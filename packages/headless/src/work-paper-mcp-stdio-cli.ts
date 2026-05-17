@@ -1,10 +1,12 @@
 export interface WorkPaperMcpStdioCliOptions {
+  readonly demoWorkPaperTools: boolean
   readonly workpaperPath?: string
   readonly writable: boolean
   readonly help: boolean
 }
 
 export function parseWorkPaperMcpStdioCliArgs(args: readonly string[]): WorkPaperMcpStdioCliOptions {
+  let demoWorkPaperTools = false
   let workpaperPath: string | undefined
   let writable = false
   let help = false
@@ -19,6 +21,10 @@ export function parseWorkPaperMcpStdioCliArgs(args: readonly string[]): WorkPape
       writable = true
       continue
     }
+    if (arg === '--demo-workpaper-tools') {
+      demoWorkPaperTools = true
+      continue
+    }
     if (arg === '--workpaper') {
       const next = args[index + 1]
       if (next === undefined || next.trim().length === 0 || next.startsWith('-')) {
@@ -31,17 +37,23 @@ export function parseWorkPaperMcpStdioCliArgs(args: readonly string[]): WorkPape
     throw new Error(`Unknown bilig-workpaper-mcp argument: ${arg}`)
   }
 
-  if (workpaperPath === undefined) {
-    return { help, writable }
+  if (demoWorkPaperTools && workpaperPath !== undefined) {
+    throw new Error('--demo-workpaper-tools cannot be combined with --workpaper')
   }
-  return { help, writable, workpaperPath }
+
+  if (workpaperPath === undefined) {
+    return { demoWorkPaperTools, help, writable }
+  }
+  return { demoWorkPaperTools, help, writable, workpaperPath }
 }
 
 export function workPaperMcpStdioHelpText(): string {
   return [
     'Usage: bilig-workpaper-mcp [--workpaper ./model.workpaper.json] [--writable]',
+    '       bilig-workpaper-mcp --demo-workpaper-tools',
     '',
     'Without --workpaper, starts the built-in demo WorkPaper MCP server.',
+    '--demo-workpaper-tools starts the built-in demo workbook with the general WorkPaper tool surface.',
     'With --workpaper, loads a persisted WorkPaper JSON document and exposes file-backed tools.',
     '--writable persists set_cell_contents edits back to the same JSON file.',
     '',

@@ -357,8 +357,11 @@ persisted WorkPaper JSON document and exposes `list_sheets`, `read_range`,
 `export_workpaper_document`, and `validate_formula`; `--writable` persists
 `set_cell_contents` edits back to the same file.
 
-The Docker target exists for MCP directory introspection and starts the same
-stdio server from the published npm package without building the Bilig web app.
+The Docker target exists for MCP directory introspection. It installs the
+published npm package, seeds a demo WorkPaper JSON file inside the image, and
+starts `bilig-workpaper-mcp --workpaper /workpaper/pricing.workpaper.json
+--writable` so scanners see the general file-backed WorkPaper tools without
+building the Bilig web app.
 
 The package metadata includes
 `mcpName: io.github.proompteng/bilig-workpaper`, and the server is listed in the

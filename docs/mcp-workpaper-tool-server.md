@@ -166,8 +166,13 @@ printf '%s\n' \
   docker run --rm -i bilig-workpaper-mcp:local
 ```
 
-The target installs `@bilig/headless` from npm and starts
-`bilig-workpaper-mcp` over stdio. It also carries the OCI label
+The target installs `@bilig/headless` from npm, seeds
+`/workpaper/pricing.workpaper.json`, and starts
+`bilig-workpaper-mcp --workpaper /workpaper/pricing.workpaper.json --writable`
+over stdio. That makes directory introspection see the general WorkPaper tools:
+`list_sheets`, `read_range`, `read_cell`, `set_cell_contents`,
+`get_cell_display_value`, `export_workpaper_document`, and `validate_formula`.
+It also carries the OCI label
 `io.modelcontextprotocol.server.name=io.github.proompteng/bilig-workpaper`, so
 registry and directory tooling can match the container target to the official
 MCP Registry name.

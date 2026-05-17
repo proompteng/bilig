@@ -333,6 +333,9 @@ Without `--workpaper`, the binary starts the built-in demo workbook. With
 `list_sheets`, `read_range`, `read_cell`, `set_cell_contents`,
 `get_cell_display_value`, `export_workpaper_document`, and `validate_formula`;
 `--writable` persists `set_cell_contents` edits back to the same file.
+The Docker target is for MCP directory scanners: it seeds a demo WorkPaper JSON
+inside the image and starts the file-backed `--writable` tool surface so
+`tools/list` returns the general WorkPaper tools without cloning this monorepo.
 
 It is published in the official MCP Registry as
 `io.github.proompteng/bilig-workpaper`:

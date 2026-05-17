@@ -18,12 +18,19 @@ import {
 describe('WorkPaper MCP server', () => {
   it('parses stdio bin CLI options without starting the server', () => {
     expect(parseWorkPaperMcpStdioCliArgs(['--workpaper', 'pricing.workpaper.json', '--writable'])).toEqual({
+      demoWorkPaperTools: false,
       help: false,
       writable: true,
       workpaperPath: 'pricing.workpaper.json',
     })
     expect(parseWorkPaperMcpStdioCliArgs(['--help'])).toEqual({
+      demoWorkPaperTools: false,
       help: true,
+      writable: false,
+    })
+    expect(parseWorkPaperMcpStdioCliArgs(['--demo-workpaper-tools'])).toEqual({
+      demoWorkPaperTools: true,
+      help: false,
       writable: false,
     })
     expect(workPaperMcpStdioHelpText()).toContain('Usage: bilig-workpaper-mcp')
@@ -32,6 +39,9 @@ describe('WorkPaper MCP server', () => {
   it('rejects malformed stdio bin workpaper paths before opening files', () => {
     expect(() => parseWorkPaperMcpStdioCliArgs(['--workpaper', '   '])).toThrow('--workpaper requires a path')
     expect(() => parseWorkPaperMcpStdioCliArgs(['--workpaper', '--writable'])).toThrow('--workpaper requires a path')
+    expect(() => parseWorkPaperMcpStdioCliArgs(['--demo-workpaper-tools', '--workpaper', 'pricing.workpaper.json'])).toThrow(
+      '--demo-workpaper-tools cannot be combined with --workpaper',
+    )
   })
 
   it('starts the stdio bin and exposes the expected tools', async () => {
@@ -338,6 +348,63 @@ describe('WorkPaper MCP server', () => {
       rmSync(tempDir, { recursive: true, force: true })
     }
   })
+
+  it('starts the stdio bin with directory-friendly WorkPaper tools for scanner introspection', async () => {
+    const binPath = fileURLToPath(new URL('../work-paper-mcp-stdio-bin.ts', import.meta.url))
+    const child = spawn(process.execPath, ['--import', 'tsx', binPath, '--demo-workpaper-tools'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const stdout: string[] = []
+    const stderr: string[] = []
+    const exitPromise = new Promise<number | null>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.kill('SIGKILL')
+        reject(new Error('Timed out waiting for demo WorkPaper tool smoke test process to exit'))
+      }, 10000)
+
+      child.once('error', (error) => {
+        clearTimeout(timeout)
+        reject(error)
+      })
+      child.once('exit', (code) => {
+        clearTimeout(timeout)
+        resolve(code)
+      })
+    })
+
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => stdout.push(chunk))
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk: string) => stderr.push(chunk))
+    child.stdin.end(
+      [
+        { jsonrpc: '2.0', id: 1, method: 'initialize' },
+        { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+      ]
+        .map((request) => JSON.stringify(request))
+        .join('\n') + '\n',
+    )
+
+    await expect(exitPromise).resolves.toBe(0)
+    expect(stderr.join('')).toBe('')
+
+    const responses = stdout
+      .join('')
+      .trim()
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line))
+
+    expect(responses[1].result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      'list_sheets',
+      'read_range',
+      'read_cell',
+      'set_cell_contents',
+      'get_cell_display_value',
+      'export_workpaper_document',
+      'validate_formula',
+    ])
+  }, 15000)
 })
 
 function readToolNames(value: unknown): string[] {

@@ -50,6 +50,7 @@ const [
   headlessExamplePackageJson,
   headlessReadme,
   excelImportReadme,
+  dockerfile,
   publicApi,
   issueTemplateConfig,
   issueTemplateRoot,
@@ -78,6 +79,7 @@ const [
   readFile(join(repoRoot, 'examples', 'headless-workpaper', 'package.json'), 'utf8'),
   readFile(join(repoRoot, 'packages', 'headless', 'README.md'), 'utf8'),
   readFile(join(repoRoot, 'packages', 'excel-import', 'README.md'), 'utf8'),
+  readFile(join(repoRoot, 'Dockerfile'), 'utf8'),
   readFile(join(docsRoot, 'public-api.md'), 'utf8'),
   readFile(join(repoRoot, '.github', 'ISSUE_TEMPLATE', 'config.yml'), 'utf8'),
   readFile(join(repoRoot, '.github', 'ISSUE_TEMPLATE.md'), 'utf8'),
@@ -697,11 +699,19 @@ requireIncludes(
   'docs/mcp-workpaper-tool-server.md',
 )
 requireIncludes(mcpWorkPaperToolServerDoc, 'io.github.proompteng/bilig-workpaper', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, '/workpaper/pricing.workpaper.json', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, '`validate_formula`', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(
   mcpWorkPaperToolServerDoc,
   'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
   'docs/mcp-workpaper-tool-server.md',
 )
+for (const required of [
+  'ENTRYPOINT ["./node_modules/.bin/bilig-workpaper-mcp", "--workpaper", "/workpaper/pricing.workpaper.json", "--writable"]',
+  'io.modelcontextprotocol.server.name="io.github.proompteng/bilig-workpaper"',
+]) {
+  requireIncludes(dockerfile, required, 'Dockerfile')
+}
 requireIncludes(mcpWorkPaperToolServerDoc, 'tools/list', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'tools/call', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'MCP tool annotations', 'docs/mcp-workpaper-tool-server.md')
@@ -746,6 +756,9 @@ for (const required of [
   'https://github.com/proompteng/bilig/actions/runs/25956395253',
   'read_workpaper_summary',
   'set_workpaper_input_cell',
+  '/workpaper/pricing.workpaper.json',
+  'set_cell_contents',
+  'validate_formula',
 ]) {
   requireIncludes(mcpSpreadsheetServerDirectoryDoc, required, 'docs/mcp-spreadsheet-server-directory.md')
 }

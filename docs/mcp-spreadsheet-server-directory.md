@@ -53,9 +53,14 @@ printf '%s\n' \
   docker run --rm -i bilig-workpaper-mcp:local
 ```
 
-The target starts `bilig-workpaper-mcp` from the published npm package and
-labels the image with
+The target installs `@bilig/headless` from npm, seeds
+`/workpaper/pricing.workpaper.json`, starts
+`bilig-workpaper-mcp --workpaper /workpaper/pricing.workpaper.json --writable`,
+and labels the image with
 `io.modelcontextprotocol.server.name=io.github.proompteng/bilig-workpaper`.
+That makes `tools/list` expose `list_sheets`, `read_range`, `read_cell`,
+`set_cell_contents`, `get_cell_display_value`, `export_workpaper_document`, and
+`validate_formula` during registry introspection.
 
 ## Directory Status
 
