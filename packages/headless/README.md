@@ -62,9 +62,9 @@ The generated-project command is being prepared as
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.18.2`:
+Current checked npm footprint for `@bilig/headless@0.18.3`:
 
-- Pack dry run: `422 kB` tarball, `2.53 MB` unpacked, `426` package entries.
+- Pack dry run: `423 kB` tarball, `2.53 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
@@ -76,11 +76,11 @@ Current checked npm footprint for `@bilig/headless@0.18.2`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.18.2` is published with npm registry signatures and SLSA
+`@bilig/headless@0.18.3` is published with npm registry signatures and SLSA
 provenance attestations. Check the package before adopting it in a service:
 
 ```sh
-npm view @bilig/headless@0.18.2 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.18.3 version dist.attestations dist.signatures --json
 npm audit signatures
 ```
 
@@ -511,7 +511,7 @@ pnpm workpaper:xlsx-corpus:check -- /path/to/xlsx-corpus
   checked-in artifact shows
   [`80/100` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
   and names the worst p95 holdout:
-  `structural-insert-columns-small` at `2.769x`.
+  `aggregate-overlapping-sliding-window` at `2.688x`.
 - The shareable benchmark card is generated from the checked-in artifact:
   [`workpaper-benchmark-card.png`](https://github.com/proompteng/bilig/blob/main/docs/assets/workpaper-benchmark-card.png).
 - Read the

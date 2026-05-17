@@ -53,15 +53,15 @@
 </g>
   <g transform="translate(88 508)">
   <text x="0" y="0" fill="#526273" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="760">Public</text>
-  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">59/73</text>
+  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">60/73</text>
   <rect x="0" y="16" width="460" height="22" rx="8" fill="#e6edf3"/>
-  <rect x="0" y="16" width="371.78" height="22" rx="8" fill="#147a4b"/>
+  <rect x="0" y="16" width="378.08" height="22" rx="8" fill="#147a4b"/>
 </g>
   <g transform="translate(88 588)">
   <text x="0" y="0" fill="#526273" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="760">Holdout</text>
-  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">21/27</text>
+  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">20/27</text>
   <rect x="0" y="16" width="460" height="22" rx="8" fill="#e6edf3"/>
-  <rect x="0" y="16" width="357.78" height="22" rx="8" fill="#147a4b"/>
+  <rect x="0" y="16" width="340.74" height="22" rx="8" fill="#147a4b"/>
 </g>
 
   <g filter="url(#shadow)">
@@ -71,20 +71,20 @@
 
   <g transform="translate(710 196)">
     <rect x="0" y="0" width="462" height="116" rx="18" fill="#ffffff" fill-opacity="0.08" stroke="#36506a"/>
-    <text x="28" y="43" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="840">Mean 0.635x</text>
-    <text x="28" y="82" fill="#7ed894" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="780">36% lower than HyperFormula</text>
+    <text x="28" y="43" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="840">Mean 0.606x</text>
+    <text x="28" y="82" fill="#7ed894" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="780">39% lower than HyperFormula</text>
   </g>
 
   <g transform="translate(710 340)">
     <rect x="0" y="0" width="462" height="116" rx="18" fill="#ffffff" fill-opacity="0.08" stroke="#36506a"/>
-    <text x="28" y="43" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="840">p95 0.659x</text>
-    <text x="28" y="82" fill="#7ed894" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="780">34% lower geomean lead</text>
+    <text x="28" y="43" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="840">p95 0.602x</text>
+    <text x="28" y="82" fill="#7ed894" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="780">40% lower geomean lead</text>
   </g>
 
   <g transform="translate(710 490)">
     <rect x="0" y="0" width="462" height="92" rx="18" fill="#f4d991" fill-opacity="0.14" stroke="#8a6a23"/>
     <text x="28" y="35" fill="#f3d98b" font-family="Inter, Arial, Helvetica, sans-serif" font-size="22" font-weight="820">Visible caveat</text>
-    <text x="28" y="66" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="21" font-weight="650">structural-insert-columns-small p95: 2.769x</text>
+    <text x="28" y="66" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="21" font-weight="650">aggregate-overlapping-sliding-window p95: 2.688x</text>
   </g>
 
   <text x="64" y="686" fill="#526273" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="20">pnpm workpaper:bench:competitive:check</text>

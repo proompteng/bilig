@@ -134,7 +134,7 @@ issue pass:
   WorkPaper target for formula, edit/readback, memory, and persistence lanes:
   <https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1>
 - External open-source directory surface: the Open-Awesome submission for Bilig
-  has a metadata refresh comment with the current `@bilig/headless@0.18.2`
+  has a metadata refresh comment with the current `@bilig/headless@0.18.3`
   package, proof page, benchmark evidence, and non-grid WorkPaper positioning;
   the prior `@bilig/headless@0.17.0` proof remains part of the launch-history
   trail:
@@ -370,7 +370,7 @@ Latest conversion snapshot on May 16, 2026:
 - GitHub surface: `23` stars, `16` forks, `17` open issues, and `5` open pull
   requests. The star gap is still `977`; GitHub also reports `0` actual
   repository watchers/subscribers.
-- npm surface: `@bilig/headless@0.18.2`, with `12,568` downloads in the
+- npm surface: `@bilig/headless@0.18.3`, with `12,568` downloads in the
   latest weekly window and `27,753` downloads in the latest monthly window.
 - Traffic surface: GitHub reports `565` views from `189` unique visitors and
   `21,392` clones from `2,641` unique cloners. The strongest referrers are
@@ -499,7 +499,7 @@ Latest technical-content action on May 14, 2026:
 - Do not route new evaluator traffic to the older public DEV copy until it is
   edited by the article owner. A Dia check on May 16, 2026 found that public
   article still showing stale `46/46` benchmark evidence while the current
-  checked package evidence is `@bilig/headless@0.18.2`, `80/100` comparable
+  checked package evidence is `@bilig/headless@0.18.3`, `80/100` comparable
   mean wins, and `76/100` mean+p95 wins.
 
 Latest search-intent boundary action on May 14, 2026:

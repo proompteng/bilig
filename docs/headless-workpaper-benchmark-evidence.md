@@ -26,10 +26,10 @@ as useful evidence, but they do not satisfy broad coverage alone.
 
 Current checked-in metadata:
 
-- generated at `2026-05-17T01:27:00.888Z`
+- generated at `2026-05-17T01:32:09.339Z`
 - host: macOS `arm64`, Node `v24.3.0`
 - benchmark sampling: `5` measured samples after `2` warmup samples
-- WorkPaper package: `@bilig/headless` `0.18.2`
+- WorkPaper package: `@bilig/headless` `0.18.3`
 - comparison engine: HyperFormula `3.2.0`, local checkout commit
   `9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad`, GPL-v3 license key
 - scalar formula comparison engine: TrueCalc `0.6.4`, `7` comparable scalar
@@ -48,16 +48,16 @@ current checked-in artifact records `80/100` mean-latency wins:
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
 | Overall |                `100` |                `80` |                   `20` |
-| Public  |                 `73` |                `59` |                   `14` |
-| Holdout |                 `27` |                `21` |                    `6` |
+| Public  |                 `73` |                `60` |                   `13` |
+| Holdout |                 `27` |                `20` |                    `7` |
 
-The overall directional mean-ratio geomean is `0.6354015061122764`. The overall
-directional p95-ratio geomean is `0.6587549873733283`. Ratios below `1.0` mean
+The overall directional mean-ratio geomean is `0.6055024754587871`. The overall
+directional p95-ratio geomean is `0.6015432806229465`. Ratios below `1.0` mean
 WorkPaper is faster for that metric.
 
-The current worst mean row is `structural-insert-columns-small`, with a mean ratio of
-`1.9963057052076403`. The current worst p95 row is `structural-insert-columns-small`,
-with a p95 ratio of `2.768712280679412`. The headless leadership scorecard
+The current worst mean row is `single-formula-edit-recalc`, with a mean ratio of
+`2.1519563174046614`. The current worst p95 row is `aggregate-overlapping-sliding-window`,
+with a p95 ratio of `2.6876829900722754`. The headless leadership scorecard
 currently records `76/100` workloads winning both
 mean and p95 against HyperFormula.
 

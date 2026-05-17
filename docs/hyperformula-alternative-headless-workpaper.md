@@ -53,8 +53,8 @@ The short benchmark explainer is:
 The current public claim is narrow:
 
 - `80/100` mean-latency wins on scorecard-eligible comparable workloads
-- `59/73` public-lane mean wins
-- `21/27` holdout-lane mean wins
+- `60/73` public-lane mean wins
+- `20/27` holdout-lane mean wins
 - an overall p95 geomean lead
 - one named p95 caveat that remains visible instead of hidden
 

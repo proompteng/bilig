@@ -26,7 +26,7 @@ That is the whole pitch.
 ## Try the npm package
 
 This starts from an empty directory and uses the published package. The version
-checked by this page is `@bilig/headless@0.18.2`.
+checked by this page is `@bilig/headless@0.18.3`.
 
 ```sh
 mkdir bilig-headless-eval
@@ -77,8 +77,8 @@ The checked benchmark artifact currently says Bilig wins `80/100` comparable
 workloads on mean latency against the HyperFormula-style baseline. It wins
 `76/100` on both mean and p95.
 
-The miss is not hidden: `structural-insert-columns-small` is slower at p95 by
-`2.769x`. Browser grid rendering is not part of this benchmark.
+The miss is not hidden: `aggregate-overlapping-sliding-window` is slower at p95 by
+`2.688x`. Browser grid rendering is not part of this benchmark.
 
 Read the benchmark note:
 [what the WorkPaper benchmark proves](what-workpaper-benchmark-proves.md).
