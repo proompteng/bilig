@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): fast-load dense numeric sheets (526723d4)
 
 ## Internal runtime changes
+
 - chore(release): format headless changelog (55dc9215)
 
 ## 0.18.22

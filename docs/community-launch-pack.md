@@ -227,6 +227,10 @@ issue pass:
   with a single `@bilig/headless` npm entry plus repo, docs, transcript, and
   server-card evidence:
   <https://github.com/MCPFind/mcp-find/pull/37>
+- External MCP directory surface: the mctrinh Awesome MCP Servers PR is open
+  with a single production-ready server-list entry for Bilig WorkPaper and
+  maintainer-review evidence in the PR body:
+  <https://github.com/mctrinh/awesome-mcp-servers/pull/46>
 - External MCP marketplace surface: the Cline MCP Marketplace server submission
   issue is open with the GitHub repository, 400px logo, public npm command, and
   verified `tools/list` plus `set_workpaper_input_cell` readback proof:
@@ -376,17 +380,17 @@ Postgres/Redis/object-storage adapter pass:
   active feedback loops visible beside stars, npm demand, contributor
   queue health, and traffic.
 
-Latest conversion snapshot on May 16, 2026:
+Latest conversion snapshot on May 17, 2026:
 
-- GitHub surface: `23` stars, `17` forks, `17` open issues, and `4` open pull
+- GitHub surface: `23` stars, `17` forks, `17` open issues, and `0` open pull
   requests. The star gap is still `977`; GitHub also reports `0` actual
   repository watchers/subscribers.
-- npm surface: `@bilig/headless`, with `12,568` downloads in the
-  latest weekly window and `27,753` downloads in the latest monthly window.
-- Traffic surface: GitHub reports `565` views from `189` unique visitors and
-  `21,392` clones from `2,641` unique cloners. The strongest referrers are
-  GitHub, Hacker News, X, the project site, Google, Kagi, Reddit, and
-  goodfirstissues.com.
+- npm surface: `@bilig/headless`, with `17,235` downloads in the
+  latest weekly window and `32,535` downloads in the latest monthly window.
+- Traffic surface: GitHub reports `602` views from `189` unique visitors and
+  `28,427` clones from `3,596` unique cloners. The strongest referrers are
+  GitHub, Hacker News, X, the project site, Google, Kagi, goodfirstissues.com,
+  Reddit, and Slack.
 - Contributor-funnel action: the public issue queue now has `15` open
   `good first issue`, `15` open `first-timers-only`, and `15` open
   `help wanted` starter issues. Keep the public path focused on the highest
@@ -411,9 +415,9 @@ Latest conversion snapshot on May 16, 2026:
   star page beside npm install and GitHub, and the docs index links to the live
   community growth snapshot so visitors can inspect the current public signals.
 - MCP registry action: the official MCP Registry refresh was verified for
-  `@bilig/headless@0.18.22` with workflow run
-  <https://github.com/proompteng/bilig/actions/runs/25988085519>. The live API
-  now includes `0.18.22` with `isLatest: true`, so downstream directory
+  `@bilig/headless@0.18.23` with workflow run
+  <https://github.com/proompteng/bilig/actions/runs/25988415382>. The live API
+  now includes `0.18.23` with `isLatest: true`, so downstream directory
   verification should be rerun after each runtime package release.
 
 Latest star-spike research on May 16, 2026:
@@ -426,8 +430,8 @@ Latest star-spike research on May 16, 2026:
   from `42` unique visitors.
 - The current traffic referrer list says the most useful external channels are
   Hacker News (`52` views / `37` uniques), X/t.co (`29` / `24`), the docs site
-  (`16` / `10`), Google (`16` / `2`), Kagi (`7` / `7`), Reddit (`6` / `4`),
-  and goodfirstissues.com (`6` / `3`).
+  (`17` / `10`), Google (`16` / `2`), Kagi (`7` / `7`),
+  goodfirstissues.com (`7` / `4`), Reddit (`6` / `4`), and Slack (`3` / `1`).
 - HN Algolia shows two relevant submissions on May 7:
   <https://news.ycombinator.com/item?id=48045427> at `2` points / `0`
   comments and <https://news.ycombinator.com/item?id=48052832> at `3` points

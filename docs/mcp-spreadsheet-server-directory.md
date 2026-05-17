@@ -87,11 +87,12 @@ crawlers that probe those well-known variants.
 | Ever Works MCP data             | Submitted for maintainer review              | <https://github.com/ever-works/awesome-mcp-servers-data/pull/4>                                       |
 | mcpserve.com                    | Submitted for maintainer review              | <https://github.com/jmstfv/mcpserve/pull/19>                                                          |
 | MCPFind                         | Submitted for maintainer review              | <https://github.com/MCPFind/mcp-find/pull/37>                                                         |
+| mctrinh Awesome MCP Servers     | Submitted for maintainer review              | <https://github.com/mctrinh/awesome-mcp-servers/pull/46>                                              |
 | PulseMCP                        | Not indexed in public search on May 14, 2026 | <https://www.pulsemcp.com/servers?search=bilig&q=bilig>                                               |
 
 PulseMCP says server listings are ingested from the official MCP Registry daily
 and processed weekly. The Bilig WorkPaper registry entry is live, and the public
-Registry API now includes the current `@bilig/headless@0.18.22` package version.
+Registry API now includes the current `@bilig/headless@0.18.23` package version.
 The current entry is marked `isLatest: true`, so treat PulseMCP absence as a
 downstream directory refresh lag rather than an upstream registry lag. Starter
 issue [#384](https://github.com/proompteng/bilig/issues/384) tracks the next
@@ -134,6 +135,11 @@ the pull request as mergeable; Netlify preview checks were pending immediately
 after creation, so treat it as submitted until the maintainer merges it and the
 listing appears on mcpserve.com.
 
+The mctrinh Awesome MCP Servers pull request was opened on May 17, 2026 as a
+single-line `Bilig WorkPaper` addition in the production-ready servers list. The
+PR body links the public repo, npm package, MCP docs/transcript, and official
+registry name.
+
 ## Verify The Registry Entry
 
 Use the official Registry API when you need a machine-checkable proof:
@@ -150,13 +156,13 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 17, 2026: npm latest is `@bilig/headless@0.18.22`,
+Latest checked result on May 17, 2026: npm latest is `@bilig/headless@0.18.23`,
 and the official Registry API search now includes Bilig WorkPaper entry version
-`0.18.22` with `isLatest: true`. The API also returns historical entries, so
+`0.18.23` with `isLatest: true`. The API also returns historical entries, so
 consumers should select the latest-marked entry or prefer the npm package
 version when they need a single freshest install coordinate. The last documented
 refresh attempt was published by the repository workflow run at
-<https://github.com/proompteng/bilig/actions/runs/25988085519>.
+<https://github.com/proompteng/bilig/actions/runs/25988415382>.
 
 The package itself carries the matching `mcpName` field. That is the ownership
 signal the registry uses for npm package validation.
