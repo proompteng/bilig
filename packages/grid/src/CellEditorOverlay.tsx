@@ -178,12 +178,7 @@ export function CellEditorOverlay({
     onChange(nextValue)
   }
 
-  const preserveCaretSelection = (input: HTMLTextAreaElement) => {
-    const selection = {
-      direction: input.selectionDirection ?? 'none',
-      end: input.selectionEnd ?? input.value.length,
-      start: input.selectionStart ?? input.value.length,
-    }
+  const scheduleSelectionRestore = (input: HTMLTextAreaElement, selection: EditorTextSelection) => {
     pendingSelectionRestoreRef.current = selection
     caretWriteSequenceRef.current += 1
     const sequence = caretWriteSequenceRef.current
@@ -191,8 +186,26 @@ export function CellEditorOverlay({
       if (caretWriteSequenceRef.current !== sequence || document.activeElement !== input) {
         return
       }
-      inputRef.current?.setSelectionRange(selection.start, selection.end, selection.direction)
+      const liveInput = inputRef.current
+      if (!liveInput) {
+        return
+      }
+      const start = clampTextOffset(selection.start, liveInput.value.length)
+      const end = clampTextOffset(selection.end, liveInput.value.length)
+      liveInput.setSelectionRange(start, end, selection.direction)
+      if (pendingKeyboardSelectionRef.current === selection) {
+        pendingKeyboardSelectionRef.current = null
+      }
     })
+  }
+
+  const preserveCaretSelection = (input: HTMLTextAreaElement) => {
+    const selection = {
+      direction: input.selectionDirection ?? 'none',
+      end: input.selectionEnd ?? input.value.length,
+      start: input.selectionStart ?? input.value.length,
+    }
+    scheduleSelectionRestore(input, selection)
   }
 
   const beginCompletion = (nextState: 'commit' | 'cancel') => {
@@ -223,14 +236,7 @@ export function CellEditorOverlay({
     } as const
     pendingKeyboardSelectionRef.current = nextSelection
     updateDraftValue(nextValue, nextSelection)
-    caretWriteSequenceRef.current += 1
-    const sequence = caretWriteSequenceRef.current
-    window.requestAnimationFrame(() => {
-      if (caretWriteSequenceRef.current !== sequence || document.activeElement !== input) {
-        return
-      }
-      inputRef.current?.setSelectionRange(caretPosition, caretPosition)
-    })
+    scheduleSelectionRestore(input, nextSelection)
   }
 
   const deleteTextAtSelection = (input: HTMLTextAreaElement, direction: 'backward' | 'forward') => {
@@ -253,28 +259,60 @@ export function CellEditorOverlay({
 
     pendingKeyboardSelectionRef.current = nextSelection
     if (deleteStart === deleteEnd) {
-      pendingSelectionRestoreRef.current = nextSelection
-      caretWriteSequenceRef.current += 1
-      const sequence = caretWriteSequenceRef.current
-      window.requestAnimationFrame(() => {
-        if (caretWriteSequenceRef.current !== sequence || document.activeElement !== input) {
-          return
-        }
-        inputRef.current?.setSelectionRange(caretPosition, caretPosition)
-      })
+      scheduleSelectionRestore(input, nextSelection)
       return
     }
 
     const nextValue = `${currentValue.slice(0, deleteStart)}${currentValue.slice(deleteEnd)}`
     updateDraftValue(nextValue, nextSelection)
-    caretWriteSequenceRef.current += 1
-    const sequence = caretWriteSequenceRef.current
-    window.requestAnimationFrame(() => {
-      if (caretWriteSequenceRef.current !== sequence || document.activeElement !== input) {
-        return
+    scheduleSelectionRestore(input, nextSelection)
+  }
+
+  const moveCaretHorizontally = (input: HTMLTextAreaElement, direction: 'left' | 'right', extendSelection: boolean) => {
+    const pendingSelection = pendingKeyboardSelectionRef.current
+    const currentValue = pendingSelection ? draftValueRef.current : input.value
+    const rawSelectionStart = pendingSelection?.start ?? input.selectionStart ?? currentValue.length
+    const rawSelectionEnd = pendingSelection?.end ?? input.selectionEnd ?? currentValue.length
+    const selectionStart = clampTextOffset(Math.min(rawSelectionStart, rawSelectionEnd), currentValue.length)
+    const selectionEnd = clampTextOffset(Math.max(rawSelectionStart, rawSelectionEnd), currentValue.length)
+    const selectionDirection = pendingSelection?.direction ?? input.selectionDirection ?? 'none'
+    const anchor =
+      selectionDirection === 'backward'
+        ? selectionEnd
+        : selectionDirection === 'forward'
+          ? selectionStart
+          : pendingSelection
+            ? selectionStart
+            : (input.selectionStart ?? selectionStart)
+    const focus = selectionDirection === 'backward' ? selectionStart : selectionEnd
+
+    let nextSelection: EditorTextSelection
+    if (extendSelection) {
+      const nextFocus = direction === 'left' ? previousTextBoundary(currentValue, focus) : nextTextBoundary(currentValue, focus)
+      nextSelection = {
+        direction: nextFocus < anchor ? 'backward' : nextFocus > anchor ? 'forward' : 'none',
+        end: Math.max(anchor, nextFocus),
+        start: Math.min(anchor, nextFocus),
       }
-      inputRef.current?.setSelectionRange(caretPosition, caretPosition)
-    })
+    } else if (selectionStart !== selectionEnd) {
+      const nextPosition = direction === 'left' ? selectionStart : selectionEnd
+      nextSelection = {
+        direction: 'none',
+        end: nextPosition,
+        start: nextPosition,
+      }
+    } else {
+      const nextPosition =
+        direction === 'left' ? previousTextBoundary(currentValue, selectionStart) : nextTextBoundary(currentValue, selectionEnd)
+      nextSelection = {
+        direction: 'none',
+        end: nextPosition,
+        start: nextPosition,
+      }
+    }
+
+    pendingKeyboardSelectionRef.current = nextSelection
+    scheduleSelectionRestore(input, nextSelection)
   }
 
   useLayoutEffect(() => {
@@ -453,6 +491,17 @@ export function CellEditorOverlay({
           ) {
             event.preventDefault()
             deleteTextAtSelection(event.currentTarget, event.key === 'Backspace' ? 'backward' : 'forward')
+            return
+          }
+          if (
+            !event.nativeEvent.isComposing &&
+            (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey
+          ) {
+            event.preventDefault()
+            moveCaretHorizontally(event.currentTarget, event.key === 'ArrowLeft' ? 'left' : 'right', event.shiftKey)
             return
           }
           if ((event.key === 'Home' || event.key === 'End') && !event.ctrlKey && !event.metaKey && !event.altKey) {

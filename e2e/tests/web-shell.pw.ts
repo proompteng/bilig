@@ -277,6 +277,50 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
   await expect(nameBox).toHaveValue('A2', { timeout: 15_000 })
 })
 
+test('@browser-ci web app keeps in-cell caret movement stable during rapid typing', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-editor-caret-rapid-typing')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0`)
+  await waitForWorkbookReady(page)
+
+  await clickProductCell(page, 0, 0)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
+  await page.getByTestId('sheet-grid-focus-target').focus()
+
+  const editor = page.getByTestId('cell-editor-input')
+  await page.keyboard.press('a')
+  await expect(editor).toBeVisible()
+  const readEditorSelection = () =>
+    editor.evaluate((element) => {
+      if (!(element instanceof HTMLTextAreaElement)) {
+        throw new Error('Expected in-cell editor textarea')
+      }
+      return {
+        direction: element.selectionDirection,
+        end: element.selectionEnd,
+        start: element.selectionStart,
+      }
+    })
+
+  await page.keyboard.press('b')
+  await page.keyboard.press('c')
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('x')
+
+  await expect(editor).toHaveValue('abxc')
+  await expect.poll(readEditorSelection).toEqual({
+    direction: 'none',
+    end: 3,
+    start: 3,
+  })
+
+  await page.keyboard.press('Shift+ArrowLeft')
+  await expect.poll(readEditorSelection).toEqual({
+    direction: 'backward',
+    end: 3,
+    start: 2,
+  })
+})
+
 test('@browser-ci web app keeps click-away commits and keyboard clears stable', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-click-away-clear')
   await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=D7`)
