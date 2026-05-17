@@ -123,6 +123,13 @@ export function useWorkbookAgentPane(input: {
       } satisfies ZeroWorkbookAgentSource),
     [zero],
   )
+  const storageScope = useMemo(
+    () => ({
+      documentId,
+      userId: currentUserId,
+    }),
+    [currentUserId, documentId],
+  )
   const usesLiveThreadSummaries = zeroEnabled && Boolean(zero)
   const client = useMemo(() => createWorkbookAgentClient(documentId), [documentId])
   const { clearPendingContextSync, resetContextSync, scheduleContextSync } = useWorkbookAgentContextSync({
@@ -151,11 +158,11 @@ export function useWorkbookAgentPane(input: {
       return
     }
     lastDraftKeyRef.current = activeDraftKey
-    setDraft(loadStoredDrafts(documentId)[activeDraftKey] ?? '')
-  }, [activeDraftKey, documentId])
+    setDraft(loadStoredDrafts(storageScope)[activeDraftKey] ?? '')
+  }, [activeDraftKey, storageScope])
 
   useEffect(() => {
-    const drafts = loadStoredDrafts(documentId)
+    const drafts = loadStoredDrafts(storageScope)
     if (draft.length === 0) {
       if (!(activeDraftKey in drafts)) {
         return
@@ -164,8 +171,8 @@ export function useWorkbookAgentPane(input: {
     } else {
       drafts[activeDraftKey] = draft
     }
-    persistStoredDrafts(documentId, drafts)
-  }, [activeDraftKey, documentId, draft])
+    persistStoredDrafts(storageScope, drafts)
+  }, [activeDraftKey, draft, storageScope])
 
   const activeThreadId = snapshot?.threadId ?? sessionRef.current?.threadId ?? null
   const zeroThreadSummaries = useWorkbookAgentThreadSummaries({
@@ -323,14 +330,14 @@ export function useWorkbookAgentPane(input: {
         lastRequestedAuthoritativeRevisionRef.current = appliedRevision
         void nextSyncAuthoritativeRevision(appliedRevision)
       }
-      persistStoredSession(documentId, {
+      persistStoredSession(storageScope, {
         threadId: nextSnapshot.threadId,
       })
       sessionRef.current = {
         threadId: nextSnapshot.threadId,
       }
     },
-    [documentId],
+    [storageScope],
   )
 
   const { closeStream, connectStream, resetRecoveringStream } = useWorkbookAgentStream({
@@ -494,7 +501,7 @@ export function useWorkbookAgentPane(input: {
     }
     let cancelled = false
     resetContextSync()
-    const storedSession = loadStoredSession(documentId)
+    const storedSession = loadStoredSession(storageScope)
     sessionRef.current = null
 
     const bootstrapThreadSummaries = async () => {
@@ -561,6 +568,7 @@ export function useWorkbookAgentPane(input: {
     apiEnabled,
     resetContextSync,
     resetRecoveringStream,
+    storageScope,
     usesLiveThreadSummaries,
   ])
 
@@ -586,7 +594,7 @@ export function useWorkbookAgentPane(input: {
 
   const startNewThread = useCallback(() => {
     closeStream()
-    clearStoredSession(documentId)
+    clearStoredSession(storageScope)
     resetRecoveringStream()
     sessionRef.current = null
     setSnapshot(null)
@@ -594,7 +602,7 @@ export function useWorkbookAgentPane(input: {
     setPreview(null)
     setSelectedCommandIndexes([])
     setError(null)
-  }, [closeStream, documentId, resetRecoveringStream])
+  }, [closeStream, resetRecoveringStream, storageScope])
 
   useEffect(() => {
     if (!showAssistantProgress || !syncAuthoritativeRevision) {
@@ -638,7 +646,7 @@ export function useWorkbookAgentPane(input: {
     try {
       setError(null)
       setPendingUserPrompt(prompt)
-      clearStoredDraft(documentId, activeDraftKey)
+      clearStoredDraft(storageScope, activeDraftKey)
       setDraft('')
       const activeSession = await ensureSession()
       const nextSnapshot = await client.sendPrompt(activeSession.threadId, prompt, getContextRef.current())
@@ -649,7 +657,7 @@ export function useWorkbookAgentPane(input: {
       setDraft(prompt)
       setError(nextError instanceof Error ? nextError.message : String(nextError))
     }
-  }, [activeDraftKey, client, documentId, draft, ensureSession, persistSessionSnapshot])
+  }, [activeDraftKey, client, draft, ensureSession, persistSessionSnapshot, storageScope])
 
   const interrupt = useCallback(async () => {
     const activeSession = sessionRef.current

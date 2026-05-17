@@ -4,15 +4,28 @@ import { logDebug } from './runtime-logger.js'
 const STORAGE_KEY_PREFIX = 'bilig:workbook-agent:'
 const DRAFT_STORAGE_KEY_PREFIX = 'bilig:workbook-agent-drafts:'
 
+export interface WorkbookAgentPaneStorageScope {
+  readonly documentId: string
+  readonly userId: string
+}
+
 export interface StoredWorkbookAgentThreadRef {
   threadId: string
 }
 
-function storageKey(documentId: string): string {
+function storageKey(scope: WorkbookAgentPaneStorageScope): string {
+  return `${STORAGE_KEY_PREFIX}${encodeURIComponent(scope.documentId)}:${encodeURIComponent(scope.userId)}`
+}
+
+function draftStorageKey(scope: WorkbookAgentPaneStorageScope): string {
+  return `${DRAFT_STORAGE_KEY_PREFIX}${encodeURIComponent(scope.documentId)}:${encodeURIComponent(scope.userId)}`
+}
+
+function legacyStorageKey(documentId: string): string {
   return `${STORAGE_KEY_PREFIX}${documentId}`
 }
 
-function draftStorageKey(documentId: string): string {
+function legacyDraftStorageKey(documentId: string): string {
   return `${DRAFT_STORAGE_KEY_PREFIX}${documentId}`
 }
 
@@ -74,10 +87,11 @@ function parseStoredWorkbookAgentSession(value: unknown): StoredWorkbookAgentThr
   return threadId.length > 0 ? { threadId } : null
 }
 
-export function loadStoredSession(documentId: string): StoredWorkbookAgentThreadRef | null {
-  const key = storageKey(documentId)
+export function loadStoredSession(scope: WorkbookAgentPaneStorageScope): StoredWorkbookAgentThreadRef | null {
+  const key = storageKey(scope)
   try {
-    const raw = readSessionStorageItem(documentId, key)
+    removeSessionStorageItem(scope.documentId, legacyStorageKey(scope.documentId))
+    const raw = readSessionStorageItem(scope.documentId, key)
     if (!raw) {
       return null
     }
@@ -86,69 +100,73 @@ export function loadStoredSession(documentId: string): StoredWorkbookAgentThread
     if (storedSession) {
       return storedSession
     }
-    removeSessionStorageItem(documentId, key)
+    removeSessionStorageItem(scope.documentId, key)
   } catch (error) {
-    logDebug('Failed to load stored workbook agent session', { documentId, error })
-    removeSessionStorageItem(documentId, key)
+    logDebug('Failed to load stored workbook agent session', { documentId: scope.documentId, error })
+    removeSessionStorageItem(scope.documentId, key)
   }
   return null
 }
 
-export function persistStoredSession(documentId: string, value: StoredWorkbookAgentThreadRef): void {
+export function persistStoredSession(scope: WorkbookAgentPaneStorageScope, value: StoredWorkbookAgentThreadRef): void {
+  removeSessionStorageItem(scope.documentId, legacyStorageKey(scope.documentId))
   const storedSession = parseStoredWorkbookAgentSession(value)
   if (!storedSession) {
-    removeSessionStorageItem(documentId, storageKey(documentId))
+    removeSessionStorageItem(scope.documentId, storageKey(scope))
     return
   }
-  writeSessionStorageItem(documentId, storageKey(documentId), JSON.stringify(storedSession))
+  writeSessionStorageItem(scope.documentId, storageKey(scope), JSON.stringify(storedSession))
 }
 
-export function clearStoredSession(documentId: string): void {
-  removeSessionStorageItem(documentId, storageKey(documentId))
+export function clearStoredSession(scope: WorkbookAgentPaneStorageScope): void {
+  removeSessionStorageItem(scope.documentId, storageKey(scope))
+  removeSessionStorageItem(scope.documentId, legacyStorageKey(scope.documentId))
 }
 
-export function loadStoredDrafts(documentId: string): Record<string, string> {
-  const key = draftStorageKey(documentId)
+export function loadStoredDrafts(scope: WorkbookAgentPaneStorageScope): Record<string, string> {
+  const key = draftStorageKey(scope)
   try {
-    const raw = readSessionStorageItem(documentId, key)
+    removeSessionStorageItem(scope.documentId, legacyDraftStorageKey(scope.documentId))
+    const raw = readSessionStorageItem(scope.documentId, key)
     if (!raw) {
       return {}
     }
     const parsed = JSON.parse(raw) as unknown
     if (!isRecord(parsed)) {
-      removeSessionStorageItem(documentId, key)
+      removeSessionStorageItem(scope.documentId, key)
       return {}
     }
     const drafts = Object.fromEntries(
       Object.entries(parsed).flatMap(([storedDraftKey, value]) => (typeof value === 'string' ? ([[storedDraftKey, value]] as const) : [])),
     )
     if (Object.keys(drafts).length !== Object.keys(parsed).length) {
-      persistStoredDrafts(documentId, drafts)
+      persistStoredDrafts(scope, drafts)
     }
     return drafts
   } catch (error) {
-    logDebug('Failed to load stored workbook agent draft', { documentId, error })
-    removeSessionStorageItem(documentId, key)
+    logDebug('Failed to load stored workbook agent draft', { documentId: scope.documentId, error })
+    removeSessionStorageItem(scope.documentId, key)
     return {}
   }
 }
 
-export function persistStoredDrafts(documentId: string, drafts: Record<string, string>): void {
+export function persistStoredDrafts(scope: WorkbookAgentPaneStorageScope, drafts: Record<string, string>): void {
+  removeSessionStorageItem(scope.documentId, legacyDraftStorageKey(scope.documentId))
   const entries = Object.entries(drafts).filter((entry) => entry[1].length > 0)
   if (entries.length === 0) {
-    removeSessionStorageItem(documentId, draftStorageKey(documentId))
+    removeSessionStorageItem(scope.documentId, draftStorageKey(scope))
     return
   }
-  writeSessionStorageItem(documentId, draftStorageKey(documentId), JSON.stringify(Object.fromEntries(entries)))
+  writeSessionStorageItem(scope.documentId, draftStorageKey(scope), JSON.stringify(Object.fromEntries(entries)))
 }
 
-export function clearStoredDraft(documentId: string, key: string): void {
-  const drafts = loadStoredDrafts(documentId)
+export function clearStoredDraft(scope: WorkbookAgentPaneStorageScope, key: string): void {
+  const drafts = loadStoredDrafts(scope)
   if (!(key in drafts)) {
     return
   }
   delete drafts[key]
-  persistStoredDrafts(documentId, drafts)
+  persistStoredDrafts(scope, drafts)
 }
 
 export function draftKey(threadId: string | null, scope: WorkbookAgentThreadScope): string {

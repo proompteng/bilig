@@ -9,6 +9,10 @@ import { WorkbookToastRegion } from '../WorkbookToastRegion.js'
 import { clearWorkbookAgentPreviewCache } from '../workbook-agent-preview-cache.js'
 import { useWorkbookAgentPane } from '../use-workbook-agent-pane.js'
 
+function agentStorageKey(userId = 'alex@example.com'): string {
+  return `bilig:workbook-agent:doc-1:${encodeURIComponent(userId)}`
+}
+
 async function flushToasts(): Promise<void> {
   await act(async () => {
     await Promise.resolve()
@@ -853,7 +857,7 @@ describe('workbook agent pane', () => {
         },
       ],
     })
-    sessionStorage.setItem('bilig:workbook-agent:doc-1', JSON.stringify({ threadId: 'thr-1' }))
+    sessionStorage.setItem(agentStorageKey(), JSON.stringify({ threadId: 'thr-1' }))
     const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input)
       if (url.endsWith('/chat/threads/thr-1')) {
@@ -890,7 +894,7 @@ describe('workbook agent pane', () => {
 
   it('hides applied preview system timeline entries from the assistant panel', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-    window.sessionStorage.setItem('bilig:workbook-agent:doc-1', JSON.stringify({ threadId: 'thr-1' }))
+    window.sessionStorage.setItem(agentStorageKey(), JSON.stringify({ threadId: 'thr-1' }))
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
@@ -963,7 +967,7 @@ describe('workbook agent pane', () => {
 
   it('renders durable workflow runs in the assistant panel', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-    window.sessionStorage.setItem('bilig:workbook-agent:doc-1', JSON.stringify({ threadId: 'thr-1' }))
+    window.sessionStorage.setItem(agentStorageKey(), JSON.stringify({ threadId: 'thr-1' }))
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -1194,7 +1198,7 @@ describe('workbook agent pane', () => {
     vi.stubGlobal('fetch', fetchSpy)
 
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -1391,7 +1395,7 @@ describe('workbook agent pane', () => {
   it('submits follow-up prompts through the durable thread route when a thread is already active', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -1478,7 +1482,7 @@ describe('workbook agent pane', () => {
   it('restores the draft and shows the server message when a turn request fails', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -1561,7 +1565,7 @@ describe('workbook agent pane', () => {
   it('does not inject a synthetic progress row before the turn request resolves', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -1663,7 +1667,7 @@ describe('workbook agent pane', () => {
   it('uses the composer button to interrupt an active turn', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -1760,7 +1764,7 @@ describe('workbook agent pane', () => {
   it('renders structured workbook comprehension tool results in the rail', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -1878,7 +1882,7 @@ describe('workbook agent pane', () => {
   it('renders workbook inspection tool payloads as structured result cards instead of raw JSON blobs', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -1969,7 +1973,7 @@ describe('workbook agent pane', () => {
   it('summarizes attached selection ranges in tool rows', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2121,7 +2125,7 @@ describe('workbook agent pane', () => {
   it('bootstraps the assistant session and streams assistant deltas into the rail', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2176,7 +2180,7 @@ describe('workbook agent pane', () => {
   it('surfaces malformed assistant stream payloads with stable copy', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2219,7 +2223,7 @@ describe('workbook agent pane', () => {
   it('streams command execution output deltas into command tool rows', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2306,7 +2310,7 @@ describe('workbook agent pane', () => {
   it('renders reasoning text immediately from streamed deltas without waiting for a snapshot refresh', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2398,7 +2402,7 @@ describe('workbook agent pane', () => {
   it('keeps the thinking row visible while tool activity is still streaming', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2478,7 +2482,7 @@ describe('workbook agent pane', () => {
   it('does not refetch thread summaries when stream snapshots arrive', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2536,7 +2540,7 @@ describe('workbook agent pane', () => {
   it('does not restart live thread bootstrap when callback props churn across internal rerenders', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2583,7 +2587,7 @@ describe('workbook agent pane', () => {
   it('syncs the latest workbook context after a sheet change even when the context getter reads laggy refs', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2653,7 +2657,7 @@ describe('workbook agent pane', () => {
   it('keeps workbook context sync single-flight when selection changes faster than the backend responds', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2751,7 +2755,7 @@ describe('workbook agent pane', () => {
   it('retries workbook context sync after a failed server response without marking stale context as synced', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2833,7 +2837,7 @@ describe('workbook agent pane', () => {
   it('does not retry a failed in-flight context sync after the assistant is disabled', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2900,7 +2904,7 @@ describe('workbook agent pane', () => {
   it('does not resync workbook context only because the rendered capture timestamp changes', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -2976,7 +2980,7 @@ describe('workbook agent pane', () => {
   it('does not rebuild workbook context on unrelated assistant pane renders when a context version is provided', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3066,7 +3070,7 @@ describe('workbook agent pane', () => {
   it('does not resync workbook context only because the rendered batch id changes', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3142,7 +3146,7 @@ describe('workbook agent pane', () => {
   it('does not resync workbook context only because rendered proof revisions change', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3223,7 +3227,7 @@ describe('workbook agent pane', () => {
   it('does not treat rendered range churn as immediate context and flood sync requests', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3308,7 +3312,7 @@ describe('workbook agent pane', () => {
   it('does not resync workbook context only because rendered string intern ids change', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3381,7 +3385,7 @@ describe('workbook agent pane', () => {
   it('recreates the assistant session and reconnects the stream after a stale session error', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3429,7 +3433,7 @@ describe('workbook agent pane', () => {
     )
     expect(sessionCalls).toHaveLength(2)
     expect(MockEventSource.latest?.url).toContain('/v2/documents/doc-1/chat/threads/thr-1/events')
-    expect(window.sessionStorage.getItem('bilig:workbook-agent:doc-1')).toBe(
+    expect(window.sessionStorage.getItem(agentStorageKey())).toBe(
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3443,7 +3447,7 @@ describe('workbook agent pane', () => {
   it('bootstraps from a stored durable thread id without requiring a stored session id', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3480,7 +3484,7 @@ describe('workbook agent pane', () => {
     })
     expect(bootstrapSessionCall).toBeDefined()
     expect(MockEventSource.latest?.url).toContain('/v2/documents/doc-1/chat/threads/thr-1/events')
-    expect(window.sessionStorage.getItem('bilig:workbook-agent:doc-1')).toContain('"threadId":"thr-1"')
+    expect(window.sessionStorage.getItem(agentStorageKey())).toContain('"threadId":"thr-1"')
 
     await act(async () => {
       root.unmount()
@@ -3490,7 +3494,7 @@ describe('workbook agent pane', () => {
   it('does not render private review controls for restored private review items', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
@@ -3678,7 +3682,7 @@ describe('workbook agent pane', () => {
   it('does not auto-apply low-risk review items on shared threads', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-shared',
       }),
@@ -3786,7 +3790,7 @@ describe('workbook agent pane', () => {
   it('blocks collaborator approval of shared medium-risk bundles in the panel', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey('casey@example.com'),
       JSON.stringify({
         threadId: 'thr-shared',
       }),
@@ -3910,7 +3914,7 @@ describe('workbook agent pane', () => {
   it('lets the shared thread owner approve a medium-risk bundle before apply', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-shared',
       }),
@@ -4098,7 +4102,7 @@ describe('workbook agent pane', () => {
   it('lets collaborators recommend approval on shared medium-risk bundles', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey('casey@example.com'),
       JSON.stringify({
         threadId: 'thr-shared',
       }),
@@ -4263,7 +4267,7 @@ describe('workbook agent pane', () => {
   it('re-previews and applies only the selected command subset', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
-      'bilig:workbook-agent:doc-1',
+      agentStorageKey(),
       JSON.stringify({
         threadId: 'thr-1',
       }),
