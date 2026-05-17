@@ -288,13 +288,22 @@ function resolveCellTextSnapshot({
   const overrideRenderCell = snapshotToRenderCell(snapshotOverride, engine.getCellStyle(snapshotOverride.styleId))
 
   if (engineRenderCell.displayText.length > 0 && overrideRenderCell.displayText.length === 0) {
-    return engineSnapshot
+    return isNewerEmptySelectedSnapshot(snapshotOverride, engineSnapshot) ? snapshotOverride : engineSnapshot
   }
   if (overrideRenderCell.displayText.length > 0 && engineRenderCell.displayText.length === 0) {
     return snapshotOverride
   }
 
   return snapshotOverride
+}
+
+function isNewerEmptySelectedSnapshot(snapshot: CellSnapshot, engineSnapshot: CellSnapshot): boolean {
+  return (
+    snapshot.value.tag === ValueTag.Empty &&
+    snapshot.formula === undefined &&
+    (snapshot.input === undefined || snapshot.input === '') &&
+    snapshot.version > engineSnapshot.version
+  )
 }
 
 function resolveMergedCellTextSnapshot({

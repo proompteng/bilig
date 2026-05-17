@@ -568,6 +568,37 @@ describe('gridTextScene', () => {
     expect(scene.items.at(-1)?.text).toBe('engine text')
   })
 
+  test('uses a newer empty selected snapshot to suppress stale engine text', () => {
+    const scene = buildGridTextScene({
+      contentMode: 'data',
+      engine: makeEngine(
+        {},
+        {
+          C5: {
+            ...createCellSnapshot({ tag: ValueTag.String, value: 'engine text' }),
+            address: 'C5',
+            version: 3,
+          },
+        },
+      ),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      selectedCell: [2, 4],
+      selectedCellSnapshot: {
+        ...createCellSnapshot({ tag: ValueTag.Empty }, undefined),
+        address: 'C5',
+        version: 4,
+      },
+      sheetName: 'Sheet1',
+      visibleItems: [[2, 4]],
+      visibleRegion: { range: { x: 2, y: 4, width: 1, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 0, top: 0, width: 320, height: 240 },
+      getCellBounds: () => ({ x: 254, y: 112, width: 104, height: 22 }),
+    })
+
+    expect(scene.items.some((item) => item.text === 'engine text')).toBe(false)
+  })
+
   test('scales header text with the selected font size for full-sheet selections', () => {
     const scene = buildGridTextScene({
       engine: makeEngine(

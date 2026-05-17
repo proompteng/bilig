@@ -18,6 +18,9 @@ export function tileSelectedTextNeedsLocalRefresh(
   }
   const selectedRun = findSelectedTextRun(tile, selectedCell)
   const expectedText = selectedSnapshotTextHint(selectedCellSnapshot)
+  if (expectedText === undefined) {
+    return false
+  }
   if (expectedText === null) {
     return selectedRun !== null
   }
@@ -46,9 +49,9 @@ function countRenderTileGridBorderRects(tile: GridRenderTile): number {
   return count
 }
 
-function selectedSnapshotTextHint(snapshot: CellSnapshot | null | undefined): string | null {
+function selectedSnapshotTextHint(snapshot: CellSnapshot | null | undefined): string | null | undefined {
   if (!snapshot) {
-    return null
+    return undefined
   }
   if (snapshot.input !== undefined && snapshot.input !== null && snapshot.input !== '') {
     return String(snapshot.input)
@@ -62,7 +65,23 @@ function selectedSnapshotTextHint(snapshot: CellSnapshot | null | undefined): st
   if (snapshot.value.tag === ValueTag.Number) {
     return String(snapshot.value.value)
   }
+  if (isDefaultPlaceholderEmptySnapshot(snapshot)) {
+    return undefined
+  }
   return null
+}
+
+function isDefaultPlaceholderEmptySnapshot(snapshot: CellSnapshot): boolean {
+  return (
+    snapshot.value.tag === ValueTag.Empty &&
+    snapshot.version === 0 &&
+    snapshot.flags === 0 &&
+    snapshot.formula === undefined &&
+    (snapshot.input === undefined || snapshot.input === '') &&
+    snapshot.format === undefined &&
+    snapshot.styleId === undefined &&
+    snapshot.numberFormatId === undefined
+  )
 }
 
 function findSelectedTextRun(tile: GridRenderTile | null, selectedCell: Item | undefined): { readonly text: string } | null {

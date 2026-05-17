@@ -225,6 +225,46 @@ describe('useWorkerWorkbookInteractionState', () => {
     })
   })
 
+  it('commits an empty formula bar override even when the edit base is stale', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const selectedCell = stringCell('Sheet1', 'A1', '')
+    const workerHandle = { viewportStore: createViewportStoreStub('Sheet1', 'A1', selectedCell) }
+    const invokeMutation = vi.fn(async () => undefined)
+    const sendSelectionChanged = vi.fn()
+    const harness = mountHarness()
+    let captured: ReturnType<typeof useWorkerWorkbookInteractionState> | null = null
+
+    await harness.render({
+      documentId: 'doc-1',
+      selection: { sheetName: 'Sheet1', address: 'A1' },
+      selectedCell,
+      workerHandle,
+      invokeMutation,
+      sendSelectionChanged,
+      capture: (value) => {
+        captured = value
+      },
+    })
+    if (!captured) {
+      throw new Error('Expected interaction state capture')
+    }
+
+    await act(async () => {
+      captured?.beginEditing('', 'select-all', 'formula')
+      workerHandle.viewportStore.setCellSnapshot(stringCell('Sheet1', 'A1', 'stale value'))
+      captured?.commitEditor(undefined, '')
+      await Promise.resolve()
+    })
+
+    expect(invokeMutation).toHaveBeenCalledWith('clearCell', 'Sheet1', 'A1')
+    expect(workerHandle.viewportStore.getCell('Sheet1', 'A1').value).toEqual({ tag: ValueTag.Empty })
+
+    await act(async () => {
+      harness.root.unmount()
+    })
+  })
+
   it('keeps invalid formula commits visible until selected-cell state catches up', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

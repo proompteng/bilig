@@ -73,6 +73,35 @@ describe('grid render tile trust predicates', () => {
 
     expect(tileSelectedTextNeedsLocalRefresh(tile, [1, 2], emptySnapshot('B3'))).toBe(true)
   })
+
+  it('keeps remote selected text when the selected snapshot is only an unhydrated empty placeholder', () => {
+    const tile = createTile({
+      textRuns: [
+        {
+          align: 'left',
+          clipHeight: 20,
+          clipWidth: 100,
+          clipX: 0,
+          clipY: 0,
+          color: '#111827',
+          col: 1,
+          font: '400 12px Arial',
+          fontSize: 12,
+          height: 20,
+          row: 2,
+          strike: false,
+          text: 'remote value',
+          underline: false,
+          width: 100,
+          x: 0,
+          y: 0,
+        },
+      ],
+    })
+
+    expect(tileSelectedTextNeedsLocalRefresh(tile, [1, 2], defaultPlaceholderEmptySnapshot('B3'))).toBe(false)
+    expect(tileSelectedTextNeedsLocalRefresh(tile, [1, 2], null)).toBe(false)
+  })
 })
 
 function createGridBorderRectInstances(rectCount: number): Float32Array {
@@ -126,6 +155,16 @@ function emptySnapshot(address: string): CellSnapshot {
     sheetName: 'Sheet1',
     value: { tag: ValueTag.Empty },
     version: 1,
+  }
+}
+
+function defaultPlaceholderEmptySnapshot(address: string): CellSnapshot {
+  return {
+    address,
+    flags: 0,
+    sheetName: 'Sheet1',
+    value: { tag: ValueTag.Empty },
+    version: 0,
   }
 }
 
