@@ -227,16 +227,23 @@ function WorkerWorkbookAppInner({
   const selectAddressRef = useRef(app.selectAddress)
   visibleSelectionRef.current = visibleSelection
   selectAddressRef.current = app.selectAddress
-  const resolvingVisibleSheet =
-    app.workbookReady && app.workerHandle && app.sheetNames.length > 0 && !app.sheetNames.includes(visibleSelection.sheetName)
-      ? isResolvingWorkbookSheet(app.runtimeSyncState)
-      : false
-  const missingVisibleSheet =
-    app.workbookReady &&
-    app.workerHandle &&
-    app.sheetNames.length > 0 &&
-    !app.sheetNames.includes(visibleSelection.sheetName) &&
-    !resolvingVisibleSheet
+  const appSelectAddress = app.selectAddress
+  const appSheetNames = app.sheetNames
+  const missingVisibleSheetFromWorkbook =
+    app.workbookReady && app.workerHandle && appSheetNames.length > 0 && !appSheetNames.includes(visibleSelection.sheetName)
+  const resolvingVisibleSheet = missingVisibleSheetFromWorkbook ? !runtimeError && isResolvingWorkbookSheet(app.runtimeSyncState) : false
+  const missingVisibleSheet = missingVisibleSheetFromWorkbook && !runtimeError && !resolvingVisibleSheet
+
+  useEffect(() => {
+    if (!missingVisibleSheetFromWorkbook || !runtimeError) {
+      return
+    }
+    const fallbackSheetName = appSheetNames[0]
+    if (!fallbackSheetName) {
+      return
+    }
+    appSelectAddress(fallbackSheetName, visibleSelection.address)
+  }, [appSelectAddress, appSheetNames, missingVisibleSheetFromWorkbook, runtimeError, visibleSelection.address])
 
   const syncSelectionFromUrl = useCallback(() => {
     const nextSelection = readSelectionFromUrl()

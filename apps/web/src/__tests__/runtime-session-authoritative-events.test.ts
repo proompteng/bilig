@@ -370,6 +370,95 @@ describe('worker runtime session authoritative event loading', () => {
     expect(calls.indexOf('fetch:/v2/documents/doc-1/snapshot/latest')).toBeLessThan(calls.indexOf('zero-materialize'))
   })
 
+  it('keeps the local workbook visible when required authoritative snapshot loading fails', async () => {
+    channel = new MessageChannel()
+    const revisionView = new FakeRevisionLiveView({
+      headRevision: 0,
+      calculatedRevision: 0,
+    })
+    const getCell = vi.fn((sheetName: string, address: string) => ({
+      sheetName,
+      address,
+      value: { tag: ValueTag.Empty },
+      flags: 0,
+      version: 0,
+    }))
+    host = createWorkerEngineHost(
+      {
+        async bootstrap() {
+          return {
+            runtimeState: runtimeState({
+              authoritativeRevision: 0,
+              pendingMutationSummary: {
+                activeCount: 0,
+                failedCount: 0,
+                firstFailed: null,
+              },
+            }),
+            restoredFromPersistence: false,
+            requiresAuthoritativeHydrate: true,
+            localPersistenceMode: 'ephemeral',
+          }
+        },
+        getAuthoritativeRevision() {
+          return 0
+        },
+        getCell,
+        subscribeViewportPatches() {
+          return () => undefined
+        },
+      },
+      channel.port1,
+    )
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const requestUrl = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url
+      if (requestUrl.endsWith('/snapshot/latest')) {
+        return new Response('server error', { status: 500 })
+      }
+      return new Response(
+        JSON.stringify({
+          afterRevision: 0,
+          headRevision: 0,
+          calculatedRevision: 0,
+          events: [],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      )
+    })
+    const zero = {
+      materialize: vi.fn(() => revisionView),
+    }
+    const onRuntimeState = vi.fn()
+    const onError = vi.fn()
+
+    controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'doc-1',
+        replicaId: 'browser:test',
+        persistState: false,
+        fetchImpl,
+        zero,
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createWorker: () => channel!.port2,
+      },
+      {
+        onRuntimeState,
+        onSelection: vi.fn(),
+        onError,
+      },
+    )
+
+    expect(controller.runtimeState.sheetNames).toEqual(['Sheet1'])
+    expect(controller.selection).toEqual({ sheetName: 'Sheet1', address: 'A1' })
+    expect(getCell).toHaveBeenCalledWith('Sheet1', 'A1')
+    expect(zero.materialize).toHaveBeenCalledOnce()
+    expect(onRuntimeState).toHaveBeenCalledWith(expect.objectContaining({ sheetNames: ['Sheet1'] }))
+    expect(onError).toHaveBeenCalledWith('Failed to load workbook snapshot (500)')
+  })
+
   it('polls authoritative events after bootstrap when the live revision callback misses an update', async () => {
     channel = new MessageChannel()
     let authoritativeRevision = 0

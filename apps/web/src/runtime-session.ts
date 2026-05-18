@@ -751,9 +751,6 @@ export async function createWorkerRuntimeSessionController(
           fetchImpl,
         })
       } catch (error) {
-        if (requiresAuthoritativeSnapshot) {
-          throw error
-        }
         callbacks.onError(toErrorMessage(error))
       }
       startLiveSync()

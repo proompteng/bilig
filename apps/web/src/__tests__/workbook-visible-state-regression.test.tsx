@@ -178,6 +178,44 @@ describe('workbook visible-state regressions', () => {
       root.unmount()
     })
   })
+
+  it('falls back to the available grid when sync fails before a URL-requested sheet resolves', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const selectAddress = vi.fn()
+    useWorkerWorkbookAppState.mockReturnValue(
+      createWorkbookAppState({
+        runtimeError: 'Failed to load workbook snapshot (500)',
+        runtimeSyncState: 'syncing',
+        selectAddress,
+        selectedCell: { sheetName: 'Prepaid Template', address: 'C12' },
+        selection: { sheetName: 'Prepaid Template', address: 'C12' },
+        selectionSnapshot: {
+          sheetName: 'Prepaid Template',
+          address: 'C12',
+          kind: 'cell',
+          range: {
+            startAddress: 'C12',
+            endAddress: 'C12',
+          },
+        },
+        sheetIdsByName: { Sheet1: 1 },
+        sheetNames: ['Sheet1'],
+        sheetOrdinalsByName: { Sheet1: 0 },
+        visibleSelectedCell: { sheetName: 'Prepaid Template', address: 'C12' },
+        visibleSelection: { sheetName: 'Prepaid Template', address: 'C12' },
+      }),
+    )
+
+    const { host, root } = await renderWorkbookApp()
+
+    expect(host.querySelector("[data-testid='workbook-resolving-state']")).toBeNull()
+    expect(host.querySelector("[data-testid='missing-sheet-state']")).toBeNull()
+    expect(selectAddress).toHaveBeenCalledWith('Sheet1', 'C12')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })
 
 function createWorkbookAppState(overrides: Record<string, unknown> = {}): Record<string, unknown> {
