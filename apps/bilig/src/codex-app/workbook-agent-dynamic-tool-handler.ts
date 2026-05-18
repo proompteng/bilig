@@ -64,15 +64,20 @@ export function createWorkbookAgentDynamicToolHandler(input: {
 }): (request: CodexDynamicToolCallRequest) => Promise<CodexDynamicToolCallResult> {
   return async (request: CodexDynamicToolCallRequest) => {
     const sessionState = input.getSessionByThreadId(request.threadId)
-    assertWorkbookAgentToolCallOwnsTurn(sessionState, request.turnId)
+    const assertRequestTurnOwnsSession = (): void => {
+      assertWorkbookAgentToolCallOwnsTurn(sessionState, request.turnId)
+    }
+    assertRequestTurnOwnsSession()
     const requestActorUserId = input.resolveTurnActorUserId(sessionState, request.turnId)
     let requestContext: WorkbookAgentThreadState['durable']['context'] = null
 
     const refreshRequestContext = async (): Promise<WorkbookAgentThreadState['durable']['context']> => {
+      assertRequestTurnOwnsSession()
       const rawRequestContext = input.resolveTurnContext(sessionState, request.turnId)
       const normalizedContext = await input.zeroSyncService.inspectWorkbook(sessionState.documentId, (runtime) =>
         normalizeWorkbookAgentUiContext(runtime, rawRequestContext),
       )
+      assertRequestTurnOwnsSession()
       requestContext = normalizedContext
       if (JSON.stringify(rawRequestContext) !== JSON.stringify(normalizedContext)) {
         sessionState.durable.context = cloneUiContext(normalizedContext)
@@ -135,6 +140,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
         },
         zeroSyncService: input.zeroSyncService,
         updateUiContext: async (nextContext) => {
+          assertRequestTurnOwnsSession()
           sessionState.durable.context = cloneUiContext(nextContext)
           sessionState.live.turnContextByTurn.set(request.turnId, cloneUiContext(nextContext))
           await input.persistSessionState(sessionState)
@@ -144,11 +150,13 @@ export function createWorkbookAgentDynamicToolHandler(input: {
           requestContext = await waitForRenderedContext(revision)
         },
         stageCommand: async (command) => {
+          assertRequestTurnOwnsSession()
           const currentReviewBundle = sessionState.durable.reviewQueueItems[0]
             ? toWorkbookAgentCommandBundle(sessionState.durable.reviewQueueItems[0])
             : null
           const previousBundle = sessionState.scope === 'private' ? null : currentReviewBundle
           const baseRevision = await input.zeroSyncService.getWorkbookHeadRevision(sessionState.documentId)
+          assertRequestTurnOwnsSession()
           const bundle = appendWorkbookAgentCommandToBundle({
             previousBundle,
             documentId: sessionState.documentId,
@@ -161,6 +169,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
             now: input.now(),
           })
           if (input.shouldApplyToolBundleImmediately(sessionState, bundle)) {
+            assertRequestTurnOwnsSession()
             const executionRecord = await input.applyToolBundleAutomatically({
               sessionState,
               actorUserId: requestActorUserId,
@@ -186,6 +195,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
               retryable: false,
             })
           }
+          assertRequestTurnOwnsSession()
           input.stageReviewBundle(sessionState, request.turnId, bundle)
           await input.persistSessionState(sessionState)
           input.emitSnapshot(sessionState.threadId)
@@ -196,6 +206,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
           }
         },
         startWorkflow: async (workflowRequest: WorkbookAgentStartWorkflowRequest) => {
+          assertRequestTurnOwnsSession()
           const previousRunIds = new Set(sessionState.durable.workflowRuns.map((run) => run.runId))
           const nextSnapshot = await input.startWorkflow({
             documentId: sessionState.documentId,

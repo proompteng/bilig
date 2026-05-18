@@ -5108,6 +5108,143 @@ describe('workbook agent service', () => {
     }
   })
 
+  it('rejects dynamic tool commands when the turn loses ownership while resolving workbook authority', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null }
+    const engine = new SpreadsheetEngine({
+      workbookName: 'doc-1',
+      replicaId: 'server:test',
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    let releaseHeadRevision!: () => void
+    const headRevisionBlocked = new Promise<void>((resolve) => {
+      releaseHeadRevision = resolve
+    })
+    let resolveHeadRevisionRequested!: () => void
+    const headRevisionRequested = new Promise<void>((resolve) => {
+      resolveHeadRevisionRequested = resolve
+    })
+    const applyAgentCommandBundle = vi.fn(async (_documentId, _bundle, preview) => ({
+      revision: 7,
+      preview,
+    }))
+    const appendWorkbookAgentRun = vi.fn(async () => undefined)
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(_documentId: string, task: (runtime: WorkbookRuntime) => T | Promise<T>) {
+          const runtime: WorkbookRuntime = {
+            documentId: 'doc-1',
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine('doc-1', engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: 'alex@example.com',
+              updatedBy: 'alex@example.com',
+              updatedAt: '2026-04-11T00:00:00.000Z',
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: 'alex@example.com',
+          }
+          return await task(runtime)
+        },
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+        async getWorkbookHeadRevision() {
+          resolveHeadRevisionRequested()
+          await headRevisionBlocked
+          return 7
+        },
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options
+          return fakeCodex
+        },
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {},
+      })
+      await startWorkbookAgentTestTurn(service, {
+        threadId: snapshot.threadId,
+        prompt: 'Create a stale sheet',
+      })
+      const handler = capturedOptions.current?.handleDynamicToolCall
+      if (!handler) {
+        throw new Error('Expected dynamic tool handler to be captured')
+      }
+
+      const toolCallPromise = handler({
+        threadId: snapshot.threadId,
+        turnId: 'turn-1',
+        callId: 'call-stale-create-sheet',
+        tool: 'bilig_create_sheet',
+        arguments: {
+          name: 'Stale Sheet',
+        },
+      })
+      await headRevisionRequested
+      fakeCodex.emit({
+        method: 'turn/completed',
+        params: {
+          threadId: snapshot.threadId,
+          turn: {
+            id: 'turn-1',
+            status: 'completed',
+            items: [],
+            error: null,
+          },
+        },
+      })
+      await vi.waitFor(() => {
+        expect(
+          service.getSnapshot({
+            documentId: 'doc-1',
+            threadId: snapshot.threadId,
+            session: {
+              userID: 'alex@example.com',
+              roles: ['editor'],
+            },
+          }).activeTurnId,
+        ).toBeNull()
+      })
+      releaseHeadRevision()
+
+      const result = await toolCallPromise
+      expect(result.success).toBe(false)
+      expect(result.contentItems).toEqual([
+        expect.objectContaining({
+          type: 'inputText',
+          text: expect.stringContaining('Rejecting workbook tool call because the assistant turn is no longer active.'),
+        }),
+      ])
+      expect(applyAgentCommandBundle).not.toHaveBeenCalled()
+      expect(appendWorkbookAgentRun).not.toHaveBeenCalled()
+      const finalSnapshot = service.getSnapshot({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+      })
+      expect(finalSnapshot.executionRecords).toEqual([])
+      expect(finalSnapshot.reviewQueueItems).toEqual([])
+    } finally {
+      releaseHeadRevision()
+      await service.close()
+    }
+  })
+
   it('falls back to a stable runtime message when the app-server emits an empty error', async () => {
     const fakeCodex = new FakeCodexTransport()
     const service = createWorkbookAgentService(createZeroSyncStub(), {
