@@ -4,6 +4,19 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.21.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.20.0
+- Manual override: no
+
+## Features
+- feat(headless): initialize demo workpaper for mcp (4120d324)
+
+## Internal runtime changes
+- refactor(excel): split pivot export writer (7ef3640a)
+- docs(discovery): track mcp registry publish lag (afd56bce)
+
 ## 0.20.0
 
 - Release type: minor
