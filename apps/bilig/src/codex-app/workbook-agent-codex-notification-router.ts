@@ -107,21 +107,31 @@ export async function routeWorkbookAgentCodexNotification(input: {
       if (!sessionState) {
         return
       }
-      sessionState.live.activeTurnId = null
-      sessionState.live.status = notification.params.turn.status === 'failed' || sessionState.live.lastError ? 'failed' : 'idle'
+      const completedTurnId = notification.params.turn.id
+      const completedActiveTurn = sessionState.live.activeTurnId === completedTurnId
+      if (completedActiveTurn) {
+        sessionState.live.activeTurnId = null
+        sessionState.live.status = notification.params.turn.status === 'failed' || sessionState.live.lastError ? 'failed' : 'idle'
+      }
       if (notification.params.turn.error?.message) {
         sessionState.live.lastError = notification.params.turn.error.message
       }
       await input.finalizeCompletedTurn?.(
         sessionState,
-        notification.params.turn.id,
+        completedTurnId,
         notification.params.turn.status === 'failed' ? 'failed' : 'completed',
       )
-      sessionState.live.status = notification.params.turn.status === 'failed' || sessionState.live.lastError ? 'failed' : 'idle'
+      if (completedActiveTurn) {
+        sessionState.live.status = notification.params.turn.status === 'failed' || sessionState.live.lastError ? 'failed' : 'idle'
+      } else if (sessionState.live.activeTurnId) {
+        sessionState.live.status = 'inProgress'
+      } else {
+        sessionState.live.status = notification.params.turn.status === 'failed' || sessionState.live.lastError ? 'failed' : 'idle'
+      }
       if (notification.params.turn.error?.message) {
         sessionState.live.lastError = notification.params.turn.error.message
       }
-      clearWorkbookAgentLiveTurnState(sessionState, notification.params.turn.id)
+      clearWorkbookAgentLiveTurnState(sessionState, completedTurnId)
       await input.persistSessionState(sessionState)
       input.emitSnapshot(sessionState.threadId)
       return

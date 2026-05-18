@@ -4395,6 +4395,94 @@ describe('workbook agent service', () => {
     }
   })
 
+  it('does not let a stale completed-turn notification clear a newer active turn', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => fakeCodex,
+      maxActiveTurnsPerUser: 1,
+      maxActiveTurnsPerDocument: 1,
+    })
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {},
+      })
+
+      await service.startTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          prompt: 'First turn',
+        },
+      })
+      fakeCodex.emit({
+        method: 'turn/started',
+        params: {
+          threadId: snapshot.threadId,
+          turn: {
+            id: 'turn-2',
+            status: 'inProgress',
+            items: [],
+            error: null,
+          },
+        },
+      })
+
+      fakeCodex.emit({
+        method: 'turn/completed',
+        params: {
+          threadId: snapshot.threadId,
+          turn: {
+            id: 'turn-1',
+            status: 'completed',
+            items: [],
+            error: null,
+          },
+        },
+      })
+
+      await vi.waitFor(() => {
+        const stillActive = service.getSnapshot({
+          documentId: 'doc-1',
+          threadId: snapshot.threadId,
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+        })
+        expect(stillActive.status).toBe('inProgress')
+        expect(stillActive.activeTurnId).toBe('turn-2')
+      })
+
+      await expect(
+        service.startTurn({
+          documentId: 'doc-1',
+          threadId: snapshot.threadId,
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+          body: {
+            prompt: 'Should still be blocked by turn-2',
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: 'WORKBOOK_AGENT_TURN_ALREADY_RUNNING',
+      })
+    } finally {
+      await service.close()
+    }
+  })
+
   it('falls back to a stable runtime message when the app-server emits an empty error', async () => {
     const fakeCodex = new FakeCodexTransport()
     const service = createWorkbookAgentService(createZeroSyncStub(), {
