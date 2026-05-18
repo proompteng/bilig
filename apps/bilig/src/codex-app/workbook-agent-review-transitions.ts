@@ -37,6 +37,15 @@ export function stageWorkbookAgentReviewBundle(input: {
   readonly turnId: string
   readonly bundle: WorkbookAgentCommandBundle
 }): void {
+  const currentReviewItem = getCurrentWorkbookAgentReviewItem(input.sessionState)
+  if (currentReviewItem && currentReviewItem.turnId !== input.turnId) {
+    throw createWorkbookAgentServiceError({
+      code: 'WORKBOOK_AGENT_REVIEW_ITEM_EXISTS',
+      message: 'Finish the current workbook review item before staging another workbook change.',
+      statusCode: 409,
+      retryable: false,
+    })
+  }
   replaceCurrentWorkbookAgentReviewItem(
     input.sessionState,
     createWorkbookAgentReviewQueueItem({

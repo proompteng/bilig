@@ -41,16 +41,16 @@ function createSessionState(): WorkbookAgentThreadState {
   }
 }
 
-function createReviewItem() {
+function createReviewItem(input: { readonly bundleId?: string; readonly turnId?: string; readonly sheetName?: string } = {}) {
   const bundle = createWorkbookAgentCommandBundle({
-    bundleId: 'bundle-1',
+    bundleId: input.bundleId ?? 'bundle-1',
     documentId: 'doc-1',
     threadId: 'thr-1',
-    turnId: 'turn-1',
+    turnId: input.turnId ?? 'turn-1',
     goalText: 'Normalize the workbook',
     baseRevision: 4,
     context: null,
-    commands: [{ kind: 'createSheet', name: 'Summary' }],
+    commands: [{ kind: 'createSheet', name: input.sheetName ?? 'Summary' }],
     now: 100,
     sharedReview: {
       ownerUserId: 'alex@example.com',
@@ -151,6 +151,60 @@ describe('workbook agent review transitions', () => {
           turnId: 'turn-1',
         }),
       ]),
+    )
+  })
+
+  it('does not replace a pending review item from another turn', () => {
+    const sessionState = createSessionState()
+    const pendingReviewItem = createReviewItem()
+    replaceCurrentWorkbookAgentReviewItem(sessionState, pendingReviewItem)
+
+    const nextBundle = toWorkbookAgentCommandBundle(
+      createReviewItem({
+        bundleId: 'bundle-2',
+        turnId: 'turn-2',
+        sheetName: 'Forecast',
+      }),
+    )
+
+    expect(() =>
+      stageWorkbookAgentReviewBundle({
+        sessionState,
+        turnId: nextBundle.turnId,
+        bundle: nextBundle,
+      }),
+    ).toThrow('Finish the current workbook review item before staging another workbook change.')
+    expect(getCurrentWorkbookAgentReviewItem(sessionState)).toBe(pendingReviewItem)
+    expect(sessionState.durable.entries).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'system-preview:bundle-2',
+        }),
+      ]),
+    )
+  })
+
+  it('allows the active turn to refresh its own staged review item', () => {
+    const sessionState = createSessionState()
+    const pendingReviewItem = createReviewItem()
+    replaceCurrentWorkbookAgentReviewItem(sessionState, pendingReviewItem)
+    const nextBundle = toWorkbookAgentCommandBundle(
+      createReviewItem({
+        sheetName: 'Forecast',
+      }),
+    )
+
+    stageWorkbookAgentReviewBundle({
+      sessionState,
+      turnId: nextBundle.turnId,
+      bundle: nextBundle,
+    })
+
+    expect(getCurrentWorkbookAgentReviewItem(sessionState)).toEqual(
+      expect.objectContaining({
+        id: 'bundle-1',
+        summary: 'Create sheet Forecast',
+      }),
     )
   })
 
