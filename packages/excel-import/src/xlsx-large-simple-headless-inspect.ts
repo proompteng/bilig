@@ -2,7 +2,13 @@ import { normalizeWorkbookName } from './workbook-import-helpers.js'
 import type { LargeSimpleXlsxImportStats, LargeSimpleXlsxSheetDimension } from './xlsx-large-simple-import.js'
 import { LargeSimpleXlsxImportPhaseRecorder } from './xlsx-large-simple-import-telemetry.js'
 import { parseHeadlessLargeSimpleWorksheetFromChunks } from './xlsx-large-simple-headless-worksheet-scanner.js'
-import { forEachInflatedXlsxZipEntryChunk, getZipText, normalizeZipPath, type XlsxZipEntries } from './xlsx-zip.js'
+import {
+  forEachInflatedXlsxZipEntryChunk,
+  getZipText,
+  normalizeZipPath,
+  releaseLazyXlsxZipSource,
+  type XlsxZipEntries,
+} from './xlsx-zip.js'
 
 export interface LargeSimpleXlsxHeadlessInspectResult {
   readonly workbookName: string
@@ -27,6 +33,7 @@ const workbookPath = 'xl/workbook.xml'
 const workbookRelationshipsPath = 'xl/_rels/workbook.xml.rels'
 const sharedStringsPath = 'xl/sharedStrings.xml'
 const worksheetRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'
+const headlessZipEntryChunkSize = 16 * 1024
 const definedNameElementPattern =
   /<(?:[A-Za-z_][\w.-]*:)?definedName\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?definedName)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/gu
 const unsupportedPackagePathPattern =
@@ -36,7 +43,7 @@ export function tryInspectLargeSimpleXlsxHeadless(
   data: Uint8Array,
   fileName: string,
   zip: XlsxZipEntries,
-  options: { readonly minByteLength?: number } = {},
+  options: { readonly minByteLength?: number; readonly releaseZipSource?: boolean } = {},
 ): LargeSimpleXlsxHeadlessInspectResult | null {
   if (data.byteLength < (options.minByteLength ?? defaultLargeSimpleXlsxByteThreshold)) {
     return null
@@ -83,7 +90,7 @@ export function tryInspectLargeSimpleXlsxHeadless(
   for (const [order, entry] of worksheetEntries.entries()) {
     const worksheetScanStart = phaseRecorder.start()
     const scan = parseHeadlessLargeSimpleWorksheetFromChunks(
-      (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
+      (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk, { chunkSize: headlessZipEntryChunkSize }),
       order,
       { hasSharedStrings },
     )
@@ -107,6 +114,11 @@ export function tryInspectLargeSimpleXlsxHeadless(
     phaseRecorder.finish('worksheet-scan', worksheetScanStart)
   }
   delete zip[sharedStringsPath]
+  if (options.releaseZipSource === true) {
+    const zipSourceReleaseStart = phaseRecorder.start()
+    releaseLazyXlsxZipSource(zip)
+    phaseRecorder.finish('zip-source-release', zipSourceReleaseStart)
+  }
   return {
     workbookName: normalizeWorkbookName(fileName),
     sheetNames: workbookSheets.map((entry) => entry.name),

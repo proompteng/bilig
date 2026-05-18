@@ -21,10 +21,14 @@ export function readXlsxZipEntriesLazy(source: XlsxZipSource): XlsxZipEntries {
     return readXlsxZipEntries(source)
   }
   const output: Unzipped = {}
-  for (const entry of entries) {
-    defineLazyZipEntry(output, source, entry)
+  const metadata: XlsxZipCentralDirectorySource = {
+    source,
+    entriesByPath: new Map(entries.map((entry) => [entry.path, entry])),
   }
-  defineLazyZipCentralDirectorySource(output, source, entries)
+  for (const entry of entries) {
+    defineLazyZipEntry(output, metadata, entry)
+  }
+  defineLazyZipCentralDirectorySource(output, metadata)
   return output
 }
 
@@ -44,13 +48,23 @@ export function forEachInflatedXlsxZipEntryChunk(
   options: { readonly chunkSize?: number } = {},
 ): boolean {
   const metadata = (zip as XlsxZipEntriesWithCentralDirectorySource)[xlsxZipCentralDirectorySourceSymbol]
+  const source = metadata?.source
   const entry = metadata?.entriesByPath.get(normalizeZipPath(path))
-  if (!metadata || !entry) {
+  if (!metadata || !source || !entry) {
     return false
   }
-  inflateCentralDirectoryEntryChunks(metadata.source, entry.localHeaderOffset, entry.compressedSize, entry.compressionMethod, onChunk, {
+  inflateCentralDirectoryEntryChunks(source, entry.localHeaderOffset, entry.compressedSize, entry.compressionMethod, onChunk, {
     chunkSize: options.chunkSize ?? defaultZipEntryChunkSize,
   })
+  return true
+}
+
+export function releaseLazyXlsxZipSource(zip: XlsxZipEntries): boolean {
+  const metadata = (zip as XlsxZipEntriesWithCentralDirectorySource)[xlsxZipCentralDirectorySourceSymbol]
+  if (!metadata?.source) {
+    return false
+  }
+  metadata.source = null
   return true
 }
 
@@ -73,7 +87,7 @@ interface CentralDirectoryEntry {
 }
 
 interface XlsxZipCentralDirectorySource {
-  readonly source: Uint8Array
+  source: Uint8Array | null
   readonly entriesByPath: ReadonlyMap<string, CentralDirectoryEntry>
 }
 
@@ -141,11 +155,15 @@ function readCentralDirectoryEntries(source: Uint8Array): CentralDirectoryEntry[
   return offset === endOffset ? entries : null
 }
 
-function defineLazyZipEntry(output: Unzipped, source: Uint8Array, entry: CentralDirectoryEntry): void {
+function defineLazyZipEntry(output: Unzipped, metadata: XlsxZipCentralDirectorySource, entry: CentralDirectoryEntry): void {
   Object.defineProperty(output, entry.path, {
     configurable: true,
     enumerable: true,
     get() {
+      const source = metadata.source
+      if (!source) {
+        throw new Error('XLSX ZIP source has been released')
+      }
       const bytes = inflateCentralDirectoryEntry(source, entry.localHeaderOffset, entry.compressedSize, entry.compressionMethod)
       Object.defineProperty(output, entry.path, {
         configurable: true,
@@ -158,14 +176,11 @@ function defineLazyZipEntry(output: Unzipped, source: Uint8Array, entry: Central
   })
 }
 
-function defineLazyZipCentralDirectorySource(output: Unzipped, source: Uint8Array, entries: readonly CentralDirectoryEntry[]): void {
+function defineLazyZipCentralDirectorySource(output: Unzipped, metadata: XlsxZipCentralDirectorySource): void {
   Object.defineProperty(output, xlsxZipCentralDirectorySourceSymbol, {
     configurable: false,
     enumerable: false,
-    value: {
-      source,
-      entriesByPath: new Map(entries.map((entry) => [entry.path, entry])),
-    } satisfies XlsxZipCentralDirectorySource,
+    value: metadata,
   })
 }
 

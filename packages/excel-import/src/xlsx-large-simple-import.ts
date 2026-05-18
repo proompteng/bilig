@@ -36,7 +36,13 @@ import {
 } from './xlsx-large-simple-worksheet-scanner.js'
 import { parseLargeSimpleWorksheetCellsFromChunks } from './xlsx-large-simple-worksheet-stream-scanner.js'
 import { readImportedSheetTablesFromWorksheetXml } from './xlsx-tables.js'
-import { forEachInflatedXlsxZipEntryChunk, getZipText, normalizeZipPath, type XlsxZipEntries } from './xlsx-zip.js'
+import {
+  forEachInflatedXlsxZipEntryChunk,
+  getZipText,
+  normalizeZipPath,
+  releaseLazyXlsxZipSource,
+  type XlsxZipEntries,
+} from './xlsx-zip.js'
 
 export interface LargeSimpleXlsxImportResult {
   snapshot: WorkbookSnapshot
@@ -51,6 +57,8 @@ export interface LargeSimpleXlsxImportOptions {
   minByteLength?: number
   materializeCells?: boolean
   materializeMetadata?: boolean
+  releaseArenaAfterMaterialization?: boolean
+  releaseZipSource?: boolean
 }
 
 export interface LargeSimpleXlsxImportStats {
@@ -354,10 +362,16 @@ export function tryImportLargeSimpleXlsx(
   }
   delete zip[stylesPath]
   phaseRecorder.finish('style-parsing', styleParsingStart)
+  if (options.releaseZipSource === true) {
+    const zipSourceReleaseStart = phaseRecorder.start()
+    releaseLazyXlsxZipSource(zip)
+    phaseRecorder.finish('zip-source-release', zipSourceReleaseStart)
+  }
   for (const scanned of scannedWorksheets) {
     const snapshotMaterializationStart = phaseRecorder.start()
     const parsed = buildParsedWorksheet(scanned.name, scanned.order, scanned.cellScan, scanned.worksheetXml, scanned.metadataInput, {
       materializeCells,
+      releaseArenaAfterMaterialization: options.releaseArenaAfterMaterialization !== false,
       styleCatalog,
       stylesByIndex,
     })
@@ -432,6 +446,7 @@ function buildParsedWorksheet(
   > = {},
   options: {
     readonly materializeCells: boolean
+    readonly releaseArenaAfterMaterialization?: boolean
     readonly styleCatalog?: Map<string, CellStyleRecord>
     readonly stylesByIndex?: ReadonlyMap<number, Omit<CellStyleRecord, 'id'>>
   } = { materializeCells: true },
@@ -474,7 +489,7 @@ function buildParsedWorksheet(
     ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     cells,
   }
-  return {
+  const parsed: ParsedWorksheet = {
     sheet,
     preview: createSheetPreview({
       name: sheetName,
@@ -499,6 +514,11 @@ function buildParsedWorksheet(
       },
     },
   }
+  if (options.releaseArenaAfterMaterialization === true) {
+    cellScan.arena.release()
+    cellScan.styleIndexes.release()
+  }
+  return parsed
 }
 
 function readConditionalFormattingBlockCount(worksheetXml: string): number {

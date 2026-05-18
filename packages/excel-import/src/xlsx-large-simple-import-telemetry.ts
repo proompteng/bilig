@@ -4,6 +4,7 @@ export type LargeSimpleXlsxImportPhase =
   | 'shared-string-resolution'
   | 'metadata-parsing'
   | 'style-parsing'
+  | 'zip-source-release'
   | 'public-snapshot-materialization'
 
 export interface LargeSimpleXlsxImportPhaseTelemetry {

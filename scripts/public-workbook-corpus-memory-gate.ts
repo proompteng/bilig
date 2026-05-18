@@ -30,9 +30,9 @@ interface MemoryGateResult {
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const mib = 1024 * 1024
-const publicWorkbookMaxRssBytes = 144 * mib
-const synthetic750kMaxRssBytes = 160 * mib
-const hardMaxRssBytes = 256 * mib
+const publicWorkbookMaxRssBytes = 112 * mib
+const synthetic750kMaxRssBytes = 112 * mib
+const hardMaxRssBytes = 192 * mib
 const defaultCacheDir = join(rootDir, '.cache', 'public-workbook-corpus')
 const defaultManifestPath = join(defaultCacheDir, 'manifest.json')
 const defaultSyntheticCacheDir = join(rootDir, '.cache', 'public-workbook-corpus-memory-gate')

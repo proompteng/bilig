@@ -73,6 +73,13 @@ export class ImportedWorksheetStyleIndexArena {
     }
   }
 
+  release(): void {
+    this.rows = new Uint32Array(0)
+    this.columns = new Uint32Array(0)
+    this.styleIndexes = new Uint32Array(0)
+    this.length = 0
+  }
+
   private ensureCapacity(nextLength: number): void {
     if (nextLength <= this.rows.length) {
       return
@@ -230,6 +237,25 @@ export class ImportedWorkbookArena {
       strings: this.strings,
       formulas: this.formulas,
     }
+  }
+
+  release(): void {
+    this.sheetIndexes = new Uint32Array(0)
+    this.rows = new Uint32Array(0)
+    this.columns = new Uint32Array(0)
+    this.valueKinds = new Uint8Array(0)
+    this.numberValues = new Float64Array(0)
+    this.stringIds = new Uint32Array(0)
+    this.booleanValues = new Uint8Array(0)
+    this.formulaIds = new Uint32Array(0)
+    this.styleIds = new Uint32Array(0)
+    this.flags = new Uint8Array(0)
+    this.length = 0
+    this.strings.length = 0
+    this.stringIdsByValue.clear()
+    this.formulas.length = 0
+    this.formulaIdsByValue.clear()
+    this.previewValues.clear()
   }
 
   private appendCell(sheetIndex: number, row: number, column: number): number {

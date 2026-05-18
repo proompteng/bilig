@@ -67,6 +67,7 @@ function tryVerifyCompactLargeSimpleArtifact(
   writeWorkerPhase('import-xlsx')
   const imported = tryInspectLargeSimpleXlsxHeadless(bytes, artifact.fileName, zip, {
     minByteLength: 0,
+    releaseZipSource: true,
   })
   if (!imported) {
     return null

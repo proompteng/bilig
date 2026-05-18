@@ -2,7 +2,13 @@ import { deflateRawSync } from 'node:zlib'
 
 import { describe, expect, it } from 'vitest'
 
-import { getZipText, readXlsxZipEntries, readXlsxZipEntriesLazy } from '../xlsx-zip.js'
+import {
+  forEachInflatedXlsxZipEntryChunk,
+  getZipText,
+  readXlsxZipEntries,
+  readXlsxZipEntriesLazy,
+  releaseLazyXlsxZipSource,
+} from '../xlsx-zip.js'
 
 describe('XLSX ZIP reader', () => {
   it('inflates streamed ZIP entries from the central directory', () => {
@@ -22,6 +28,18 @@ describe('XLSX ZIP reader', () => {
     expect(getZipText(zip, 'xl/workbook.xml')).toBe('<workbook><sheets/></workbook>')
     const descriptorAfter = Object.getOwnPropertyDescriptor(zip, 'xl/workbook.xml')
     expect(descriptorAfter?.value).toBeInstanceOf(Uint8Array)
+  })
+
+  it('releases lazy central-directory source bytes after streamed consumers finish', () => {
+    const zip = readXlsxZipEntriesLazy(buildStreamedZip('xl/workbook.xml', '<workbook><sheets/></workbook>'))
+    const chunks: Uint8Array[] = []
+
+    expect(forEachInflatedXlsxZipEntryChunk(zip, 'xl/workbook.xml', (chunk) => chunks.push(chunk))).toBe(true)
+    expect(Buffer.concat(chunks).toString()).toBe('<workbook><sheets/></workbook>')
+    expect(releaseLazyXlsxZipSource(zip)).toBe(true)
+    expect(releaseLazyXlsxZipSource(zip)).toBe(false)
+    expect(forEachInflatedXlsxZipEntryChunk(zip, 'xl/workbook.xml', () => undefined)).toBe(false)
+    expect(() => getZipText(zip, 'xl/workbook.xml')).toThrow(/released/u)
   })
 })
 

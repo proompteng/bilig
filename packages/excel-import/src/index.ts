@@ -845,7 +845,12 @@ function importSheetJsWorkbook(
 export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
   const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
   const workbookZip = readValidXlsxZipContainer(data, 'lazy')
-  const largeSimpleImport = Object.hasOwn(workbookZip, 'xl/calcChain.xml') ? null : tryImportLargeSimpleXlsx(data, fileName, workbookZip)
+  const largeSimpleImport = Object.hasOwn(workbookZip, 'xl/calcChain.xml')
+    ? null
+    : tryImportLargeSimpleXlsx(data, fileName, workbookZip, {
+        releaseArenaAfterMaterialization: true,
+        releaseZipSource: true,
+      })
   if (largeSimpleImport) {
     return largeSimpleImport
   }

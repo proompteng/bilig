@@ -423,6 +423,8 @@ async function verifyLargeSimpleWorkbookCompact(
     tryImportLargeSimpleXlsx(bytes, artifact.fileName, readXlsxZipEntriesLazy(bytes), {
       materializeCells: false,
       minByteLength: 0,
+      releaseArenaAfterMaterialization: true,
+      releaseZipSource: true,
     }),
   )
   if (!imported) {

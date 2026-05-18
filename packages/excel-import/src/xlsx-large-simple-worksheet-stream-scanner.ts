@@ -10,12 +10,15 @@ import {
 } from './xlsx-large-simple-formula-records.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 
 const lessThan = 60
 const slash = 47
 const greaterThan = 62
 const doubleQuote = 34
 const singleQuote = 39
+const packedAddressColumnFactor = 16_384
+const emptyBytes = new Uint8Array(0)
 const unsupportedWorksheetTagNames = new Set(['dataValidations', 'legacyDrawing', 'oleObjects', 'picture', 'sheetProtection'])
 const metadataWorksheetTagNames = new Set([
   'autoFilter',
@@ -71,7 +74,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
 }
 
 class LargeSimpleWorksheetChunkScanner {
-  private buffer = new Uint8Array()
+  private buffer: Uint8Array = new Uint8Array()
   private index = 0
   private failed = false
   private readonly arena = new ImportedWorkbookArena()
@@ -172,7 +175,7 @@ class LargeSimpleWorksheetChunkScanner {
 
   private append(chunk: Uint8Array): void {
     if (this.index === this.buffer.byteLength) {
-      this.buffer = new Uint8Array(chunk)
+      this.buffer = chunk
       this.index = 0
       return
     }
@@ -189,7 +192,7 @@ class LargeSimpleWorksheetChunkScanner {
       return
     }
     if (this.index >= this.buffer.byteLength) {
-      this.buffer = new Uint8Array()
+      this.buffer = emptyBytes
       this.index = 0
       return
     }
@@ -205,6 +208,9 @@ class LargeSimpleWorksheetChunkScanner {
       }
       const tag = readXmlTagName(this.buffer, this.index + 1)
       if (!tag) {
+        if (!final && this.index + 1 >= this.buffer.byteLength) {
+          return
+        }
         this.index += 1
         continue
       }
@@ -287,11 +293,13 @@ class LargeSimpleWorksheetChunkScanner {
       }
       return false
     }
-    const decodedAddress = readCellAddressAttributeFromTag(this.buffer, nameEnd, tagEnd)
-    if (!decodedAddress) {
+    const packedAddress = readPackedCellAddressAttributeFromTag(this.buffer, nameEnd, tagEnd)
+    if (packedAddress === null) {
       this.failed = true
       return false
     }
+    const row = packedAddressRow(packedAddress)
+    const column = packedAddressColumn(packedAddress)
     const cellType = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 't')
     if (
       (!this.hasSharedStrings && cellType === 's') ||
@@ -333,12 +341,12 @@ class LargeSimpleWorksheetChunkScanner {
     const hasFormula = formula !== undefined
     if (hasValue || hasFormula) {
       this.cellCount += 1
-      this.rowCount = Math.max(this.rowCount, decodedAddress.row + 1)
-      this.columnCount = Math.max(this.columnCount, decodedAddress.column + 1)
-      this.minRow = Math.min(this.minRow, decodedAddress.row)
-      this.minColumn = Math.min(this.minColumn, decodedAddress.column)
-      this.maxRow = Math.max(this.maxRow, decodedAddress.row)
-      this.maxColumn = Math.max(this.maxColumn, decodedAddress.column)
+      this.rowCount = Math.max(this.rowCount, row + 1)
+      this.columnCount = Math.max(this.columnCount, column + 1)
+      this.minRow = Math.min(this.minRow, row)
+      this.minColumn = Math.min(this.minColumn, column)
+      this.maxRow = Math.max(this.maxRow, row)
+      this.maxColumn = Math.max(this.maxColumn, column)
       if (hasValue) {
         this.valueCellCount += 1
       }
@@ -349,26 +357,26 @@ class LargeSimpleWorksheetChunkScanner {
         ? deferSharedStringValue
           ? this.arena.addSharedStringCell({
               sheetIndex: this.sheetIndex,
-              row: decodedAddress.row,
-              column: decodedAddress.column,
+              row,
+              column,
               sharedStringIndex,
             })
           : this.arena.addCell({
               sheetIndex: this.sheetIndex,
-              row: decodedAddress.row,
-              column: decodedAddress.column,
+              row,
+              column,
               value,
             })
         : -1
       if (formula && this.retainCells) {
-        this.formulas.add(cellIndex, decodedAddress.row, decodedAddress.column, formula.typeCode, formula.sharedIndex, formula.rawFormula)
+        this.formulas.add(cellIndex, row, column, formula.typeCode, formula.sharedIndex, formula.rawFormula)
       }
       if (this.retainCells && styleIndex !== null) {
-        this.styleIndexes.add(decodedAddress.row, decodedAddress.column, styleIndex)
+        this.styleIndexes.add(row, column, styleIndex)
       }
       const richTextCell =
         this.retainCells && !deferSharedStringValue
-          ? readRichTextCellArtifact(this.buffer, contentStart, closing.start, decodedAddress, cellType, rawValue, this.sharedStrings)
+          ? readRichTextCellArtifact(this.buffer, contentStart, closing.start, row, column, cellType, rawValue, this.sharedStrings)
           : undefined
       if (richTextCell) {
         this.richTextCells.push(richTextCell)
@@ -497,7 +505,8 @@ function readRichTextCellArtifact(
   bytes: Uint8Array,
   contentStart: number,
   contentEnd: number,
-  address: { readonly row: number; readonly column: number },
+  row: number,
+  column: number,
   type: string | null,
   rawValue: string | null,
   sharedStrings: readonly LargeSimpleSharedStringEntry[],
@@ -507,7 +516,7 @@ function readRichTextCellArtifact(
     const entry = Number.isSafeInteger(index) && index >= 0 ? sharedStrings[index] : undefined
     return entry?.rich
       ? {
-          address: encodeCellAddress(address.row, address.column),
+          address: encodeCellAddress(row, column),
           text: entry.text,
           storage: 'sharedString',
           xml: entry.xml ?? '',
@@ -522,7 +531,7 @@ function readRichTextCellArtifact(
     return undefined
   }
   return {
-    address: encodeCellAddress(address.row, address.column),
+    address: encodeCellAddress(row, column),
     text: stringItemText(inlineStringXml),
     storage: 'inlineString',
     xml: inlineStringXml,
@@ -678,7 +687,9 @@ function readXmlTagName(bytes: Uint8Array, startIndex: number): { readonly local
     }
     index += 1
   }
-  return index === localNameStart ? null : { localName: decodeAscii(bytes, localNameStart, index), endIndex: index }
+  return index === localNameStart
+    ? null
+    : { localName: readKnownXmlLocalName(bytes, localNameStart, index) ?? decodeAscii(bytes, localNameStart, index), endIndex: index }
 }
 
 function readXmlAttributeFromTag(bytes: Uint8Array, startIndex: number, tagEnd: number, attributeName: string): string | null {
@@ -686,13 +697,9 @@ function readXmlAttributeFromTag(bytes: Uint8Array, startIndex: number, tagEnd: 
   return range ? decodeBytes(bytes, range.start, range.end) : null
 }
 
-function readCellAddressAttributeFromTag(
-  bytes: Uint8Array,
-  startIndex: number,
-  tagEnd: number,
-): { readonly row: number; readonly column: number } | null {
+function readPackedCellAddressAttributeFromTag(bytes: Uint8Array, startIndex: number, tagEnd: number): number | null {
   const range = readXmlAttributeRangeFromTag(bytes, startIndex, tagEnd, 'r')
-  return range ? decodeCellAddressBytes(bytes, range.start, range.end) : null
+  return range ? decodePackedCellAddressBytes(bytes, range.start, range.end) : null
 }
 
 function readCellStyleIndexFromTag(bytes: Uint8Array, startIndex: number, tagEnd: number): number | null {
@@ -834,11 +841,7 @@ function decodeCellAddress(address: string): { readonly row: number; readonly co
   return Number.isSafeInteger(row) && row > 0 && column > 0 ? { row: row - 1, column: column - 1 } : null
 }
 
-function decodeCellAddressBytes(
-  bytes: Uint8Array,
-  startIndex: number,
-  endIndex: number,
-): { readonly row: number; readonly column: number } | null {
+function decodePackedCellAddressBytes(bytes: Uint8Array, startIndex: number, endIndex: number): number | null {
   let column = 0
   let row = 0
   let letterCount = 0
@@ -861,7 +864,19 @@ function decodeCellAddressBytes(
     }
     return null
   }
-  return letterCount > 0 && letterCount <= 3 && digitCount > 0 && row > 0 && column > 0 ? { row: row - 1, column: column - 1 } : null
+  return letterCount > 0 && letterCount <= 3 && digitCount > 0 && row > 0 && column > 0 ? packCellAddress(row - 1, column - 1) : null
+}
+
+function packCellAddress(row: number, column: number): number {
+  return row * packedAddressColumnFactor + column
+}
+
+function packedAddressRow(value: number): number {
+  return Math.floor(value / packedAddressColumnFactor)
+}
+
+function packedAddressColumn(value: number): number {
+  return value % packedAddressColumnFactor
 }
 
 function encodeCellAddress(row: number, column: number): string {

@@ -363,7 +363,10 @@ describe('large simple XLSX import fast path', () => {
       },
     })
 
-    const imported = tryImportLargeSimpleXlsx(bytes, 'single-pass-shared-strings.xlsx', zip, { minByteLength: 0 })
+    const imported = tryImportLargeSimpleXlsx(bytes, 'single-pass-shared-strings.xlsx', zip, {
+      minByteLength: 0,
+      releaseZipSource: true,
+    })
 
     expect(imported?.snapshot.sheets[0]?.cells).toEqual([
       { address: 'A1', value: 'Alpha' },
@@ -376,6 +379,7 @@ describe('large simple XLSX import fast path', () => {
       'metadata-parsing',
       'shared-string-resolution',
       'style-parsing',
+      'zip-source-release',
       'public-snapshot-materialization',
     ])
     expect(imported?.stats.phaseTelemetry.every((entry) => Number.isInteger(entry.elapsedMs) && entry.elapsedMs >= 0)).toBe(true)
