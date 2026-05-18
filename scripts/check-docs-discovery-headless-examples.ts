@@ -6,6 +6,18 @@ import { requireNpmEvalDiscovery } from './check-docs-discovery-npm-eval.ts'
 import { requireOpenAiResponsesDiscovery } from './check-docs-discovery-openai-responses.ts'
 import { requireServerlessWorkPaperApiDiscovery } from './check-docs-discovery-serverless.ts'
 
+function parsePackageVersion(packageJson: string): string {
+  const parsed: unknown = JSON.parse(packageJson)
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('packages/headless/package.json must be an object')
+  }
+  const version = Reflect.get(parsed, 'version')
+  if (typeof version !== 'string') {
+    throw new Error('packages/headless/package.json must define a string version')
+  }
+  return version
+}
+
 export async function requireHeadlessExampleDiscovery({
   repoRoot,
   docsRoot,
@@ -31,6 +43,7 @@ export async function requireHeadlessExampleDiscovery({
     readFile(join(repoRoot, 'packages', 'headless', 'package.json'), 'utf8'),
     readFile(join(repoRoot, 'packages', 'headless', 'server.json'), 'utf8'),
   ])
+  const headlessPackageSpec = `@bilig/headless@${parsePackageVersion(headlessPackageManifest)}`
   await requireNpmEvalDiscovery(repoRoot, docsRoot, readme, headlessReadme, headlessExampleReadme)
   await requireOpenAiResponsesDiscovery({
     repoRoot,
@@ -110,7 +123,7 @@ export async function requireHeadlessExampleDiscovery({
   requireIncludes(headlessPackageManifest, '"bilig-workpaper-mcp": "./dist/work-paper-mcp-stdio-bin.js"', 'packages/headless/package.json')
   requireIncludes(
     headlessReadme,
-    'npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"',
+    `npm exec --package ${headlessPackageSpec} -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"`,
     'packages/headless/README.md',
   )
   requireIncludes(
@@ -121,7 +134,7 @@ export async function requireHeadlessExampleDiscovery({
   requireIncludes(headlessReadme, '`set_cell_contents` edits back to the same file', 'packages/headless/README.md')
   requireIncludes(
     readme,
-    'npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"',
+    `npm exec --package ${headlessPackageSpec} -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"`,
     'README.md',
   )
   requireIncludes(readme, 'bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable', 'README.md')

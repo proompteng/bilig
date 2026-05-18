@@ -54,6 +54,7 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     nodeSpreadsheetFormulaEngine,
   } = input.context
   const { headlessSpreadsheetEngineNodeServicesAgents, spreadsheetMcpServerComparison } = input
+  const headlessPackageSpec = `@bilig/headless@${headlessPackageVersion}`
 
   const jekyllConfig = await readFile(join(docsRoot, '_config.yml'), 'utf8')
   requireIncludes(jekyllConfig, 'include:', 'docs/_config.yml')
@@ -237,12 +238,12 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
   requireIncludes(rootPackageJson, '"workpaper:smoke:external": "bun scripts/workpaper-external-smoke.ts"', 'package.json')
   requireIncludes(
     mcpWorkPaperToolServerDoc,
-    'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+    `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp`,
     'docs/mcp-workpaper-tool-server.md',
   )
   requireIncludes(
     mcpWorkPaperToolServerDoc,
-    'npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable',
+    `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable`,
     'docs/mcp-workpaper-tool-server.md',
   )
   requireIncludes(mcpWorkPaperToolServerDoc, '`list_sheets`, `read_range`, `read_cell`', 'docs/mcp-workpaper-tool-server.md')
@@ -309,7 +310,7 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
   }
   for (const required of [
     'description: Live directory and install status for the Bilig WorkPaper MCP server',
-    'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+    `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp`,
     'io.github.proompteng/bilig-workpaper',
     'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
     'https://glama.ai/mcp/servers/proompteng/bilig',
@@ -371,10 +372,10 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     'docs/mcp-client-setup.md',
   )
   for (const required of [
-    'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+    `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp`,
     'The first command is demo mode. The client configs below use file-backed mode',
-    '"args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"]',
-    'args = ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"]',
+    `"args": ["exec", "--package", "${headlessPackageSpec}", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"]`,
+    `args = ["exec", "--package", "${headlessPackageSpec}", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"]`,
     'pnpm mcpb:workpaper:build',
     'claude-desktop-mcpb-workpaper.md',
     'claude mcp add-json bilig-workpaper',

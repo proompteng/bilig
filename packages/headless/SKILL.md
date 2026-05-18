@@ -15,7 +15,7 @@ allowed-tools:
   - Write
   - Edit
   - Grep
-argument-hint: "[workbook file or formula task]"
+argument-hint: '[workbook file or formula task]'
 ---
 
 # Bilig WorkPaper Agent Skill
@@ -40,7 +40,7 @@ Do not trigger it for manual spreadsheet editing, Office macros, VBA, pivots, ch
 Use MCP when the host can run a stdio server:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 The useful file-backed tools are:
@@ -60,31 +60,31 @@ After a write, always read the dependent output cell and export the WorkPaper do
 Use `@bilig/headless` directly when workbook logic belongs in a service, queue worker, test, or route:
 
 ```ts
-import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from "@bilig/headless";
+import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
-    ["Metric", "Value"],
-    ["Customers", 20],
-    ["Average revenue", 1200],
+    ['Metric', 'Value'],
+    ['Customers', 20],
+    ['Average revenue', 1200],
   ],
   Summary: [
-    ["Metric", "Value"],
-    ["Revenue", "=Inputs!B2*Inputs!B3"],
+    ['Metric', 'Value'],
+    ['Revenue', '=Inputs!B2*Inputs!B3'],
   ],
-});
+})
 
-const inputs = workbook.getSheetId("Inputs");
-const summary = workbook.getSheetId("Summary");
+const inputs = workbook.getSheetId('Inputs')
+const summary = workbook.getSheetId('Summary')
 if (inputs === undefined || summary === undefined) {
-  throw new Error("Workbook is missing required sheets");
+  throw new Error('Workbook is missing required sheets')
 }
 
-workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32);
-const revenue = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 });
-const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }));
+workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32)
+const revenue = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })
+const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
 
-console.log({ revenue, savedBytes: saved.length });
+console.log({ revenue, savedBytes: saved.length })
 ```
 
 ## XLSX Formula Clinic
@@ -92,7 +92,7 @@ console.log({ revenue, savedBytes: saved.length });
 When the user has a reduced XLSX formula/import bug, generate a local report:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.23.3 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 The report is local. It does not upload workbook contents. Ask for a reduced public fixture rather than private customer spreadsheets.

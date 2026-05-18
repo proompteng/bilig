@@ -11,6 +11,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(formula): preserve 3d structural range metadata (529cb889)
 
 ## 0.23.2
@@ -20,6 +21,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(formula): translate 3d range references (af35362b)
 
 ## 0.23.1
@@ -29,9 +31,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(formula): propagate criteria aggregate ref errors (47f63810)
 
 ## Internal runtime changes
+
 - docs(mcp): track registry refresh lag (3f70e797)
 
 ## 0.23.0

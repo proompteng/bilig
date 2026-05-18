@@ -43,7 +43,7 @@ explicit compatibility comparison.
 When the agent host supports stdio MCP, start the file-backed WorkPaper server:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 Useful MCP tools:

@@ -193,7 +193,7 @@ export async function requireSharedPublicDocsDiscovery(args: {
       'agent:framework-adapters',
       'agent:mcp-tools',
       'agent:mcp-stdio',
-      'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+      'npm exec --package @bilig/headless@',
       'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
       'vercel-ai-sdk-langchain-spreadsheet-tool',
       'mcp-workpaper-tool-server',

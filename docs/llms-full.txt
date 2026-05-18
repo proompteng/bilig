@@ -44,8 +44,8 @@ Do not claim success from a write call alone. The proof is computed readback plu
 ## Fast Commands
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
-npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 ## Direct TypeScript
@@ -68,6 +68,13 @@ tags:
   - xlsx
   - mcp
   - typescript
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - Edit
+  - Grep
+argument-hint: '[workbook file or formula task]'
 ---
 
 # Bilig WorkPaper Agent Skill
@@ -92,7 +99,7 @@ Do not trigger it for manual spreadsheet editing, Office macros, VBA, pivots, ch
 Use MCP when the host can run a stdio server:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 The useful file-backed tools are:
@@ -112,31 +119,31 @@ After a write, always read the dependent output cell and export the WorkPaper do
 Use `@bilig/headless` directly when workbook logic belongs in a service, queue worker, test, or route:
 
 ```ts
-import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from "@bilig/headless";
+import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
-    ["Metric", "Value"],
-    ["Customers", 20],
-    ["Average revenue", 1200],
+    ['Metric', 'Value'],
+    ['Customers', 20],
+    ['Average revenue', 1200],
   ],
   Summary: [
-    ["Metric", "Value"],
-    ["Revenue", "=Inputs!B2*Inputs!B3"],
+    ['Metric', 'Value'],
+    ['Revenue', '=Inputs!B2*Inputs!B3'],
   ],
-});
+})
 
-const inputs = workbook.getSheetId("Inputs");
-const summary = workbook.getSheetId("Summary");
+const inputs = workbook.getSheetId('Inputs')
+const summary = workbook.getSheetId('Summary')
 if (inputs === undefined || summary === undefined) {
-  throw new Error("Workbook is missing required sheets");
+  throw new Error('Workbook is missing required sheets')
 }
 
-workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32);
-const revenue = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 });
-const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }));
+workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32)
+const revenue = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })
+const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
 
-console.log({ revenue, savedBytes: saved.length });
+console.log({ revenue, savedBytes: saved.length })
 ```
 
 ## XLSX Formula Clinic
@@ -144,7 +151,7 @@ console.log({ revenue, savedBytes: saved.length });
 When the user has a reduced XLSX formula/import bug, generate a local report:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.23.3 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 The report is local. It does not upload workbook contents. Ask for a reduced public fixture rather than private customer spreadsheets.
@@ -230,7 +237,7 @@ Reduced workbook already in hand? Generate the paste-ready fixture report in
 one command:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.23.3 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 Handing a spreadsheet task to another coding agent? Start with the
@@ -355,7 +362,7 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.23.0`:
+Current checked npm footprint for `@bilig/headless@0.23.3`:
 
 - Pack dry run: `455 kB` tarball, `2.71 MB` unpacked, `453` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -460,7 +467,7 @@ and [serverless quote approval](examples/serverless-workpaper-api). Run
 `npm run quote-approval-api`, `npm run agent:framework-adapters`,
 `npm run agent:mcp-tools`, `npm run agent:mcp-transcript`,
 `npm run agent:mcp-file-transcript`, `npm run agent:mcp-stdio`, or
-`npm exec --package @bilig/headless -- bilig-workpaper-mcp` when that is the
+`npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp` when that is the
 path you are evaluating.
 
 The serverless example also includes `npm run next-route-handler`,
@@ -526,9 +533,9 @@ The agent framework guide is
 The package also ships the MCP stdio binary:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
-npm exec --package @bilig/headless -- bilig-workpaper-mcp
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
 ```
 
@@ -827,7 +834,7 @@ around the same WorkPaper model.
 Reduced workbook already in hand?
 
 ```sh
-npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.23.3 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 ## Install
@@ -858,7 +865,7 @@ That command is published through `@bilig/create-workpaper`. The publish gate is
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.23.0`:
+Current checked npm footprint for `@bilig/headless@0.23.3`:
 
 - Pack dry run: `455 kB` tarball, `2.71 MB` unpacked, `453` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -1132,9 +1139,9 @@ MCP examples:
 - The package ships npm-executable binaries:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
-npm exec --package @bilig/headless -- bilig-workpaper-mcp
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
 ```
 
@@ -1583,7 +1590,7 @@ logic that can run through @bilig/headless. If it is, use WorkPaper state as the
 source of truth.
 
 For MCP, start with:
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 
 For Node or TypeScript, import @bilig/headless directly. Prove the edit by
 reading the relevant range, writing one small input or formula, reading the
@@ -1613,7 +1620,7 @@ Do not report success from a write call alone.
 For MCP clients, use the published stdio server:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 Expected file-backed tools:
@@ -1713,7 +1720,7 @@ logic that can run through @bilig/headless. If it is, use WorkPaper state as the
 source of truth.
 
 If you have an MCP client, start with:
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 
 If you are writing Node or TypeScript, import @bilig/headless directly. Your
 minimum proof is: read the relevant range, write one small input or formula,
@@ -1767,7 +1774,7 @@ File-backed mode is the useful production shape because it gives the agent real
 state instead of the built-in demo workbook:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 Expose the same command from an MCP client config:
@@ -2635,14 +2642,14 @@ printf '%s\n' \
 The npm package exposes the demo server as `bilig-workpaper-mcp` by default:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp
 ```
 
 For a real agent workflow, point the same binary at a persisted WorkPaper JSON
 document:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.23.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 File-backed mode loads `./pricing.workpaper.json`, exposes `list_sheets`,
@@ -2762,7 +2769,7 @@ import { generateText } from 'ai'
 const client = await createMCPClient({
   transport: new Experimental_StdioMCPTransport({
     command: 'npm',
-    args: ['exec', '--package', '@bilig/headless', '--', 'bilig-workpaper-mcp'],
+    args: ['exec', '--package', '@bilig/headless@0.23.3', '--', 'bilig-workpaper-mcp'],
   }),
 })
 
@@ -3085,7 +3092,7 @@ the Markdown output into the fixture form. It reads the file on your machine and
 does not upload workbook contents.
 
 ```sh
-npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx \
+npm exec --package @bilig/headless@0.23.3 -- bilig-formula-clinic ./reduced.xlsx \
   --cells "Summary!B7,Inputs!B2"
 ```
 

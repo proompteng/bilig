@@ -73,6 +73,7 @@ const {
   serverSideSpreadsheetAutomationNode,
   evaluateExcelFormulasInNodeTypescript,
 } = docsDiscoveryContext
+const headlessPackageSpec = `@bilig/headless@${headlessPackageVersion}`
 
 const headlessSpreadsheetEngineNodeServicesAgents = await readFile(
   join(docsRoot, 'headless-spreadsheet-engine-node-services-agents.md'),
@@ -273,7 +274,7 @@ requireIncludes(headlessAgentNotes, '## Handoff prompt', 'packages/headless/AGEN
 requireIncludes(headlessAgentNotes, 'Do not claim success from a write call alone.', 'packages/headless/AGENTS.md')
 requireIncludes(
   headlessAgentNotes,
-  'npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable',
+  `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable`,
   'packages/headless/AGENTS.md',
 )
 requireIncludes(headlessSkillNotes, 'name: bilig-workpaper', 'packages/headless/SKILL.md')
@@ -367,7 +368,7 @@ requireIncludes(
 )
 requireIncludes(llmsFull, '## Generated Skill Manifest', 'docs/llms-full.txt')
 requireIncludes(llmsFull, '## Headless WorkPaper Agent Handbook', 'docs/llms-full.txt')
-requireIncludes(llmsFull, 'npm exec --package @bilig/headless -- bilig-workpaper-mcp', 'docs/llms-full.txt')
+requireIncludes(llmsFull, `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp`, 'docs/llms-full.txt')
 requireIncludes(headlessReadme, '## Stay Connected', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '## More Guides', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'Pick a scoped first patch:', 'packages/headless/README.md')
