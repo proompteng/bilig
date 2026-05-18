@@ -404,6 +404,7 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     'get_cell_display_value',
     'export_workpaper_document',
     'validate_formula',
+    '[Bilig WorkPaper MCPB privacy policy](workpaper-mcpb-privacy.md)',
     '"entry_point": "server/index.js"',
     'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
   ]) {

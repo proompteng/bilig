@@ -22,6 +22,7 @@ describe('WorkPaper MCPB builder', () => {
         documentation: 'https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html',
         icon: 'icon.png',
         license: 'MIT',
+        privacy_policies: ['https://proompteng.github.io/bilig/workpaper-mcpb-privacy.html'],
       }),
     )
     expect(manifest.server).toEqual({
@@ -87,6 +88,8 @@ describe('WorkPaper MCPB builder', () => {
       },
     })
     expect(renderWorkPaperMcpbReadme('0.13.27')).toContain('Bundled package version: `0.13.27`')
+    expect(renderWorkPaperMcpbReadme('0.13.27')).toContain('## Privacy Policy')
+    expect(renderWorkPaperMcpbReadme('0.13.27')).toContain('https://proompteng.github.io/bilig/workpaper-mcpb-privacy.html')
   })
 
   it('parses explicit CLI paths and versions', () => {

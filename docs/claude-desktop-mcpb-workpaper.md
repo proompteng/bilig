@@ -70,6 +70,15 @@ The write tool changes one input cell, recalculates dependent formulas, saves
 the WorkPaper document, and returns checks such as `persisted`,
 `restoredMatchesAfter`, `previousSerialized`, and `newSerialized`.
 
+## Privacy and local data
+
+The bundle runs locally through Claude Desktop stdio and does not send workbook
+contents, formulas, cell values, or generated `workpaper.json` files to Proompt
+Engineering. The generated manifest includes the public
+[Bilig WorkPaper MCPB privacy policy](workpaper-mcpb-privacy.md), which covers
+data collection, local storage, third-party sharing, retention, and support
+contact details.
+
 ## What is inside the bundle
 
 The generated MCPB folder is intentionally small:

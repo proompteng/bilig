@@ -10,6 +10,7 @@ const defaultOutputPath = join(defaultBuildRoot, 'bilig-workpaper.mcpb')
 const defaultIconPath = join(repoRoot, 'docs', 'assets', 'bilig-mcp-marketplace-logo.png')
 const defaultMcpbPackage = '@anthropic-ai/mcpb@2.1.2'
 const headlessPackageName = '@bilig/headless'
+const workPaperMcpbPrivacyPolicyUrl = 'https://proompteng.github.io/bilig/workpaper-mcpb-privacy.html'
 
 export type WorkPaperMcpbManifest = {
   readonly manifest_version: '0.4'
@@ -153,7 +154,7 @@ export function buildWorkPaperMcpbManifest(packageVersion: string): WorkPaperMcp
       'bilig',
     ],
     license: 'MIT',
-    privacy_policies: [],
+    privacy_policies: [workPaperMcpbPrivacyPolicyUrl],
     compatibility: {
       platforms: ['darwin', 'win32', 'linux'],
       runtimes: {
@@ -215,6 +216,12 @@ export function renderWorkPaperMcpbReadme(packageVersion: string): string {
     `Bundled package version: \`${packageVersion}\``,
     '',
     'After installation, ask Claude to list the Bilig WorkPaper tools, read `Summary!A1:B5`, set `Inputs!B3` to `0.4`, read `Summary!B3`, and report the recalculated value plus persistence checks.',
+    '',
+    '## Privacy Policy',
+    '',
+    'This desktop extension runs locally in Claude Desktop through stdio. It does not send workbook contents, formulas, cell values, or generated `workpaper.json` files to Proompt Engineering. Claude Desktop and Anthropic may process tool calls according to Anthropic policies when you use the extension in Claude.',
+    '',
+    `Privacy policy: ${workPaperMcpbPrivacyPolicyUrl}`,
     '',
   ].join('\n')
 }

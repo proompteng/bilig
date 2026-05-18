@@ -259,6 +259,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://proompteng.github.io/bilig/workpaper-mcpb-privacy.html</loc>
+    <lastmod>2026-05-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html</loc>
     <lastmod>2026-05-08</lastmod>
     <changefreq>monthly</changefreq>

@@ -47,6 +47,7 @@ export const docsSiteSources = [
   ['mcp-spreadsheet-server-directory.html', 'mcp-spreadsheet-server-directory.md'],
   ['mcp-client-setup.html', 'mcp-client-setup.md'],
   ['claude-desktop-mcpb-workpaper.html', 'claude-desktop-mcpb-workpaper.md'],
+  ['workpaper-mcpb-privacy.html', 'workpaper-mcpb-privacy.md'],
   ['agent-spreadsheet-tool-call-loop.html', 'agent-spreadsheet-tool-call-loop.md'],
   ['node-service-workpaper-recipe.html', 'node-service-workpaper-recipe.md'],
   ['server-side-spreadsheet-automation-node.html', 'server-side-spreadsheet-automation-node.md'],
