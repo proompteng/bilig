@@ -1,24 +1,27 @@
 import type { Zero } from '@rocicorp/zero'
 import { createWorkerEngineClient, type MessagePortLike } from '@bilig/worker-transport'
 import { parseCellAddress } from '@bilig/formula'
-import { isAuthoritativeWorkbookEventBatchAfterRevision, type AuthoritativeWorkbookEventBatch } from '@bilig/zero-sync'
-import {
-  isCellSnapshot,
-  isWorkbookSnapshot,
-  ValueTag,
-  type CellSnapshot,
-  type RecalcMetrics,
-  type Viewport,
-  type WorkbookSnapshot,
-} from '@bilig/protocol'
+import { isCellSnapshot, isWorkbookSnapshot, ValueTag, type CellSnapshot, type RecalcMetrics, type Viewport } from '@bilig/protocol'
 import type { InstallAuthoritativeSnapshotInput, WorkbookWorkerBootstrapResult, WorkbookWorkerStateSnapshot } from './worker-runtime.js'
 import { isInstallBenchmarkCorpusResult } from './benchmark-corpus-result.js'
 import { isWorkerRuntimeStateSnapshot, normalizeWorkerRuntimeStateSnapshot } from './worker-runtime-state.js'
 import type { WorkbookPerfSession } from './perf/workbook-perf.js'
 import { ProjectedViewportStore } from './projected-viewport-store.js'
 import { ZeroWorkbookRevisionSync, type WorkbookRevisionState } from './runtime-zero-revision-sync.js'
+import {
+  isAuthoritativeSnapshotNewerForRebase,
+  loadAuthoritativeEventBatch,
+  loadLatestWorkbookSnapshot,
+  shouldApplyAuthoritativeEventBatch,
+  shouldInstallBootstrapSnapshot,
+  shouldQueueAuthoritativeRebase,
+  type AuthoritativeWorkbookEventBatch,
+  type LatestWorkbookSnapshot,
+} from './runtime-authoritative-sync.js'
 import { loadPersistedWorkbookMutationJournal, persistWorkbookMutationJournal } from './workbook-local-mutation-journal-persistence.js'
 import { isPendingWorkbookMutationList } from './workbook-sync.js'
+
+export { parseSnapshotRevisionHeader } from './runtime-authoritative-sync.js'
 
 export interface WorkerHandle {
   readonly viewportStore: ProjectedViewportStore
@@ -158,35 +161,6 @@ function isInstallAuthoritativeSnapshotInput(value: unknown): value is InstallAu
   )
 }
 
-async function parseJsonResponse(response: Response, context: string): Promise<unknown> {
-  try {
-    return JSON.parse(await response.text()) as unknown
-  } catch {
-    throw new Error(`${context} response returned malformed JSON`)
-  }
-}
-
-async function loadAuthoritativeEventBatch(
-  documentId: string,
-  afterRevision: number,
-  fetchImpl: typeof fetch,
-): Promise<AuthoritativeWorkbookEventBatch> {
-  const response = await fetchImpl(`/v2/documents/${encodeURIComponent(documentId)}/events?afterRevision=${String(afterRevision)}`, {
-    headers: {
-      accept: 'application/json',
-    },
-    cache: 'no-store',
-  })
-  if (!response.ok) {
-    throw new Error(`Failed to load authoritative events (${response.status})`)
-  }
-  const parsed = await parseJsonResponse(response, 'Authoritative events')
-  if (!isAuthoritativeWorkbookEventBatchAfterRevision(parsed, afterRevision)) {
-    throw new Error('Authoritative event payload does not match the expected schema')
-  }
-  return parsed
-}
-
 async function invokeWorkerMethod<T>(
   client: ReturnType<typeof createWorkerEngineClient>,
   method: string,
@@ -245,11 +219,6 @@ function resolveAuthoritativeBackstopIntervalMs(): number {
   return AUTHORITATIVE_BACKSTOP_VISIBLE_INTERVAL_MS
 }
 
-interface LatestWorkbookSnapshot {
-  readonly snapshot: WorkbookSnapshot
-  readonly revision: number | null
-}
-
 function reconcileSelection(selection: WorkerRuntimeSelection, sheetNames: readonly string[]): WorkerRuntimeSelection {
   if (sheetNames.length === 0) {
     return selection
@@ -260,38 +229,6 @@ function reconcileSelection(selection: WorkerRuntimeSelection, sheetNames: reado
   return {
     sheetName: sheetNames[0]!,
     address: 'A1',
-  }
-}
-
-export function parseSnapshotRevisionHeader(value: string | null): number | null {
-  const trimmed = value?.trim()
-  if (!trimmed || !/^(0|[1-9]\d*)$/u.test(trimmed)) {
-    return null
-  }
-  const parsed = Number(trimmed)
-  return Number.isSafeInteger(parsed) ? parsed : null
-}
-
-async function loadLatestWorkbookSnapshot(documentId: string, fetchImpl: typeof fetch): Promise<LatestWorkbookSnapshot | null> {
-  const response = await fetchImpl(`/v2/documents/${encodeURIComponent(documentId)}/snapshot/latest`, {
-    headers: {
-      accept: 'application/json, application/vnd.bilig.workbook+json',
-    },
-    cache: 'no-store',
-  })
-  if (response.status === 204 || response.status === 404) {
-    return null
-  }
-  if (!response.ok) {
-    throw new Error(`Failed to load workbook snapshot (${response.status})`)
-  }
-  const parsed = await parseJsonResponse(response, 'Workbook snapshot')
-  if (!isWorkbookSnapshot(parsed)) {
-    throw new Error('Workbook snapshot payload does not match the expected schema')
-  }
-  return {
-    snapshot: parsed,
-    revision: parseSnapshotRevisionHeader(response.headers.get('x-bilig-snapshot-cursor')),
   }
 }
 
@@ -497,11 +434,7 @@ export async function createWorkerRuntimeSessionController(
   }
 
   const applyAuthoritativeEventBatch = async (eventBatch: AuthoritativeWorkbookEventBatch): Promise<boolean> => {
-    if (
-      eventBatch.events.length === 0 ||
-      eventBatch.headRevision <= currentAuthoritativeRevision ||
-      eventBatch.calculatedRevision < eventBatch.headRevision
-    ) {
+    if (!shouldApplyAuthoritativeEventBatch({ eventBatch, currentAuthoritativeRevision })) {
       return false
     }
 
@@ -525,7 +458,11 @@ export async function createWorkerRuntimeSessionController(
     if (disposed || !authoritativeSyncEnabled) {
       return
     }
-    const eventBatch = await loadAuthoritativeEventBatch(input.documentId, currentAuthoritativeRevision, fetchImpl)
+    const eventBatch = await loadAuthoritativeEventBatch({
+      documentId: input.documentId,
+      afterRevision: currentAuthoritativeRevision,
+      fetchImpl,
+    })
     if (await applyAuthoritativeEventBatch(eventBatch)) {
       await runAuthoritativeRebase()
     }
@@ -689,7 +626,11 @@ export async function createWorkerRuntimeSessionController(
       return
     }
     if (needsNewHeadRevision) {
-      const eventBatch = await loadAuthoritativeEventBatch(input.documentId, currentAuthoritativeRevision, fetchImpl)
+      const eventBatch = await loadAuthoritativeEventBatch({
+        documentId: input.documentId,
+        afterRevision: currentAuthoritativeRevision,
+        fetchImpl,
+      })
       if (
         eventBatch.events.length > 0 &&
         eventBatch.headRevision >= targetRevision &&
@@ -701,7 +642,10 @@ export async function createWorkerRuntimeSessionController(
       }
     }
     publishPhase('recovering')
-    const latestSnapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl)
+    const latestSnapshot = await loadLatestWorkbookSnapshot({
+      documentId: input.documentId,
+      fetchImpl,
+    })
     if (!latestSnapshot) {
       throw new Error('Authoritative workbook snapshot was not available for rebase')
     }
@@ -709,8 +653,12 @@ export async function createWorkerRuntimeSessionController(
     const snapshotCalculatedRevision = calculatedRevisionForSnapshot(snapshotRevision)
     if (
       latestSnapshot.revision !== null &&
-      (snapshotRevision < currentAuthoritativeRevision ||
-        (snapshotRevision === currentAuthoritativeRevision && snapshotCalculatedRevision <= currentCalculatedRevision))
+      !isAuthoritativeSnapshotNewerForRebase({
+        snapshotRevision,
+        snapshotCalculatedRevision,
+        currentAuthoritativeRevision,
+        currentCalculatedRevision,
+      })
     ) {
       throw new Error('Authoritative workbook snapshot was not newer than the current runtime state')
     }
@@ -727,16 +675,21 @@ export async function createWorkerRuntimeSessionController(
   }
 
   const queueAuthoritativeRebase = (revisionState: WorkbookRevisionState | null): void => {
+    if (revisionState === null) {
+      return
+    }
     if (
-      revisionState === null ||
-      revisionState.calculatedRevision < revisionState.headRevision ||
-      revisionState.headRevision < currentAuthoritativeRevision ||
-      (revisionState.headRevision === currentAuthoritativeRevision && revisionState.calculatedRevision <= currentCalculatedRevision)
+      !shouldQueueAuthoritativeRebase({
+        revisionState,
+        currentAuthoritativeRevision,
+        currentCalculatedRevision,
+      })
     ) {
       return
     }
-    requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, revisionState.headRevision)
-    requestedCalculatedRevision = Math.max(requestedCalculatedRevision, revisionState.calculatedRevision)
+    const queuedRevisionState = revisionState
+    requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, queuedRevisionState.headRevision)
+    requestedCalculatedRevision = Math.max(requestedCalculatedRevision, queuedRevisionState.calculatedRevision)
     const previousRebaseQueue = rebaseQueue
     rebaseQueue = (async () => {
       await previousRebaseQueue.catch(() => undefined)
@@ -788,7 +741,10 @@ export async function createWorkerRuntimeSessionController(
       publishPhase('syncing')
       let latestSnapshot: LatestWorkbookSnapshot | null = null
       try {
-        latestSnapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl)
+        latestSnapshot = await loadLatestWorkbookSnapshot({
+          documentId: input.documentId,
+          fetchImpl,
+        })
       } catch (error) {
         if (requiresAuthoritativeSnapshot) {
           throw error
@@ -798,7 +754,10 @@ export async function createWorkerRuntimeSessionController(
       startLiveSync()
       if (latestSnapshot) {
         const snapshotRevision = latestSnapshot.revision ?? currentAuthoritativeRevision
-        const shouldInstallSnapshot = latestSnapshot.revision === null || snapshotRevision >= currentAuthoritativeRevision
+        const shouldInstallSnapshot = shouldInstallBootstrapSnapshot({
+          snapshotRevision: latestSnapshot.revision,
+          currentAuthoritativeRevision,
+        })
         if (shouldInstallSnapshot) {
           const snapshotCalculatedRevision = calculatedRevisionForSnapshot(snapshotRevision)
           const hydratedState = await invokeWorkerMethod(client, 'installAuthoritativeSnapshot', isWorkbookWorkerStateSnapshot, {
