@@ -4536,7 +4536,6 @@ describe('workbook agent pane', () => {
       JSON.stringify({
         appliedBy: 'user',
         commandIndexes: [1],
-        preview: subsetPreview,
       }),
     )
     expect(host.textContent).toContain('Write cells in Sheet1!B2')

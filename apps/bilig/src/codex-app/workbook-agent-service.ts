@@ -646,7 +646,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     session: SessionIdentity
     appliedBy: WorkbookAgentAppliedBy
     commandIndexes?: readonly number[] | null
-    preview: unknown
   }): Promise<WorkbookAgentThreadSnapshot> {
     const sessionState = await this.getAuthorizedSession(input.documentId, input.threadId, input.session.userID)
     await applyWorkbookAgentReviewItem({
@@ -656,7 +655,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       actorUserId: input.session.userID,
       appliedBy: input.appliedBy,
       commandIndexes: input.commandIndexes,
-      preview: input.preview,
     })
     return buildSnapshot(sessionState)
   }

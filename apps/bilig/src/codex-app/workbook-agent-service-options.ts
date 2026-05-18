@@ -53,7 +53,6 @@ export interface WorkbookAgentService {
     session: SessionIdentity
     appliedBy: WorkbookAgentAppliedBy
     commandIndexes?: readonly number[] | null
-    preview: unknown
   }): Promise<WorkbookAgentThreadSnapshot>
   reviewReviewItem(input: {
     documentId: string

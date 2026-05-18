@@ -241,7 +241,6 @@ export function registerWorkbookAgentRoutes(app: FastifyInstance, workbookAgentS
         Body: {
           appliedBy?: 'user' | 'auto'
           commandIndexes?: number[]
-          preview?: unknown
         }
       }>,
       reply,
@@ -258,7 +257,6 @@ export function registerWorkbookAgentRoutes(app: FastifyInstance, workbookAgentS
           session,
           appliedBy: request.body && request.body.appliedBy === 'auto' ? 'auto' : 'user',
           ...(commandIndexes ? { commandIndexes } : {}),
-          preview: request.body && typeof request.body === 'object' && 'preview' in request.body ? (request.body.preview ?? null) : null,
         })
       })
     },

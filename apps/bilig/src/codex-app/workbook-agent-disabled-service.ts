@@ -41,7 +41,6 @@ export class DisabledWorkbookAgentService implements WorkbookAgentService {
     session: SessionIdentity
     appliedBy: WorkbookAgentAppliedBy
     commandIndexes?: readonly number[] | null
-    preview: unknown
   }): Promise<never> {
     throw new Error('Workbook agent service is not configured')
   }

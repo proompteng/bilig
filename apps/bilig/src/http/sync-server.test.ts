@@ -269,24 +269,6 @@ function createReviewQueueItem(bundle: WorkbookAgentCommandBundle) {
   })
 }
 
-function createPreviewSummary(overrides: Record<string, unknown> = {}) {
-  return {
-    ranges: [],
-    structuralChanges: [],
-    cellDiffs: [],
-    effectSummary: {
-      displayedCellDiffCount: 0,
-      truncatedCellDiffs: false,
-      inputChangeCount: 0,
-      formulaChangeCount: 0,
-      styleChangeCount: 0,
-      numberFormatChangeCount: 0,
-      structuralChangeCount: 0,
-    },
-    ...overrides,
-  }
-}
-
 describe('sync-server zero keepalive', () => {
   it('proxies a healthy keepalive response without using the generic zero proxy route', async () => {
     const upstream = await startHttpServer((request, response) => {
@@ -1337,7 +1319,6 @@ describe('sync-server workbook agent', () => {
         url: '/v2/documents/doc-1/chat/threads/thr-2/review-items/bundle-1/apply',
         payload: {
           commandIndexes: [1],
-          preview: createPreviewSummary(),
         },
       })
 
@@ -1357,7 +1338,6 @@ describe('sync-server workbook agent', () => {
           reviewItemId: 'bundle-1',
           appliedBy: 'user',
           commandIndexes: [1],
-          preview: createPreviewSummary(),
         }),
       )
     } finally {
@@ -1392,9 +1372,7 @@ describe('sync-server workbook agent', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v2/documents/doc-1/chat/threads/thr-stale/review-items/bundle-1/apply',
-        payload: {
-          preview: createPreviewSummary(),
-        },
+        payload: {},
       })
 
       expect(createSession).toHaveBeenCalledWith(

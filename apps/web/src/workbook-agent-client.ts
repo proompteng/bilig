@@ -1,4 +1,3 @@
-import type { WorkbookAgentPreviewSummary } from '@bilig/agent-api'
 import {
   WorkbookAgentThreadSnapshotSchema,
   WorkbookAgentThreadScopeSchema,
@@ -143,7 +142,6 @@ export function createWorkbookAgentClient(documentId: string) {
       input: {
         readonly appliedBy: 'user' | 'auto'
         readonly commandIndexes: readonly number[]
-        readonly preview: WorkbookAgentPreviewSummary
       },
     ): Promise<WorkbookAgentThreadSnapshot> {
       return decodeThreadSnapshot(

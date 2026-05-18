@@ -442,7 +442,6 @@ export function useWorkbookAgentPane(input: {
         const nextSnapshot = await client.applyReviewItem(activeSession.threadId, activeReviewBundle.id, {
           appliedBy,
           commandIndexes: normalizedCommandIndexes,
-          preview,
         })
         persistSessionSnapshot(nextSnapshot)
         perfSession.markFirstAgentApplyVisible?.()

@@ -4915,7 +4915,6 @@ describe('workbook agent service', () => {
         },
       })
 
-      const callerPreview = createPreviewSummary()
       const applied = await service.applyReviewItem({
         documentId: 'doc-1',
         threadId: 'thr-test',
@@ -4925,7 +4924,6 @@ describe('workbook agent service', () => {
           roles: ['editor'],
         },
         appliedBy: 'user',
-        preview: callerPreview,
       })
 
       const record = applied.executionRecords[0]
@@ -4933,8 +4931,6 @@ describe('workbook agent service', () => {
         throw new Error('Expected an execution record after apply')
       }
       expect(applyAgentCommandBundle).toHaveBeenCalled()
-      const appliedPreview = applyAgentCommandBundle.mock.calls[0]?.[2]
-      expect(appliedPreview).not.toBe(callerPreview)
       expect(applyAgentCommandBundle).toHaveBeenCalledWith(
         'doc-1',
         expect.objectContaining({
@@ -5097,7 +5093,6 @@ describe('workbook agent service', () => {
             roles: ['editor'],
           },
           appliedBy: 'user',
-          preview: createPreviewSummary(),
         }),
       ).rejects.toThrow('Replay the plan to stage a fresh change set.')
 
@@ -5252,28 +5247,6 @@ describe('workbook agent service', () => {
         },
         appliedBy: 'user',
         commandIndexes: [1],
-        preview: createPreviewSummary({
-          cellDiffs: [
-            {
-              sheetName: 'Sheet1',
-              address: 'C3',
-              beforeInput: null,
-              beforeFormula: null,
-              afterInput: 2,
-              afterFormula: null,
-              changeKinds: ['input'],
-            },
-          ],
-          effectSummary: {
-            displayedCellDiffCount: 1,
-            truncatedCellDiffs: false,
-            inputChangeCount: 1,
-            formulaChangeCount: 0,
-            styleChangeCount: 0,
-            numberFormatChangeCount: 0,
-            structuralChangeCount: 0,
-          },
-        }),
       })
 
       expect(applyAgentCommandBundle).toHaveBeenCalledWith(
@@ -6128,7 +6101,6 @@ describe('workbook agent service', () => {
             roles: ['editor'],
           },
           appliedBy: 'user',
-          preview: createPreviewSummary(),
         }),
       ).rejects.toThrow('Shared medium/high-risk workbook bundles must be applied by the thread owner.')
       expect(applyAgentCommandBundle).not.toHaveBeenCalled()
@@ -6219,7 +6191,6 @@ describe('workbook agent service', () => {
           roles: ['editor'],
         },
         appliedBy: 'user',
-        preview: createPreviewSummary(),
       })
 
       expect(applyAgentCommandBundle).toHaveBeenCalled()
@@ -6309,7 +6280,6 @@ describe('workbook agent service', () => {
             roles: ['editor'],
           },
           appliedBy: 'user',
-          preview: createPreviewSummary(),
         }),
       ).rejects.toThrow('Shared medium/high-risk workbook bundles must be approved by the thread owner before apply.')
 
@@ -6346,7 +6316,6 @@ describe('workbook agent service', () => {
           roles: ['editor'],
         },
         appliedBy: 'user',
-        preview: createPreviewSummary(),
       })
 
       expect(applyAgentCommandBundle).toHaveBeenCalled()

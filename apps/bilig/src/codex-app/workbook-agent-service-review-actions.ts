@@ -1,5 +1,5 @@
 import type { WorkbookAgentAppliedBy, WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from '@bilig/agent-api'
-import { createWorkbookAgentCommandBundle, decodeWorkbookAgentPreviewSummary, toWorkbookAgentCommandBundle } from '@bilig/agent-api'
+import { createWorkbookAgentCommandBundle, toWorkbookAgentCommandBundle } from '@bilig/agent-api'
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 import { createBundleRangeCitations } from './workbook-agent-bundle-state.js'
 import {
@@ -34,22 +34,12 @@ export async function applyWorkbookAgentReviewItem(input: {
   readonly actorUserId: string
   readonly appliedBy: WorkbookAgentAppliedBy
   readonly commandIndexes?: readonly number[] | null | undefined
-  readonly preview: unknown
 }): Promise<void> {
   const reviewItem = requireWorkbookAgentReviewItem({
     reviewItem: getCurrentWorkbookAgentReviewItem(input.sessionState),
     reviewItemId: input.reviewItemId,
     notFoundMessage: 'Workbook agent change set was not found.',
   })
-  const callerPreview = decodeWorkbookAgentPreviewSummary(input.preview)
-  if (!callerPreview) {
-    throw createWorkbookAgentServiceError({
-      code: 'WORKBOOK_AGENT_PREVIEW_REQUIRED',
-      message: 'Workbook preview details are required before applying this change set.',
-      statusCode: 400,
-      retryable: false,
-    })
-  }
   const commandBundle = toWorkbookAgentCommandBundle(reviewItem)
   await input.context.applyCommandBundleForSessionState({
     sessionState: input.sessionState,
