@@ -63,7 +63,7 @@ export function workPaperMcpStdioHelpText(): string {
     '',
     'Without --workpaper, starts the built-in demo WorkPaper MCP server.',
     '--demo-workpaper-tools starts the built-in demo workbook with the general WorkPaper tool surface.',
-    'With --workpaper, loads a persisted WorkPaper JSON document and exposes file-backed tools.',
+    'With --workpaper, loads a persisted WorkPaper JSON document and exposes file-backed tools, resources, and prompts.',
     '--init-demo-workpaper creates a demo WorkPaper JSON at --workpaper when the file is missing.',
     '--writable persists set_cell_contents edits back to the same JSON file.',
     '',

@@ -355,7 +355,7 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.22.1`:
+Current checked npm footprint for `@bilig/headless@0.22.2`:
 
 - Pack dry run: `450 kB` tarball, `2.69 MB` unpacked, `450` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -540,10 +540,15 @@ Without `--workpaper`, the binary starts the built-in demo workbook. With
 `--workpaper`, it loads your persisted WorkPaper JSON and exposes
 `list_sheets`, `read_range`, `read_cell`, `set_cell_contents`,
 `get_cell_display_value`, `export_workpaper_document`, and `validate_formula`;
-`--writable` persists `set_cell_contents` edits back to the same file.
+`--writable` persists `set_cell_contents` edits back to the same file. It also
+exposes MCP resources and prompts for `bilig://workpaper/agent-handoff`,
+`bilig://workpaper/current-document`, `edit_and_verify_workpaper`, and
+`debug_workpaper_formula`, so capable clients can discover the workflow before
+calling tools.
 The Docker target is for MCP directory scanners: it seeds a demo WorkPaper JSON
 inside the image and starts the file-backed `--writable` tool surface so
-`tools/list` returns the general WorkPaper tools without cloning this monorepo.
+`tools/list`, `resources/list`, and `prompts/list` return the general WorkPaper
+agent surface without cloning this monorepo.
 
 It is published in the official MCP Registry as
 `io.github.proompteng/bilig-workpaper`:
@@ -853,7 +858,7 @@ That command is published through `@bilig/create-workpaper`. The publish gate is
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.22.1`:
+Current checked npm footprint for `@bilig/headless@0.22.2`:
 
 - Pack dry run: `450 kB` tarball, `2.69 MB` unpacked, `450` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -1119,7 +1124,8 @@ MCP examples:
   <https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md#copy-paste-json-rpc-transcript>.
 - `NODE_NO_WARNINGS=1 npm run --silent agent:mcp-file-transcript` runs the
   packaged `bilig-workpaper-mcp --workpaper` file-backed mode, persists an
-  input edit to WorkPaper JSON, and verifies a recalculated cell:
+  input edit to WorkPaper JSON, verifies a recalculated cell, and exposes the
+  file-backed resources and prompts:
   <https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md#copy-paste-json-rpc-transcript>.
 - `npm run agent:mcp-stdio` runs the same handlers over newline-delimited
   stdio.
@@ -1140,7 +1146,11 @@ persisted WorkPaper JSON document and exposes `list_sheets`, `read_range`,
 `read_cell`, `set_cell_contents`, `get_cell_display_value`,
 `export_workpaper_document`, and `validate_formula`; `--init-demo-workpaper`
 creates the demo JSON file when it is missing, and `--writable` persists
-`set_cell_contents` edits back to the same file.
+`set_cell_contents` edits back to the same file. File-backed mode also exposes
+`resources/list`, `resources/read`, `prompts/list`, and `prompts/get` for
+`bilig://workpaper/manifest`, `bilig://workpaper/agent-handoff`,
+`bilig://workpaper/sheets`, `bilig://workpaper/current-document`,
+`edit_and_verify_workpaper`, and `debug_workpaper_formula`.
 
 The Docker target exists for MCP directory introspection. It installs the
 published npm package, seeds a demo WorkPaper JSON file inside the image, and
@@ -1790,6 +1800,23 @@ Expected tools:
 - `get_cell_display_value`
 - `export_workpaper_document`
 - `validate_formula`
+
+Expected resources:
+
+- `bilig://workpaper/manifest`
+- `bilig://workpaper/agent-handoff`
+- `bilig://workpaper/sheets`
+- `bilig://workpaper/current-document`
+
+Expected prompts:
+
+- `edit_and_verify_workpaper`
+- `debug_workpaper_formula`
+
+If the client supports MCP resources or prompts, use
+`bilig://workpaper/agent-handoff` or `edit_and_verify_workpaper` first. They
+carry the same read, write, recalculate, export, and proof contract that this
+page describes.
 
 `--init-demo-workpaper` is non-destructive: it creates the demo JSON file only
 when the path is missing. `--writable` is intentional. Without it, the server
@@ -2496,9 +2523,10 @@ Source: https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-se
 # MCP Spreadsheet Tool Server For WorkPaper Agents
 
 This page is for agent builders who want workbook formulas behind a Model
-Context Protocol tool surface. The useful boundary is small: list the tools,
-call one tool, return exact cell readback, and include enough structured output
-for the agent to verify the edit.
+Context Protocol surface. The useful boundary is small: list the tools, read
+the workbook context resources, invoke a reusable workflow prompt, call one
+tool, return exact cell readback, and include enough structured output for the
+agent to verify the edit.
 
 `@bilig/headless` owns the workbook behavior. MCP should stay as the transport
 and discovery layer around ordinary Node functions.
@@ -2621,7 +2649,22 @@ File-backed mode loads `./pricing.workpaper.json`, exposes `list_sheets`,
 `read_range`, `read_cell`, `set_cell_contents`, `get_cell_display_value`,
 `export_workpaper_document`, and `validate_formula`, then writes the updated
 WorkPaper JSON back to the same file after `set_cell_contents` when `--writable`
-is present. Omit `--writable` for read-only inspection.
+is present. It also exposes `resources/list`, `resources/read`,
+`prompts/list`, and `prompts/get` so clients can discover the live workbook
+manifest, agent handoff instructions, current document JSON, and reusable edit
+or formula-debug prompts. Omit `--writable` for read-only inspection.
+
+The high-signal runtime resources are:
+
+- `bilig://workpaper/manifest`
+- `bilig://workpaper/agent-handoff`
+- `bilig://workpaper/sheets`
+- `bilig://workpaper/current-document`
+
+The reusable prompts are:
+
+- `edit_and_verify_workpaper`
+- `debug_workpaper_formula`
 
 Every file-backed tool includes an MCP `outputSchema`, parameter descriptions,
 and safety annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
@@ -2674,7 +2717,8 @@ static MCP server card at
 `https://proompteng.github.io/bilig/.well-known/mcp/server-card.json`. The card
 lists the same `list_sheets`, `read_range`, `read_cell`, `set_cell_contents`,
 `get_cell_display_value`, `export_workpaper_document`, and `validate_formula`
-tools without requiring account auth or a live server connection.
+tools, plus the WorkPaper resources and prompts, without requiring account auth
+or a live server connection.
 
 The package carries `mcpName: io.github.proompteng/bilig-workpaper` and a
 matching `server.json`. It is published in the official MCP Registry as
@@ -2754,12 +2798,17 @@ Verify the docs links and discovery metadata after editing this page:
 pnpm docs:discovery:check
 ```
 
-The script implements two JSON-RPC methods shaped around the MCP tool model:
+The script implements the JSON-RPC methods needed for the file-backed WorkPaper
+agent surface:
 
 - `tools/list` returns `read_workpaper_summary` and
   `set_workpaper_input_cell` with JSON Schema inputs and MCP tool annotations.
 - `tools/call` invokes the requested WorkPaper tool and returns text content
   plus structured formula readback.
+- `resources/list` and `resources/read` expose the live WorkPaper manifest,
+  sheet summary, current document JSON, and compact agent handoff.
+- `prompts/list` and `prompts/get` expose the edit-and-verify and formula-debug
+  workflows as reusable client prompts.
 
 The packaged binary has two tool sets:
 
@@ -2838,6 +2887,12 @@ Expose only the minimum useful surface first:
 The official MCP specification describes tool discovery through `tools/list`,
 tool invocation through `tools/call`, input schemas, and tool annotations:
 <https://modelcontextprotocol.io/specification/2025-06-18/server/tools>.
+It also defines server resources through `resources/list` and
+`resources/read`, and reusable prompt templates through `prompts/list` and
+`prompts/get`:
+<https://modelcontextprotocol.io/specification/2025-06-18/server/resources>
+and
+<https://modelcontextprotocol.io/specification/2025-06-18/server/prompts>.
 
 ## Files To Inspect
 

@@ -89,6 +89,50 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
       throw new Error(`docs/.well-known/mcp/server-card.json is missing ${requiredTool}`)
     }
   }
+  const mcpServerCardCapabilities = Reflect.get(parsedMcpServerCard, 'capabilities')
+  if (
+    typeof mcpServerCardCapabilities !== 'object' ||
+    mcpServerCardCapabilities === null ||
+    Reflect.get(mcpServerCardCapabilities, 'resources') !== true ||
+    Reflect.get(mcpServerCardCapabilities, 'prompts') !== true
+  ) {
+    throw new Error('docs/.well-known/mcp/server-card.json must advertise resources and prompts')
+  }
+  const mcpServerCardResources = Reflect.get(parsedMcpServerCard, 'resources')
+  if (
+    !Array.isArray(mcpServerCardResources) ||
+    !mcpServerCardResources.every(
+      (resource) => typeof resource === 'object' && resource !== null && typeof Reflect.get(resource, 'uri') === 'string',
+    )
+  ) {
+    throw new Error('docs/.well-known/mcp/server-card.json must define resource URIs')
+  }
+  const mcpServerCardResourceUris = new Set(mcpServerCardResources.map((resource) => Reflect.get(resource, 'uri')))
+  for (const requiredResource of [
+    'bilig://workpaper/manifest',
+    'bilig://workpaper/agent-handoff',
+    'bilig://workpaper/sheets',
+    'bilig://workpaper/current-document',
+  ]) {
+    if (!mcpServerCardResourceUris.has(requiredResource)) {
+      throw new Error(`docs/.well-known/mcp/server-card.json is missing ${requiredResource}`)
+    }
+  }
+  const mcpServerCardPrompts = Reflect.get(parsedMcpServerCard, 'prompts')
+  if (
+    !Array.isArray(mcpServerCardPrompts) ||
+    !mcpServerCardPrompts.every(
+      (prompt) => typeof prompt === 'object' && prompt !== null && typeof Reflect.get(prompt, 'name') === 'string',
+    )
+  ) {
+    throw new Error('docs/.well-known/mcp/server-card.json must define named prompts')
+  }
+  const mcpServerCardPromptNames = new Set(mcpServerCardPrompts.map((prompt) => Reflect.get(prompt, 'name')))
+  for (const requiredPrompt of ['edit_and_verify_workpaper', 'debug_workpaper_formula']) {
+    if (!mcpServerCardPromptNames.has(requiredPrompt)) {
+      throw new Error(`docs/.well-known/mcp/server-card.json is missing ${requiredPrompt}`)
+    }
+  }
   requireIncludes(
     whyAgentsDoc,
     'description: Why coding agents should edit workbook formulas through a Node.js WorkPaper API',
@@ -168,7 +212,7 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
   }
   requireIncludes(
     mcpWorkPaperToolServerDoc,
-    'description: Expose @bilig/headless workbook reads, verified edits, formula contracts, and persistence checks through MCP-style tools/list and tools/call handlers',
+    'description: Expose @bilig/headless workbook reads, verified edits, formula contracts, persistence checks, resources, and prompts through MCP.',
     'docs/mcp-workpaper-tool-server.md',
   )
   requireIncludes(
@@ -207,6 +251,10 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     'WorkPaper JSON back to the same file after `set_cell_contents`',
     'docs/mcp-workpaper-tool-server.md',
   )
+  requireIncludes(mcpWorkPaperToolServerDoc, 'resources/list', 'docs/mcp-workpaper-tool-server.md')
+  requireIncludes(mcpWorkPaperToolServerDoc, 'prompts/list', 'docs/mcp-workpaper-tool-server.md')
+  requireIncludes(mcpWorkPaperToolServerDoc, 'bilig://workpaper/agent-handoff', 'docs/mcp-workpaper-tool-server.md')
+  requireIncludes(mcpWorkPaperToolServerDoc, 'edit_and_verify_workpaper', 'docs/mcp-workpaper-tool-server.md')
   requireIncludes(mcpWorkPaperToolServerDoc, 'io.github.proompteng/bilig-workpaper', 'docs/mcp-workpaper-tool-server.md')
   requireIncludes(mcpWorkPaperToolServerDoc, '/workpaper/pricing.workpaper.json', 'docs/mcp-workpaper-tool-server.md')
   requireIncludes(mcpWorkPaperToolServerDoc, '`validate_formula`', 'docs/mcp-workpaper-tool-server.md')

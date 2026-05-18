@@ -225,6 +225,101 @@ describe('WorkPaper MCP server', () => {
       'checks',
     ])
     expect(readToolOutputSchemaRequired(tools.result, 'validate_formula')).toEqual(['formula', 'valid'])
+    expect(server.capabilities).toMatchObject({
+      resources: {
+        listChanged: false,
+        subscribe: false,
+      },
+      prompts: {
+        listChanged: false,
+      },
+    })
+
+    const resources = server.handleJsonRpc({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'resources/list',
+    })
+    expect(readResourceUris(resources.result)).toEqual([
+      'bilig://workpaper/manifest',
+      'bilig://workpaper/agent-handoff',
+      'bilig://workpaper/sheets',
+      'bilig://workpaper/current-document',
+    ])
+
+    const manifest = server.handleJsonRpc({
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'resources/read',
+      params: {
+        uri: 'bilig://workpaper/manifest',
+      },
+    })
+    expect(JSON.parse(readFirstResourceText(manifest.result))).toMatchObject({
+      server: 'bilig-workpaper-mcp',
+      writable: true,
+      sourcePath: '/tmp/pricing.workpaper.json',
+      capabilities: {
+        resources: {
+          listChanged: false,
+        },
+        prompts: {
+          listChanged: false,
+        },
+      },
+      sheets: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Inputs',
+          dimensions: {
+            width: 2,
+            height: 5,
+          },
+        }),
+      ]),
+      tools: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'list_sheets',
+        }),
+      ]),
+      prompts: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'edit_and_verify_workpaper',
+        }),
+      ]),
+      verificationContract: expect.arrayContaining(['read the dependent computed output after recalculation']),
+    })
+
+    const handoff = server.handleJsonRpc({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'resources/read',
+      params: {
+        uri: 'bilig://workpaper/agent-handoff',
+      },
+    })
+    expect(readFirstResourceText(handoff.result)).toContain('Do not report success unless computed readback')
+
+    const prompts = server.handleJsonRpc({
+      jsonrpc: '2.0',
+      id: 8,
+      method: 'prompts/list',
+    })
+    expect(readPromptNames(prompts.result)).toEqual(['edit_and_verify_workpaper', 'debug_workpaper_formula'])
+
+    const prompt = server.handleJsonRpc({
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'prompts/get',
+      params: {
+        name: 'edit_and_verify_workpaper',
+        arguments: {
+          task: 'Change win rate and prove expected ARR changed.',
+          target_cell: 'Inputs!B3',
+          output_range: 'Summary!A1:B5',
+        },
+      },
+    })
+    expect(readPromptText(prompt.result)).toContain('Do not claim success from set_cell_contents alone')
 
     const read = server.handleJsonRpc({
       jsonrpc: '2.0',
@@ -334,9 +429,11 @@ describe('WorkPaper MCP server', () => {
         [
           { jsonrpc: '2.0', id: 1, method: 'initialize' },
           { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+          { jsonrpc: '2.0', id: 3, method: 'resources/list' },
+          { jsonrpc: '2.0', id: 4, method: 'prompts/list' },
           {
             jsonrpc: '2.0',
-            id: 3,
+            id: 5,
             method: 'tools/call',
             params: {
               name: 'set_cell_contents',
@@ -363,7 +460,9 @@ describe('WorkPaper MCP server', () => {
         .map((line) => JSON.parse(line))
 
       expect(responses[1].result.tools.map((tool: { name: string }) => tool.name)).toContain('set_cell_contents')
-      expect(responses[2].result.structuredContent).toMatchObject({
+      expect(responses[2].result.resources.map((resource: { uri: string }) => resource.uri)).toContain('bilig://workpaper/agent-handoff')
+      expect(responses[3].result.prompts.map((prompt: { name: string }) => prompt.name)).toContain('edit_and_verify_workpaper')
+      expect(responses[4].result.structuredContent).toMatchObject({
         editedCell: 'Inputs!B3',
         checks: {
           persisted: true,
@@ -555,6 +654,57 @@ function readToolOutputSchemaRequired(value: unknown, toolName: string): string[
     }
     return item
   })
+}
+
+function readResourceUris(value: unknown): string[] {
+  if (!isRecord(value) || !Array.isArray(value['resources'])) {
+    throw new Error(`Expected resources/list result, received ${JSON.stringify(value)}`)
+  }
+
+  return value['resources'].map((resource) => {
+    if (!isRecord(resource) || typeof resource['uri'] !== 'string') {
+      throw new Error(`Expected MCP resource definition, received ${JSON.stringify(resource)}`)
+    }
+    return resource['uri']
+  })
+}
+
+function readPromptNames(value: unknown): string[] {
+  if (!isRecord(value) || !Array.isArray(value['prompts'])) {
+    throw new Error(`Expected prompts/list result, received ${JSON.stringify(value)}`)
+  }
+
+  return value['prompts'].map((prompt) => {
+    if (!isRecord(prompt) || typeof prompt['name'] !== 'string') {
+      throw new Error(`Expected MCP prompt definition, received ${JSON.stringify(prompt)}`)
+    }
+    return prompt['name']
+  })
+}
+
+function readFirstResourceText(value: unknown): string {
+  if (!isRecord(value) || !Array.isArray(value['contents'])) {
+    throw new Error(`Expected resources/read result, received ${JSON.stringify(value)}`)
+  }
+
+  const first = value['contents'][0]
+  if (!isRecord(first) || typeof first['text'] !== 'string') {
+    throw new Error(`Expected text resource content, received ${JSON.stringify(value)}`)
+  }
+  return first['text']
+}
+
+function readPromptText(value: unknown): string {
+  if (!isRecord(value) || !Array.isArray(value['messages'])) {
+    throw new Error(`Expected prompts/get result, received ${JSON.stringify(value)}`)
+  }
+
+  const first = value['messages'][0]
+  const content = isRecord(first) ? first['content'] : undefined
+  if (!isRecord(content) || typeof content['text'] !== 'string') {
+    throw new Error(`Expected text prompt content, received ${JSON.stringify(value)}`)
+  }
+  return content['text']
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

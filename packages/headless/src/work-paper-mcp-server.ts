@@ -23,6 +23,13 @@ interface WorkPaperMcpCapabilities {
   tools: {
     listChanged: false
   }
+  resources?: {
+    listChanged: false
+    subscribe?: false
+  }
+  prompts?: {
+    listChanged: false
+  }
 }
 
 interface WorkPaperMcpToolDefinition {

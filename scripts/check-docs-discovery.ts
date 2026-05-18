@@ -324,6 +324,24 @@ for (const requiredTool of [
     throw new Error(`docs/.well-known/agent.json mcp.tools is missing ${requiredTool}`)
   }
 }
+const agentJsonMcpResources = Reflect.get(parsedAgentJsonMcp, 'resources')
+if (!Array.isArray(agentJsonMcpResources) || !agentJsonMcpResources.every((resource) => typeof resource === 'string')) {
+  throw new Error('docs/.well-known/agent.json mcp.resources must be a string array')
+}
+for (const requiredResource of ['bilig://workpaper/manifest', 'bilig://workpaper/agent-handoff', 'bilig://workpaper/current-document']) {
+  if (!agentJsonMcpResources.includes(requiredResource)) {
+    throw new Error(`docs/.well-known/agent.json mcp.resources is missing ${requiredResource}`)
+  }
+}
+const agentJsonMcpPrompts = Reflect.get(parsedAgentJsonMcp, 'prompts')
+if (!Array.isArray(agentJsonMcpPrompts) || !agentJsonMcpPrompts.every((prompt) => typeof prompt === 'string')) {
+  throw new Error('docs/.well-known/agent.json mcp.prompts must be a string array')
+}
+for (const requiredPrompt of ['edit_and_verify_workpaper', 'debug_workpaper_formula']) {
+  if (!agentJsonMcpPrompts.includes(requiredPrompt)) {
+    throw new Error(`docs/.well-known/agent.json mcp.prompts is missing ${requiredPrompt}`)
+  }
+}
 const agentJsonCapabilities = Reflect.get(parsedAgentJson, 'capabilities')
 if (
   !Array.isArray(agentJsonCapabilities) ||

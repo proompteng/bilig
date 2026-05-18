@@ -15,7 +15,9 @@ directory and want to run it from a local agent client.
 
 The server is the published npm binary from `@bilig/headless`. It starts over
 stdio, exposes WorkPaper tools, and returns computed workbook readback after a
-write.
+write. In file-backed mode it also exposes MCP resources and prompts so clients
+can discover the live WorkPaper manifest, the compact agent handoff, and the
+edit/debug workflow prompts before calling tools.
 
 For the agent-side write/read/persist loop, use the
 [headless WorkPaper agent handbook](headless-workpaper-agent-handbook.md).
@@ -48,9 +50,12 @@ printf '%s\n' \
 `set_workpaper_input_cell` in default demo mode. In file-backed mode,
 `tools/list` should include `list_sheets`, `read_range`, `read_cell`,
 `set_cell_contents`, `get_cell_display_value`, `export_workpaper_document`, and
-`validate_formula`; `--init-demo-workpaper` creates the demo JSON file when it
-is missing, and `--writable` persists `set_cell_contents` changes to the same
-WorkPaper JSON file.
+`validate_formula`. `resources/list` should include
+`bilig://workpaper/agent-handoff` and `bilig://workpaper/current-document`.
+`prompts/list` should include `edit_and_verify_workpaper` and
+`debug_workpaper_formula`. `--init-demo-workpaper` creates the demo JSON file
+when it is missing, and `--writable` persists `set_cell_contents` changes to
+the same WorkPaper JSON file.
 
 ## Claude Code
 

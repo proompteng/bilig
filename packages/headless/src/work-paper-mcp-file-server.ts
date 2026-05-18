@@ -6,6 +6,12 @@ import {
   type PersistedWorkPaperDocument,
 } from './persistence.js'
 import type { WorkPaper } from './work-paper.js'
+import {
+  createFileBackedPromptDefinitions,
+  createFileBackedResourceDefinitions,
+  getFileBackedPrompt,
+  readFileBackedResource,
+} from './work-paper-mcp-file-discovery.js'
 import type { WorkPaperMcpCapabilities, WorkPaperMcpToolServer } from './work-paper-mcp-server.js'
 import { buildDemoWorkPaper } from './work-paper-mcp-server.js'
 import type { RawCellContent, WorkPaperCellAddress } from './work-paper-types.js'
@@ -79,12 +85,21 @@ const capabilities: WorkPaperMcpCapabilities = {
   tools: {
     listChanged: false,
   },
+  resources: {
+    listChanged: false,
+    subscribe: false,
+  },
+  prompts: {
+    listChanged: false,
+  },
 }
 
 function createFileBackedWorkPaperMcpToolServer(options: FileBackedWorkPaperMcpOptions): WorkPaperMcpToolServer {
   const { workbook, writable = false, sourcePath } = options
   const persist = options.persist ?? createMemoryPersist(workbook)
   const toolDefinitions = createFileBackedToolDefinitions(writable)
+  const resourceDefinitions = createFileBackedResourceDefinitions()
+  const promptDefinitions = createFileBackedPromptDefinitions()
 
   return {
     capabilities,
@@ -115,6 +130,56 @@ function createFileBackedWorkPaperMcpToolServer(options: FileBackedWorkPaperMcpO
           jsonrpc: '2.0',
           id: parsedRequest.id,
           result: toolResult(structuredContent),
+        }
+      }
+
+      if (parsedRequest.method === 'resources/list') {
+        return {
+          jsonrpc: '2.0',
+          id: parsedRequest.id,
+          result: {
+            resources: resourceDefinitions,
+          },
+        }
+      }
+
+      if (parsedRequest.method === 'resources/read') {
+        return {
+          jsonrpc: '2.0',
+          id: parsedRequest.id,
+          result: readFileBackedResource({
+            workbook,
+            writable,
+            sourcePath,
+            capabilities,
+            toolDefinitions,
+            resourceDefinitions,
+            promptDefinitions,
+            params: parsedRequest.params,
+          }),
+        }
+      }
+
+      if (parsedRequest.method === 'prompts/list') {
+        return {
+          jsonrpc: '2.0',
+          id: parsedRequest.id,
+          result: {
+            prompts: promptDefinitions,
+          },
+        }
+      }
+
+      if (parsedRequest.method === 'prompts/get') {
+        return {
+          jsonrpc: '2.0',
+          id: parsedRequest.id,
+          result: getFileBackedPrompt({
+            workbook,
+            writable,
+            sourcePath,
+            params: parsedRequest.params,
+          }),
         }
       }
 

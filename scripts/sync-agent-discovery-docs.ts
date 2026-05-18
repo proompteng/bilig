@@ -310,6 +310,13 @@ function agentJsonManifest(): string {
           'export_workpaper_document',
           'validate_formula',
         ],
+        resources: [
+          'bilig://workpaper/manifest',
+          'bilig://workpaper/agent-handoff',
+          'bilig://workpaper/sheets',
+          'bilig://workpaper/current-document',
+        ],
+        prompts: ['edit_and_verify_workpaper', 'debug_workpaper_formula'],
       },
       capabilities: [
         {

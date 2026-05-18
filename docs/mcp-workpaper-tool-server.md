@@ -1,7 +1,7 @@
 ---
 title: MCP spreadsheet tool server for WorkPaper agents
 published: true
-description: Expose @bilig/headless workbook reads, verified edits, formula contracts, and persistence checks through MCP-style tools/list and tools/call handlers.
+description: Expose @bilig/headless workbook reads, verified edits, formula contracts, persistence checks, resources, and prompts through MCP.
 tags: mcp, model context protocol, spreadsheet, tool calling, node
 canonical_url: https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -11,9 +11,10 @@ image: /assets/github-social-preview.png
 # MCP Spreadsheet Tool Server For WorkPaper Agents
 
 This page is for agent builders who want workbook formulas behind a Model
-Context Protocol tool surface. The useful boundary is small: list the tools,
-call one tool, return exact cell readback, and include enough structured output
-for the agent to verify the edit.
+Context Protocol surface. The useful boundary is small: list the tools, read
+the workbook context resources, invoke a reusable workflow prompt, call one
+tool, return exact cell readback, and include enough structured output for the
+agent to verify the edit.
 
 `@bilig/headless` owns the workbook behavior. MCP should stay as the transport
 and discovery layer around ordinary Node functions.
@@ -136,7 +137,22 @@ File-backed mode loads `./pricing.workpaper.json`, exposes `list_sheets`,
 `read_range`, `read_cell`, `set_cell_contents`, `get_cell_display_value`,
 `export_workpaper_document`, and `validate_formula`, then writes the updated
 WorkPaper JSON back to the same file after `set_cell_contents` when `--writable`
-is present. Omit `--writable` for read-only inspection.
+is present. It also exposes `resources/list`, `resources/read`,
+`prompts/list`, and `prompts/get` so clients can discover the live workbook
+manifest, agent handoff instructions, current document JSON, and reusable edit
+or formula-debug prompts. Omit `--writable` for read-only inspection.
+
+The high-signal runtime resources are:
+
+- `bilig://workpaper/manifest`
+- `bilig://workpaper/agent-handoff`
+- `bilig://workpaper/sheets`
+- `bilig://workpaper/current-document`
+
+The reusable prompts are:
+
+- `edit_and_verify_workpaper`
+- `debug_workpaper_formula`
 
 Every file-backed tool includes an MCP `outputSchema`, parameter descriptions,
 and safety annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
@@ -189,7 +205,8 @@ static MCP server card at
 `https://proompteng.github.io/bilig/.well-known/mcp/server-card.json`. The card
 lists the same `list_sheets`, `read_range`, `read_cell`, `set_cell_contents`,
 `get_cell_display_value`, `export_workpaper_document`, and `validate_formula`
-tools without requiring account auth or a live server connection.
+tools, plus the WorkPaper resources and prompts, without requiring account auth
+or a live server connection.
 
 The package carries `mcpName: io.github.proompteng/bilig-workpaper` and a
 matching `server.json`. It is published in the official MCP Registry as
@@ -269,12 +286,17 @@ Verify the docs links and discovery metadata after editing this page:
 pnpm docs:discovery:check
 ```
 
-The script implements two JSON-RPC methods shaped around the MCP tool model:
+The script implements the JSON-RPC methods needed for the file-backed WorkPaper
+agent surface:
 
 - `tools/list` returns `read_workpaper_summary` and
   `set_workpaper_input_cell` with JSON Schema inputs and MCP tool annotations.
 - `tools/call` invokes the requested WorkPaper tool and returns text content
   plus structured formula readback.
+- `resources/list` and `resources/read` expose the live WorkPaper manifest,
+  sheet summary, current document JSON, and compact agent handoff.
+- `prompts/list` and `prompts/get` expose the edit-and-verify and formula-debug
+  workflows as reusable client prompts.
 
 The packaged binary has two tool sets:
 
@@ -353,6 +375,12 @@ Expose only the minimum useful surface first:
 The official MCP specification describes tool discovery through `tools/list`,
 tool invocation through `tools/call`, input schemas, and tool annotations:
 <https://modelcontextprotocol.io/specification/2025-06-18/server/tools>.
+It also defines server resources through `resources/list` and
+`resources/read`, and reusable prompt templates through `prompts/list` and
+`prompts/get`:
+<https://modelcontextprotocol.io/specification/2025-06-18/server/resources>
+and
+<https://modelcontextprotocol.io/specification/2025-06-18/server/prompts>.
 
 ## Files To Inspect
 

@@ -115,6 +115,23 @@ Expected tools:
 - `export_workpaper_document`
 - `validate_formula`
 
+Expected resources:
+
+- `bilig://workpaper/manifest`
+- `bilig://workpaper/agent-handoff`
+- `bilig://workpaper/sheets`
+- `bilig://workpaper/current-document`
+
+Expected prompts:
+
+- `edit_and_verify_workpaper`
+- `debug_workpaper_formula`
+
+If the client supports MCP resources or prompts, use
+`bilig://workpaper/agent-handoff` or `edit_and_verify_workpaper` first. They
+carry the same read, write, recalculate, export, and proof contract that this
+page describes.
+
 `--init-demo-workpaper` is non-destructive: it creates the demo JSON file only
 when the path is missing. `--writable` is intentional. Without it, the server
 can still read and compute, but mutating calls cannot save back to the WorkPaper

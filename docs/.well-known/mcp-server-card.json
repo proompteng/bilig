@@ -24,8 +24,8 @@
   },
   "capabilities": {
     "tools": true,
-    "resources": false,
-    "prompts": false
+    "resources": true,
+    "prompts": true
   },
   "tools": [
     {
@@ -140,6 +140,80 @@
       }
     }
   ],
-  "resources": [],
-  "prompts": []
+  "resources": [
+    {
+      "uri": "bilig://workpaper/manifest",
+      "name": "workpaper_manifest",
+      "title": "WorkPaper MCP Manifest",
+      "description": "Live manifest of the current WorkPaper file, available tools, prompts, resources, and verification contract.",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "bilig://workpaper/agent-handoff",
+      "name": "workpaper_agent_handoff",
+      "title": "WorkPaper Agent Handoff",
+      "description": "Compact instructions for agents that need to edit workbook formulas without spreadsheet UI automation.",
+      "mimeType": "text/markdown"
+    },
+    {
+      "uri": "bilig://workpaper/sheets",
+      "name": "workpaper_sheets",
+      "title": "WorkPaper Sheets",
+      "description": "Current sheet names and used dimensions for the loaded WorkPaper document.",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "bilig://workpaper/current-document",
+      "name": "workpaper_current_document",
+      "title": "Current WorkPaper Document",
+      "description": "Current persisted WorkPaper JSON document as exported from the in-memory engine.",
+      "mimeType": "application/json"
+    }
+  ],
+  "prompts": [
+    {
+      "name": "edit_and_verify_workpaper",
+      "title": "Edit And Verify WorkPaper",
+      "description": "Guide an agent through a safe WorkPaper edit: read before, validate target, write one cell, read computed output, export JSON, and report proof.",
+      "arguments": [
+        {
+          "name": "task",
+          "title": "Task",
+          "description": "Human-readable workbook edit request."
+        },
+        {
+          "name": "target_cell",
+          "title": "Target Cell",
+          "description": "Optional sheet-qualified A1 target such as Inputs!B3."
+        },
+        {
+          "name": "output_range",
+          "title": "Output Range",
+          "description": "Optional dependent output range to read after recalculation, such as Summary!A1:B5."
+        }
+      ]
+    },
+    {
+      "name": "debug_workpaper_formula",
+      "title": "Debug WorkPaper Formula",
+      "description": "Guide an agent through formula validation and readback when a WorkPaper formula or dependent output looks wrong.",
+      "arguments": [
+        {
+          "name": "formula",
+          "title": "Formula",
+          "description": "Optional formula text, including the leading =."
+        },
+        {
+          "name": "cell",
+          "title": "Cell",
+          "description": "Optional sheet-qualified A1 cell that contains or should contain the formula."
+        },
+        {
+          "name": "symptom",
+          "title": "Symptom",
+          "description": "Optional description of the wrong value, parse failure, or behavior being debugged."
+        }
+      ]
+    }
+  ]
 }

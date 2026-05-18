@@ -360,7 +360,8 @@ MCP examples:
   <https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md#copy-paste-json-rpc-transcript>.
 - `NODE_NO_WARNINGS=1 npm run --silent agent:mcp-file-transcript` runs the
   packaged `bilig-workpaper-mcp --workpaper` file-backed mode, persists an
-  input edit to WorkPaper JSON, and verifies a recalculated cell:
+  input edit to WorkPaper JSON, verifies a recalculated cell, and exposes the
+  file-backed resources and prompts:
   <https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md#copy-paste-json-rpc-transcript>.
 - `npm run agent:mcp-stdio` runs the same handlers over newline-delimited
   stdio.
@@ -381,7 +382,11 @@ persisted WorkPaper JSON document and exposes `list_sheets`, `read_range`,
 `read_cell`, `set_cell_contents`, `get_cell_display_value`,
 `export_workpaper_document`, and `validate_formula`; `--init-demo-workpaper`
 creates the demo JSON file when it is missing, and `--writable` persists
-`set_cell_contents` edits back to the same file.
+`set_cell_contents` edits back to the same file. File-backed mode also exposes
+`resources/list`, `resources/read`, `prompts/list`, and `prompts/get` for
+`bilig://workpaper/manifest`, `bilig://workpaper/agent-handoff`,
+`bilig://workpaper/sheets`, `bilig://workpaper/current-document`,
+`edit_and_verify_workpaper`, and `debug_workpaper_formula`.
 
 The Docker target exists for MCP directory introspection. It installs the
 published npm package, seeds a demo WorkPaper JSON file inside the image, and
