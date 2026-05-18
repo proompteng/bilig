@@ -112,6 +112,13 @@ function dispatchWorkbookShortcut(init: KeyboardEventInit & { readonly key: stri
   return event
 }
 
+async function flushToolbarMutationQueue(cycles = 3): Promise<void> {
+  await Promise.resolve()
+  if (cycles > 1) {
+    await flushToolbarMutationQueue(cycles - 1)
+  }
+}
+
 describe('WorkbookToolbar', () => {
   it('shows shortcut formatting state optimistically while the mutation is still pending', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -253,20 +260,20 @@ describe('WorkbookToolbar', () => {
       },
     ]
 
-    for (const shortcutCase of shortcutCases) {
-      invokeMutation.mockClear()
-      act(() => {
+    await act(async () => {
+      for (const shortcutCase of shortcutCases) {
         const event = dispatchWorkbookShortcut(shortcutCase.event)
         expect(event.defaultPrevented).toBe(true)
-      })
-      expect(invokeMutation.mock.calls).toEqual(shortcutCase.calls)
-    }
+      }
+      await flushToolbarMutationQueue(30)
+    })
+    expect(invokeMutation.mock.calls).toEqual(shortcutCases.flatMap((shortcutCase) => shortcutCase.calls))
 
     invokeMutation.mockClear()
     await act(async () => {
       const event = dispatchWorkbookShortcut({ code: 'Backslash', key: '\\', metaKey: true })
       expect(event.defaultPrevented).toBe(true)
-      await Promise.resolve()
+      await flushToolbarMutationQueue()
     })
     expect(invokeMutation.mock.calls).toEqual([
       ['clearRangeStyle', selectionRange, undefined],
@@ -277,6 +284,7 @@ describe('WorkbookToolbar', () => {
     await act(async () => {
       const event = dispatchWorkbookShortcut({ code: 'Digit7', key: '&', metaKey: true, shiftKey: true })
       expect(event.defaultPrevented).toBe(true)
+      await flushToolbarMutationQueue()
     })
     const borderTrigger = host.querySelector("[aria-label='Borders']")
     expect(borderTrigger?.getAttribute('aria-pressed')).toBe('true')
@@ -340,7 +348,7 @@ describe('WorkbookToolbar', () => {
     await act(async () => {
       const event = dispatchWorkbookShortcut({ code: 'Digit7', key: '&', metaKey: true, shiftKey: true })
       expect(event.defaultPrevented).toBe(true)
-      await Promise.resolve()
+      await flushToolbarMutationQueue()
     })
 
     expect(invokeMutation.mock.calls).toEqual([
@@ -350,8 +358,7 @@ describe('WorkbookToolbar', () => {
 
     await act(async () => {
       resolveClear?.()
-      await Promise.resolve()
-      await Promise.resolve()
+      await flushToolbarMutationQueue()
     })
 
     expect(invokeMutation.mock.calls.slice(1)).toEqual([
@@ -359,6 +366,72 @@ describe('WorkbookToolbar', () => {
       ['setRangeStyle', selectionRangeRef.current, { borders: { bottom: { color: '#111827', style: 'solid', weight: 'thin' } } }],
       ['setRangeStyle', selectionRangeRef.current, { borders: { left: { color: '#111827', style: 'solid', weight: 'thin' } } }],
       ['setRangeStyle', selectionRangeRef.current, { borders: { right: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+    ])
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('serializes clear-style shortcuts after pending border shortcut writes', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const pendingBorderWrites: Array<() => void> = []
+    const invokeMutation = vi.fn((method: string) => {
+      if (method === 'setRangeStyle') {
+        return new Promise<void>((resolve) => {
+          pendingBorderWrites.push(resolve)
+        })
+      }
+      return Promise.resolve()
+    })
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    await act(async () => {
+      const event = dispatchWorkbookShortcut({ code: 'Digit7', key: '&', metaKey: true, shiftKey: true })
+      expect(event.defaultPrevented).toBe(true)
+      await flushToolbarMutationQueue()
+    })
+
+    expect(invokeMutation.mock.calls).toEqual([
+      ['clearRangeStyle', selectionRangeRef.current, ['borderTop', 'borderRight', 'borderBottom', 'borderLeft']],
+      ['setRangeStyle', selectionRangeRef.current, { borders: { top: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+      ['setRangeStyle', selectionRangeRef.current, { borders: { bottom: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+      ['setRangeStyle', selectionRangeRef.current, { borders: { left: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+      ['setRangeStyle', selectionRangeRef.current, { borders: { right: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+    ])
+    expect(pendingBorderWrites).toHaveLength(4)
+
+    await act(async () => {
+      const event = dispatchWorkbookShortcut({ code: 'Backslash', key: '\\', metaKey: true })
+      expect(event.defaultPrevented).toBe(true)
+      await flushToolbarMutationQueue()
+    })
+
+    expect(invokeMutation.mock.calls).toHaveLength(5)
+    expect(host.querySelector("[aria-label='Borders']")?.getAttribute('aria-pressed')).toBe('false')
+
+    await act(async () => {
+      pendingBorderWrites.forEach((resolve) => resolve())
+      await flushToolbarMutationQueue()
+    })
+
+    expect(invokeMutation.mock.calls.slice(5)).toEqual([
+      ['clearRangeStyle', selectionRangeRef.current, undefined],
+      ['clearRangeNumberFormat', selectionRangeRef.current],
     ])
 
     await act(async () => {
@@ -396,6 +469,7 @@ describe('WorkbookToolbar', () => {
       window.dispatchEvent(redoEvent)
       expect(undoEvent.defaultPrevented).toBe(true)
       expect(redoEvent.defaultPrevented).toBe(true)
+      await flushToolbarMutationQueue()
     })
 
     expect(onUndo).toHaveBeenCalledTimes(1)
@@ -1128,22 +1202,10 @@ describe('WorkbookToolbar', () => {
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'b', metaKey: true }))
+      await flushToolbarMutationQueue()
     })
     expect(host.querySelector("[aria-label='Bold']")?.className).toContain('bg-[var(--wb-accent-soft)]')
-
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'i', metaKey: true }))
-    })
-    expect(host.querySelector("[aria-label='Bold']")?.className).toContain('bg-[var(--wb-accent-soft)]')
-    expect(host.querySelector("[aria-label='Italic']")?.className).toContain('bg-[var(--wb-accent-soft)]')
-
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'u', metaKey: true }))
-    })
-    expect(host.querySelector("[aria-label='Bold']")?.className).toContain('bg-[var(--wb-accent-soft)]')
-    expect(host.querySelector("[aria-label='Italic']")?.className).toContain('bg-[var(--wb-accent-soft)]')
-    expect(host.querySelector("[aria-label='Underline']")?.className).toContain('bg-[var(--wb-accent-soft)]')
-
+    expect(invokeMutation).toHaveBeenCalledTimes(1)
     expect(invokeMutation).toHaveBeenNthCalledWith(
       1,
       'setRangeStyle',
@@ -1156,6 +1218,29 @@ describe('WorkbookToolbar', () => {
         font: { bold: true },
       },
     )
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'i', metaKey: true }))
+      await flushToolbarMutationQueue()
+    })
+    expect(host.querySelector("[aria-label='Bold']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+    expect(host.querySelector("[aria-label='Italic']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+    expect(invokeMutation).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'u', metaKey: true }))
+      await flushToolbarMutationQueue()
+    })
+    expect(host.querySelector("[aria-label='Bold']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+    expect(host.querySelector("[aria-label='Italic']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+    expect(host.querySelector("[aria-label='Underline']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+    expect(invokeMutation).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      pendingMutationResolvers[0]?.()
+      await flushToolbarMutationQueue()
+    })
+    expect(invokeMutation).toHaveBeenCalledTimes(2)
     expect(invokeMutation).toHaveBeenNthCalledWith(
       2,
       'setRangeStyle',
@@ -1168,6 +1253,12 @@ describe('WorkbookToolbar', () => {
         font: { italic: true },
       },
     )
+
+    await act(async () => {
+      pendingMutationResolvers[1]?.()
+      await flushToolbarMutationQueue()
+    })
+    expect(invokeMutation).toHaveBeenCalledTimes(3)
     expect(invokeMutation).toHaveBeenNthCalledWith(
       3,
       'setRangeStyle',
@@ -1181,10 +1272,9 @@ describe('WorkbookToolbar', () => {
       },
     )
 
-    for (const resolveMutation of pendingMutationResolvers) {
-      resolveMutation()
-    }
     await act(async () => {
+      pendingMutationResolvers[2]?.()
+      await flushToolbarMutationQueue()
       await Promise.all(pendingMutations)
     })
 

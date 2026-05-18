@@ -106,6 +106,7 @@ export function useWorkbookToolbar(input: {
   const isWrapActive = activeSelectedStyle?.alignment?.wrap === true
   const isBorderActive = hasAnyBorder(activeSelectedStyle)
   const selectedRangeBounds = getNormalizedRangeBounds(selectionRangeRef.current)
+  const toolbarMutationQueueRef = useRef<Promise<void> | null>(null)
   const canMergeSelection =
     selectedRangeBounds.startRow !== selectedRangeBounds.endRow || selectedRangeBounds.startCol !== selectedRangeBounds.endCol
   const currentFillColor = normalizeHexColor(activeSelectedStyle?.fill?.backgroundColor ?? '#ffffff')
@@ -130,7 +131,28 @@ export function useWorkbookToolbar(input: {
     },
     [selectedStyle],
   )
-  const enqueueToolbarMutation = useCallback((run: () => Promise<void>) => run(), [])
+  const enqueueToolbarMutation = useCallback((run: () => Promise<void>) => {
+    const queuedMutation = (async () => {
+      const previousMutation = toolbarMutationQueueRef.current
+      if (previousMutation) {
+        await previousMutation
+      }
+      await run()
+    })()
+    let queueTail: Promise<void> | null = null
+    queueTail = (async () => {
+      try {
+        await queuedMutation
+      } catch {
+        // The command caller receives the failure; later toolbar commands must keep draining in order.
+      }
+      if (toolbarMutationQueueRef.current === queueTail) {
+        toolbarMutationQueueRef.current = null
+      }
+    })()
+    toolbarMutationQueueRef.current = queueTail
+    return queuedMutation
+  }, [])
   const statusPresentation = deriveWorkbookStatusPresentation({
     connectionStateName,
     runtimeReady,
