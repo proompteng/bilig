@@ -1,8 +1,9 @@
 import { formatAddress } from '@bilig/formula'
-import type { Viewport } from '@bilig/protocol'
+import type { CellStyleRecord, Viewport } from '@bilig/protocol'
 
 import type { GridEngineLike } from '../grid-engine.js'
 import { snapshotToRenderCell } from '../gridCells.js'
+import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 
 interface VisibleTextRefreshCacheInput {
@@ -90,7 +91,7 @@ function tileVisibleTextNeedsLocalRefresh(
     return true
   }
 
-  const textRunsByCell = new Map<string, string>()
+  const textRunsByCell = new Map<string, GridRenderTile['textRuns'][number]>()
   for (const run of tile.textRuns) {
     if (run.text.length === 0) {
       continue
@@ -119,21 +120,30 @@ function tileVisibleTextNeedsLocalRefresh(
       if (textRunsByCell.has(key)) {
         return true
       }
-      textRunsByCell.set(key, run.text)
+      textRunsByCell.set(key, run)
     }
   }
+
+  const projectedRevision = resolveProjectedRevision(input.engine)
+  const tileStyleRevisionIsBehind = projectedRevision !== null && tile.version.styles < projectedRevision
+  let needsCurrentStyleProof = tileStyleRevisionIsBehind && tileHasAuthoredPaintRects(tile)
 
   for (let row = visibleBounds.visibleRowStart; row <= visibleBounds.visibleRowEnd; row += 1) {
     for (let col = visibleBounds.visibleColStart; col <= visibleBounds.visibleColEnd; col += 1) {
       const snapshot = input.engine.getCell(input.sheetName, formatAddress(row, col))
-      const renderCell = snapshotToRenderCell(snapshot, input.engine.getCellStyle(snapshot.styleId))
-      const visibleTileText = textRunsByCell.get(`${row}:${col}`) ?? ''
-      if (visibleTileText !== renderCell.displayText) {
+      const style = input.engine.getCellStyle(snapshot.styleId)
+      const renderCell = snapshotToRenderCell(snapshot, style)
+      const visibleTileRun = textRunsByCell.get(`${row}:${col}`) ?? null
+      if ((visibleTileRun?.text ?? '') !== renderCell.displayText) {
         return true
       }
+      if (visibleTileRun && textRunStyleDiffersFromRenderCell(visibleTileRun, renderCell)) {
+        return true
+      }
+      needsCurrentStyleProof = needsCurrentStyleProof || (tileStyleRevisionIsBehind && styleAffectsVisibleGridPaint(style))
     }
   }
-  return false
+  return needsCurrentStyleProof
 }
 
 function resolveRenderRevisionKey(engine: GridEngineLike): string {
@@ -148,4 +158,45 @@ function resolveRenderRevisionKey(engine: GridEngineLike): string {
     revision.tileSceneRevision ?? 'none',
     revision.tileSceneCameraSeq ?? 'none',
   ].join(':')
+}
+
+function resolveProjectedRevision(engine: GridEngineLike): number | null {
+  const revision = engine.getRenderRevisionSnapshot?.().projectedRevision
+  return typeof revision === 'number' && Number.isInteger(revision) && revision >= 0 ? revision : null
+}
+
+function styleAffectsVisibleGridPaint(style: CellStyleRecord | undefined): boolean {
+  return Boolean(style?.fill?.backgroundColor || style?.borders)
+}
+
+function tileHasAuthoredPaintRects(tile: GridRenderTile): boolean {
+  const readableRectCount = Math.min(tile.rectCount, Math.floor(tile.rectInstances.length / GRID_RECT_INSTANCE_FLOAT_COUNT_V3))
+  for (let index = 0; index < readableRectCount; index += 1) {
+    const offset = index * GRID_RECT_INSTANCE_FLOAT_COUNT_V3
+    const instanceKind = tile.rectInstances[offset + 13] ?? -1
+    const fillAlpha = tile.rectInstances[offset + 7] ?? 0
+    if (instanceKind === 0 && fillAlpha > 0.01) {
+      return true
+    }
+  }
+  return tile.rectCount > expectedBaseGridLineRectCount(tile)
+}
+
+function expectedBaseGridLineRectCount(tile: GridRenderTile): number {
+  const rowCount = Math.max(0, tile.bounds.rowEnd - tile.bounds.rowStart + 1)
+  const colCount = Math.max(0, tile.bounds.colEnd - tile.bounds.colStart + 1)
+  return rowCount + colCount
+}
+
+function textRunStyleDiffersFromRenderCell(
+  run: GridRenderTile['textRuns'][number],
+  renderCell: ReturnType<typeof snapshotToRenderCell>,
+): boolean {
+  return (
+    (run.font ?? '') !== renderCell.font ||
+    (run.color ?? '') !== renderCell.color ||
+    (run.align ?? 'left') !== renderCell.align ||
+    (run.wrap ?? false) !== renderCell.wrap ||
+    run.underline !== renderCell.underline
+  )
 }

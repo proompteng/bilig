@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formatAddress } from '@bilig/formula'
-import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { ValueTag, type CellSnapshot, type CellStyleRecord } from '@bilig/protocol'
 import type { GridEngineLike } from '../grid-engine.js'
 import { getGridMetrics } from '../gridMetrics.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
@@ -15,6 +15,11 @@ import { DirtyMaskV3, type WorkbookDeltaBatchLikeV3 } from '../renderer-v3/tile-
 import { packTileKey53 } from '../renderer-v3/tile-key.js'
 import { GridRenderTilePaneRuntime, getGridRenderTilePaneRuntime } from '../runtime/gridRenderTilePaneRuntime.js'
 import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS, workbookFontPointSizeToCssPx } from '../workbookTheme.js'
+
+const DEFAULT_TEST_TEXT_COLOR = '#1f2933'
+const DEFAULT_TEST_FONT_SIZE = workbookFontPointSizeToCssPx(WORKBOOK_DEFAULT_FONT_SIZE)
+const DEFAULT_TEST_FONT = `400 ${DEFAULT_TEST_FONT_SIZE}px ${WORKBOOK_FONT_SANS}`
 
 const TEST_ENGINE: GridEngineLike = {
   getCell: (_sheetName, address) => createEmptyCellSnapshot(address),
@@ -44,6 +49,13 @@ function createStringCellSnapshot(address: string, value: string): CellSnapshot 
     sheetName: 'Sheet1',
     value: { tag: ValueTag.String, value, stringId: 0 },
     version: 1,
+  }
+}
+
+function createStyledStringCellSnapshot(address: string, value: string, styleId: string): CellSnapshot {
+  return {
+    ...createStringCellSnapshot(address, value),
+    styleId,
   }
 }
 
@@ -809,10 +821,10 @@ describe('GridRenderTilePaneRuntime', () => {
           clipWidth: 120,
           clipX: 0,
           clipY: 0,
-          color: '#000000',
+          color: DEFAULT_TEST_TEXT_COLOR,
           col: 0,
-          font: '12px sans-serif',
-          fontSize: 12,
+          font: DEFAULT_TEST_FONT,
+          fontSize: DEFAULT_TEST_FONT_SIZE,
           height: 20,
           row: 32,
           strike: false,
@@ -2198,10 +2210,10 @@ describe('GridRenderTilePaneRuntime', () => {
           clipWidth: 120,
           clipX: 0,
           clipY: 280,
-          color: '#000000',
+          color: DEFAULT_TEST_TEXT_COLOR,
           col: 0,
-          font: '12px sans-serif',
-          fontSize: 12,
+          font: DEFAULT_TEST_FONT,
+          fontSize: DEFAULT_TEST_FONT_SIZE,
           height: 20,
           row: 14,
           strike: false,
@@ -2400,6 +2412,84 @@ describe('GridRenderTilePaneRuntime', () => {
 
     expect(refreshed.residentBodyPane?.tile).not.toBe(remoteTile)
     expect(refreshed.residentBodyPane?.tile.textRuns.some((run) => run.row === 24 && run.col === 1 && run.text === visibleText)).toBe(true)
+  })
+
+  it('rebuilds visible remote tiles when style revisions are stale even if text still matches', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const tileId = host.viewportTileKeys({
+      dprBucket: 1,
+      sheetOrdinal: 7,
+      viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    })[0]
+    if (tileId === undefined) {
+      throw new Error('Expected a visible render tile key for the test viewport')
+    }
+    const remoteTile: GridRenderTile = {
+      ...createRenderTile(tileId),
+      lastBatchId: 7,
+      textCount: 1,
+      textRuns: [
+        {
+          align: 'left',
+          clipHeight: 20,
+          clipWidth: 100,
+          clipX: 0,
+          clipY: 0,
+          color: DEFAULT_TEST_TEXT_COLOR,
+          col: 0,
+          font: DEFAULT_TEST_FONT,
+          fontSize: DEFAULT_TEST_FONT_SIZE,
+          height: 20,
+          row: 0,
+          strike: false,
+          text: 'A1',
+          underline: false,
+          width: 100,
+          x: 0,
+          y: 0,
+        },
+      ],
+      version: {
+        axisX: 7,
+        axisY: 7,
+        freeze: 7,
+        styles: 1,
+        text: 7,
+        values: 7,
+      },
+    }
+    const styles: Record<string, CellStyleRecord> = {
+      'style-green': { id: 'style-green', fill: { backgroundColor: '#00ff00' } },
+    }
+    const engineWithFreshFill: GridEngineLike = {
+      getCell: (_sheetName, address) =>
+        address === 'A1' ? createStyledStringCellSnapshot('A1', 'A1', 'style-green') : createEmptyCellSnapshot(address),
+      getCellStyle: (styleId) => (styleId ? styles[styleId] : undefined),
+      getRenderRevisionSnapshot: () => ({
+        authoritativeRevision: 7,
+        localRevision: 7,
+        projectedRevision: 7,
+        tileSceneCameraSeq: 7,
+        tileSceneRevision: 7,
+      }),
+      subscribeCells: () => () => {},
+      workbook: {
+        getSheet: () => undefined,
+      },
+    }
+
+    const refreshed = runtime.resolve(
+      createInput({
+        engine: engineWithFreshFill,
+        gridRuntimeHost: host,
+        renderTileSource: createRenderTileSource([remoteTile]),
+        visibleViewport: { colEnd: 10, colStart: 0, rowEnd: 10, rowStart: 0 },
+      }),
+    )
+
+    expect(refreshed.residentBodyPane?.tile).not.toBe(remoteTile)
+    expect(hasOpaqueGreenFillRect(refreshed.residentBodyPane?.tile)).toBe(true)
   })
 
   it('checks resident rendered rows for local text even when the logical visible window is shorter', () => {
