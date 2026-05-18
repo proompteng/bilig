@@ -19,6 +19,8 @@ const encodedSnapshotCache = new WeakMap<WorkbookSnapshot, Uint8Array>()
 let snapshotPublicationSequence = 0
 
 export const SNAPSHOT_ASSEMBLY_MAX_AGE_MS = 5 * 60_000
+export const SNAPSHOT_ASSEMBLY_MAX_CHUNKS = 4_096
+export const SNAPSHOT_ASSEMBLY_MAX_BYTES = 128 * 1024 * 1024
 
 export interface BrowserSubscriber {
   id: string
@@ -41,6 +43,7 @@ interface SnapshotAssembly {
   contentType: string
   chunkCount: number
   chunks: Array<Uint8Array | undefined>
+  totalByteLength: number
   updatedAtUnixMs: number
 }
 
@@ -175,7 +178,14 @@ function pruneExpiredSnapshotAssemblies(registry: SnapshotAssemblyRegistry, nowU
   })
 }
 
-function isValidSnapshotChunkFrame(frame: SnapshotChunkFrame): boolean {
+export interface SnapshotAssemblyOptions {
+  readonly nowUnixMs?: number
+  readonly maxAgeMs?: number
+  readonly maxChunks?: number
+  readonly maxBytes?: number
+}
+
+function isValidSnapshotChunkFrame(frame: SnapshotChunkFrame, maxChunks: number, maxBytes: number): boolean {
   return (
     frame.documentId.length > 0 &&
     frame.snapshotId.length > 0 &&
@@ -184,10 +194,12 @@ function isValidSnapshotChunkFrame(frame: SnapshotChunkFrame): boolean {
     frame.cursor >= 0 &&
     Number.isSafeInteger(frame.chunkCount) &&
     frame.chunkCount > 0 &&
+    frame.chunkCount <= maxChunks &&
     Number.isSafeInteger(frame.chunkIndex) &&
     frame.chunkIndex >= 0 &&
     frame.chunkIndex < frame.chunkCount &&
-    frame.bytes instanceof Uint8Array
+    frame.bytes instanceof Uint8Array &&
+    frame.bytes.byteLength <= maxBytes
   )
 }
 
@@ -216,13 +228,15 @@ function byteArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
 export function acceptSnapshotChunk(
   registry: SnapshotAssemblyRegistry,
   frame: SnapshotChunkFrame,
-  options: { nowUnixMs?: number; maxAgeMs?: number } = {},
+  options: SnapshotAssemblyOptions = {},
 ): CompletedSnapshotAssembly | null {
   const nowUnixMs = options.nowUnixMs ?? Date.now()
   const maxAgeMs = options.maxAgeMs ?? SNAPSHOT_ASSEMBLY_MAX_AGE_MS
+  const maxChunks = options.maxChunks ?? SNAPSHOT_ASSEMBLY_MAX_CHUNKS
+  const maxBytes = options.maxBytes ?? SNAPSHOT_ASSEMBLY_MAX_BYTES
   pruneExpiredSnapshotAssemblies(registry, nowUnixMs, maxAgeMs)
 
-  if (!isValidSnapshotChunkFrame(frame)) {
+  if (!isValidSnapshotChunkFrame(frame, maxChunks, maxBytes)) {
     registry.delete(frame.snapshotId)
     return null
   }
@@ -240,6 +254,7 @@ export function acceptSnapshotChunk(
     contentType: frame.contentType,
     chunkCount: frame.chunkCount,
     chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount }),
+    totalByteLength: 0,
     updatedAtUnixMs: nowUnixMs,
   }
 
@@ -250,7 +265,12 @@ export function acceptSnapshotChunk(
       return null
     }
   } else {
+    if (assembly.totalByteLength + frame.bytes.byteLength > maxBytes) {
+      registry.delete(frame.snapshotId)
+      return null
+    }
     assembly.chunks[frame.chunkIndex] = frame.bytes
+    assembly.totalByteLength += frame.bytes.byteLength
   }
   assembly.updatedAtUnixMs = nowUnixMs
   registry.set(frame.snapshotId, assembly)

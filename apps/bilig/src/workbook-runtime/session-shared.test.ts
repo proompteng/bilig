@@ -3,6 +3,7 @@ import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames, type Snapsho
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import {
   SNAPSHOT_ASSEMBLY_MAX_AGE_MS,
+  SNAPSHOT_ASSEMBLY_MAX_CHUNKS,
   acceptSnapshotChunk,
   createSnapshotPublication,
   decodeWorkbookSnapshotBytes,
@@ -59,6 +60,7 @@ describe('session-shared', () => {
       contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
       chunkCount: 2,
       chunks: [new Uint8Array([1]), undefined],
+      totalByteLength: 1,
       updatedAtUnixMs: 0,
     })
 
@@ -138,6 +140,40 @@ describe('session-shared', () => {
 
     expect(acceptSnapshotChunk(registry, frame)).toBeNull()
     expect(registry.has('snapshot-1')).toBe(false)
+  })
+
+  it('rejects snapshot assemblies with unbounded chunk counts before allocating the assembly', () => {
+    const registry = new Map()
+    const frame: SnapshotChunkFrame = {
+      kind: 'snapshotChunk',
+      documentId: 'doc-1',
+      snapshotId: 'snapshot-many-chunks',
+      cursor: 7,
+      chunkIndex: 0,
+      chunkCount: SNAPSHOT_ASSEMBLY_MAX_CHUNKS + 1,
+      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+      bytes: new Uint8Array([1]),
+    }
+
+    expect(acceptSnapshotChunk(registry, frame)).toBeNull()
+    expect(registry.has('snapshot-many-chunks')).toBe(false)
+  })
+
+  it('rejects snapshot assemblies once accumulated bytes exceed the configured cap', () => {
+    const registry = new Map()
+    const frames = createSnapshotChunkFrames({
+      documentId: 'doc-1',
+      snapshotId: 'snapshot-too-large',
+      cursor: 7,
+      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+      bytes: new TextEncoder().encode('abcd'),
+      chunkSize: 2,
+    })
+
+    expect(acceptSnapshotChunk(registry, frames[0]!, { maxBytes: 3 })).toBeNull()
+    expect(registry.has('snapshot-too-large')).toBe(true)
+    expect(acceptSnapshotChunk(registry, frames[1]!, { maxBytes: 3 })).toBeNull()
+    expect(registry.has('snapshot-too-large')).toBe(false)
   })
 
   it('decodes assembled workbook snapshots through the shared protocol guard', () => {
