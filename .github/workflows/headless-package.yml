@@ -323,15 +323,32 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure canonical release remotes
+        id: release_remotes
         env:
           FORGEJO_PUSH_URL: ${{ secrets.FORGEJO_PUSH_URL }}
         run: |
           set -euo pipefail
 
           if [[ -z "${FORGEJO_PUSH_URL:-}" ]]; then
-            echo "FORGEJO_PUSH_URL secret is required for runtime release planning" >&2
-            exit 1
+            reason="FORGEJO_PUSH_URL secret is not configured; runtime release planning skipped after verification"
+            {
+              echo "ready=false"
+              echo "reason=${reason}"
+            } >> "$GITHUB_OUTPUT"
+            {
+              echo "### runtime release planning skipped"
+              echo
+              echo "${reason}."
+              echo
+              echo "The runtime package verification job still ran; only the release planning/publish path is disabled for this mirror."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+
+          {
+            echo "ready=true"
+            echo "reason="
+          } >> "$GITHUB_OUTPUT"
 
           git remote rename origin github
           git remote add origin "${FORGEJO_PUSH_URL}"
@@ -347,8 +364,19 @@ jobs:
 
       - name: Validate Forgejo and GitHub branch alignment
         id: release_alignment
+        env:
+          RELEASE_REMOTES_READY: ${{ steps.release_remotes.outputs.ready }}
+          RELEASE_REMOTES_REASON: ${{ steps.release_remotes.outputs.reason }}
         run: |
           set -euo pipefail
+
+          if [[ "${RELEASE_REMOTES_READY}" != "true" ]]; then
+            {
+              echo "current=false"
+              echo "reason=${RELEASE_REMOTES_REASON:-runtime release remotes were not configured}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           origin_sha="$(git rev-parse origin/main)"
           github_sha="$(git rev-parse github/main)"
@@ -361,6 +389,7 @@ jobs:
 
           if [[ "${origin_sha}" != "${GITHUB_SHA}" ]]; then
             echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "reason=stale workflow SHA; newer main exists" >> "$GITHUB_OUTPUT"
             {
               echo "### runtime release planning skipped"
               echo
@@ -373,6 +402,7 @@ jobs:
           fi
 
           echo "current=true" >> "$GITHUB_OUTPUT"
+          echo "reason=" >> "$GITHUB_OUTPUT"
 
       - name: Plan runtime release
         id: planner
@@ -380,12 +410,13 @@ jobs:
           set -euo pipefail
 
           if [[ "${RELEASE_ALIGNMENT_CURRENT}" != "true" ]]; then
+            release_skip_reason="${RELEASE_ALIGNMENT_REASON:-stale workflow SHA; newer main exists}"
             {
               echo "release_needed=false"
               echo "bootstrap_required=false"
               echo "manual_override=false"
               echo "release_type=none"
-              echo "reason=stale workflow SHA; newer main exists"
+              echo "reason=${release_skip_reason}"
               echo "manifest_version="
               echo "published_version="
               echo "last_tag="
@@ -409,6 +440,7 @@ jobs:
             --github-output "$GITHUB_OUTPUT"
         env:
           RELEASE_ALIGNMENT_CURRENT: ${{ steps.release_alignment.outputs.current }}
+          RELEASE_ALIGNMENT_REASON: ${{ steps.release_alignment.outputs.reason }}
           PLANNER_ARGS: ${{ steps.release_meta.outputs.planner_args }}
 
   publish_release:
