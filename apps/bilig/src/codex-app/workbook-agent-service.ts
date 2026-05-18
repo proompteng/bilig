@@ -4,12 +4,7 @@ import type {
   WorkbookAgentThreadSummary,
   WorkbookAgentWorkflowRun,
 } from '@bilig/contracts'
-import type {
-  WorkbookAgentAppliedBy,
-  WorkbookAgentCommandBundle,
-  WorkbookAgentExecutionRecord,
-  WorkbookAgentPreviewSummary,
-} from '@bilig/agent-api'
+import type { WorkbookAgentAppliedBy, WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from '@bilig/agent-api'
 import {
   isWorkbookAgentBundleAutoApplyEligible,
   resolveWorkbookAgentBundleExecutionPolicyInput,
@@ -91,7 +86,6 @@ import {
 import {
   applyWorkbookAgentCommandBundleForSessionState,
   applyWorkbookAgentToolBundleAutomatically,
-  buildWorkbookAgentAuthoritativePreview,
   finalizeWorkbookAgentPrivateTurnBundle,
 } from './workbook-agent-service-application.js'
 import { applyWorkbookAgentReviewItem, replayWorkbookAgentExecutionRecord } from './workbook-agent-service-review-actions.js'
@@ -232,21 +226,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     })
   }
 
-  private async buildAuthoritativePreview(documentId: string, bundle: WorkbookAgentCommandBundle): Promise<WorkbookAgentPreviewSummary> {
-    return await buildWorkbookAgentAuthoritativePreview({
-      zeroSyncService: this.zeroSyncService,
-      documentId,
-      bundle,
-    })
-  }
-
   private async applyCommandBundleForSessionState(input: {
     sessionState: WorkbookAgentThreadState
     commandBundle: WorkbookAgentCommandBundle
     actorUserId: string
     appliedBy: WorkbookAgentAppliedBy
     commandIndexes?: readonly number[] | null | undefined
-    preview: WorkbookAgentPreviewSummary
   }): Promise<WorkbookAgentExecutionRecord> {
     return await applyWorkbookAgentCommandBundleForSessionState(this.createBundleApplicationContext(), input)
   }
@@ -285,15 +270,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       zeroSyncService: this.zeroSyncService,
       now: this.now,
       sessionRegistry: this.sessionRegistry,
-      buildAuthoritativePreview: async (documentId: string, bundle: WorkbookAgentCommandBundle) =>
-        await this.buildAuthoritativePreview(documentId, bundle),
       applyCommandBundleForSessionState: async (input: {
         sessionState: WorkbookAgentThreadState
         commandBundle: WorkbookAgentCommandBundle
         actorUserId: string
         appliedBy: WorkbookAgentAppliedBy
         commandIndexes?: readonly number[] | null | undefined
-        preview: WorkbookAgentPreviewSummary
       }) => await this.applyCommandBundleForSessionState(input),
       shouldApplyToolBundleImmediately: (sessionState: WorkbookAgentThreadState, bundle: WorkbookAgentCommandBundle) =>
         this.shouldApplyToolBundleImmediately(sessionState, bundle),
@@ -439,13 +421,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       })
       const migratedBundle = toWorkbookAgentCommandBundle(migratedReviewItem)
       replaceCurrentWorkbookAgentReviewItem(sessionState, migratedReviewItem)
-      const preview = await this.buildAuthoritativePreview(input.documentId, migratedBundle)
       await this.applyCommandBundleForSessionState({
         sessionState,
         commandBundle: migratedBundle,
         actorUserId: input.session.userID,
         appliedBy: 'auto',
-        preview,
       })
     } else if (bootstrapRecovery.kind === 'clearLegacy') {
       clearLegacyPrivateBootstrapReviewItem({

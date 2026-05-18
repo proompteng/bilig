@@ -1,9 +1,4 @@
-import type {
-  WorkbookAgentAppliedBy,
-  WorkbookAgentCommandBundle,
-  WorkbookAgentExecutionRecord,
-  WorkbookAgentPreviewSummary,
-} from '@bilig/agent-api'
+import type { WorkbookAgentAppliedBy, WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from '@bilig/agent-api'
 import type { ZeroSyncService } from '../zero/service.js'
 import type { WorkbookAgentFeatureFlags } from './workbook-agent-feature-flags.js'
 import type { WorkbookAgentSessionRegistry } from './workbook-agent-session-registry.js'
@@ -31,14 +26,12 @@ export function createWorkbookAgentReviewActionContext(input: {
   readonly zeroSyncService: ZeroSyncService
   readonly now: () => number
   readonly sessionRegistry: WorkbookAgentSessionRegistry
-  readonly buildAuthoritativePreview: (documentId: string, bundle: WorkbookAgentCommandBundle) => Promise<WorkbookAgentPreviewSummary>
   readonly applyCommandBundleForSessionState: (input: {
     readonly sessionState: WorkbookAgentThreadState
     readonly commandBundle: WorkbookAgentCommandBundle
     readonly actorUserId: string
     readonly appliedBy: WorkbookAgentAppliedBy
     readonly commandIndexes?: readonly number[] | null | undefined
-    readonly preview: WorkbookAgentPreviewSummary
   }) => Promise<WorkbookAgentExecutionRecord>
   readonly shouldApplyToolBundleImmediately: (sessionState: WorkbookAgentThreadState, bundle: WorkbookAgentCommandBundle) => boolean
   readonly persistSessionState: (sessionState: WorkbookAgentThreadState) => Promise<void>
@@ -46,7 +39,6 @@ export function createWorkbookAgentReviewActionContext(input: {
   return {
     now: input.now,
     getWorkbookHeadRevision: async (documentId) => await input.zeroSyncService.getWorkbookHeadRevision(documentId),
-    buildAuthoritativePreview: input.buildAuthoritativePreview,
     applyCommandBundleForSessionState: input.applyCommandBundleForSessionState,
     shouldApplyToolBundleImmediately: input.shouldApplyToolBundleImmediately,
     persistSessionState: input.persistSessionState,

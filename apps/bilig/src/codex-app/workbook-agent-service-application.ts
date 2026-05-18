@@ -101,7 +101,6 @@ export async function applyWorkbookAgentCommandBundleForSessionState(
     actorUserId: string
     appliedBy: WorkbookAgentAppliedBy
     commandIndexes?: readonly number[] | null | undefined
-    preview: WorkbookAgentPreviewSummary
   },
 ): Promise<WorkbookAgentExecutionRecord> {
   const selection = splitWorkbookAgentCommandBundle({
@@ -184,15 +183,15 @@ export async function applyWorkbookAgentCommandBundleForSessionState(
       retryable: false,
     })
   }
-  const result = await context.zeroSyncService.applyAgentCommandBundle(
-    input.sessionState.documentId,
-    selection.acceptedBundle,
-    input.preview,
-    {
-      userID: input.actorUserId,
-      roles: ['editor'],
-    },
-  )
+  const preview = await buildWorkbookAgentAuthoritativePreview({
+    zeroSyncService: context.zeroSyncService,
+    documentId: input.sessionState.documentId,
+    bundle: selection.acceptedBundle,
+  })
+  const result = await context.zeroSyncService.applyAgentCommandBundle(input.sessionState.documentId, selection.acceptedBundle, preview, {
+    userID: input.actorUserId,
+    roles: ['editor'],
+  })
   const executionRecord = buildWorkbookAgentExecutionRecord({
     bundle: selection.acceptedBundle,
     actorUserId: input.actorUserId,
@@ -261,17 +260,11 @@ export async function applyWorkbookAgentToolBundleAutomatically(
     bundle: WorkbookAgentCommandBundle
   },
 ): Promise<WorkbookAgentExecutionRecord | null> {
-  const preview = await buildWorkbookAgentAuthoritativePreview({
-    zeroSyncService: context.zeroSyncService,
-    documentId: input.sessionState.documentId,
-    bundle: input.bundle,
-  })
   const executionRecord = await applyWorkbookAgentCommandBundleForSessionState(context, {
     sessionState: input.sessionState,
     commandBundle: input.bundle,
     actorUserId: input.actorUserId,
     appliedBy: 'auto',
-    preview,
   })
   await context.persistSessionState(input.sessionState)
   context.emitSnapshot(input.sessionState.threadId)
@@ -298,17 +291,11 @@ export async function finalizeWorkbookAgentPrivateTurnBundle(
   }
   const actorUserId = context.resolveTurnActorUserId(input.sessionState, input.turnId)
   try {
-    const preview = await buildWorkbookAgentAuthoritativePreview({
-      zeroSyncService: context.zeroSyncService,
-      documentId: input.sessionState.documentId,
-      bundle: queuedBundle,
-    })
     await applyWorkbookAgentCommandBundleForSessionState(context, {
       sessionState: input.sessionState,
       commandBundle: queuedBundle,
       actorUserId,
       appliedBy: 'auto',
-      preview,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

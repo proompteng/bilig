@@ -1,9 +1,4 @@
-import type {
-  WorkbookAgentAppliedBy,
-  WorkbookAgentCommandBundle,
-  WorkbookAgentExecutionRecord,
-  WorkbookAgentPreviewSummary,
-} from '@bilig/agent-api'
+import type { WorkbookAgentAppliedBy, WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from '@bilig/agent-api'
 import { createWorkbookAgentCommandBundle, decodeWorkbookAgentPreviewSummary, toWorkbookAgentCommandBundle } from '@bilig/agent-api'
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 import { createBundleRangeCitations } from './workbook-agent-bundle-state.js'
@@ -19,14 +14,12 @@ import { toContextRef, upsertEntry, type WorkbookAgentThreadState } from './work
 export interface WorkbookAgentReviewActionContext {
   readonly now: () => number
   readonly getWorkbookHeadRevision: (documentId: string) => Promise<number>
-  readonly buildAuthoritativePreview: (documentId: string, bundle: WorkbookAgentCommandBundle) => Promise<WorkbookAgentPreviewSummary>
   readonly applyCommandBundleForSessionState: (input: {
     sessionState: WorkbookAgentThreadState
     commandBundle: WorkbookAgentCommandBundle
     actorUserId: string
     appliedBy: WorkbookAgentAppliedBy
     commandIndexes?: readonly number[] | null | undefined
-    preview: WorkbookAgentPreviewSummary
   }) => Promise<WorkbookAgentExecutionRecord>
   readonly shouldApplyToolBundleImmediately: (sessionState: WorkbookAgentThreadState, bundle: WorkbookAgentCommandBundle) => boolean
   readonly persistSessionState: (sessionState: WorkbookAgentThreadState) => Promise<void>
@@ -48,8 +41,8 @@ export async function applyWorkbookAgentReviewItem(input: {
     reviewItemId: input.reviewItemId,
     notFoundMessage: 'Workbook agent change set was not found.',
   })
-  const preview = decodeWorkbookAgentPreviewSummary(input.preview)
-  if (!preview) {
+  const callerPreview = decodeWorkbookAgentPreviewSummary(input.preview)
+  if (!callerPreview) {
     throw createWorkbookAgentServiceError({
       code: 'WORKBOOK_AGENT_PREVIEW_REQUIRED',
       message: 'Workbook preview details are required before applying this change set.',
@@ -57,13 +50,13 @@ export async function applyWorkbookAgentReviewItem(input: {
       retryable: false,
     })
   }
+  const commandBundle = toWorkbookAgentCommandBundle(reviewItem)
   await input.context.applyCommandBundleForSessionState({
     sessionState: input.sessionState,
-    commandBundle: toWorkbookAgentCommandBundle(reviewItem),
+    commandBundle,
     actorUserId: input.actorUserId,
     appliedBy: input.appliedBy,
     commandIndexes: input.commandIndexes,
-    preview,
   })
   await input.context.persistSessionState(input.sessionState)
   input.context.emitSnapshot(input.sessionState.threadId)
@@ -97,13 +90,11 @@ export async function replayWorkbookAgentExecutionRecord(input: {
     now: input.context.now(),
   })
   if (input.context.shouldApplyToolBundleImmediately(input.sessionState, replayedBundle)) {
-    const preview = await input.context.buildAuthoritativePreview(input.documentId, replayedBundle)
     await input.context.applyCommandBundleForSessionState({
       sessionState: input.sessionState,
       commandBundle: replayedBundle,
       actorUserId: input.actorUserId,
       appliedBy: 'auto',
-      preview,
     })
     await input.context.persistSessionState(input.sessionState)
     input.context.emitSnapshot(input.sessionState.threadId)

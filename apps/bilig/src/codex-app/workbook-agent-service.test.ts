@@ -4807,7 +4807,7 @@ describe('workbook agent service', () => {
   it('persists the authoritative preview returned by apply and not the caller payload', async () => {
     const fakeCodex = new FakeCodexTransport()
     const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null }
-    const applyAgentCommandBundle = vi.fn(async () => ({
+    const applyAgentCommandBundle = vi.fn(async (_documentId: string, _bundle: WorkbookAgentCommandBundle, _preview: unknown) => ({
       revision: 7,
       preview: createPreviewSummary({
         cellDiffs: [
@@ -4915,6 +4915,7 @@ describe('workbook agent service', () => {
         },
       })
 
+      const callerPreview = createPreviewSummary()
       const applied = await service.applyReviewItem({
         documentId: 'doc-1',
         threadId: 'thr-test',
@@ -4924,7 +4925,7 @@ describe('workbook agent service', () => {
           roles: ['editor'],
         },
         appliedBy: 'user',
-        preview: createPreviewSummary(),
+        preview: callerPreview,
       })
 
       const record = applied.executionRecords[0]
@@ -4932,6 +4933,27 @@ describe('workbook agent service', () => {
         throw new Error('Expected an execution record after apply')
       }
       expect(applyAgentCommandBundle).toHaveBeenCalled()
+      const appliedPreview = applyAgentCommandBundle.mock.calls[0]?.[2]
+      expect(appliedPreview).not.toBe(callerPreview)
+      expect(applyAgentCommandBundle).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({
+          id: pending.id,
+        }),
+        expect.objectContaining({
+          ranges: [
+            {
+              sheetName: 'Sheet1',
+              startAddress: 'B2',
+              endAddress: 'B2',
+              role: 'target',
+            },
+          ],
+        }),
+        expect.objectContaining({
+          userID: 'alex@example.com',
+        }),
+      )
       expect(record.preview).toEqual(
         expect.objectContaining({
           cellDiffs: [
@@ -5269,10 +5291,13 @@ describe('workbook agent service', () => {
           ],
         }),
         expect.objectContaining({
-          cellDiffs: [
-            expect.objectContaining({
-              address: 'C3',
-            }),
+          ranges: [
+            {
+              sheetName: 'Sheet1',
+              startAddress: 'C3',
+              endAddress: 'C3',
+              role: 'target',
+            },
           ],
         }),
         expect.objectContaining({
