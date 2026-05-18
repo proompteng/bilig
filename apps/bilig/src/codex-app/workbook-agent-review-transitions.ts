@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import type { WorkbookAgentCommandBundle, WorkbookAgentReviewQueueItem, WorkbookAgentSharedReviewState } from '@bilig/agent-api'
 import { describeWorkbookAgentBundle, toWorkbookAgentCommandBundle, toWorkbookAgentReviewQueueItem } from '@bilig/agent-api'
 import {
@@ -32,6 +33,22 @@ export function createWorkbookAgentReviewQueueItem(input: {
   })
 }
 
+function isRestagedWorkbookAgentBundlePayloadChanged(input: {
+  readonly currentReviewItem: WorkbookAgentReviewQueueItem
+  readonly nextBundle: WorkbookAgentCommandBundle
+}): boolean {
+  const currentBundle = toWorkbookAgentCommandBundle(input.currentReviewItem)
+  return (
+    currentBundle.documentId !== input.nextBundle.documentId ||
+    currentBundle.threadId !== input.nextBundle.threadId ||
+    currentBundle.turnId !== input.nextBundle.turnId ||
+    currentBundle.goalText !== input.nextBundle.goalText ||
+    currentBundle.baseRevision !== input.nextBundle.baseRevision ||
+    !isDeepStrictEqual(currentBundle.context, input.nextBundle.context) ||
+    !isDeepStrictEqual(currentBundle.commands, input.nextBundle.commands)
+  )
+}
+
 export function stageWorkbookAgentReviewBundle(input: {
   readonly sessionState: WorkbookAgentThreadState
   readonly turnId: string
@@ -46,21 +63,27 @@ export function stageWorkbookAgentReviewBundle(input: {
       retryable: false,
     })
   }
+  const bundle =
+    currentReviewItem &&
+    isRestagedWorkbookAgentBundlePayloadChanged({
+      currentReviewItem,
+      nextBundle: input.bundle,
+    })
+      ? {
+          ...input.bundle,
+          sharedReview: null,
+        }
+      : input.bundle
   replaceCurrentWorkbookAgentReviewItem(
     input.sessionState,
     createWorkbookAgentReviewQueueItem({
       sessionState: input.sessionState,
-      bundle: input.bundle,
+      bundle,
     }),
   )
   input.sessionState.durable.entries = upsertEntry(
     input.sessionState.durable.entries,
-    createSystemEntry(
-      `system-preview:${input.bundle.id}`,
-      input.turnId,
-      describeWorkbookAgentBundle(input.bundle),
-      createBundleRangeCitations(input.bundle),
-    ),
+    createSystemEntry(`system-preview:${bundle.id}`, input.turnId, describeWorkbookAgentBundle(bundle), createBundleRangeCitations(bundle)),
   )
 }
 

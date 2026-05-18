@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkbookAgentThreadState } from './workbook-agent-service-shared.js'
+import type { WorkbookAgentSharedReviewState } from '@bilig/agent-api'
 import { createWorkbookAgentCommandBundle, toWorkbookAgentCommandBundle, toWorkbookAgentReviewQueueItem } from '@bilig/agent-api'
 import {
   createWorkbookAgentReviewQueueItem,
@@ -41,7 +42,14 @@ function createSessionState(): WorkbookAgentThreadState {
   }
 }
 
-function createReviewItem(input: { readonly bundleId?: string; readonly turnId?: string; readonly sheetName?: string } = {}) {
+function createReviewItem(
+  input: {
+    readonly bundleId?: string
+    readonly turnId?: string
+    readonly sheetName?: string
+    readonly sharedReview?: WorkbookAgentSharedReviewState
+  } = {},
+) {
   const bundle = createWorkbookAgentCommandBundle({
     bundleId: input.bundleId ?? 'bundle-1',
     documentId: 'doc-1',
@@ -52,7 +60,7 @@ function createReviewItem(input: { readonly bundleId?: string; readonly turnId?:
     context: null,
     commands: [{ kind: 'createSheet', name: input.sheetName ?? 'Summary' }],
     now: 100,
-    sharedReview: {
+    sharedReview: input.sharedReview ?? {
       ownerUserId: 'alex@example.com',
       status: 'pending',
       decidedByUserId: null,
@@ -204,6 +212,57 @@ describe('workbook agent review transitions', () => {
       expect.objectContaining({
         id: 'bundle-1',
         summary: 'Create sheet Forecast',
+      }),
+    )
+  })
+
+  it('resets owner approval when the active turn changes the staged bundle payload', () => {
+    const sessionState = createSessionState()
+    const approvedSharedReview = {
+      ownerUserId: 'alex@example.com',
+      status: 'approved' as const,
+      decidedByUserId: 'alex@example.com',
+      decidedAtUnixMs: 250,
+      recommendations: [
+        {
+          userId: 'pat@example.com',
+          decision: 'approved' as const,
+          decidedAtUnixMs: 240,
+        },
+      ],
+    }
+    const approvedReviewItem = createReviewItem({
+      sharedReview: approvedSharedReview,
+    })
+    replaceCurrentWorkbookAgentReviewItem(sessionState, approvedReviewItem)
+    const approvedBundle = toWorkbookAgentCommandBundle(approvedReviewItem)
+    const restagedBundle = createWorkbookAgentCommandBundle({
+      bundleId: approvedBundle.id,
+      documentId: approvedBundle.documentId,
+      threadId: approvedBundle.threadId,
+      turnId: approvedBundle.turnId,
+      goalText: approvedBundle.goalText,
+      baseRevision: approvedBundle.baseRevision,
+      context: approvedBundle.context,
+      commands: [...approvedBundle.commands, { kind: 'createSheet', name: 'Forecast' }],
+      now: approvedBundle.createdAtUnixMs,
+      sharedReview: approvedSharedReview,
+    })
+
+    stageWorkbookAgentReviewBundle({
+      sessionState,
+      turnId: restagedBundle.turnId,
+      bundle: restagedBundle,
+    })
+
+    expect(getCurrentWorkbookAgentReviewItem(sessionState)).toEqual(
+      expect.objectContaining({
+        id: approvedBundle.id,
+        status: 'pending',
+        decidedByUserId: null,
+        decidedAtUnixMs: null,
+        recommendations: [],
+        summary: 'Create sheet Summary and 1 more change',
       }),
     )
   })
