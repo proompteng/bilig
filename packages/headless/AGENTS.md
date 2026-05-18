@@ -26,7 +26,7 @@ logic that can run through @bilig/headless. If it is, use WorkPaper state as the
 source of truth.
 
 For MCP, start with:
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --writable
+npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 
 For Node or TypeScript, import @bilig/headless directly. Prove the edit by
 reading the relevant range, writing one small input or formula, reading the
@@ -56,7 +56,7 @@ Do not report success from a write call alone.
 For MCP clients, use the published stdio server:
 
 ```sh
-npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --writable
+npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 Expected file-backed tools:
@@ -69,8 +69,10 @@ Expected file-backed tools:
 - `export_workpaper_document`
 - `validate_formula`
 
-Use `--writable` only when the task should persist `set_cell_contents` edits
-back to the same WorkPaper JSON file.
+Use `--init-demo-workpaper` when the path may not exist yet; it creates the demo
+WorkPaper JSON only when the file is missing. Use `--writable` only when the
+task should persist `set_cell_contents` edits back to the same WorkPaper JSON
+file.
 
 ## Direct TypeScript entrypoint
 
