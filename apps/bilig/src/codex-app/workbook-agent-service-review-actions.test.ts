@@ -147,4 +147,53 @@ describe('workbook agent service review actions', () => {
     expect(context.persistSessionState).not.toHaveBeenCalled()
     expect(context.emitSnapshot).not.toHaveBeenCalled()
   })
+
+  it('does not overwrite a review item staged while replay is resolving workbook revision', async () => {
+    const existingReviewBundle = createBundle('bundle-existing-review')
+    const executionRecord = createExecutionRecord()
+    const sessionState = createSessionState({
+      executionRecords: [executionRecord],
+    })
+    let releaseHeadRevision!: () => void
+    const headRevisionBlocked = new Promise<void>((resolve) => {
+      releaseHeadRevision = resolve
+    })
+    let resolveHeadRevisionRequested!: () => void
+    const headRevisionRequested = new Promise<void>((resolve) => {
+      resolveHeadRevisionRequested = resolve
+    })
+    const context: WorkbookAgentReviewActionContext = {
+      ...createContext(),
+      getWorkbookHeadRevision: vi.fn(async () => {
+        resolveHeadRevisionRequested()
+        await headRevisionBlocked
+        return 9
+      }),
+    }
+
+    const replayPromise = replayWorkbookAgentExecutionRecord({
+      context,
+      sessionState,
+      documentId: 'doc-1',
+      recordId: executionRecord.id,
+      actorUserId: 'alex@example.com',
+    })
+    await headRevisionRequested
+    sessionState.durable.reviewQueueItems = [
+      toWorkbookAgentReviewQueueItem({
+        bundle: existingReviewBundle,
+        reviewMode: 'ownerReview',
+        sharedReview: existingReviewBundle.sharedReview ?? null,
+      }),
+    ]
+    releaseHeadRevision()
+
+    await expect(replayPromise).rejects.toThrow('Finish the current workbook review item before replaying another workbook change.')
+
+    expect(sessionState.durable.reviewQueueItems).toHaveLength(1)
+    expect(sessionState.durable.reviewQueueItems[0]?.id).toBe(existingReviewBundle.id)
+    expect(context.applyCommandBundleForSessionState).not.toHaveBeenCalled()
+    expect(context.persistSessionState).not.toHaveBeenCalled()
+    expect(context.emitSnapshot).not.toHaveBeenCalled()
+  })
 })

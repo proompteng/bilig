@@ -74,6 +74,10 @@ export async function replayWorkbookAgentExecutionRecord(input: {
     message: 'Finish the current workbook review item before replaying another workbook change.',
   })
   const baseRevision = await input.context.getWorkbookHeadRevision(input.documentId)
+  assertNoWorkbookAgentReviewItem({
+    sessionState: input.sessionState,
+    message: 'Finish the current workbook review item before replaying another workbook change.',
+  })
   const replayedBundle = createWorkbookAgentCommandBundle({
     documentId: input.documentId,
     threadId: input.sessionState.threadId,
