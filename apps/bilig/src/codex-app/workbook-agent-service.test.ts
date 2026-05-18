@@ -9,7 +9,7 @@ import {
   type WorkbookAgentCommandBundle,
   type CodexTurn,
 } from '@bilig/agent-api'
-import type { WorkbookAgentThreadSummary, WorkbookAgentUiContext } from '@bilig/contracts'
+import type { WorkbookAgentThreadSummary, WorkbookAgentUiContext, WorkbookAgentWorkflowRun } from '@bilig/contracts'
 import { SpreadsheetEngine } from '@bilig/core'
 import { ValueTag } from '@bilig/protocol'
 import { describe, expect, it, vi } from 'vitest'
@@ -168,6 +168,32 @@ function createRenderedContextForServiceTest(input: {
         ],
       },
     },
+  }
+}
+
+function createDurableRunningWorkflowRun(): WorkbookAgentWorkflowRun {
+  return {
+    runId: 'workflow-existing',
+    threadId: 'thr-existing',
+    startedByUserId: 'alex@example.com',
+    workflowTemplate: 'summarizeWorkbook',
+    title: 'Summarize Workbook',
+    summary: 'Running workbook summary workflow.',
+    status: 'running',
+    createdAtUnixMs: 100,
+    updatedAtUnixMs: 100,
+    completedAtUnixMs: null,
+    errorMessage: null,
+    steps: [
+      {
+        stepId: 'inspect-workbook',
+        label: 'Inspect workbook structure',
+        status: 'running',
+        summary: 'Reading durable workbook structure and layout metadata.',
+        updatedAtUnixMs: 100,
+      },
+    ],
+    artifact: null,
   }
 }
 
@@ -3783,6 +3809,97 @@ describe('workbook agent service', () => {
         },
       })
       expect(running.workflowRuns[0]?.status).toBe('running')
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('recovers stale durable running workflows on bootstrap and allows new workflow starts', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const staleWorkflowRun = createDurableRunningWorkflowRun()
+    const upsertWorkbookWorkflowRun = vi.fn(async () => undefined)
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: 'doc-1',
+            threadId: 'thr-existing',
+            actorUserId: 'alex@example.com',
+            scope: 'private',
+            executionPolicy: 'autoApplyAll',
+            context: null,
+            entries: [],
+            reviewQueueItems: [],
+            updatedAtUnixMs: 100,
+          }
+        },
+        async listWorkbookThreadWorkflowRuns() {
+          return [staleWorkflowRun]
+        },
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => fakeCodex,
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          threadId: 'thr-existing',
+        },
+      })
+
+      expect(snapshot.workflowRuns).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            runId: 'workflow-existing',
+            status: 'failed',
+            errorMessage: 'Workflow interrupted because the workbook assistant restarted before it could finish.',
+          }),
+        ]),
+      )
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: 'Marked stale running workflow as failed after assistant restart: Summarize Workbook',
+          }),
+        ]),
+      )
+      expect(upsertWorkbookWorkflowRun).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({
+          runId: 'workflow-existing',
+          status: 'failed',
+        }),
+      )
+
+      const running = await service.startWorkflow({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          workflowTemplate: 'createSheet',
+          name: 'Summary',
+        },
+      })
+
+      expect(running.workflowRuns).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            workflowTemplate: 'createSheet',
+            status: 'running',
+          }),
+        ]),
+      )
     } finally {
       await service.close()
     }

@@ -40,6 +40,7 @@ import { attachSharedReviewState, createBundleRangeCitations, createWorkflowTurn
 import {
   clearLegacyPrivateBootstrapReviewItem,
   createWorkbookAgentBootstrappedSessionState,
+  findRecoveredStaleBootstrapWorkflowRuns,
   planWorkbookAgentBootstrapReviewRecovery,
   rebaseWorkbookAgentBootstrapReviewItem,
 } from './workbook-agent-service-bootstrap.js'
@@ -419,6 +420,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       sessionBootstrapError,
       now: this.now(),
     })
+    const recoveredBootstrapWorkflowRuns = findRecoveredStaleBootstrapWorkflowRuns({
+      previousWorkflowRuns: durableThreadSession.workflowRuns,
+      nextWorkflowRuns: sessionState.durable.workflowRuns,
+    })
     sessionState.live.authorizedUserIds.add(input.session.userID)
     const bootstrapRecovery = planWorkbookAgentBootstrapReviewRecovery({
       sessionState,
@@ -451,6 +456,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     this.sessionRegistry.storeSession(sessionState, (evictedThreadId) => {
       this.codexRuntime.releaseThread(evictedThreadId)
     })
+    await Promise.all(
+      recoveredBootstrapWorkflowRuns.map(async (run) => await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, run)),
+    )
     await this.persistSessionState(sessionState)
     return buildSnapshot(sessionState)
   }

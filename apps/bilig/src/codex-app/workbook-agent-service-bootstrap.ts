@@ -5,6 +5,7 @@ import {
   type CodexThread,
   type WorkbookAgentReviewQueueItem,
 } from '@bilig/agent-api'
+import type { WorkbookAgentTimelineEntry, WorkbookAgentWorkflowRun } from '@bilig/contracts'
 import { createBundleRangeCitations } from './workbook-agent-bundle-state.js'
 import { buildEntriesFromThread, createSystemEntry } from './workbook-agent-session-model.js'
 import {
@@ -14,9 +15,17 @@ import {
   type WorkbookAgentThreadState,
 } from './workbook-agent-service-shared.js'
 import type { WorkbookAgentLoadedThreadState } from './workbook-agent-thread-repository.js'
+import { failWorkflowSteps } from './workbook-agent-workflows.js'
 
 export const LEGACY_PRIVATE_BOOTSTRAP_REVIEW_MESSAGE =
   'Private workbook threads no longer keep queued review items. Replay the request to apply it again.'
+export const STALE_BOOTSTRAP_WORKFLOW_MESSAGE = 'Workflow interrupted because the workbook assistant restarted before it could finish.'
+
+export interface WorkbookAgentBootstrapWorkflowRecovery {
+  readonly workflowRuns: WorkbookAgentWorkflowRun[]
+  readonly recoveredRuns: WorkbookAgentWorkflowRun[]
+  readonly entries: WorkbookAgentTimelineEntry[]
+}
 
 function resolveWorkbookAgentBootstrapStatus(thread: CodexThread | null): WorkbookAgentThreadState['live']['status'] {
   if (!thread) {
@@ -56,6 +65,10 @@ export function createWorkbookAgentBootstrappedSessionState(input: {
   readonly now: number
 }): WorkbookAgentThreadState {
   const durableThreadState = input.durableThreadSession.threadState
+  const workflowRecovery = recoverStaleBootstrapWorkflowRuns({
+    workflowRuns: input.durableThreadSession.workflowRuns,
+    now: input.now,
+  })
   const resolvedScope = durableThreadState?.scope ?? input.requestedScope ?? 'private'
   const resolvedExecutionPolicy = normalizeExecutionPolicy({
     scope: resolvedScope,
@@ -72,10 +85,10 @@ export function createWorkbookAgentBootstrappedSessionState(input: {
     threadId: input.threadId,
     durable: {
       context: input.requestedContext ?? durableThreadState?.context ?? null,
-      entries: mergeTimelineEntries(codexEntries, durableThreadState?.entries ?? []),
+      entries: mergeTimelineEntries([...codexEntries, ...workflowRecovery.entries], durableThreadState?.entries ?? []),
       reviewQueueItems: [...(durableThreadState?.reviewQueueItems ?? [])],
       executionRecords: input.durableThreadSession.executionRecords,
-      workflowRuns: input.durableThreadSession.workflowRuns,
+      workflowRuns: workflowRecovery.workflowRuns,
     },
     live: {
       activeTurnId: input.liveThread?.turns.findLast((turn) => turn.status === 'inProgress')?.id ?? null,
@@ -92,6 +105,53 @@ export function createWorkbookAgentBootstrappedSessionState(input: {
       lastAccessedAt: input.now,
     },
   }
+}
+
+export function recoverStaleBootstrapWorkflowRuns(input: {
+  readonly workflowRuns: readonly WorkbookAgentWorkflowRun[]
+  readonly now: number
+}): WorkbookAgentBootstrapWorkflowRecovery {
+  const recoveredRuns: WorkbookAgentWorkflowRun[] = []
+  const entries: WorkbookAgentTimelineEntry[] = []
+  const workflowRuns = input.workflowRuns.map((run) => {
+    if (run.status !== 'running') {
+      return run
+    }
+    const recoveredRun: WorkbookAgentWorkflowRun = {
+      ...run,
+      status: 'failed',
+      summary: `Workflow interrupted: ${run.title}`,
+      updatedAtUnixMs: input.now,
+      completedAtUnixMs: input.now,
+      errorMessage: STALE_BOOTSTRAP_WORKFLOW_MESSAGE,
+      steps: failWorkflowSteps(run.workflowTemplate, run.steps, STALE_BOOTSTRAP_WORKFLOW_MESSAGE, input.now),
+      artifact: null,
+    }
+    recoveredRuns.push(recoveredRun)
+    entries.push(
+      createSystemEntry(
+        `system-workflow-bootstrap-recovered:${run.runId}:${String(input.now)}`,
+        null,
+        `Marked stale running workflow as failed after assistant restart: ${run.title}`,
+      ),
+    )
+    return recoveredRun
+  })
+  return {
+    workflowRuns,
+    recoveredRuns,
+    entries,
+  }
+}
+
+export function findRecoveredStaleBootstrapWorkflowRuns(input: {
+  readonly previousWorkflowRuns: readonly WorkbookAgentWorkflowRun[]
+  readonly nextWorkflowRuns: readonly WorkbookAgentWorkflowRun[]
+}): WorkbookAgentWorkflowRun[] {
+  const previousRunningIds = new Set(input.previousWorkflowRuns.filter((run) => run.status === 'running').map((run) => run.runId))
+  return input.nextWorkflowRuns.filter(
+    (run) => previousRunningIds.has(run.runId) && run.status === 'failed' && run.errorMessage === STALE_BOOTSTRAP_WORKFLOW_MESSAGE,
+  )
 }
 
 export function planWorkbookAgentBootstrapReviewRecovery(input: {

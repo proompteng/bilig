@@ -8,12 +8,15 @@ import { describe, expect, it } from 'vitest'
 import {
   clearLegacyPrivateBootstrapReviewItem,
   createWorkbookAgentBootstrappedSessionState,
+  findRecoveredStaleBootstrapWorkflowRuns,
   LEGACY_PRIVATE_BOOTSTRAP_REVIEW_MESSAGE,
   planWorkbookAgentBootstrapReviewRecovery,
   rebaseWorkbookAgentBootstrapReviewItem,
+  STALE_BOOTSTRAP_WORKFLOW_MESSAGE,
 } from './workbook-agent-service-bootstrap.js'
 import type { WorkbookAgentThreadState } from './workbook-agent-service-shared.js'
 import type { WorkbookAgentLoadedThreadState } from './workbook-agent-thread-repository.js'
+import type { WorkbookAgentWorkflowRun } from '@bilig/contracts'
 
 function createLoadedThreadState(): WorkbookAgentLoadedThreadState {
   return {
@@ -55,6 +58,39 @@ function createLoadedThreadState(): WorkbookAgentLoadedThreadState {
     },
     executionRecords: [],
     workflowRuns: [],
+  }
+}
+
+function createRunningWorkflowRun(): WorkbookAgentWorkflowRun {
+  return {
+    runId: 'workflow-1',
+    threadId: 'thr-1',
+    startedByUserId: 'alex@example.com',
+    workflowTemplate: 'summarizeWorkbook',
+    title: 'Summarize Workbook',
+    summary: 'Running workbook summary workflow.',
+    status: 'running',
+    createdAtUnixMs: 100,
+    updatedAtUnixMs: 100,
+    completedAtUnixMs: null,
+    errorMessage: null,
+    steps: [
+      {
+        stepId: 'inspect-workbook',
+        label: 'Inspect workbook structure',
+        status: 'running',
+        summary: 'Reading durable workbook structure and layout metadata.',
+        updatedAtUnixMs: 100,
+      },
+      {
+        stepId: 'draft-summary',
+        label: 'Draft summary artifact',
+        status: 'pending',
+        summary: 'Waiting to assemble the durable workbook summary artifact.',
+        updatedAtUnixMs: 100,
+      },
+    ],
+    artifact: null,
   }
 }
 
@@ -168,6 +204,57 @@ describe('workbook agent service bootstrap helpers', () => {
     expect(sessionState.live.status).toBe('inProgress')
     expect(sessionState.live.lastError).toBeNull()
     expect(sessionState.live.lastAccessedAt).toBe(200)
+  })
+
+  it('marks durable running workflows as failed during bootstrap because no task survives restart', () => {
+    const loadedState = {
+      ...createLoadedThreadState(),
+      workflowRuns: [createRunningWorkflowRun()],
+    }
+    const sessionState = createWorkbookAgentBootstrappedSessionState({
+      documentId: 'doc-1',
+      userId: 'alex@example.com',
+      threadId: 'thr-1',
+      durableThreadSession: loadedState,
+      liveThread: null,
+      sessionBootstrapError: new Error('codex resume unavailable'),
+      now: 400,
+    })
+
+    expect(sessionState.durable.workflowRuns).toEqual([
+      expect.objectContaining({
+        runId: 'workflow-1',
+        status: 'failed',
+        summary: 'Workflow interrupted: Summarize Workbook',
+        completedAtUnixMs: 400,
+        errorMessage: STALE_BOOTSTRAP_WORKFLOW_MESSAGE,
+        artifact: null,
+      }),
+    ])
+    expect(sessionState.durable.workflowRuns[0]?.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stepId: 'inspect-workbook',
+          status: 'failed',
+          summary: STALE_BOOTSTRAP_WORKFLOW_MESSAGE,
+          updatedAtUnixMs: 400,
+        }),
+      ]),
+    )
+    expect(sessionState.durable.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'system-workflow-bootstrap-recovered:workflow-1:400',
+          text: 'Marked stale running workflow as failed after assistant restart: Summarize Workbook',
+        }),
+      ]),
+    )
+    expect(
+      findRecoveredStaleBootstrapWorkflowRuns({
+        previousWorkflowRuns: loadedState.workflowRuns,
+        nextWorkflowRuns: sessionState.durable.workflowRuns,
+      }),
+    ).toEqual([sessionState.durable.workflowRuns[0]])
   })
 
   it('plans bootstrap review recovery for auto-apply, clear-legacy, and no-op cases', () => {
