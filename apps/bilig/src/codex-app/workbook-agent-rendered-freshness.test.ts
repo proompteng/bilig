@@ -276,6 +276,63 @@ function renderedContext(input: { readonly value: string | null; readonly captur
 }
 
 describe('workbook agent rendered freshness', () => {
+  it('fails closed for rendered tools when the authoritative head revision cannot be loaded', async () => {
+    const engine = await createEngine()
+    const revisionRef = { current: 5 }
+    const zeroSyncService = createZeroSyncService(engine, { revisionRef })
+    zeroSyncService.getWorkbookHeadRevision = vi.fn(async () => {
+      throw new Error('head revision unavailable')
+    })
+    const fakeCodex = new FakeCodexTransport()
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null }
+    const service = createWorkbookAgentService(zeroSyncService, {
+      codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+        capturedOptions.current = options
+        return fakeCodex
+      },
+    })
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          threadId: 'thr-rendered-fail-closed',
+          context: renderedContext({
+            value: 'stale-visible-value',
+            capturedRevision: 1,
+          }),
+        },
+      })
+      await service.startTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          prompt: 'Read rendered state',
+        },
+      })
+
+      await expect(
+        capturedOptions.current?.handleDynamicToolCall({
+          threadId: snapshot.threadId,
+          turnId: 'turn-1',
+          callId: 'call-read-rendered',
+          tool: 'read_rendered_selection',
+          arguments: {},
+        }),
+      ).rejects.toThrow('head revision unavailable')
+    } finally {
+      await service.close()
+    }
+  })
+
   it('waits for exact rendered target proof after a mutation, not just the captured revision', async () => {
     vi.useRealTimers()
     const engine = await createEngine()

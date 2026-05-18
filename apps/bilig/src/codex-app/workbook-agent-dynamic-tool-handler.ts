@@ -1,8 +1,6 @@
 import {
   appendWorkbookAgentCommandToBundle,
   toWorkbookAgentCommandBundle,
-  WORKBOOK_AGENT_TOOL_NAMES,
-  normalizeWorkbookAgentToolName,
   type CodexDynamicToolCallRequest,
   type CodexDynamicToolCallResult,
   type WorkbookAgentExecutionRecord,
@@ -15,44 +13,11 @@ import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 import { cloneUiContext, type WorkbookAgentThreadState, toContextRef } from './workbook-agent-service-shared.js'
 import { inspectWorkbookRange, normalizeWorkbookAgentUiContext } from './workbook-agent-inspection.js'
 import { selectWorkbookRenderedReadback } from './workbook-agent-rendered-readback.js'
-
-const RENDERED_CONTEXT_WAIT_TIMEOUT_MS = 20_000
-const RENDERED_CONTEXT_POLL_INTERVAL_MS = 50
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
-
-function hasRenderedContext(context: WorkbookAgentThreadState['durable']['context']): boolean {
-  return context?.rendered !== undefined
-}
-
-function renderedRevision(context: WorkbookAgentThreadState['durable']['context']): number | null {
-  const capturedRevision = context?.rendered?.capturedRevision
-  if (typeof capturedRevision === 'number' && Number.isSafeInteger(capturedRevision) && capturedRevision >= 0) {
-    return capturedRevision
-  }
-  return null
-}
-
-function hasRenderedContextAtRevision(context: WorkbookAgentThreadState['durable']['context'], minRevision: number | null): boolean {
-  const revision = renderedRevision(context)
-  if (revision === null) {
-    return false
-  }
-  return minRevision === null || revision >= minRevision
-}
-
-function shouldWaitForRenderedTool(toolName: string): boolean {
-  const normalizedTool = normalizeWorkbookAgentToolName(toolName)
-  return (
-    normalizedTool === WORKBOOK_AGENT_TOOL_NAMES.readRenderedSelection ||
-    normalizedTool === WORKBOOK_AGENT_TOOL_NAMES.readRenderedRange ||
-    normalizedTool === WORKBOOK_AGENT_TOOL_NAMES.applyAndVerify
-  )
-}
+import {
+  hasRenderedContext,
+  shouldWaitForRenderedTool,
+  waitForWorkbookAgentRenderedContext,
+} from './workbook-agent-rendered-context-wait.js'
 
 function firstRenderedVerificationRange(bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>) {
   const targetRange = bundle.affectedRanges.find((range) => range.role === 'target') ?? null
@@ -117,29 +82,14 @@ export function createWorkbookAgentDynamicToolHandler(input: {
     }
 
     const waitForRenderedContext = async (
-      minRevision: number | null,
+      minRevision: number,
       isReady?: (context: WorkbookAgentThreadState['durable']['context']) => Promise<boolean>,
     ): Promise<WorkbookAgentThreadState['durable']['context']> => {
-      let latestContext = await refreshRequestContext()
-      if (hasRenderedContextAtRevision(latestContext, minRevision) && (!isReady || (await isReady(latestContext)))) {
-        return latestContext
-      }
-      if (!hasRenderedContext(latestContext)) {
-        return latestContext
-      }
-      const deadline = Date.now() + RENDERED_CONTEXT_WAIT_TIMEOUT_MS
-      const pollRenderedContext = async (): Promise<WorkbookAgentThreadState['durable']['context']> => {
-        if (Date.now() >= deadline) {
-          return latestContext
-        }
-        await delay(RENDERED_CONTEXT_POLL_INTERVAL_MS)
-        latestContext = await refreshRequestContext()
-        if (hasRenderedContextAtRevision(latestContext, minRevision) && (!isReady || (await isReady(latestContext)))) {
-          return latestContext
-        }
-        return pollRenderedContext()
-      }
-      return pollRenderedContext()
+      return await waitForWorkbookAgentRenderedContext({
+        minRevision,
+        refreshContext: refreshRequestContext,
+        ...(isReady ? { isReady } : {}),
+      })
     }
 
     const renderedVerificationRangeMatches = async (
@@ -167,7 +117,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
 
     requestContext = await refreshRequestContext()
     if (shouldWaitForRenderedTool(request.tool)) {
-      const headRevision = await input.zeroSyncService.getWorkbookHeadRevision(sessionState.documentId).catch(() => null)
+      const headRevision = await input.zeroSyncService.getWorkbookHeadRevision(sessionState.documentId)
       requestContext = await waitForRenderedContext(headRevision)
     }
 
