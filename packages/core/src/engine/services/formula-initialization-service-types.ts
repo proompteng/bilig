@@ -51,7 +51,7 @@ export interface HydratedPreparedFormulaInitializationRef extends PreparedFormul
 export interface EngineFormulaInitializationServiceArgs {
   readonly state: Pick<
     EngineRuntimeState,
-    'workbook' | 'strings' | 'formulas' | 'ranges' | 'counters' | 'getLastMetrics' | 'setLastMetrics'
+    'workbook' | 'strings' | 'wasm' | 'formulas' | 'ranges' | 'counters' | 'getLastMetrics' | 'setLastMetrics'
   >
   readonly beginMutationCollection: () => void
   readonly ensureRecalcScratchCapacity: (size: number) => void

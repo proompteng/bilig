@@ -24,6 +24,11 @@ import {
   hasPendingFormulaDependency,
   mutationErrorMessage,
 } from './formula-initialization-predicates.js'
+import {
+  createInitialNativeDirectScalarBatch,
+  MAX_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE,
+  MIN_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE,
+} from './formula-initialization-native-direct-scalar.js'
 import { evaluateInitialPrefixAggregateGroups } from './formula-initialization-prefix-aggregates.js'
 import type {
   EngineFormulaInitializationService,
@@ -343,6 +348,13 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
         ? new Uint32Array(Math.max(refs.length, 1))
         : undefined
       let inlineInitialDirectScalarCellCount = 0
+      let nativeInitialDirectScalarBatch =
+        hadExistingFormulas ||
+        refs.length < MIN_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE ||
+        refs.length > MAX_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE
+          ? undefined
+          : createInitialNativeDirectScalarBatch({ state: args.state, capacity: refs.length })
+      let nativeInitialDirectScalarCellCount = 0
       const shouldDeferFormulaFamilyIndex = !hadExistingFormulas && args.deferFormulaFamilyIndexRebuild !== undefined
       const shouldDeferFormulaInstanceTable =
         !hadExistingFormulas && (args.hydrateFreshFormulaInstances !== undefined || args.deferFormulaInstanceTableRebuild !== undefined)
@@ -435,6 +447,14 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
           return
         }
         if (runtimeFormula.directScalar !== undefined) {
+          if (nativeInitialDirectScalarBatch) {
+            if (nativeInitialDirectScalarBatch.add(prepared, runtimeFormula.directScalar)) {
+              nativeInitialDirectScalarCellCount += 1
+              return
+            }
+            nativeInitialDirectScalarBatch = undefined
+            nativeInitialDirectScalarCellCount = 0
+          }
           const numericValue = evaluateInitialDirectScalarNumber(args.state, runtimeFormula.directScalar)
           inlineInitialDirectScalarWriter ??= createInitialFormulaValueWriter(args)
           if (numericValue !== undefined) {
@@ -620,6 +640,29 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
       }
       let recalculated: U32
       if (
+        useInitialDirectEvaluation &&
+        nativeInitialDirectScalarCellCount === orderedPreparedCellCount &&
+        !hasInitialPrefixAggregateCandidates
+      ) {
+        const native = nativeInitialDirectScalarBatch?.evaluate()
+        if (native) {
+          recalculated = native
+          args.deferKernelSync(recalculated)
+          addEngineCounter(args.state.counters, 'directFormulaInitialEvaluations', orderedPreparedCellCount)
+        } else {
+          const direct = evaluateInitialDirectFormulas(orderedPreparedCellList(), {
+            alreadyValidated: true,
+            hasPrefixAggregateCandidates: hasInitialPrefixAggregateCandidates,
+          })
+          if (direct) {
+            recalculated = direct
+          } else {
+            const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
+            const changedRoots = args.composeMutationRoots(changedInputCount, formulaChangedCount)
+            recalculated = args.recalculate(changedRoots, changedInputArray)
+          }
+        }
+      } else if (
         useInitialDirectEvaluation &&
         inlineInitialDirectScalarCellCount === orderedPreparedCellCount &&
         !hasInitialPrefixAggregateCandidates

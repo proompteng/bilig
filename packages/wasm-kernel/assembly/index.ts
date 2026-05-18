@@ -29,6 +29,8 @@ export {
   getSpillResultValueCount,
 } from './vm'
 
+export { evalDirectScalarValueBatch } from './direct-scalar-batch'
+
 export {
   getTagsPtr,
   getNumbersPtr,

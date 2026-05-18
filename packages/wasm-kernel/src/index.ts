@@ -30,6 +30,21 @@ interface RawKernelExports {
   uploadStringLengths(lengths: number): void
   uploadStrings(offsets: number, lengths: number, data: number): void
   writeCells(tags: number, numbers: number, stringIds: number, errors: number): void
+  evalDirectScalarValueBatch(
+    operators: number,
+    leftBatchRefs: number,
+    leftTags: number,
+    leftValues: number,
+    leftErrors: number,
+    rightBatchRefs: number,
+    rightTags: number,
+    rightValues: number,
+    rightErrors: number,
+    resultOffsets: number,
+    outTags: number,
+    outNumbers: number,
+    outErrors: number,
+  ): void
   evalBatch(cellIndices: number): void
   materializePivotTable(
     sourceRangeIndex: number,
@@ -101,6 +116,7 @@ function isRawKernelExports(value: unknown): value is RawKernelExports {
     'uploadStringLengths',
     'uploadStrings',
     'writeCells',
+    'evalDirectScalarValueBatch',
     'evalBatch',
     'materializePivotTable',
     'getPivotResultTagsPtr',
@@ -180,6 +196,21 @@ export interface SpreadsheetKernel {
   uploadStringLengths(lengths: Uint32Array): void
   uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void
+  evalDirectScalarValueBatch(
+    operators: Uint8Array,
+    leftBatchRefs: Uint32Array,
+    leftTags: Uint8Array,
+    leftValues: Float64Array,
+    leftErrors: Uint16Array,
+    rightBatchRefs: Uint32Array,
+    rightTags: Uint8Array,
+    rightValues: Float64Array,
+    rightErrors: Uint16Array,
+    resultOffsets: Float64Array,
+    outTags: Uint8Array,
+    outNumbers: Float64Array,
+    outErrors: Uint16Array,
+  ): void
   evalBatch(cellIndices: Uint32Array): void
   materializePivotTable(
     sourceRangeIndex: number,
@@ -379,6 +410,70 @@ class RawKernelBridge {
     }
   }
 
+  evalDirectScalarValueBatch(
+    operators: Uint8Array,
+    leftBatchRefs: Uint32Array,
+    leftTags: Uint8Array,
+    leftValues: Float64Array,
+    leftErrors: Uint16Array,
+    rightBatchRefs: Uint32Array,
+    rightTags: Uint8Array,
+    rightValues: Float64Array,
+    rightErrors: Uint16Array,
+    resultOffsets: Float64Array,
+    outTags: Uint8Array,
+    outNumbers: Float64Array,
+    outErrors: Uint16Array,
+  ): void {
+    const operatorsPtr = this.lowerTypedArray(operators, uint8Spec)
+    const leftBatchRefsPtr = this.lowerTypedArray(leftBatchRefs, uint32Spec)
+    const leftTagsPtr = this.lowerTypedArray(leftTags, uint8Spec)
+    const leftValuesPtr = this.lowerTypedArray(leftValues, float64Spec)
+    const leftErrorsPtr = this.lowerTypedArray(leftErrors, uint16Spec)
+    const rightBatchRefsPtr = this.lowerTypedArray(rightBatchRefs, uint32Spec)
+    const rightTagsPtr = this.lowerTypedArray(rightTags, uint8Spec)
+    const rightValuesPtr = this.lowerTypedArray(rightValues, float64Spec)
+    const rightErrorsPtr = this.lowerTypedArray(rightErrors, uint16Spec)
+    const resultOffsetsPtr = this.lowerTypedArray(resultOffsets, float64Spec)
+    const outTagsPtr = this.lowerTypedArray(outTags, uint8Spec)
+    const outNumbersPtr = this.lowerTypedArray(outNumbers, float64Spec)
+    const outErrorsPtr = this.lowerTypedArray(outErrors, uint16Spec)
+    try {
+      this.raw.evalDirectScalarValueBatch(
+        operatorsPtr,
+        leftBatchRefsPtr,
+        leftTagsPtr,
+        leftValuesPtr,
+        leftErrorsPtr,
+        rightBatchRefsPtr,
+        rightTagsPtr,
+        rightValuesPtr,
+        rightErrorsPtr,
+        resultOffsetsPtr,
+        outTagsPtr,
+        outNumbersPtr,
+        outErrorsPtr,
+      )
+      this.copyLoweredTypedArray(outTagsPtr, outTags, uint8Spec)
+      this.copyLoweredTypedArray(outNumbersPtr, outNumbers, float64Spec)
+      this.copyLoweredTypedArray(outErrorsPtr, outErrors, uint16Spec)
+    } finally {
+      this.raw.__unpin(operatorsPtr)
+      this.raw.__unpin(leftBatchRefsPtr)
+      this.raw.__unpin(leftTagsPtr)
+      this.raw.__unpin(leftValuesPtr)
+      this.raw.__unpin(leftErrorsPtr)
+      this.raw.__unpin(rightBatchRefsPtr)
+      this.raw.__unpin(rightTagsPtr)
+      this.raw.__unpin(rightValuesPtr)
+      this.raw.__unpin(rightErrorsPtr)
+      this.raw.__unpin(resultOffsetsPtr)
+      this.raw.__unpin(outTagsPtr)
+      this.raw.__unpin(outNumbersPtr)
+      this.raw.__unpin(outErrorsPtr)
+    }
+  }
+
   evalBatch(cellIndices: Uint32Array): void {
     const cellIndicesPtr = this.lowerTypedArray(cellIndices, uint32Spec)
     try {
@@ -430,12 +525,25 @@ class RawKernelBridge {
     }
   }
 
+  private copyLoweredTypedArray<T extends TypedArrayValue>(pointer: number, target: T, spec: LoweredArraySpec<T>): void {
+    target.set(new spec.ctor(this.raw.memory.buffer, this.getUint32(pointer + 4), target.length))
+  }
+
   private setUint32(pointer: number, value: number): void {
     try {
       this.dataView.setUint32(pointer, value, true)
     } catch {
       this.dataView = new DataView(this.raw.memory.buffer)
       this.dataView.setUint32(pointer, value, true)
+    }
+  }
+
+  private getUint32(pointer: number): number {
+    try {
+      return this.dataView.getUint32(pointer, true)
+    } catch {
+      this.dataView = new DataView(this.raw.memory.buffer)
+      return this.dataView.getUint32(pointer, true)
     }
   }
 }
@@ -537,6 +645,38 @@ class KernelHandle implements SpreadsheetKernel {
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void {
     this.bridge.writeCells(tags, numbers, stringIds, errors)
     this.refreshViews()
+  }
+
+  evalDirectScalarValueBatch(
+    operators: Uint8Array,
+    leftBatchRefs: Uint32Array,
+    leftTags: Uint8Array,
+    leftValues: Float64Array,
+    leftErrors: Uint16Array,
+    rightBatchRefs: Uint32Array,
+    rightTags: Uint8Array,
+    rightValues: Float64Array,
+    rightErrors: Uint16Array,
+    resultOffsets: Float64Array,
+    outTags: Uint8Array,
+    outNumbers: Float64Array,
+    outErrors: Uint16Array,
+  ): void {
+    this.bridge.evalDirectScalarValueBatch(
+      operators,
+      leftBatchRefs,
+      leftTags,
+      leftValues,
+      leftErrors,
+      rightBatchRefs,
+      rightTags,
+      rightValues,
+      rightErrors,
+      resultOffsets,
+      outTags,
+      outNumbers,
+      outErrors,
+    )
   }
 
   evalBatch(cellIndices: Uint32Array): void {
