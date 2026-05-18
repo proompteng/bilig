@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getGridMetrics } from '../gridMetrics.js'
 import type { Rectangle } from '../gridTypes.js'
 import { GridHeaderPaneRuntime, getGridHeaderPaneRuntime, type GridHeaderPaneRuntimeInput } from '../runtime/gridHeaderPaneRuntime.js'
@@ -46,6 +46,10 @@ function createInput(overrides: Partial<GridHeaderPaneRuntimeInput> = {}): GridH
 }
 
 describe('GridHeaderPaneRuntime', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('replaces stale runtime refs from live reloads', () => {
     const runtime = new GridHeaderPaneRuntime()
 
@@ -76,5 +80,54 @@ describe('GridHeaderPaneRuntime', () => {
     )
 
     expect(panes).toEqual([])
+  })
+
+  it('keeps header panes resident across semantically identical selection-only renders', () => {
+    const noteHeaderPaneBuild = vi.fn()
+    vi.stubGlobal('window', { __biligScrollPerf: { noteHeaderPaneBuild } })
+    const runtime = new GridHeaderPaneRuntime()
+
+    const first = runtime.resolve(createInput())
+    const second = runtime.resolve(
+      createInput({
+        columnWidths: { 0: 80, 1: 120 },
+        getHeaderCellLocalBounds: (col: number, row: number): Rectangle => ({
+          height: row === 0 ? 30 : 26,
+          width: col === 0 ? 80 : 120,
+          x: getGridMetrics().rowMarkerWidth + (col === 0 ? 0 : 80),
+          y: getGridMetrics().headerHeight + (row === 0 ? 0 : 30),
+        }),
+        residentHeaderItems: [
+          [0, 0],
+          [1, 0],
+          [0, 1],
+          [1, 1],
+        ],
+        rowHeights: { 0: 30, 1: 26 },
+      }),
+    )
+
+    expect(second).toBe(first)
+    expect(noteHeaderPaneBuild).toHaveBeenCalledTimes(1)
+  })
+
+  it('rebuilds resident header panes when rendered header geometry changes', () => {
+    const noteHeaderPaneBuild = vi.fn()
+    vi.stubGlobal('window', { __biligScrollPerf: { noteHeaderPaneBuild } })
+    const runtime = new GridHeaderPaneRuntime()
+
+    const first = runtime.resolve(createInput())
+    const shifted = runtime.resolve(
+      createInput({
+        residentBodyPane: {
+          contentOffset: { x: 41, y: 44 },
+          surfaceSize: { height: 56, width: 200 },
+        },
+      }),
+    )
+
+    expect(shifted).not.toBe(first)
+    expect(shifted.find((pane) => pane.paneId === 'top-body')?.contentOffset).toEqual({ x: 41, y: 0 })
+    expect(noteHeaderPaneBuild).toHaveBeenCalledTimes(2)
   })
 })

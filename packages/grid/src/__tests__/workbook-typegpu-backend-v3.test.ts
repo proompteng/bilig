@@ -6,9 +6,15 @@ import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
 import { GRID_TEXT_METRIC_FLOAT_COUNT_V3 } from '../renderer-v3/text-run-buffer.js'
 import {
+  DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3,
+  DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3,
+  type DynamicGridOverlayBatchV3,
+} from '../renderer-v3/dynamic-overlay-batch.js'
+import {
   TypeGpuLayerResourceCacheV3,
   WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3,
   resolveWorkbookHeaderLayerKeyV3,
+  syncTypeGpuOverlayResourcesV3,
 } from '../renderer-v3/typegpu-layer-buffer-pool.js'
 import { syncTypeGpuAtlasResources, type TypeGpuAtlasResourceArtifacts } from '../renderer-v3/typegpu-primitives.js'
 import {
@@ -81,6 +87,31 @@ function createHeaderPane(paneId: GridHeaderPaneState['paneId']): GridHeaderPane
     textRuns: [],
     textSignature: 'text',
   }
+}
+
+function createOverlayBatch(rectCount: number): DynamicGridOverlayBatchV3 {
+  return {
+    borderRectCount: rectCount,
+    cameraSeq: rectCount,
+    fillRectCount: 0,
+    generatedAt: rectCount,
+    rectCount,
+    rectInstances: new Float32Array(Math.max(1, rectCount) * DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3),
+    rects: new Float32Array(Math.max(1, rectCount) * DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3),
+    rectSignature: `selection:${rectCount}`,
+    seq: rectCount,
+    sheetName: 'Sheet1',
+    surfaceSize: { height: 320, width: 640 },
+  }
+}
+
+function createBufferStub() {
+  const buffer = {
+    destroy: vi.fn(),
+    write: vi.fn(),
+    $usage: vi.fn(() => buffer),
+  }
+  return buffer
 }
 
 function upsertRenderTile(residency: TileResidencyV3<GridRenderTile, null>, tile: GridRenderTile): void {
@@ -243,6 +274,35 @@ describe('workbook typegpu backend v3 tile path', () => {
 
     cache.pruneExcept(new Set())
     expect(cache.peek(headerKey)).toBeNull()
+  })
+
+  test('keeps the dynamic overlay buffer resident across normal selection rect-count changes', () => {
+    const createBuffer = vi.fn(() => createBufferStub())
+    const cache = new TypeGpuLayerResourceCacheV3({
+      root: {
+        createBuffer,
+      },
+    })
+    const noteTypeGpuBufferAllocation = vi.fn()
+    Reflect.set(window, '__biligScrollPerf', { noteTypeGpuBufferAllocation })
+    try {
+      syncTypeGpuOverlayResourcesV3({
+        layerResources: cache,
+        overlay: createOverlayBatch(1),
+      })
+      const entry = cache.peek(WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3)
+      const firstHandle = entry?.rectHandle ?? null
+      syncTypeGpuOverlayResourcesV3({
+        layerResources: cache,
+        overlay: createOverlayBatch(32),
+      })
+
+      expect(cache.peek(WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3)?.rectHandle).toBe(firstHandle)
+      expect(createBuffer).toHaveBeenCalledTimes(1)
+      expect(noteTypeGpuBufferAllocation).toHaveBeenCalledTimes(1)
+    } finally {
+      Reflect.deleteProperty(window, '__biligScrollPerf')
+    }
   })
 
   test('reports a V3 tile miss when tile resources are not draw-ready', () => {

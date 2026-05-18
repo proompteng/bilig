@@ -365,6 +365,7 @@ export async function createWorkerRuntimeSessionController(
         shouldForceSelectionHydration(viewportStore.peekCell(selection.sheetName, selection.address), nextSnapshot),
       forceOptimistic: options.forceOptimistic === true,
       allowOptimisticClearResurrection: options.allowOptimisticClearResurrection === true,
+      emitLocalDelta: false,
     })
     updateSelectionViewport(selection)
     return nextSnapshot

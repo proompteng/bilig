@@ -280,16 +280,26 @@ describe('selection persistence', () => {
     })
   })
 
-  it('emits selection URL changes from history writes', () => {
+  it('emits selection URL changes from external history writes', () => {
+    const listener = vi.fn()
+    const unsubscribe = subscribeSelectionUrlChanges(listener)
+
+    window.history.replaceState(window.history.state, '', 'https://bilig.test/?sheet=Sheet1&cell=C3')
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    unsubscribe()
+    window.history.replaceState(window.history.state, '', 'https://bilig.test/?sheet=Sheet1&cell=D4')
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not re-emit URL changes from local selection persistence writes', () => {
     const listener = vi.fn()
     const unsubscribe = subscribeSelectionUrlChanges(listener)
 
     persistSelection(alexScope, { sheetName: 'Sheet1', address: 'C3' })
 
-    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener).not.toHaveBeenCalled()
     unsubscribe()
-    persistSelection(alexScope, { sheetName: 'Sheet1', address: 'D4' })
-    expect(listener).toHaveBeenCalledTimes(1)
   })
 
   it('coalesces rapid scheduled selection writes into the last selection', () => {

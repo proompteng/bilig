@@ -124,6 +124,7 @@ export function useWorkerWorkbookInteractionState(input: {
   const selectionSnapshotRef = useRef<GridSelectionSnapshot>(createSingleCellSelectionSnapshot(selection))
   const selectionRangeRef = useRef<CellRangeRef>(selectionSnapshotToRangeRef(selectionSnapshotRef.current))
   const pendingExternalSelectionRef = useRef<GridSelectionSnapshot | null>(null)
+  const pendingLocalSelectionRef = useRef<GridSelectionSnapshot | null>(null)
   const optimisticCellSeedsRef = useRef<Map<string, string>>(new Map())
   const optimisticCellResolvedValuesRef = useRef<Map<string, string>>(new Map())
   const editSessionRef = useRef(0)
@@ -133,13 +134,27 @@ export function useWorkerWorkbookInteractionState(input: {
   useEffect(() => {
     const previousSelection = selectionRef.current
     const activeExternalSelection = pendingExternalSelectionRef.current
+    const activeLocalSelection = pendingLocalSelectionRef.current
     if (
       activeExternalSelection &&
       (activeExternalSelection.sheetName !== selection.sheetName || activeExternalSelection.address !== selection.address)
     ) {
       return
     }
+    if (
+      activeLocalSelection &&
+      (activeLocalSelection.sheetName !== selection.sheetName || activeLocalSelection.address !== selection.address)
+    ) {
+      return
+    }
     selectionRef.current = selection
+    if (
+      activeLocalSelection &&
+      activeLocalSelection.sheetName === selection.sheetName &&
+      activeLocalSelection.address === selection.address
+    ) {
+      pendingLocalSelectionRef.current = null
+    }
     if (
       activeExternalSelection &&
       activeExternalSelection.sheetName === selection.sheetName &&
@@ -158,10 +173,6 @@ export function useWorkerWorkbookInteractionState(input: {
       setSelectionSnapshot(nextSelectionSnapshot)
     }
   }, [selection])
-
-  useEffect(() => {
-    scheduleSelectionPersistence({ documentId, userId: currentUserId }, selection)
-  }, [currentUserId, documentId, selection])
 
   useEffect(() => {
     editorValueRef.current = editorValue
@@ -344,9 +355,13 @@ export function useWorkerWorkbookInteractionState(input: {
       }
       const nextAddress = clampSelectionMovement(targetSelection.address, targetSelection.sheetName, movement)
       const nextSelection = { sheetName: targetSelection.sheetName, address: nextAddress }
+      const nextSelectionSnapshot = createSingleCellSelectionSnapshot(nextSelection)
       selectionRef.current = nextSelection
       editorTargetRef.current = nextSelection
-      syncSelectionSnapshot(nextSelection)
+      selectionSnapshotRef.current = nextSelectionSnapshot
+      selectionRangeRef.current = selectionSnapshotToRangeRef(nextSelectionSnapshot)
+      setSelectionSnapshot(nextSelectionSnapshot)
+      pendingLocalSelectionRef.current = nextSelectionSnapshot
       sendSelectionChanged(nextSelection)
       return nextSelection
     },
@@ -394,6 +409,7 @@ export function useWorkerWorkbookInteractionState(input: {
       selectionRangeRef.current = selectionSnapshotToRangeRef(nextSelectionSnapshot)
       setSelectionSnapshot(nextSelectionSnapshot)
       pendingExternalSelectionRef.current = null
+      pendingLocalSelectionRef.current = targetChanged ? nextSelectionSnapshot : null
       selectionRef.current = nextTarget
       if (targetChanged) {
         onSelectionSheetChanged?.(nextTarget, previousSelection)
@@ -606,6 +622,7 @@ export function useWorkerWorkbookInteractionState(input: {
       selectionRangeRef.current = selectionSnapshotToRangeRef(nextSelectionSnapshot)
       setSelectionSnapshot(nextSelectionSnapshot)
       pendingExternalSelectionRef.current = options?.markAsExternal ? nextSelectionSnapshot : null
+      pendingLocalSelectionRef.current = options?.markAsExternal ? null : nextSelectionSnapshot
       if (previousSelection.sheetName !== sheetName) {
         onSelectionSheetChanged?.(nextSelection, previousSelection)
       }
@@ -685,6 +702,11 @@ export function useWorkerWorkbookInteractionState(input: {
     }),
     [selectionSnapshot.address, selectionSnapshot.sheetName],
   )
+
+  useEffect(() => {
+    scheduleSelectionPersistence({ documentId, userId: currentUserId }, visibleSelection)
+  }, [currentUserId, documentId, visibleSelection])
+
   const visibleCellKey = optimisticCellKey(visibleSelection.sheetName, visibleSelection.address)
   const liveVisibleCell = getLiveSelectedCell(visibleSelection)
   const visibleEditorValue = isEditing

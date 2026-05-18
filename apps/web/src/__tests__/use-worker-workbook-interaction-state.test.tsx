@@ -5,10 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { GridSelectionSnapshot } from '@bilig/grid'
 import type { WorkerHandle, WorkerRuntimeSelection } from '../runtime-session.js'
+import { flushScheduledSelectionPersistence, loadPersistedSelection } from '../selection-persistence.js'
 import { useWorkerWorkbookInteractionState } from '../use-worker-workbook-interaction-state.js'
 
 function InteractionHarness(props: {
   documentId: string
+  currentUserId?: string
   selection: WorkerRuntimeSelection
   selectedCell: CellSnapshot
   workerHandle: WorkerHandle | null
@@ -19,6 +21,7 @@ function InteractionHarness(props: {
 }) {
   const state = useWorkerWorkbookInteractionState({
     documentId: props.documentId,
+    currentUserId: props.currentUserId ?? 'test-user',
     selection: props.selection,
     selectedCell: props.selectedCell,
     workerHandle: props.workerHandle,
@@ -65,7 +68,9 @@ function mountHarness(): {
 
 describe('useWorkerWorkbookInteractionState', () => {
   afterEach(() => {
+    flushScheduledSelectionPersistence()
     document.body.innerHTML = ''
+    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
@@ -603,6 +608,59 @@ describe('useWorkerWorkbookInteractionState', () => {
     })
   })
 
+  it('keeps a local user selection visible while stale authoritative selection catches up', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const sendSelectionChanged = vi.fn()
+    const selectedCell = stringCell('Sheet1', 'A1', 'one')
+    const workerHandle = {
+      viewportStore: createViewportStoreMapStub([selectedCell, stringCell('Sheet1', 'B2', 'two')]),
+    }
+    const harness = mountHarness()
+    let captured: ReturnType<typeof useWorkerWorkbookInteractionState> | null = null
+    const baseProps = {
+      documentId: 'doc-1',
+      selectedCell,
+      workerHandle,
+      invokeMutation: vi.fn(async () => undefined),
+      sendSelectionChanged,
+      capture: (value: ReturnType<typeof useWorkerWorkbookInteractionState>) => {
+        captured = value
+      },
+    }
+
+    await harness.render({
+      ...baseProps,
+      selection: { sheetName: 'Sheet1', address: 'A1' },
+    })
+    if (!captured) {
+      throw new Error('Expected interaction state capture')
+    }
+
+    await act(async () => {
+      captured?.handleSelectionChange(singleCellSnapshot('Sheet1', 'B2'))
+    })
+    expect(captured.visibleSelection).toEqual({ sheetName: 'Sheet1', address: 'B2' })
+    expect(sendSelectionChanged).toHaveBeenCalledWith({ sheetName: 'Sheet1', address: 'B2' })
+
+    await harness.render({
+      ...baseProps,
+      selection: { sheetName: 'Sheet1', address: 'A1' },
+    })
+    expect(captured.visibleSelection).toEqual({ sheetName: 'Sheet1', address: 'B2' })
+    expect(captured.selectionRef.current).toEqual({ sheetName: 'Sheet1', address: 'B2' })
+
+    await harness.render({
+      ...baseProps,
+      selection: { sheetName: 'Sheet1', address: 'B2' },
+    })
+    expect(captured.visibleSelection).toEqual({ sheetName: 'Sheet1', address: 'B2' })
+
+    await act(async () => {
+      harness.root.unmount()
+    })
+  })
+
   it('updates visible selection and editor readback before authoritative selection catches up', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -638,6 +696,56 @@ describe('useWorkerWorkbookInteractionState', () => {
     expect(captured?.visibleEditorValue).toBe('two')
     expect(captured?.selectionRef.current).toEqual({ sheetName: 'Sheet1', address: 'B2' })
     expect(sendSelectionChanged).toHaveBeenCalledWith({ sheetName: 'Sheet1', address: 'B2' })
+
+    await act(async () => {
+      harness.root.unmount()
+    })
+  })
+
+  it('persists the visible selection before authoritative selection catches up', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    vi.useFakeTimers()
+    window.localStorage.clear()
+    window.history.replaceState({}, '', '/?sheet=Sheet1&cell=A1')
+
+    const sendSelectionChanged = vi.fn()
+    const selectedCell = stringCell('Sheet1', 'A1', 'one')
+    const workerHandle = {
+      viewportStore: createViewportStoreMapStub([selectedCell, stringCell('Sheet1', 'B2', 'two')]),
+    }
+    const harness = mountHarness()
+    let captured: ReturnType<typeof useWorkerWorkbookInteractionState> | null = null
+
+    await harness.render({
+      documentId: 'doc-visible-persist',
+      currentUserId: 'visible-user',
+      selection: { sheetName: 'Sheet1', address: 'A1' },
+      selectedCell,
+      workerHandle,
+      invokeMutation: vi.fn(async () => undefined),
+      sendSelectionChanged,
+      capture: (value) => {
+        captured = value
+      },
+    })
+    if (!captured) {
+      throw new Error('Expected interaction state capture')
+    }
+
+    await act(async () => {
+      captured?.handleSelectionChange(singleCellSnapshot('Sheet1', 'B2'))
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(120)
+    })
+
+    expect(loadPersistedSelection({ documentId: 'doc-visible-persist', userId: 'visible-user' })).toEqual({
+      sheetName: 'Sheet1',
+      address: 'B2',
+    })
+    expect(new URL(window.location.href).searchParams.get('cell')).toBe('B2')
 
     await act(async () => {
       harness.root.unmount()

@@ -23,10 +23,15 @@ import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from './rect-instance-buffer.js'
 export const WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3 = 'overlay:v3'
 
 const WORKBOOK_HEADER_LAYER_PREFIX_V3 = 'header:v3'
+const WORKBOOK_OVERLAY_RECT_INSTANCE_BUFFER_MIN_COUNT_V3 = 64
 const RECT_INSTANCE_FLOAT_COUNT = GRID_RECT_INSTANCE_FLOAT_COUNT_V3
 const TEXT_INSTANCE_FLOAT_COUNT = 16
 const RECT_INSTANCE_BYTE_COUNT = RECT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT
 const TEXT_INSTANCE_BYTE_COUNT = TEXT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT
+
+interface TypeGpuLayerBufferArtifactsV3 {
+  readonly root: Pick<TypeGpuRendererArtifacts['root'], 'createBuffer'>
+}
 
 export interface TypeGpuLayerResourceEntryV3 {
   rectHandle: GpuBufferHandleV3<RectInstanceVertexBuffer> | null
@@ -63,7 +68,7 @@ export class TypeGpuLayerResourceCacheV3 {
   private readonly rectArena: GpuBufferArenaV3<RectInstanceVertexBuffer>
   private readonly textArena: GpuBufferArenaV3<TextInstanceVertexBuffer>
 
-  constructor(private readonly artifacts: TypeGpuRendererArtifacts | null = null) {
+  constructor(private readonly artifacts: TypeGpuLayerBufferArtifactsV3 | null = null) {
     this.rectArena = new GpuBufferArenaV3<RectInstanceVertexBuffer>(
       ({ capacityBytes }) => createRectBuffer(this.requireArtifacts(), capacityBytes),
       (buffer) => buffer.destroy(),
@@ -158,7 +163,7 @@ export class TypeGpuLayerResourceCacheV3 {
     entry.textBindGroupAtlasVersion = -1
   }
 
-  private requireArtifacts(): TypeGpuRendererArtifacts {
+  private requireArtifacts(): TypeGpuLayerBufferArtifactsV3 {
     if (!this.artifacts) {
       throw new Error('TypeGpuLayerResourceCacheV3 requires TypeGPU artifacts to allocate buffers')
     }
@@ -220,7 +225,11 @@ export function syncTypeGpuOverlayResourcesV3(input: {
   if (entry.rectSignature === rectSignature) {
     return
   }
-  const handle = prepareRectBuffer(input.layerResources, entry, input.overlay.rectCount)
+  const handle = prepareRectBuffer(
+    input.layerResources,
+    entry,
+    Math.max(input.overlay.rectCount, WORKBOOK_OVERLAY_RECT_INSTANCE_BUFFER_MIN_COUNT_V3),
+  )
   entry.rectHandle = handle
   entry.rectCount = input.overlay.rectCount
   writeTypeGpuVertexBuffer(handle.buffer, input.overlay.rectInstances, `overlay:${input.overlay.seq}`)
@@ -352,14 +361,14 @@ function releaseTextBuffer(layerResources: TypeGpuLayerResourceCacheV3, entry: T
   entry.textHandle = null
 }
 
-function createRectBuffer(artifacts: TypeGpuRendererArtifacts, capacityBytes: number): RectInstanceVertexBuffer {
+function createRectBuffer(artifacts: TypeGpuLayerBufferArtifactsV3, capacityBytes: number): RectInstanceVertexBuffer {
   const count = Math.max(1, Math.ceil(capacityBytes / RECT_INSTANCE_BYTE_COUNT))
   const byteLength = count * RECT_INSTANCE_BYTE_COUNT
   noteTypeGpuBufferAllocation(byteLength, 'layer-v3-rect-instances')
   return artifacts.root.createBuffer(WORKBOOK_RECT_INSTANCE_LAYOUT.schemaForCount(count)).$usage('vertex') as RectInstanceVertexBuffer
 }
 
-function createTextBuffer(artifacts: TypeGpuRendererArtifacts, capacityBytes: number): TextInstanceVertexBuffer {
+function createTextBuffer(artifacts: TypeGpuLayerBufferArtifactsV3, capacityBytes: number): TextInstanceVertexBuffer {
   const count = Math.max(1, Math.ceil(capacityBytes / TEXT_INSTANCE_BYTE_COUNT))
   const byteLength = count * TEXT_INSTANCE_BYTE_COUNT
   noteTypeGpuBufferAllocation(byteLength, 'layer-v3-text-instances')

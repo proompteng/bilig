@@ -24,6 +24,7 @@ interface PendingSelectionPersist {
 
 const pendingPersists = new Map<string, PendingSelectionPersist>()
 let flushListenersInstalled = false
+let suppressNextSelectionUrlChange = false
 
 interface SelectionHistoryInstrumentation {
   readonly history: History
@@ -170,6 +171,10 @@ function emitSelectionUrlChange(): void {
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
     return
   }
+  if (suppressNextSelectionUrlChange) {
+    suppressNextSelectionUrlChange = false
+    return
+  }
   window.dispatchEvent(new Event(SELECTION_URL_CHANGE_EVENT))
 }
 
@@ -229,7 +234,11 @@ function persistSelectionToUrl(selection: WorkerRuntimeSelection): void {
   }
   currentUrl.searchParams.set(SHEET_QUERY_PARAM, selection.sheetName)
   currentUrl.searchParams.set(CELL_QUERY_PARAM, selection.address)
+  suppressNextSelectionUrlChange = true
   window.history.replaceState(window.history.state, '', currentUrl)
+  if (suppressNextSelectionUrlChange) {
+    suppressNextSelectionUrlChange = false
+  }
 }
 
 function persistNormalizedSelection(scope: SelectionPersistenceScope, normalizedSelection: WorkerRuntimeSelection): void {

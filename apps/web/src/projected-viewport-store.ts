@@ -29,6 +29,12 @@ import { ProjectedViewportPatchRevisionGate } from './projected-viewport-patch-r
 export interface ProjectedViewportStoreOptions {
   readonly maxCachedCellsPerSheet?: number
 }
+interface ProjectedCellSnapshotWriteOptions {
+  readonly force?: boolean
+  readonly forceOptimistic?: boolean
+  readonly allowOptimisticClearResurrection?: boolean
+  readonly emitLocalDelta?: boolean
+}
 type CellItem = readonly [number, number]
 type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze' | 'merges'
 type SheetIdentity = { readonly sheetId: number; readonly sheetOrdinal: number }
@@ -202,12 +208,9 @@ export class ProjectedViewportStore implements GridEngineLike {
     }
   }
 
-  setCellSnapshot(
-    snapshot: CellSnapshot,
-    options: { force?: boolean; forceOptimistic?: boolean; allowOptimisticClearResurrection?: boolean } = {},
-  ): void {
+  setCellSnapshot(snapshot: CellSnapshot, options: ProjectedCellSnapshotWriteOptions = {}): void {
     const result = this.cellCache.writeCellSnapshot(snapshot, options)
-    if (result.changed && result.acceptedSnapshot) {
+    if (result.changed && result.acceptedSnapshot && options.emitLocalDelta !== false) {
       this.localRevision += 1
       this.emitLocalCellSnapshotDelta(result.acceptedSnapshot)
     }

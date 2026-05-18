@@ -295,6 +295,33 @@ describe('ProjectedViewportStore', () => {
     expect(cache.getRenderRevisionSnapshot().localRevision).toBe(1)
   })
 
+  it('hydrates selected-cell cache without publishing render tile deltas', () => {
+    const cache = new ProjectedViewportStore(createNoopWorkerEngineClient())
+    const listener = vi.fn()
+    cache.setSheetIdentities([{ id: 7, name: 'Sheet1', order: 0 }])
+    const unsubscribeDeltas = cache.subscribeWorkbookDeltas(listener)
+
+    expect(cache.getRenderRevisionSnapshot().localRevision).toBe(0)
+
+    cache.setCellSnapshot(
+      {
+        sheetName: 'Sheet1',
+        address: 'D5',
+        flags: 0,
+        input: 'hydrated',
+        value: { tag: ValueTag.String, value: 'hydrated', stringId: 0 },
+        version: 12,
+      },
+      { emitLocalDelta: false },
+    )
+
+    expect(cache.getCell('Sheet1', 'D5').input).toBe('hydrated')
+    expect(cache.getRenderRevisionSnapshot().localRevision).toBe(0)
+    expect(listener).not.toHaveBeenCalled()
+
+    unsubscribeDeltas()
+  })
+
   it('can force authoritative selected-cell hydration over stale optimistic input', () => {
     const cache = new ProjectedViewportStore()
 
