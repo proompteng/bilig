@@ -5891,6 +5891,190 @@ describe('workbook agent service', () => {
     }
   })
 
+  it('does not resurrect a dismissed review item after a concurrent partial apply finishes', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null }
+    let releaseApply!: () => void
+    const applyBlocked = new Promise<void>((resolve) => {
+      releaseApply = resolve
+    })
+    let resolveApplyStarted!: () => void
+    const applyStarted = new Promise<void>((resolve) => {
+      resolveApplyStarted = resolve
+    })
+    const applyAgentCommandBundle = vi.fn(async () => {
+      resolveApplyStarted()
+      await applyBlocked
+      return {
+        revision: 7,
+        preview: createPreviewSummary({
+          cellDiffs: [
+            {
+              sheetName: 'Sheet1',
+              address: 'C3',
+              beforeInput: null,
+              beforeFormula: null,
+              afterInput: 2,
+              afterFormula: null,
+              changeKinds: ['input'],
+            },
+          ],
+          effectSummary: {
+            displayedCellDiffCount: 1,
+            truncatedCellDiffs: false,
+            inputChangeCount: 1,
+            formulaChangeCount: 0,
+            styleChangeCount: 0,
+            numberFormatChangeCount: 0,
+            structuralChangeCount: 0,
+          },
+        }),
+      }
+    })
+    const appendWorkbookAgentRun = vi.fn(async () => undefined)
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options
+          return fakeCodex
+        },
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          threadId: 'thr-test',
+          scope: 'shared',
+          executionPolicy: 'ownerReview',
+          context: {
+            selection: {
+              sheetName: 'Sheet1',
+              address: 'B2',
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      })
+      await startWorkbookAgentTestTurn(service, {
+        threadId: snapshot.threadId,
+      })
+
+      await capturedOptions.current?.handleDynamicToolCall({
+        threadId: 'thr-test',
+        turnId: 'turn-1',
+        callId: 'call-1',
+        tool: 'bilig_write_range',
+        arguments: {
+          sheetName: 'Sheet1',
+          startAddress: 'B2',
+          values: [[1]],
+        },
+      })
+      await capturedOptions.current?.handleDynamicToolCall({
+        threadId: 'thr-test',
+        turnId: 'turn-1',
+        callId: 'call-2',
+        tool: 'bilig_write_range',
+        arguments: {
+          sheetName: 'Sheet1',
+          startAddress: 'C3',
+          values: [[2]],
+        },
+      })
+
+      const pending = getPrimaryReviewBundle(
+        service.getSnapshot({
+          documentId: 'doc-1',
+          threadId: 'thr-test',
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+        }),
+      )
+      if (!isWorkbookAgentCommandBundle(pending)) {
+        throw new Error('Expected a staged review item')
+      }
+
+      await service.reviewReviewItem({
+        documentId: 'doc-1',
+        threadId: 'thr-test',
+        reviewItemId: pending.id,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          decision: 'approved',
+        },
+      })
+
+      const applyPromise = service.applyReviewItem({
+        documentId: 'doc-1',
+        threadId: 'thr-test',
+        reviewItemId: pending.id,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        appliedBy: 'user',
+        commandIndexes: [1],
+      })
+      await applyStarted
+
+      const dismissed = await service.dismissReviewItem({
+        documentId: 'doc-1',
+        threadId: 'thr-test',
+        reviewItemId: pending.id,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+      })
+      expect(dismissed.reviewQueueItems).toEqual([])
+
+      releaseApply()
+      const applied = await applyPromise
+
+      expect(applied.executionRecords[0]).toEqual(
+        expect.objectContaining({
+          bundleId: pending.id,
+          acceptedScope: 'partial',
+          summary: 'Write cells in Sheet1!C3',
+        }),
+      )
+      expect(applied.reviewQueueItems).toEqual([])
+      expect(
+        service.getSnapshot({
+          documentId: 'doc-1',
+          threadId: 'thr-test',
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+        }).reviewQueueItems,
+      ).toEqual([])
+    } finally {
+      releaseApply()
+      await service.close()
+    }
+  })
+
   it('recovers durable review item state after the service restarts', async () => {
     let durableThreadState: WorkbookAgentThreadStateRecord | null = {
       documentId: 'doc-1',

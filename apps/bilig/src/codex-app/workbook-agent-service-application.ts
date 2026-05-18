@@ -23,7 +23,11 @@ import {
   normalizeSharedReviewState,
 } from './workbook-agent-bundle-state.js'
 import { normalizeWorkbookAgentUiContext } from './workbook-agent-inspection.js'
-import { createWorkbookAgentReviewQueueItem, replaceCurrentWorkbookAgentReviewItem } from './workbook-agent-review-transitions.js'
+import {
+  createWorkbookAgentReviewQueueItem,
+  getCurrentWorkbookAgentReviewItem,
+  replaceCurrentWorkbookAgentReviewItem,
+} from './workbook-agent-review-transitions.js'
 import { createSystemEntry } from './workbook-agent-session-model.js'
 import { applyWorkbookAgentStructuralContextHints } from './workbook-agent-structural-context-hints.js'
 import { cloneUiContext, type WorkbookAgentThreadState, upsertEntry } from './workbook-agent-service-shared.js'
@@ -91,6 +95,18 @@ function assertAutoApplyRolloutAllowed(input: {
     statusCode: 409,
     retryable: false,
   })
+}
+
+function replaceAppliedReviewItemIfCurrent(input: {
+  sessionState: WorkbookAgentThreadState
+  appliedBundleId: string
+  nextReviewItem: ReturnType<typeof createWorkbookAgentReviewQueueItem> | null
+}): void {
+  const currentReviewItem = getCurrentWorkbookAgentReviewItem(input.sessionState)
+  if (!currentReviewItem || currentReviewItem.id !== input.appliedBundleId) {
+    return
+  }
+  replaceCurrentWorkbookAgentReviewItem(input.sessionState, input.nextReviewItem)
 }
 
 export async function applyWorkbookAgentCommandBundleForSessionState(
@@ -213,8 +229,7 @@ export async function applyWorkbookAgentCommandBundleForSessionState(
     turnId: input.commandBundle.turnId,
     commands: selection.acceptedBundle.commands,
   })
-  replaceCurrentWorkbookAgentReviewItem(
-    input.sessionState,
+  const nextReviewItem =
     selection.remainingBundle === null
       ? null
       : createWorkbookAgentReviewQueueItem({
@@ -232,8 +247,12 @@ export async function applyWorkbookAgentCommandBundleForSessionState(
             }),
             input.sessionState,
           ),
-        }),
-  )
+        })
+  replaceAppliedReviewItemIfCurrent({
+    sessionState: input.sessionState,
+    appliedBundleId: input.commandBundle.id,
+    nextReviewItem,
+  })
   input.sessionState.durable.entries = upsertEntry(
     input.sessionState.durable.entries,
     createSystemEntry(
