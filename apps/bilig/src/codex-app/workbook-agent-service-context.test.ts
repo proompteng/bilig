@@ -205,8 +205,11 @@ describe('workbook agent service context helpers', () => {
     expect(sessionState.live.turnContextByTurn.get('turn-1')).toEqual(nextContext)
   })
 
-  it('does not let collaborators update active turn context when the actor map is missing', () => {
-    const sessionState = createThreadState(null)
+  it('uses the canonical shared owner for active-turn context when the actor map is missing', () => {
+    const sessionState = {
+      ...createThreadState(null),
+      userId: 'casey@example.com',
+    }
     sessionState.scope = 'shared'
     sessionState.live.authorizedUserIds.add('casey@example.com')
     sessionState.live.turnActorUserIdByTurn.delete('turn-1')

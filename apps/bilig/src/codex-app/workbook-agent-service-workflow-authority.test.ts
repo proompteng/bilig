@@ -20,6 +20,8 @@ class FakeCodexTransport implements CodexAppServerTransport {
   private turnCounter = 0
   readonly interruptedThreadIds: string[] = []
 
+  constructor(private readonly resumedThread: CodexThread | null = null) {}
+
   async ensureReady() {
     return {
       userAgent: 'fake',
@@ -43,6 +45,9 @@ class FakeCodexTransport implements CodexAppServerTransport {
   }
 
   async threadResume(input: { threadId: string }): Promise<CodexThread> {
+    if (this.resumedThread) {
+      return this.resumedThread
+    }
     return {
       id: input.threadId,
       preview: '',
@@ -407,6 +412,73 @@ describe('workbook agent workflow authority', () => {
           status: 'inProgress',
         }),
       )
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('does not infer a restarted shared active turn belongs to the collaborator who reopened it', async () => {
+    const codexTransport = new FakeCodexTransport({
+      id: 'thr-shared',
+      preview: '',
+      status: { type: 'active', activeFlags: [] },
+      turns: [
+        {
+          id: 'turn-recovered',
+          status: 'inProgress',
+          items: [],
+          error: null,
+        },
+      ],
+    })
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async loadWorkbookAgentThreadState() {
+          return createThreadState({
+            actorUserId: 'alex@example.com',
+          })
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => codexTransport,
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'casey@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          threadId: 'thr-shared',
+        },
+      })
+
+      expect(snapshot.activeTurnActorUserId).toBe('alex@example.com')
+      await expect(
+        service.interruptTurn({
+          documentId: 'doc-1',
+          threadId: snapshot.threadId,
+          session: {
+            userID: 'casey@example.com',
+            roles: ['editor'],
+          },
+        }),
+      ).rejects.toThrow('Only the active turn author or shared thread owner can stop this turn.')
+
+      const interrupted = await service.interruptTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+      })
+
+      expect(codexTransport.interruptedThreadIds).toEqual([snapshot.threadId])
+      expect(interrupted.activeTurnActorUserId).toBe('alex@example.com')
     } finally {
       await service.close()
     }

@@ -10,7 +10,10 @@ export function resolveWorkbookAgentActiveTurnActorUserId(sessionState: Workbook
 }
 
 export function resolveWorkbookAgentTurnActorUserId(sessionState: WorkbookAgentThreadState, turnId: string): string {
-  return sessionState.live.turnActorUserIdByTurn.get(turnId) ?? sessionState.userId
+  return (
+    sessionState.live.turnActorUserIdByTurn.get(turnId) ??
+    (sessionState.scope === 'shared' ? sessionState.storageActorUserId : sessionState.userId)
+  )
 }
 
 export function canUpdateWorkbookAgentActiveTurnContext(input: {

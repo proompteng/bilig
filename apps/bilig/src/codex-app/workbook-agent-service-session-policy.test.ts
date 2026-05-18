@@ -11,6 +11,7 @@ function createSession(input: {
   threadId: string
   documentId?: string
   userId?: string
+  storageActorUserId?: string
   activeTurnId?: string | null
   turnActorUserId?: string | null
   status?: WorkbookAgentThreadState['live']['status']
@@ -21,7 +22,7 @@ function createSession(input: {
   return {
     documentId: input.documentId ?? 'doc-1',
     userId: input.userId ?? 'alex@example.com',
-    storageActorUserId: input.userId ?? 'alex@example.com',
+    storageActorUserId: input.storageActorUserId ?? input.userId ?? 'alex@example.com',
     scope: input.scope ?? 'private',
     executionPolicy: 'autoApplyAll',
     threadId: input.threadId,
@@ -86,6 +87,32 @@ describe('workbook agent service session policy', () => {
         userId: 'casey@example.com',
       }),
     ).toBe(false)
+  })
+
+  it('falls back missing shared active turn ownership to the canonical owner', () => {
+    const session = createSession({
+      threadId: 'thr-shared',
+      userId: 'casey@example.com',
+      storageActorUserId: 'alex@example.com',
+      scope: 'shared',
+      activeTurnId: 'turn-1',
+      turnActorUserId: null,
+      status: 'inProgress',
+    })
+
+    expect(resolveWorkbookAgentActiveTurnActorUserId(session)).toBe('alex@example.com')
+    expect(
+      canUpdateWorkbookAgentActiveTurnContext({
+        sessionState: session,
+        userId: 'casey@example.com',
+      }),
+    ).toBe(false)
+    expect(
+      canUpdateWorkbookAgentActiveTurnContext({
+        sessionState: session,
+        userId: 'alex@example.com',
+      }),
+    ).toBe(true)
   })
 
   it('summarizes active turn counts by user and document', () => {
