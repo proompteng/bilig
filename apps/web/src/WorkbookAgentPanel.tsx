@@ -664,6 +664,7 @@ export function WorkbookAgentPanel(props: {
   readonly canDismissReviewItem: boolean
   readonly selectedCommandIndexes: readonly number[]
   readonly workflowRuns: readonly WorkbookAgentWorkflowRun[]
+  readonly canCancelWorkflowRun: (run: WorkbookAgentWorkflowRun) => boolean
   readonly cancellingWorkflowRunId: string | null
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[]
   readonly draft: string
@@ -741,16 +742,21 @@ export function WorkbookAgentPanel(props: {
                     <div className="pt-1">
                       <div className={cn(agentPanelEyebrowTextClass(), 'mb-2')}>Workflows</div>
                       <div className="flex flex-col gap-2">
-                        {props.workflowRuns.slice(0, 5).map((run) => (
-                          <WorkflowRunRow
-                            key={run.runId}
-                            isCancelling={props.cancellingWorkflowRunId === run.runId}
-                            run={run}
-                            onCancel={() => {
-                              props.onCancelWorkflowRun(run.runId)
-                            }}
-                          />
-                        ))}
+                        {props.workflowRuns.slice(0, 5).map((run) => {
+                          const onCancel = props.canCancelWorkflowRun(run)
+                            ? () => {
+                                props.onCancelWorkflowRun(run.runId)
+                              }
+                            : null
+                          return (
+                            <WorkflowRunRow
+                              key={run.runId}
+                              isCancelling={props.cancellingWorkflowRunId === run.runId}
+                              run={run}
+                              {...(onCancel ? { onCancel } : {})}
+                            />
+                          )
+                        })}
                       </div>
                     </div>
                   ) : null}

@@ -59,6 +59,7 @@ function renderPanel(overrides: Record<string, unknown> = {}) {
     selectedCommandIndexes: [],
     executionRecords: [],
     workflowRuns: [],
+    canCancelWorkflowRun: vi.fn(() => true),
     cancellingWorkflowRunId: null,
     threadSummaries: [],
     draft: '',

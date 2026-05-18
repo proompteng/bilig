@@ -6,6 +6,7 @@ import type {
 } from '@bilig/contracts'
 import type { WorkbookAgentAppliedBy, WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from '@bilig/agent-api'
 import {
+  canCancelWorkbookAgentWorkflowRun,
   isWorkbookAgentBundleAutoApplyEligible,
   resolveWorkbookAgentBundleExecutionPolicyInput,
   toWorkbookAgentCommandBundle,
@@ -555,13 +556,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       code: 'WORKBOOK_AGENT_WORKFLOW_RUNNER_ROLLOUT_BLOCKED',
       message: 'Workbook assistant workflows are still limited to the rollout allowlist.',
     })
-    if (parsed.context) {
-      updateWorkbookAgentDurableUiContextFromUser({
-        sessionState,
-        context: parsed.context,
-        userId: input.session.userID,
-      })
-    }
     const runningWorkflow = sessionState.durable.workflowRuns.find((run) => run.status === 'running')
     if (runningWorkflow) {
       throw createWorkbookAgentServiceError({
@@ -579,6 +573,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         message: 'Finish the current workbook review item before starting another mutating workflow.',
         statusCode: 409,
         retryable: false,
+      })
+    }
+    if (parsed.context) {
+      updateWorkbookAgentDurableUiContextFromUser({
+        sessionState,
+        context: parsed.context,
+        userId: input.session.userID,
       })
     }
     const workflowInput = {
@@ -619,6 +620,21 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       throw createWorkbookAgentServiceError({
         code: 'WORKBOOK_AGENT_WORKFLOW_NOT_RUNNING',
         message: 'Workbook agent workflow is not currently running',
+        statusCode: 409,
+        retryable: false,
+      })
+    }
+    if (
+      !canCancelWorkbookAgentWorkflowRun({
+        scope: sessionState.scope,
+        ownerUserId: sessionState.storageActorUserId,
+        actorUserId: input.session.userID,
+        startedByUserId: runningWorkflow.startedByUserId,
+      })
+    ) {
+      throw createWorkbookAgentServiceError({
+        code: 'WORKBOOK_AGENT_WORKFLOW_CANCEL_FORBIDDEN',
+        message: 'Only the workflow starter or shared thread owner can cancel this workflow.',
         statusCode: 409,
         retryable: false,
       })

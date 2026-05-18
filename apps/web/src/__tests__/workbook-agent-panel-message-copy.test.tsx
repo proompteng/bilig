@@ -64,6 +64,7 @@ function createPanelProps(snapshot: WorkbookAgentThreadSnapshot): ComponentProps
     canDismissReviewItem: true,
     selectedCommandIndexes: [],
     workflowRuns: [],
+    canCancelWorkflowRun: vi.fn(() => true),
     cancellingWorkflowRunId: null,
     threadSummaries: [],
     draft: '',

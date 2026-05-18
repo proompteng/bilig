@@ -54,6 +54,7 @@ function renderPanel(entry: {
             optimisticEntries={[]}
             activeResponseTurnId={null}
             onApplyReviewItem={() => {}}
+            canCancelWorkflowRun={() => true}
             onCancelWorkflowRun={() => {}}
             onDismissReviewItem={() => {}}
             onDraftChange={() => {}}

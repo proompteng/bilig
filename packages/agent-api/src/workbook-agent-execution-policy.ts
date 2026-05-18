@@ -68,3 +68,12 @@ export function resolveWorkbookAgentBundleExecutionPolicyInput(input: {
     riskClass: input.bundle.riskClass,
   }
 }
+
+export function canCancelWorkbookAgentWorkflowRun(input: {
+  readonly scope: 'private' | 'shared'
+  readonly ownerUserId: string | null
+  readonly actorUserId: string
+  readonly startedByUserId: string
+}): boolean {
+  return input.scope !== 'shared' || input.ownerUserId === input.actorUserId || input.startedByUserId === input.actorUserId
+}

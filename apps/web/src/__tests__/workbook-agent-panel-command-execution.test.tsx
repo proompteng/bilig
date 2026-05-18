@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkbookAgentThreadSnapshot, WorkbookAgentTimelineEntry } from '@bilig/contracts'
+import type { WorkbookAgentThreadSnapshot, WorkbookAgentTimelineEntry, WorkbookAgentWorkflowRun } from '@bilig/contracts'
 import { WorkbookAgentPanel } from '../WorkbookAgentPanel.js'
 
 beforeEach(() => {
@@ -43,7 +43,10 @@ function createSnapshot(entries: readonly WorkbookAgentTimelineEntry[]): Workboo
   }
 }
 
-function createPanelProps(snapshot: WorkbookAgentThreadSnapshot): ComponentProps<typeof WorkbookAgentPanel> {
+function createPanelProps(
+  snapshot: WorkbookAgentThreadSnapshot,
+  overrides: Partial<ComponentProps<typeof WorkbookAgentPanel>> = {},
+): ComponentProps<typeof WorkbookAgentPanel> {
   return {
     activeThreadId: 'thr-1',
     activeContextLabel: 'Sheet1!A1',
@@ -64,6 +67,7 @@ function createPanelProps(snapshot: WorkbookAgentThreadSnapshot): ComponentProps
     canDismissReviewItem: true,
     selectedCommandIndexes: [],
     workflowRuns: [],
+    canCancelWorkflowRun: vi.fn(() => true),
     cancellingWorkflowRunId: null,
     threadSummaries: [],
     draft: '',
@@ -79,10 +83,11 @@ function createPanelProps(snapshot: WorkbookAgentThreadSnapshot): ComponentProps
     onToggleReviewCommand: vi.fn(),
     onCancelWorkflowRun: vi.fn(),
     onSubmit: vi.fn(),
+    ...overrides,
   }
 }
 
-function renderPanel(snapshot: WorkbookAgentThreadSnapshot) {
+function renderPanel(snapshot: WorkbookAgentThreadSnapshot, overrides: Partial<ComponentProps<typeof WorkbookAgentPanel>> = {}) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
@@ -92,7 +97,7 @@ function renderPanel(snapshot: WorkbookAgentThreadSnapshot) {
     root,
     render: async () => {
       await act(async () => {
-        root.render(<WorkbookAgentPanel {...createPanelProps(snapshot)} />)
+        root.render(<WorkbookAgentPanel {...createPanelProps(snapshot, overrides)} />)
       })
     },
     unmount: async () => {
@@ -100,6 +105,24 @@ function renderPanel(snapshot: WorkbookAgentThreadSnapshot) {
         root.unmount()
       })
     },
+  }
+}
+
+function createRunningWorkflowRun(): WorkbookAgentWorkflowRun {
+  return {
+    runId: 'workflow-running',
+    threadId: 'thr-1',
+    startedByUserId: 'alex@example.com',
+    workflowTemplate: 'summarizeWorkbook',
+    title: 'Summarize Workbook',
+    summary: 'Running workbook summary workflow.',
+    status: 'running',
+    createdAtUnixMs: 100,
+    updatedAtUnixMs: 100,
+    completedAtUnixMs: null,
+    errorMessage: null,
+    steps: [],
+    artifact: null,
   }
 }
 
@@ -176,6 +199,38 @@ describe('WorkbookAgentPanel command execution rendering', () => {
 
     expect(panel.host.textContent).not.toContain('Codex emitted commandExecution.')
     expect(panel.host.querySelector("[data-testid='workbook-agent-empty-state']")).toBeNull()
+
+    await panel.unmount()
+  })
+
+  it('hides running workflow cancel actions when the caller cannot cancel the run', async () => {
+    const workflowRun = createRunningWorkflowRun()
+    const panel = renderPanel(
+      createSnapshot([
+        {
+          id: 'system-workflow-start',
+          kind: 'system',
+          turnId: null,
+          text: 'Started workflow: Summarize Workbook',
+          phase: null,
+          toolName: null,
+          toolStatus: null,
+          argumentsText: null,
+          outputText: null,
+          success: null,
+          citations: [],
+        },
+      ]),
+      {
+        workflowRuns: [workflowRun],
+        canCancelWorkflowRun: vi.fn(() => false),
+      },
+    )
+
+    await panel.render()
+
+    expect(panel.host.querySelector("[data-testid='workbook-agent-workflow-workflow-running']")).toBeTruthy()
+    expect(panel.host.querySelector("[data-testid='workbook-agent-cancel-workflow-workflow-running']")).toBeNull()
 
     await panel.unmount()
   })

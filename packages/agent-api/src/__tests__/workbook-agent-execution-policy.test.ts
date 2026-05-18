@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canCancelWorkbookAgentWorkflowRun,
   describeWorkbookAgentExecutionPolicy,
   isWorkbookAgentBundleAutoApplyEligible,
   requiresWorkbookAgentOwnerReview,
@@ -94,5 +95,32 @@ describe('workbook agent execution policy', () => {
     expect(describeWorkbookAgentExecutionPolicy('autoApplySafe')).toBe('auto-apply safe changes')
     expect(describeWorkbookAgentExecutionPolicy('autoApplyAll')).toBe('auto-apply all changes')
     expect(describeWorkbookAgentExecutionPolicy('ownerReview')).toBe('owner review')
+  })
+
+  it('limits shared workflow cancellation to the starter or thread owner', () => {
+    expect(
+      canCancelWorkbookAgentWorkflowRun({
+        scope: 'shared',
+        ownerUserId: 'alex@example.com',
+        actorUserId: 'casey@example.com',
+        startedByUserId: 'casey@example.com',
+      }),
+    ).toBe(true)
+    expect(
+      canCancelWorkbookAgentWorkflowRun({
+        scope: 'shared',
+        ownerUserId: 'alex@example.com',
+        actorUserId: 'alex@example.com',
+        startedByUserId: 'casey@example.com',
+      }),
+    ).toBe(true)
+    expect(
+      canCancelWorkbookAgentWorkflowRun({
+        scope: 'shared',
+        ownerUserId: 'alex@example.com',
+        actorUserId: 'pat@example.com',
+        startedByUserId: 'casey@example.com',
+      }),
+    ).toBe(false)
   })
 })

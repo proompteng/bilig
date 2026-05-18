@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  canCancelWorkbookAgentWorkflowRun,
   normalizeWorkbookAgentCommandIndexes,
   projectWorkbookAgentBundle,
   toWorkbookAgentCommandBundle,
@@ -309,6 +310,16 @@ export function useWorkbookAgentPane(input: {
     sharedReviewStatus === 'pending' &&
     !isApplyingReviewItem
   const canDismissReviewItem = sharedReviewOwnerUserId === null || sharedReviewOwnerUserId === currentUserId
+  const canCancelWorkflowRun = useCallback(
+    (run: WorkbookAgentWorkflowRun) =>
+      canCancelWorkbookAgentWorkflowRun({
+        scope: snapshot?.scope ?? 'private',
+        ownerUserId: activeThreadSummary?.ownerUserId ?? null,
+        actorUserId: currentUserId,
+        startedByUserId: run.startedByUserId,
+      }),
+    [activeThreadSummary?.ownerUserId, currentUserId, snapshot?.scope],
+  )
 
   const persistSessionSnapshot = useCallback(
     (nextSnapshot: WorkbookAgentThreadSnapshot) => {
@@ -754,6 +765,7 @@ export function useWorkbookAgentPane(input: {
         snapshot={snapshot}
         threadSummaries={threadSummaries}
         workflowRuns={workflowRuns}
+        canCancelWorkflowRun={canCancelWorkflowRun}
         onApplyReviewItem={() => {
           void applyReviewItem('user')
         }}
@@ -800,6 +812,7 @@ export function useWorkbookAgentPane(input: {
       canDismissReviewItem,
       canRecommendSharedBundle,
       currentUserSharedRecommendation,
+      canCancelWorkflowRun,
       reviewReviewItem,
       sendPrompt,
       selectThread,
