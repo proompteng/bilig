@@ -28,6 +28,7 @@ The npm tarball also includes `AGENTS.md` and `SKILL.md` so coding agents
 inspecting `node_modules/@bilig/headless` can find the write/read/persist loop
 without leaving the package. The public docs expose the same path through
 [`AGENTS.md`](https://proompteng.github.io/bilig/AGENTS.md),
+[`agent.json`](https://proompteng.github.io/bilig/.well-known/agent.json),
 [`skill.txt`](https://proompteng.github.io/bilig/skill.txt), and
 [`llms-full.txt`](https://proompteng.github.io/bilig/llms-full.txt).
 

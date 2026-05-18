@@ -7,6 +7,8 @@ site: https://proompteng.github.io/bilig/
 repository: https://github.com/proompteng/bilig
 npm package: https://www.npmjs.com/package/@bilig/headless
 agent instructions: https://proompteng.github.io/bilig/AGENTS.md
+agent discovery manifest: https://proompteng.github.io/bilig/.well-known/agent.json
+root agent discovery manifest: https://proompteng.github.io/bilig/agent.json
 agent skill: https://proompteng.github.io/bilig/skill.txt
 full agent context: https://proompteng.github.io/bilig/llms-full.txt
 agent skill discovery: https://proompteng.github.io/bilig/.well-known/agent-skills/index.json

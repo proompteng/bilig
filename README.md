@@ -20,7 +20,8 @@ cell value, and save the workbook as JSON. No browser grid is involved.
 The published package also carries `AGENTS.md` and `SKILL.md` so coding agents
 inspecting `node_modules/@bilig/headless` can find the write/read/persist loop
 locally. The public docs expose the same path through
-[`AGENTS.md`](docs/AGENTS.md), [`skill.md`](docs/skill.md), and
+[`AGENTS.md`](docs/AGENTS.md), [`skill.md`](docs/skill.md),
+[`docs/.well-known/agent.json`](docs/.well-known/agent.json), and
 [`llms-full.txt`](docs/llms-full.txt).
 
 Good fits: pricing rules, budget checks, payout models, import validation, and

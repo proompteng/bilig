@@ -199,6 +199,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://proompteng.github.io/bilig/.well-known/agent.json</loc>
+    <lastmod>2026-05-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://proompteng.github.io/bilig/.well-known/agent-skills/index.json</loc>
     <lastmod>2026-05-18</lastmod>
     <changefreq>weekly</changefreq>
@@ -452,6 +458,12 @@
   </url>
   <url>
     <loc>https://proompteng.github.io/bilig/AGENTS.md</loc>
+    <lastmod>2026-05-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://proompteng.github.io/bilig/agent.json</loc>
     <lastmod>2026-05-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>

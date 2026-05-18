@@ -6,6 +6,12 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const siteRoot = 'https://proompteng.github.io/bilig'
 const repositoryUrl = 'https://github.com/proompteng/bilig'
 const skillName = 'bilig-workpaper'
+const skillTags = ['ai-agents', 'spreadsheet-automation', 'formulas', 'xlsx', 'mcp', 'typescript'] as const
+const agentNotAFitBoundaries = [
+  'manual spreadsheet editing as the main product',
+  'Office macros or desktop Excel automation',
+  'one-off arithmetic',
+] as const
 
 const checkOnly = process.argv.includes('--check')
 
@@ -232,7 +238,7 @@ const llmsFullSources = [
 ] as const
 
 function skillIndexJson(basePath: 'agent-skills' | 'skills'): string {
-  return `${JSON.stringify(
+  const json = JSON.stringify(
     {
       schema_version: basePath === 'agent-skills' ? 'agent-skills-0.2.0' : 'skills-index-1.0',
       skills: [
@@ -243,13 +249,126 @@ function skillIndexJson(basePath: 'agent-skills' | 'skills'): string {
             'Use @bilig/headless WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.',
           url: `${siteRoot}/.well-known/${basePath}/${skillName}/SKILL.txt`,
           source_url: `${repositoryUrl}/blob/main/docs/.well-known/${basePath}/${skillName}/SKILL.txt`,
-          tags: ['ai-agents', 'spreadsheet-automation', 'formulas', 'xlsx', 'mcp', 'typescript'],
+          tags: skillTags,
         },
       ],
     },
     null,
     2,
-  )}\n`
+  )
+  return `${compactStringArrayProperty(json, 'tags', skillTags, '      ')}\n`
+}
+
+function agentJsonManifest(): string {
+  const json = JSON.stringify(
+    {
+      schema_version: 'agent-json-0.1.0',
+      name: 'bilig',
+      title: 'Bilig WorkPaper formula runtime',
+      description:
+        'Formula WorkPaper runtime for Node.js services and agent tools: edit cells, recalculate, verify readback, and persist JSON without spreadsheet UI automation.',
+      url: `${siteRoot}/`,
+      repository: repositoryUrl,
+      license: 'MIT',
+      contact: `${repositoryUrl}/discussions/new?category=general`,
+      llms_txt: `${siteRoot}/llms.txt`,
+      llms_full: `${siteRoot}/llms-full.txt`,
+      skill_file: `${siteRoot}/skill.txt`,
+      agent_instructions: `${siteRoot}/AGENTS.md`,
+      skills: [
+        {
+          name: skillName,
+          url: `${siteRoot}/.well-known/agent-skills/${skillName}/SKILL.txt`,
+          index_url: `${siteRoot}/.well-known/agent-skills/index.json`,
+          description:
+            'Use @bilig/headless WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.',
+        },
+      ],
+      mcp: {
+        server_name: 'io.github.proompteng/bilig-workpaper',
+        server_card: `${siteRoot}/.well-known/mcp/server-card.json`,
+        manifest: `${siteRoot}/.well-known/mcp.json`,
+        registry_search: 'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
+        command: 'npm',
+        args: [
+          'exec',
+          '--package',
+          '@bilig/headless',
+          '--',
+          'bilig-workpaper-mcp',
+          '--workpaper',
+          './pricing.workpaper.json',
+          '--init-demo-workpaper',
+          '--writable',
+        ],
+        tools: [
+          'list_sheets',
+          'read_range',
+          'read_cell',
+          'set_cell_contents',
+          'get_cell_display_value',
+          'export_workpaper_document',
+          'validate_formula',
+        ],
+      },
+      capabilities: [
+        {
+          name: 'workpaper-formula-runtime',
+          type: 'npm-library',
+          package: '@bilig/headless',
+          runtime: 'Node.js >=22',
+          install: 'npm install @bilig/headless',
+          docs: `${siteRoot}/try-bilig-headless-in-node.html`,
+        },
+        {
+          name: 'file-backed-workpaper-mcp',
+          type: 'mcp-stdio-server',
+          docs: `${siteRoot}/mcp-workpaper-tool-server.html`,
+          server_card: `${siteRoot}/.well-known/mcp/server-card.json`,
+        },
+        {
+          name: 'formula-clinic',
+          type: 'local-cli',
+          command: 'npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"',
+          docs: `${siteRoot}/formula-bug-clinic.html`,
+        },
+      ],
+      verification_contract: [
+        'read the relevant range before editing',
+        'write the target input or formula cell',
+        'read the dependent calculated output after recalculation',
+        'export or serialize the WorkPaper document',
+        'restore or reimport when a file boundary matters',
+        'return editedCell, before, after, afterRestore, persistedDocumentBytes, verified, and limitations',
+      ],
+      boundaries: {
+        good_fit: [
+          'pricing, quote approval, budget, payout, import-validation, and forecast logic',
+          'agent tools that need deterministic cell addresses and formula readback',
+          'service-owned workbook state that can persist as JSON',
+        ],
+        not_a_fit: agentNotAFitBoundaries,
+      },
+      public_entrypoints: [
+        `${siteRoot}/`,
+        `${siteRoot}/why-use-bilig.html`,
+        `${siteRoot}/headless-workpaper-agent-handbook.html`,
+        `${siteRoot}/mcp-workpaper-tool-server.html`,
+        `${siteRoot}/agent-workpaper-tool-calling-recipe.html`,
+        `${siteRoot}/node-framework-workpaper-adapters.html`,
+        `${siteRoot}/npm-provenance-package-trust.html`,
+      ],
+    },
+    null,
+    2,
+  )
+  return `${compactStringArrayProperty(json, 'not_a_fit', agentNotAFitBoundaries, '    ')}\n`
+}
+
+function compactStringArrayProperty(json: string, propertyName: string, values: readonly string[], indent: string): string {
+  const expanded = `${indent}"${propertyName}": [\n${values.map((value) => `${indent}  ${JSON.stringify(value)}`).join(',\n')}\n${indent}]`
+  const compact = `${indent}"${propertyName}": [${values.map((value) => JSON.stringify(value)).join(', ')}]`
+  return json.replace(expanded, compact)
 }
 
 function stripFrontmatter(content: string): string {
@@ -293,11 +412,14 @@ async function buildLlmsFull(): Promise<string> {
 
 async function generatedTargets(): Promise<ReadonlyArray<readonly [string, string]>> {
   const llmsFull = await buildLlmsFull()
+  const agentJson = agentJsonManifest()
   return [
     ['docs/AGENTS.md', docsAgentInstructions],
+    ['docs/agent.json', agentJson],
     ['docs/skill.md', skillDocument],
     ['docs/skill.txt', skillDocument],
     ['docs/llms-full.txt', llmsFull],
+    ['docs/.well-known/agent.json', agentJson],
     ['docs/.well-known/agent-skills/index.json', skillIndexJson('agent-skills')],
     ['docs/.well-known/agent-skills/bilig-workpaper/SKILL.md', skillDocument],
     ['docs/.well-known/agent-skills/bilig-workpaper/SKILL.txt', skillDocument],

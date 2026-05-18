@@ -41,6 +41,8 @@ const {
   sitemap,
   llms,
   llmsFull,
+  agentJson,
+  agentJsonRoot,
   docsAgentNotes,
   docsSkill,
   agentSkillsIndex,
@@ -140,6 +142,11 @@ requirePackageKeywords(
 requireIncludes(index, '"downloadUrl": "https://www.npmjs.com/package/@bilig/headless"', 'docs/index.html')
 requireIncludes(index, '"applicationCategory": "DeveloperApplication"', 'docs/index.html')
 requireIncludes(index, '"@type": "FAQPage"', 'docs/index.html')
+requireIncludes(
+  index,
+  '<link rel="alternate" type="application/json" href="https://proompteng.github.io/bilig/.well-known/agent.json" title="agent.json" />',
+  'docs/index.html',
+)
 for (const required of homepageRequiredLinks) {
   requireIncludes(index, required, 'docs/index.html')
 }
@@ -269,10 +276,14 @@ requireIncludes(readme, 'agent handoff prompt', 'README.md')
 requireIncludes(index, './headless-workpaper-agent-handbook.html">Agent handoff prompt', 'docs/index.html')
 requireIncludes(llms, '## agent handoff prompt', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/AGENTS.md', 'docs/llms.txt')
+requireIncludes(llms, 'https://proompteng.github.io/bilig/.well-known/agent.json', 'docs/llms.txt')
+requireIncludes(llms, 'https://proompteng.github.io/bilig/agent.json', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/skill.txt', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/llms-full.txt', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/.well-known/agent-skills/index.json', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/.well-known/skills/index.json', 'docs/llms.txt')
+requireIncludes(readme, 'docs/.well-known/agent.json', 'README.md')
+requireIncludes(headlessReadme, 'https://proompteng.github.io/bilig/.well-known/agent.json', 'packages/headless/README.md')
 requireIncludes(llms, 'Do not claim success from a write call alone.', 'docs/llms.txt')
 requireIncludes(llms, 'pnpm --dir bilig/examples/headless-workpaper install --ignore-workspace', 'docs/llms.txt')
 requireIncludes(llms, 'pnpm --dir bilig/examples/headless-workpaper run agent:framework-adapters', 'docs/llms.txt')
@@ -298,6 +309,60 @@ requireIncludes(docsAgentNotes, '## Discovery Order', 'docs/AGENTS.md')
 requireIncludes(docsAgentNotes, 'Do not claim success from a write call alone.', 'docs/AGENTS.md')
 requireIncludes(docsSkill, 'name: bilig-workpaper', 'docs/skill.md')
 requireIncludes(docsSkill, '## Required Verification', 'docs/skill.md')
+if (agentJsonRoot !== agentJson) {
+  throw new Error('docs/agent.json must match docs/.well-known/agent.json')
+}
+const parsedAgentJson: unknown = JSON.parse(agentJson)
+if (typeof parsedAgentJson !== 'object' || parsedAgentJson === null || Array.isArray(parsedAgentJson)) {
+  throw new Error('docs/.well-known/agent.json must be a JSON object')
+}
+for (const [fieldName, expectedValue] of [
+  ['name', 'bilig'],
+  ['repository', 'https://github.com/proompteng/bilig'],
+  ['llms_txt', 'https://proompteng.github.io/bilig/llms.txt'],
+  ['llms_full', 'https://proompteng.github.io/bilig/llms-full.txt'],
+  ['skill_file', 'https://proompteng.github.io/bilig/skill.txt'],
+  ['agent_instructions', 'https://proompteng.github.io/bilig/AGENTS.md'],
+] as const) {
+  if (Reflect.get(parsedAgentJson, fieldName) !== expectedValue) {
+    throw new Error(`docs/.well-known/agent.json ${fieldName} must be ${expectedValue}`)
+  }
+}
+const parsedAgentJsonMcp = Reflect.get(parsedAgentJson, 'mcp')
+if (typeof parsedAgentJsonMcp !== 'object' || parsedAgentJsonMcp === null || Array.isArray(parsedAgentJsonMcp)) {
+  throw new Error('docs/.well-known/agent.json must define an mcp object')
+}
+if (Reflect.get(parsedAgentJsonMcp, 'server_card') !== 'https://proompteng.github.io/bilig/.well-known/mcp/server-card.json') {
+  throw new Error('docs/.well-known/agent.json must point at the MCP server card')
+}
+const agentJsonMcpTools = Reflect.get(parsedAgentJsonMcp, 'tools')
+if (!Array.isArray(agentJsonMcpTools) || !agentJsonMcpTools.every((tool) => typeof tool === 'string')) {
+  throw new Error('docs/.well-known/agent.json mcp.tools must be a string array')
+}
+for (const requiredTool of [
+  'list_sheets',
+  'set_cell_contents',
+  'get_cell_display_value',
+  'export_workpaper_document',
+  'validate_formula',
+]) {
+  if (!agentJsonMcpTools.includes(requiredTool)) {
+    throw new Error(`docs/.well-known/agent.json mcp.tools is missing ${requiredTool}`)
+  }
+}
+const agentJsonCapabilities = Reflect.get(parsedAgentJson, 'capabilities')
+if (
+  !Array.isArray(agentJsonCapabilities) ||
+  !agentJsonCapabilities.some(
+    (capability) =>
+      typeof capability === 'object' &&
+      capability !== null &&
+      Reflect.get(capability, 'name') === 'file-backed-workpaper-mcp' &&
+      Reflect.get(capability, 'server_card') === 'https://proompteng.github.io/bilig/.well-known/mcp/server-card.json',
+  )
+) {
+  throw new Error('docs/.well-known/agent.json must advertise the file-backed MCP capability')
+}
 requireIncludes(
   agentSkillsIndex,
   'https://proompteng.github.io/bilig/.well-known/agent-skills/bilig-workpaper/SKILL.txt',

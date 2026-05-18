@@ -54,6 +54,8 @@ export const llmsRequiredLinks = [
   'https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html',
   'https://proompteng.github.io/bilig/headless-workpaper-agent-handbook.html',
   'https://proompteng.github.io/bilig/AGENTS.md',
+  'https://proompteng.github.io/bilig/.well-known/agent.json',
+  'https://proompteng.github.io/bilig/agent.json',
   'https://proompteng.github.io/bilig/skill.txt',
   'https://proompteng.github.io/bilig/llms-full.txt',
   'https://proompteng.github.io/bilig/why-use-bilig.html',

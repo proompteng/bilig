@@ -1,0 +1,96 @@
+{
+  "schema_version": "agent-json-0.1.0",
+  "name": "bilig",
+  "title": "Bilig WorkPaper formula runtime",
+  "description": "Formula WorkPaper runtime for Node.js services and agent tools: edit cells, recalculate, verify readback, and persist JSON without spreadsheet UI automation.",
+  "url": "https://proompteng.github.io/bilig/",
+  "repository": "https://github.com/proompteng/bilig",
+  "license": "MIT",
+  "contact": "https://github.com/proompteng/bilig/discussions/new?category=general",
+  "llms_txt": "https://proompteng.github.io/bilig/llms.txt",
+  "llms_full": "https://proompteng.github.io/bilig/llms-full.txt",
+  "skill_file": "https://proompteng.github.io/bilig/skill.txt",
+  "agent_instructions": "https://proompteng.github.io/bilig/AGENTS.md",
+  "skills": [
+    {
+      "name": "bilig-workpaper",
+      "url": "https://proompteng.github.io/bilig/.well-known/agent-skills/bilig-workpaper/SKILL.txt",
+      "index_url": "https://proompteng.github.io/bilig/.well-known/agent-skills/index.json",
+      "description": "Use @bilig/headless WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback."
+    }
+  ],
+  "mcp": {
+    "server_name": "io.github.proompteng/bilig-workpaper",
+    "server_card": "https://proompteng.github.io/bilig/.well-known/mcp/server-card.json",
+    "manifest": "https://proompteng.github.io/bilig/.well-known/mcp.json",
+    "registry_search": "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper",
+    "command": "npm",
+    "args": [
+      "exec",
+      "--package",
+      "@bilig/headless",
+      "--",
+      "bilig-workpaper-mcp",
+      "--workpaper",
+      "./pricing.workpaper.json",
+      "--init-demo-workpaper",
+      "--writable"
+    ],
+    "tools": [
+      "list_sheets",
+      "read_range",
+      "read_cell",
+      "set_cell_contents",
+      "get_cell_display_value",
+      "export_workpaper_document",
+      "validate_formula"
+    ]
+  },
+  "capabilities": [
+    {
+      "name": "workpaper-formula-runtime",
+      "type": "npm-library",
+      "package": "@bilig/headless",
+      "runtime": "Node.js >=22",
+      "install": "npm install @bilig/headless",
+      "docs": "https://proompteng.github.io/bilig/try-bilig-headless-in-node.html"
+    },
+    {
+      "name": "file-backed-workpaper-mcp",
+      "type": "mcp-stdio-server",
+      "docs": "https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html",
+      "server_card": "https://proompteng.github.io/bilig/.well-known/mcp/server-card.json"
+    },
+    {
+      "name": "formula-clinic",
+      "type": "local-cli",
+      "command": "npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells \"Summary!B7,Inputs!B2\"",
+      "docs": "https://proompteng.github.io/bilig/formula-bug-clinic.html"
+    }
+  ],
+  "verification_contract": [
+    "read the relevant range before editing",
+    "write the target input or formula cell",
+    "read the dependent calculated output after recalculation",
+    "export or serialize the WorkPaper document",
+    "restore or reimport when a file boundary matters",
+    "return editedCell, before, after, afterRestore, persistedDocumentBytes, verified, and limitations"
+  ],
+  "boundaries": {
+    "good_fit": [
+      "pricing, quote approval, budget, payout, import-validation, and forecast logic",
+      "agent tools that need deterministic cell addresses and formula readback",
+      "service-owned workbook state that can persist as JSON"
+    ],
+    "not_a_fit": ["manual spreadsheet editing as the main product", "Office macros or desktop Excel automation", "one-off arithmetic"]
+  },
+  "public_entrypoints": [
+    "https://proompteng.github.io/bilig/",
+    "https://proompteng.github.io/bilig/why-use-bilig.html",
+    "https://proompteng.github.io/bilig/headless-workpaper-agent-handbook.html",
+    "https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html",
+    "https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html",
+    "https://proompteng.github.io/bilig/node-framework-workpaper-adapters.html",
+    "https://proompteng.github.io/bilig/npm-provenance-package-trust.html"
+  ]
+}

@@ -23,6 +23,8 @@ export interface DocsDiscoveryContext {
   readonly sitemap: string
   readonly llms: string
   readonly llmsFull: string
+  readonly agentJson: string
+  readonly agentJsonRoot: string
   readonly docsAgentNotes: string
   readonly docsSkill: string
   readonly agentSkillsIndex: string
@@ -98,6 +100,8 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     sitemap,
     llms,
     llmsFull,
+    agentJson,
+    agentJsonRoot,
     docsAgentNotes,
     docsSkill,
     agentSkillsIndex,
@@ -164,6 +168,8 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     readFile(join(docsRoot, 'sitemap.xml'), 'utf8'),
     readFile(join(docsRoot, 'llms.txt'), 'utf8'),
     readFile(join(docsRoot, 'llms-full.txt'), 'utf8'),
+    readFile(join(docsRoot, '.well-known', 'agent.json'), 'utf8'),
+    readFile(join(docsRoot, 'agent.json'), 'utf8'),
     readFile(join(docsRoot, 'AGENTS.md'), 'utf8'),
     readFile(join(docsRoot, 'skill.md'), 'utf8'),
     readFile(join(docsRoot, '.well-known', 'agent-skills', 'index.json'), 'utf8'),
@@ -239,6 +245,8 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     sitemap,
     llms,
     llmsFull,
+    agentJson,
+    agentJsonRoot,
     docsAgentNotes,
     docsSkill,
     agentSkillsIndex,
