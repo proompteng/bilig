@@ -127,6 +127,42 @@ function applyOptimisticCellMutation(
   }
 }
 
+async function applyOptimisticProjectionMutation(
+  runtimeController: WorkbookSyncRuntimeController | null,
+  mutation: PendingWorkbookMutationInput,
+): Promise<void> {
+  if (!runtimeController) {
+    return
+  }
+  if (mutation.method === 'setRangeStyle') {
+    const [range, patch] = mutation.args
+    if (isCellRangeRef(range) && isCellStylePatchValue(patch)) {
+      await runtimeController.invoke('setRangeStyle', range, patch)
+    }
+    return
+  }
+  if (mutation.method === 'clearRangeStyle') {
+    const [range, fields] = mutation.args
+    if (isCellRangeRef(range) && (fields === undefined || isCellStyleFieldList(fields))) {
+      await runtimeController.invoke('clearRangeStyle', range, fields)
+    }
+    return
+  }
+  if (mutation.method === 'setRangeNumberFormat') {
+    const [range, format] = mutation.args
+    if (isCellRangeRef(range) && isCellNumberFormatInputValue(format)) {
+      await runtimeController.invoke('setRangeNumberFormat', range, format)
+    }
+    return
+  }
+  if (mutation.method === 'clearRangeNumberFormat') {
+    const [range] = mutation.args
+    if (isCellRangeRef(range)) {
+      await runtimeController.invoke('clearRangeNumberFormat', range)
+    }
+  }
+}
+
 export function useWorkbookSync(input: {
   documentId: string
   connectionStateName: ZeroConnectionState['name']
@@ -448,7 +484,14 @@ export function useWorkbookSync(input: {
       })
       try {
         rollbackOptimisticCell = applyOptimisticCellMutation(workerHandleRef.current?.viewportStore, mutation)
-        await trackLocalMutationTask(() => enqueuePendingMutation(mutation))
+        await trackLocalMutationTask(async () => {
+          try {
+            await applyOptimisticProjectionMutation(runtimeController, mutation)
+          } catch (error) {
+            reportRuntimeError(error)
+          }
+          await enqueuePendingMutation(mutation)
+        })
         if (canAttemptRemoteSync(connectionStateRef.current)) {
           scheduleAuthoritativeRefreshProbes()
         }

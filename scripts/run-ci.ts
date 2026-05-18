@@ -165,6 +165,26 @@ async function runTask(task: CiTask, runningChildren: Set<ChildProcess>): Promis
   return new Promise((resolve, reject) => {
     const taskStartedAt = performance.now()
     log(`start ${task.label}: ${task.command.join(' ')}`)
+    let settled = false
+    let closeFallback: ReturnType<typeof setTimeout> | null = null
+    function finish(code: number | null, signal: string | null): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (closeFallback) {
+        clearTimeout(closeFallback)
+        closeFallback = null
+      }
+      runningChildren.delete(child)
+      const elapsedMs = performance.now() - taskStartedAt
+      if (code === 0) {
+        log(`done ${task.label} in ${formatSeconds(elapsedMs)}`)
+        resolve({ label: task.label, elapsedMs })
+        return
+      }
+      reject(new Error(`${task.label} failed after ${formatSeconds(elapsedMs)} (${signal ? `signal ${signal}` : `exit ${String(code)}`})`))
+    }
     const child = spawn(task.command[0] ?? '', task.command.slice(1), {
       cwd: process.cwd(),
       env: {
@@ -175,20 +195,24 @@ async function runTask(task: CiTask, runningChildren: Set<ChildProcess>): Promis
     })
     runningChildren.add(child)
 
-    child.on('error', (error) => {
+    child.once('error', (error) => {
+      if (closeFallback) {
+        clearTimeout(closeFallback)
+        closeFallback = null
+      }
+      settled = true
       runningChildren.delete(child)
       reject(error)
     })
 
-    child.on('close', (code, signal) => {
-      runningChildren.delete(child)
-      const elapsedMs = performance.now() - taskStartedAt
-      if (code === 0) {
-        log(`done ${task.label} in ${formatSeconds(elapsedMs)}`)
-        resolve({ label: task.label, elapsedMs })
-        return
-      }
-      reject(new Error(`${task.label} failed after ${formatSeconds(elapsedMs)} (${signal ? `signal ${signal}` : `exit ${String(code)}`})`))
+    child.once('exit', (code, signal) => {
+      closeFallback = setTimeout(() => {
+        finish(code, signal)
+      }, 1_000)
+    })
+
+    child.once('close', (code, signal) => {
+      finish(code, signal)
     })
   })
 }

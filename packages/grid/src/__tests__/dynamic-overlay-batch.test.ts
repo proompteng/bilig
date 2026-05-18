@@ -60,7 +60,7 @@ describe('dynamic overlay batch v3', () => {
     )
   })
 
-  test('draws header and body axis selections from the live camera instead of resident panes', () => {
+  test('draws axis selection headers and guides from the live camera without masking cell fills', () => {
     const metrics = getGridMetrics()
     const geometry = createGridGeometrySnapshotFromAxes({
       columns: createGridAxisWorldIndex({ axisLength: 20, defaultSize: 100 }),
@@ -92,9 +92,13 @@ describe('dynamic overlay batch v3', () => {
         expect.objectContaining({ x: 197, y: 1, width: 98, height: 22 }),
         expect.objectContaining({ x: 297, y: 1, width: 98, height: 22 }),
         expect.objectContaining({ x: 1, y: 55, width: 44, height: 18 }),
+        expect.objectContaining({ x: 196, y: 21, width: 100, height: 3 }),
+      ]),
+    )
+    expect(readOverlayRects(overlay)).not.toEqual(
+      expect.arrayContaining([
         expect.objectContaining({ x: 147, y: 25, width: 248, height: 18 }),
         expect.objectContaining({ x: 147, y: 45, width: 248, height: 174 }),
-        expect.objectContaining({ x: 196, y: 21, width: 100, height: 3 }),
       ]),
     )
     expect(readOverlayRects(overlay)).toEqual(

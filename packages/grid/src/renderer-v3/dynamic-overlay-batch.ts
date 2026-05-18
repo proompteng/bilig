@@ -1,4 +1,3 @@
-import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import type { GridGeometrySnapshot, GridPaneKind } from '../gridGeometry.js'
 import { parseGpuColor, type GridGpuRect } from '../gridGpuPrimitives.js'
 import type { HeaderSelection } from '../gridPointer.js'
@@ -227,7 +226,6 @@ function appendAxisSelectionOverlay(input: {
   readonly borderRects: GridGpuRect[]
 }): void {
   const headerFillColor = parseGpuColor(workbookThemeColors.accentSoft)
-  const bodyFillColor = parseGpuColor('rgba(33, 86, 58, 0.08)')
   const columnRanges = resolveSelectedAxisRanges({
     axis: input.gridSelection?.columns ?? null,
     fallbackIndex: input.selectedCell?.[0] ?? null,
@@ -245,17 +243,6 @@ function appendAxisSelectionOverlay(input: {
 
   appendSelectedColumnHeaderFills({ color: headerFillColor, fillRects: input.fillRects, geometry: input.geometry, ranges: columnRanges })
   appendSelectedRowHeaderFills({ color: headerFillColor, fillRects: input.fillRects, geometry: input.geometry, ranges: rowRanges })
-
-  if (input.gridSelection && input.gridSelection.columns.length > 0) {
-    for (const range of input.gridSelection.columns.ranges) {
-      appendRangeFills(input.fillRects, input.geometry, { x: range[0], y: 0, width: range[1] - range[0], height: MAX_ROWS }, bodyFillColor)
-    }
-  }
-  if (input.gridSelection && input.gridSelection.rows.length > 0) {
-    for (const range of input.gridSelection.rows.ranges) {
-      appendRangeFills(input.fillRects, input.geometry, { x: 0, y: range[0], width: MAX_COLS, height: range[1] - range[0] }, bodyFillColor)
-    }
-  }
 }
 
 function appendSelectedColumnHeaderFills(input: {
@@ -509,17 +496,6 @@ function visibleRowIndexes(geometry: GridGeometrySnapshot): readonly number[] {
     }
   }
   return indexes
-}
-
-function appendRangeFills(
-  target: GridGpuRect[],
-  geometry: GridGeometrySnapshot,
-  range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>,
-  color: GridGpuRect['color'],
-): void {
-  for (const rect of geometry.rangeScreenRects(range)) {
-    target.push({ ...insetRect(rect, 1, 1), color })
-  }
 }
 
 function isIndexSelected(index: number, ranges: readonly AxisSelectionRange[]): boolean {

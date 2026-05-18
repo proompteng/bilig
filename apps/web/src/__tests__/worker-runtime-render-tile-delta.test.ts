@@ -160,6 +160,59 @@ describe('worker-runtime-render-tile-delta', () => {
     expect(replacements[0]?.dirty.rectSpans).toEqual([{ offset: 0, length: replacements[0]?.rectCount ?? 0 }])
   })
 
+  it('clips sheet-scale style range invalidations to interested render tiles', () => {
+    const visibleTileKey = packTileKey53({
+      colTile: 0,
+      dprBucket: 1,
+      rowTile: 0,
+      sheetOrdinal: 7,
+    })
+    const warmTileKey = packTileKey53({
+      colTile: 0,
+      dprBucket: 1,
+      rowTile: 1,
+      sheetOrdinal: 7,
+    })
+    const batch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      event: createRangeInvalidationEvent('B1', 'E1048576'),
+      generation: 6,
+      subscription: {
+        sheetId: 7,
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 63,
+        colStart: 0,
+        colEnd: 255,
+        dprBucket: 1,
+        cameraSeq: 19,
+        tileInterest: {
+          seq: 11,
+          sheetOrdinal: 7,
+          axisSeqX: 1,
+          axisSeqY: 1,
+          freezeSeq: 1,
+          visibleTileKeys: [visibleTileKey],
+          warmTileKeys: [warmTileKey],
+          pinnedTileKeys: [],
+          reason: 'scroll' as const,
+        },
+      },
+    })
+
+    const replacements = batch.mutations.filter((mutation) => mutation.kind === 'tileReplace')
+    expect(replacements).toHaveLength(2)
+    expect(replacements.map((mutation) => mutation.bounds)).toEqual([
+      { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
+      { rowStart: 32, rowEnd: 63, colStart: 0, colEnd: 127 },
+    ])
+    replacements.forEach((replacement) => {
+      expect(replacement.dirtyLocalRows).toEqual(new Uint32Array([0, 31]))
+      expect(replacement.dirtyLocalCols).toEqual(new Uint32Array([1, 4]))
+      expect(replacement.dirtyMasks).toEqual(new Uint32Array([RANGE_VISUAL_DIRTY_MASK]))
+    })
+  })
+
   it('materializes warm tile interest on initial and dirty event-driven batches', () => {
     const warmTileKey = packTileKey53({
       colTile: 0,

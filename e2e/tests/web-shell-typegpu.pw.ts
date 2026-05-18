@@ -5,6 +5,7 @@ import {
   clickProductCell,
   createTestDocumentId,
   dragProductBodySelection,
+  dragProductHeaderSelection,
   gotoWorkbookShell,
   pickToolbarPresetColor,
   PRODUCT_COLUMN_WIDTH,
@@ -1104,6 +1105,53 @@ test('@browser-webgpu @browser-deep selected range fill changes stay visually au
     testInfo,
     'main-workbook-grid-selected-fill-refresh-readback.png',
     'main-workbook-grid-selected-fill-refresh-readback',
+  )
+})
+
+test('@browser-webgpu @browser-deep full-column fill changes repaint visible cells without waiting for sync catch-up', async ({
+  page,
+}, testInfo) => {
+  const points = [
+    { ...selectedRangeFillProbe(1, 1), name: 'b2' },
+    { ...selectedRangeFillProbe(2, 8), name: 'c9' },
+    { ...selectedRangeFillProbe(4, 20), name: 'e21' },
+  ]
+
+  await page.setViewportSize({ width: 960, height: 720 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('typegpu-column-fill-fast'))}&persist=0`)
+  await waitForWorkbookReady(page)
+  await waitForTypeGpuRenderer(page)
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  await dragProductHeaderSelection(page, 'column', 1, 4)
+  await expect(page.getByTestId('status-selection')).toContainText('!B:E')
+  const startedAt = Date.now()
+  await pickToolbarPresetColor(page, 'Fill color', 'theme green')
+  const readback = await waitForReadback(
+    page,
+    {
+      points,
+      regions: [],
+    },
+    (result) => allReadbackPointsMatch(result, isThemeGreenFill),
+  )
+
+  expect(Date.now() - startedAt).toBeLessThan(3_000)
+  expect(readback.sequence).toBeGreaterThan(0)
+
+  await saveReadbackArtifact(
+    page,
+    testInfo,
+    'main-workbook-grid-full-column-fill-fast-readback.png',
+    'main-workbook-grid-full-column-fill-fast-readback',
   )
 })
 

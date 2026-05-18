@@ -271,6 +271,7 @@ function collectEventDirtyTileSpans(input: {
 }): Map<TileKey53, DirtyLocalSpan[]> {
   const { dprBucket, engine, event, sheetName, sheetOrdinal, subscription, textOverflowIndex } = input
   const spansByTile = new Map<TileKey53, DirtyLocalSpan[]>()
+  const interestedTileKeys = resolveInterestedTileKeys(subscription)
   const cellStore = engine.workbook.cellStore
   const getSheetNameById = engine.workbook.getSheetNameById
   if (cellStore && getSheetNameById) {
@@ -285,6 +286,7 @@ function collectEventDirtyTileSpans(input: {
       markDirtyRangeSpans(spansByTile, {
         colEnd: col,
         colStart: col,
+        candidateTileKeys: interestedTileKeys,
         dprBucket,
         mask: CHANGED_CELL_DIRTY_MASK,
         rowEnd: row,
@@ -312,6 +314,7 @@ function collectEventDirtyTileSpans(input: {
     markDirtyRangeSpans(spansByTile, {
       colEnd,
       colStart,
+      candidateTileKeys: interestedTileKeys,
       dprBucket,
       mask: INVALIDATED_RANGE_DIRTY_MASK,
       rowEnd,
@@ -459,6 +462,7 @@ function markDirtyRangeSpans(
     readonly colStart: number
     readonly colEnd: number
     readonly mask: number
+    readonly candidateTileKeys?: readonly TileKey53[] | undefined
   },
 ): void {
   const rowStart = Math.max(0, Math.min(MAX_ROWS - 1, input.rowStart))
@@ -469,29 +473,80 @@ function markDirtyRangeSpans(
   const rowTileEnd = Math.floor(rowEnd / VIEWPORT_TILE_ROW_COUNT)
   const colTileStart = Math.floor(colStart / VIEWPORT_TILE_COLUMN_COUNT)
   const colTileEnd = Math.floor(colEnd / VIEWPORT_TILE_COLUMN_COUNT)
+  const tileArea = (rowTileEnd - rowTileStart + 1) * (colTileEnd - colTileStart + 1)
+  if (input.candidateTileKeys && tileArea > input.candidateTileKeys.length) {
+    input.candidateTileKeys.forEach((tileKey) => {
+      const fields = unpackTileKey53(tileKey)
+      if (fields.sheetOrdinal !== input.sheetOrdinal || fields.dprBucket !== input.dprBucket) {
+        return
+      }
+      appendDirtyRangeTileSpan(spansByTile, {
+        colEnd,
+        colStart,
+        colTile: fields.colTile,
+        dprBucket: input.dprBucket,
+        mask: input.mask,
+        rowEnd,
+        rowStart,
+        rowTile: fields.rowTile,
+        sheetOrdinal: input.sheetOrdinal,
+      })
+    })
+    return
+  }
   for (let rowTile = rowTileStart; rowTile <= rowTileEnd; rowTile += 1) {
-    const tileRowStart = rowTile * VIEWPORT_TILE_ROW_COUNT
-    const tileRowEnd = Math.min(MAX_ROWS - 1, tileRowStart + VIEWPORT_TILE_ROW_COUNT - 1)
     for (let colTile = colTileStart; colTile <= colTileEnd; colTile += 1) {
-      const tileColStart = colTile * VIEWPORT_TILE_COLUMN_COUNT
-      const tileColEnd = Math.min(MAX_COLS - 1, tileColStart + VIEWPORT_TILE_COLUMN_COUNT - 1)
-      const tileKey = packTileKey53({
+      appendDirtyRangeTileSpan(spansByTile, {
+        colEnd,
+        colStart,
         colTile,
         dprBucket: input.dprBucket,
+        mask: input.mask,
+        rowEnd,
+        rowStart,
         rowTile,
         sheetOrdinal: input.sheetOrdinal,
       })
-      const spans = spansByTile.get(tileKey) ?? []
-      spans.push({
-        colEnd: Math.min(colEnd, tileColEnd) - tileColStart,
-        colStart: Math.max(colStart, tileColStart) - tileColStart,
-        mask: input.mask,
-        rowEnd: Math.min(rowEnd, tileRowEnd) - tileRowStart,
-        rowStart: Math.max(rowStart, tileRowStart) - tileRowStart,
-      })
-      spansByTile.set(tileKey, spans)
     }
   }
+}
+
+function appendDirtyRangeTileSpan(
+  spansByTile: Map<TileKey53, DirtyLocalSpan[]>,
+  input: {
+    readonly sheetOrdinal: number
+    readonly dprBucket: number
+    readonly rowStart: number
+    readonly rowEnd: number
+    readonly colStart: number
+    readonly colEnd: number
+    readonly rowTile: number
+    readonly colTile: number
+    readonly mask: number
+  },
+): void {
+  const tileRowStart = input.rowTile * VIEWPORT_TILE_ROW_COUNT
+  const tileRowEnd = Math.min(MAX_ROWS - 1, tileRowStart + VIEWPORT_TILE_ROW_COUNT - 1)
+  const tileColStart = input.colTile * VIEWPORT_TILE_COLUMN_COUNT
+  const tileColEnd = Math.min(MAX_COLS - 1, tileColStart + VIEWPORT_TILE_COLUMN_COUNT - 1)
+  if (tileRowEnd < input.rowStart || tileRowStart > input.rowEnd || tileColEnd < input.colStart || tileColStart > input.colEnd) {
+    return
+  }
+  const tileKey = packTileKey53({
+    colTile: input.colTile,
+    dprBucket: input.dprBucket,
+    rowTile: input.rowTile,
+    sheetOrdinal: input.sheetOrdinal,
+  })
+  const spans = spansByTile.get(tileKey) ?? []
+  spans.push({
+    colEnd: Math.min(input.colEnd, tileColEnd) - tileColStart,
+    colStart: Math.max(input.colStart, tileColStart) - tileColStart,
+    mask: input.mask,
+    rowEnd: Math.min(input.rowEnd, tileRowEnd) - tileRowStart,
+    rowStart: Math.max(input.rowStart, tileRowStart) - tileRowStart,
+  })
+  spansByTile.set(tileKey, spans)
 }
 
 function packDirtyLocalSpans(spans: readonly DirtyLocalSpan[]): {
