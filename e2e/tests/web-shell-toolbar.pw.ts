@@ -160,8 +160,8 @@ test('web app keeps the formula input usable on phone-width screens', async ({ p
 
   const [nameBoxBox, formulaInputBox, formulaFrameBox] = await Promise.all([getBox(nameBox), getBox(formulaInput), getBox(formulaFrame)])
   const placeholderMetrics = await formulaInput.evaluate((element) => {
-    if (!(element instanceof HTMLInputElement)) {
-      throw new Error('Expected formula input')
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
+      throw new Error('Expected formula text control')
     }
     const canvas = document.createElement('canvas')
     const context = canvas.getContext('2d')
@@ -190,8 +190,8 @@ test('web app keeps the formula placeholder readable on tiny screens', async ({ 
   await expect(formulaInput).toHaveAttribute('placeholder', 'Value or =formula')
 
   const placeholderMetrics = await formulaInput.evaluate((element) => {
-    if (!(element instanceof HTMLInputElement)) {
-      throw new Error('Expected formula input')
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
+      throw new Error('Expected formula text control')
     }
     const canvas = document.createElement('canvas')
     const context = canvas.getContext('2d')
