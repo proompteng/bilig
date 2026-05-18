@@ -4,6 +4,7 @@ import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS, workbookFontPointSizeToCssPx } from '../workbookTheme.js'
+import { workbookNativeTextQualityStyle } from '../workbookTextQuality.js'
 import type { TextQuadRun } from './line-text-quad-buffer.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-runtime.js'
@@ -329,6 +330,7 @@ export function resolveNativeTextRunInnerStyleV3(input: {
   const baseTop = visibleClip?.innerTop ?? snapCssPixel(input.run.y - clipY, dpr)
   const textTop = input.run.wrap ? baseTop : snapCssPixel(baseTop + lineBox.topInset, dpr)
   return {
+    ...workbookNativeTextQualityStyle,
     boxSizing: 'border-box',
     color: input.run.color ?? '#111827',
     display: 'block',
@@ -336,7 +338,6 @@ export function resolveNativeTextRunInnerStyleV3(input: {
     fontFeatureSettings: 'normal',
     fontSize: fontStyle.fontSize,
     fontStyle: fontStyle.fontStyle,
-    fontKerning: 'normal',
     fontVariantNumeric: 'tabular-nums',
     fontWeight: fontStyle.fontWeight,
     height: input.run.wrap ? (visibleClip?.innerHeight ?? height) : lineBox.height,

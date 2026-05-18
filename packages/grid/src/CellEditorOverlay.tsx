@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import type { EditMovement, EditTargetSelection } from './SheetGridView.js'
 import { WORKBOOK_DEFAULT_FONT_SIZE, workbookFontPointSizeToCssPx } from './workbookTheme.js'
 import { workbookTextControlProps } from './workbookTextControls.js'
+import { workbookNativeTextQualityStyle } from './workbookTextQuality.js'
 
 function normalizeNumpadKey(key: string, code: string): string | null {
   if (!code.startsWith('Numpad')) {
@@ -450,6 +451,7 @@ export function CellEditorOverlay({
         rows={1}
         {...workbookTextControlProps}
         style={{
+          ...workbookNativeTextQualityStyle,
           color,
           font,
           fontFeatureSettings: 'normal',

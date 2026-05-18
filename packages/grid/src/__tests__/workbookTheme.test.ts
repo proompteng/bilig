@@ -7,8 +7,12 @@ import {
 } from '../workbookTheme.js'
 
 describe('workbookTheme', () => {
-  test('uses a spreadsheet-native font stack for rendered grid text', () => {
-    expect(WORKBOOK_FONT_SANS.startsWith('Arial')).toBe(true)
+  test('uses a polished system-first font stack for rendered grid text with spreadsheet fallbacks', () => {
+    expect(WORKBOOK_FONT_SANS.startsWith('ui-sans-serif')).toBe(true)
+    expect(WORKBOOK_FONT_SANS).toContain('system-ui')
+    expect(WORKBOOK_FONT_SANS).toContain('-apple-system')
+    expect(WORKBOOK_FONT_SANS).toContain('"Segoe UI"')
+    expect(WORKBOOK_FONT_SANS).toContain('Arial')
     expect(WORKBOOK_FONT_SANS).toContain('"Helvetica Neue"')
     expect(WORKBOOK_FONT_SANS).toContain('Helvetica')
     expect(WORKBOOK_FONT_SANS).not.toContain('Aptos')
