@@ -129,7 +129,7 @@ export class DirtyTileIndexV3 {
       const tileColEnd = Math.min(MAX_COLS - 1, tileColStart + VIEWPORT_TILE_COLUMN_COUNT - 1)
       this.axisXMasks.set(key, (this.axisXMasks.get(key) ?? 0) | mask)
       const localColStart = Math.max(colStart, tileColStart) - tileColStart
-      const localColEnd = Math.min(colEnd, tileColEnd) - tileColStart
+      const localColEnd = (input.mask & DirtyMaskV3.AxisX) !== 0 ? tileColEnd - tileColStart : Math.min(colEnd, tileColEnd) - tileColStart
       this.appendSpan(
         key,
         {
@@ -168,7 +168,7 @@ export class DirtyTileIndexV3 {
       const tileRowEnd = Math.min(MAX_ROWS - 1, tileRowStart + VIEWPORT_TILE_ROW_COUNT - 1)
       this.axisYMasks.set(key, (this.axisYMasks.get(key) ?? 0) | mask)
       const localRowStart = Math.max(rowStart, tileRowStart) - tileRowStart
-      const localRowEnd = Math.min(rowEnd, tileRowEnd) - tileRowStart
+      const localRowEnd = (input.mask & DirtyMaskV3.AxisY) !== 0 ? tileRowEnd - tileRowStart : Math.min(rowEnd, tileRowEnd) - tileRowStart
       this.appendSpan(
         key,
         {

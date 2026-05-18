@@ -81,6 +81,40 @@ describe('DirtyTileIndexV3', () => {
     expect(index.getSpans(axisY)).toEqual([])
   })
 
+  it('expands true axis geometry damage through the rest of the tile', () => {
+    const index = new DirtyTileIndexV3()
+    markWorkbookDeltaDirtyTilesV3(
+      index,
+      {
+        sheetOrdinal: 2,
+        dirty: {
+          axisX: Uint32Array.from([128, 128, DirtyMaskV3.AxisX | DirtyMaskV3.Rect | DirtyMaskV3.Text]),
+          axisY: Uint32Array.from([32, 32, DirtyMaskV3.AxisY | DirtyMaskV3.Rect | DirtyMaskV3.Text]),
+          cellRanges: new Uint32Array(),
+        },
+      },
+      { dprBucket: 1 },
+    )
+
+    const axisX = tileKeyFromCell({ sheetOrdinal: 2, dprBucket: 1, row: 0, col: 128 })
+    const axisY = tileKeyFromCell({ sheetOrdinal: 2, dprBucket: 1, row: 32, col: 0 })
+
+    expect(index.getSpans(axisX)).toContainEqual({
+      colEnd: 127,
+      colStart: 0,
+      mask: DirtyMaskV3.AxisX | DirtyMaskV3.Rect | DirtyMaskV3.Text,
+      rowEnd: 31,
+      rowStart: 0,
+    })
+    expect(index.getSpans(axisY)).toContainEqual({
+      colEnd: 127,
+      colStart: 0,
+      mask: DirtyMaskV3.AxisY | DirtyMaskV3.Rect | DirtyMaskV3.Text,
+      rowEnd: 31,
+      rowStart: 0,
+    })
+  })
+
   it('tracks full-column and full-row cell damage as axis spans instead of enumerating sheet tiles', () => {
     const index = new DirtyTileIndexV3()
     const styleMask = DirtyMaskV3.Style | DirtyMaskV3.Rect | DirtyMaskV3.Border

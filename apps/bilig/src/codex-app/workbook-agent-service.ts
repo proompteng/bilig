@@ -16,7 +16,6 @@ import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 import type { CodexAppServerTransport } from './codex-app-server-client.js'
-import { isCodexAppServerPoolBackpressureError } from './codex-app-server-pool.js'
 import { DisabledWorkbookAgentService } from './workbook-agent-disabled-service.js'
 import {
   getWorkbookAgentWorkflowFamily,
@@ -30,7 +29,6 @@ import {
   createSystemEntry,
   reviewReviewItemBodySchema,
   startWorkflowBodySchema,
-  startTurnBodySchema,
   updateContextBodySchema,
 } from './workbook-agent-session-model.js'
 import { attachSharedReviewState, createBundleRangeCitations, createWorkflowTurnId } from './workbook-agent-bundle-state.js'
@@ -98,7 +96,8 @@ import {
   finalizeWorkbookAgentPrivateTurnBundle,
 } from './workbook-agent-service-application.js'
 import { applyWorkbookAgentReviewItem, replayWorkbookAgentExecutionRecord } from './workbook-agent-service-review-actions.js'
-import { assertWorkbookAgentToolCallOwnsTurn, startWorkbookAgentTurn } from './workbook-agent-turn-lifecycle.js'
+import { startWorkbookAgentServiceTurn } from './workbook-agent-service-turn-actions.js'
+import { assertWorkbookAgentToolCallOwnsTurn } from './workbook-agent-turn-lifecycle.js'
 
 export type { EnabledWorkbookAgentServiceOptions, WorkbookAgentService } from './workbook-agent-service-options.js'
 
@@ -504,65 +503,30 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     session: SessionIdentity
     body: unknown
   }): Promise<WorkbookAgentThreadSnapshot> {
-    const parsed = startTurnBodySchema.parse(input.body)
-    const sessionState = await this.getAuthorizedSession(input.documentId, input.threadId, input.session.userID)
-    if (sessionState.live.activeTurnId) {
-      throw createWorkbookAgentServiceError({
-        code: 'WORKBOOK_AGENT_TURN_ALREADY_RUNNING',
-        message: 'Finish or interrupt the current assistant turn before starting another one.',
-        statusCode: 409,
-        retryable: false,
-      })
-    }
-    this.assertTurnQuota(input.documentId, input.session.userID)
-    if (parsed.context) {
-      sessionState.durable.context = parsed.context
-    }
-    const turnContext = cloneUiContext(sessionState.durable.context)
-    const codexClient = await this.codexRuntime.getClient()
-    let turn
-    try {
-      turn = await codexClient.turnStart({
-        threadId: sessionState.threadId,
-        prompt: parsed.prompt,
-      })
-    } catch (error) {
-      if (isCodexAppServerPoolBackpressureError(error)) {
-        this.sessionRegistry.incrementCounter('turnBackpressureCount')
-        throw createWorkbookAgentServiceError({
-          code: 'WORKBOOK_AGENT_TURN_BACKPRESSURE',
-          message: error.message,
-          statusCode: 429,
-          retryable: true,
-        })
-      }
-      throw error
-    }
-    const optimisticEntryId = `optimistic-user:${turn.id}`
-    sessionState.durable.entries = upsertEntry(sessionState.durable.entries, {
-      id: optimisticEntryId,
-      kind: 'user',
-      turnId: turn.id,
-      text: parsed.prompt,
-      phase: null,
-      toolName: null,
-      toolStatus: null,
-      argumentsText: null,
-      outputText: null,
-      success: null,
-      citations: [],
+    return await startWorkbookAgentServiceTurn(
+      {
+        codexRuntime: this.codexRuntime,
+        sessionRegistry: this.sessionRegistry,
+        getAuthorizedSession: async (documentId, threadId, userId) => await this.getAuthorizedSession(documentId, threadId, userId),
+        assertTurnQuota: (documentId, actorUserId) => this.assertTurnQuota(documentId, actorUserId),
+        persistSessionState: async (sessionState) => await this.persistSessionState(sessionState),
+      },
+      input,
+    )
+  }
+
+  private async getAuthorizedSession(documentId: string, threadId: string, userId: string): Promise<WorkbookAgentThreadState> {
+    return this.sessionAuthority.getAuthorizedSession(documentId, threadId, userId)
+  }
+
+  private assertTurnQuota(documentId: string, actorUserId: string): void {
+    assertWorkbookAgentTurnQuota({
+      sessions: this.sessionRegistry.listSessions(),
+      documentId,
+      actorUserId,
+      maxActiveTurnsPerUser: this.maxActiveTurnsPerUser,
+      maxActiveTurnsPerDocument: this.maxActiveTurnsPerDocument,
     })
-    startWorkbookAgentTurn(sessionState, {
-      turnId: turn.id,
-      prompt: parsed.prompt,
-      actorUserId: input.session.userID,
-      context: turnContext,
-      optimisticEntryId,
-    })
-    this.sessionRegistry.touch(sessionState)
-    await this.persistSessionState(sessionState)
-    this.sessionRegistry.emitSnapshot(sessionState.threadId)
-    return buildSnapshot(sessionState)
   }
 
   async startWorkflow(input: {
@@ -849,22 +813,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     return cloneUiContext(sessionState.live.turnContextByTurn.get(turnId) ?? sessionState.durable.context)
   }
 
-  private async getAuthorizedSession(documentId: string, threadId: string, userId: string): Promise<WorkbookAgentThreadState> {
-    return await this.sessionAuthority.getAuthorizedSession(documentId, threadId, userId)
-  }
-
   private tryGetSessionByThreadId(threadId: string): WorkbookAgentThreadState | null {
     return this.sessionAuthority.tryGetSessionByThreadId(threadId)
-  }
-
-  private assertTurnQuota(documentId: string, actorUserId: string): void {
-    assertWorkbookAgentTurnQuota({
-      sessions: this.sessionRegistry.listSessions(),
-      documentId,
-      actorUserId,
-      maxActiveTurnsPerUser: this.maxActiveTurnsPerUser,
-      maxActiveTurnsPerDocument: this.maxActiveTurnsPerDocument,
-    })
   }
 
   private assertWorkflowFamilyEnabled(workflowTemplate: WorkbookAgentWorkflowRun['workflowTemplate']): void {

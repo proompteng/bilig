@@ -397,8 +397,11 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
     sheets[sheetName] = rows
   }
 
-  const importedSnapshot = importXlsx(workbookBytes, basename(filePath)).snapshot
-  formulaCells = addFormulaAuditFallbackCells(sheets, formulaCells, importedSnapshot, skippedByReason)
+  const importedSnapshot =
+    formulaCells.length > 0 || workbookHasFormulaMarkup(workbook) ? importXlsx(workbookBytes, basename(filePath)).snapshot : null
+  if (importedSnapshot) {
+    formulaCells = addFormulaAuditFallbackCells(sheets, formulaCells, importedSnapshot, skippedByReason)
+  }
   formulaCells = markVolatileDependentFormulaCells(formulaCells, skippedByReason)
   for (const formulaCell of formulaCells) {
     maxRows = Math.max(maxRows, formulaCell.row + 1)
@@ -406,12 +409,33 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
   }
 
   return {
-    sheets: formulaCells.length === 0 ? sheets : attachRuntimeSnapshot(sheets, importedSnapshot),
+    sheets: formulaCells.length === 0 || !importedSnapshot ? sheets : attachRuntimeSnapshot(sheets, importedSnapshot),
     formulaCells,
-    compatibility: compatibilitySummaryForSnapshot(importedSnapshot),
+    compatibility: importedSnapshot ? compatibilitySummaryForSnapshot(importedSnapshot) : emptyCompatibilitySummary(),
     maxRows,
     maxColumns,
   }
+}
+
+function workbookHasFormulaMarkup(workbook: XLSX.WorkBook): boolean {
+  if (!('files' in workbook)) {
+    return false
+  }
+  const files = workbook['files']
+  if (!isRecord(files)) {
+    return false
+  }
+  for (const [path, file] of Object.entries(files)) {
+    if (!path.startsWith('xl/worksheets/') || !path.endsWith('.xml') || !isRecord(file)) {
+      continue
+    }
+    const content = file['content']
+    const xml = typeof content === 'string' ? content : content instanceof Uint8Array ? new TextDecoder().decode(content) : null
+    if (xml && /<f\b/u.test(xml)) {
+      return true
+    }
+  }
+  return false
 }
 
 function addFormulaAuditFallbackCells(

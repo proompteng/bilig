@@ -7,16 +7,26 @@ import { useWorkbookAppPanels } from '../use-workbook-app-panels.js'
 const { useWorkbookAgentPane } = vi.hoisted(() => ({
   useWorkbookAgentPane: vi.fn(),
 }))
+const { useWorkbookPresence } = vi.hoisted(() => ({
+  useWorkbookPresence: vi.fn(() => []),
+}))
 
 vi.mock('../use-workbook-agent-pane.js', () => ({
   useWorkbookAgentPane,
 }))
 
 vi.mock('../use-workbook-presence.js', () => ({
-  useWorkbookPresence: () => [],
+  useWorkbookPresence,
 }))
 
-function renderHarness(host: HTMLElement) {
+function renderHarness(
+  host: HTMLElement,
+  overrides: {
+    readonly remoteSyncAvailable?: boolean
+    readonly zeroConfigured?: boolean
+    readonly zeroHealthReady?: boolean
+  } = {},
+) {
   function Harness() {
     const panels = useWorkbookAppPanels({
       documentId: 'doc-1',
@@ -30,8 +40,9 @@ function renderHarness(host: HTMLElement) {
       sheetNames: ['Sheet1'],
       zero: undefined,
       runtimeReady: true,
-      zeroConfigured: true,
-      remoteSyncAvailable: true,
+      zeroConfigured: overrides.zeroConfigured ?? true,
+      zeroHealthReady: overrides.zeroHealthReady ?? true,
+      remoteSyncAvailable: overrides.remoteSyncAvailable ?? true,
       changeCount: 1,
       changesPanel: <div data-testid="changes-panel">Changes panel</div>,
       selectAddress: vi.fn(),
@@ -100,6 +111,7 @@ function mockAgentPane(pendingCommandCount: number) {
 
 describe('useWorkbookAppPanels', () => {
   beforeEach(() => {
+    useWorkbookPresence.mockReturnValue([])
     const backingStore = new Map<string, string>()
     const storage = {
       clear() {
@@ -150,6 +162,22 @@ describe('useWorkbookAppPanels', () => {
 
     expect(host.querySelector("[data-testid='workbook-side-panel-panel-assistant']")).not.toBeNull()
     expect(host.textContent).toContain('Assistant panel')
+
+    await harness.unmount()
+  })
+
+  it('does not enable Zero-backed panel side effects until the Zero health gate is ready', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    mockAgentPane(0)
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const harness = renderHarness(host, { zeroHealthReady: false })
+
+    await harness.render()
+
+    expect(useWorkbookPresence).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }))
+    expect(useWorkbookAgentPane).toHaveBeenCalledWith(expect.objectContaining({ zeroEnabled: false }))
 
     await harness.unmount()
   })

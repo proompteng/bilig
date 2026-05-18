@@ -121,6 +121,7 @@ export function useWorkbookAppPanels(input: {
   zero: WorkbookPanelsZeroSource
   runtimeReady: boolean
   zeroConfigured: boolean
+  zeroHealthReady: boolean
   workbookAgentEnabled?: boolean
   remoteSyncAvailable: boolean
   changeCount: number
@@ -152,7 +153,9 @@ export function useWorkbookAppPanels(input: {
     workbookAgentEnabled = true,
     zero,
     zeroConfigured,
+    zeroHealthReady,
   } = input
+  const zeroRealtimeAvailable = runtimeReady && zeroConfigured && remoteSyncAvailable && zeroHealthReady
 
   const collaborators = useWorkbookPresence({
     documentId,
@@ -162,7 +165,7 @@ export function useWorkbookAppPanels(input: {
     selection,
     sheetNames,
     zero,
-    enabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
+    enabled: zeroRealtimeAvailable,
   })
 
   const {
@@ -187,7 +190,7 @@ export function useWorkbookAppPanels(input: {
     previewCommandBundle: previewAgentCommandBundle,
     ...(syncAgentAuthoritativeRevision ? { syncAuthoritativeRevision: syncAgentAuthoritativeRevision } : {}),
     zero,
-    zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
+    zeroEnabled: zeroRealtimeAvailable,
   })
 
   const sidePanelTabs = useMemo<readonly WorkbookSidePanelTabDefinition[]>(

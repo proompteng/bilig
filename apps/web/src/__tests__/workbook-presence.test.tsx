@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkbookPresenceBar } from '../WorkbookPresenceBar.js'
-import { useWorkbookPresence } from '../use-workbook-presence.js'
+import { WORKBOOK_PRESENCE_INITIAL_PUBLISH_DELAY_MS, useWorkbookPresence } from '../use-workbook-presence.js'
 import {
   WORKBOOK_PRESENCE_HEARTBEAT_MS,
   WORKBOOK_PRESENCE_SELECTION_PUBLISH_MS,
@@ -84,6 +84,13 @@ function PresenceHarness(props: {
   return <WorkbookPresenceBar collaborators={collaborators} onJump={props.onJump} />
 }
 
+async function flushInitialPresencePublish() {
+  await act(async () => {
+    vi.advanceTimersByTime(WORKBOOK_PRESENCE_INITIAL_PUBLISH_DELAY_MS)
+    await Promise.resolve()
+  })
+}
+
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
@@ -92,6 +99,9 @@ afterEach(() => {
 
 describe('workbook presence', () => {
   it('publishes local selection presence and renders collaborator jump chips', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-06T12:00:00.000Z'))
+
     const presence = createMockZeroPresenceHarness([
       {
         sessionId: 'doc-1:browser:other',
@@ -135,6 +145,8 @@ describe('workbook presence', () => {
       )
     })
 
+    expect(presence.mutateCalls).toHaveLength(0)
+    await flushInitialPresencePublish()
     expect(presence.mutateCalls).toHaveLength(1)
     expect(presence.mutateCalls[0]).toMatchObject({
       args: {
@@ -163,6 +175,40 @@ describe('workbook presence', () => {
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('cancels initial presence publish when the workbook unmounts before Zero is stable', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-06T12:00:00.000Z'))
+
+    const presence = createMockZeroPresenceHarness([])
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <PresenceHarness
+          documentId="doc-1"
+          currentUserId="me@example.com"
+          presenceClientId="presence:self"
+          enabled
+          selection={{ sheetName: 'Sheet1', address: 'A1' }}
+          sessionId="doc-1:browser:self"
+          sheetNames={['Sheet1']}
+          zero={presence.zero}
+          onJump={() => {}}
+        />,
+      )
+    })
+
+    await act(async () => {
+      root.unmount()
+      vi.advanceTimersByTime(WORKBOOK_PRESENCE_INITIAL_PUBLISH_DELAY_MS)
+      await Promise.resolve()
+    })
+
+    expect(presence.mutateCalls).toHaveLength(0)
   })
 
   it('does not render other sessions owned by the current user', async () => {
@@ -328,6 +374,8 @@ describe('workbook presence', () => {
     })
 
     expect(host.querySelector("[data-testid='ax-presence-chip']")).toBeNull()
+    expect(presence.mutateCalls).toHaveLength(0)
+    await flushInitialPresencePublish()
     expect(presence.mutateCalls).toHaveLength(1)
 
     await act(async () => {
@@ -407,6 +455,8 @@ describe('workbook presence', () => {
       )
     })
 
+    expect(presence.mutateCalls).toHaveLength(0)
+    await flushInitialPresencePublish()
     expect(presence.mutateCalls).toHaveLength(1)
 
     await act(async () => {

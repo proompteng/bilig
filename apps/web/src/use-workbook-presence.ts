@@ -26,6 +26,8 @@ type UpdatePresenceArgs = Parameters<typeof mutators.workbook.updatePresence>[0]
   presenceClientId?: string
 }
 
+export const WORKBOOK_PRESENCE_INITIAL_PUBLISH_DELAY_MS = 120
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -65,10 +67,13 @@ export function useWorkbookPresence(input: {
   const [presenceRows, setPresenceRows] = useState([] as readonly ReturnType<typeof normalizeWorkbookPresenceRows>[number][])
   const [now, setNow] = useState(() => Date.now())
   const latestSelectionRef = useRef(selection)
+  const enabledRef = useRef(enabled)
   const lastPresencePublishedAtRef = useRef(0)
   const pendingPresencePublishTimeoutRef = useRef<number | null>(null)
+  const presenceLifecycleTokenRef = useRef(0)
 
   latestSelectionRef.current = selection
+  enabledRef.current = enabled
 
   const clearPendingPresencePublish = useCallback(() => {
     if (pendingPresencePublishTimeoutRef.current === null) {
@@ -79,8 +84,8 @@ export function useWorkbookPresence(input: {
   }, [])
 
   const publishPresence = useCallback(
-    (publishedAt = Date.now()) => {
-      if (!enabled) {
+    (lifecycleToken: number, publishedAt = Date.now()) => {
+      if (!enabledRef.current || lifecycleToken !== presenceLifecycleTokenRef.current) {
         return
       }
       const presenceArgs: UpdatePresenceArgs = {
@@ -91,21 +96,44 @@ export function useWorkbookPresence(input: {
         address: latestSelectionRef.current.address,
         selection: latestSelectionRef.current,
       }
-      observeZeroMutationResult(zero.mutate(mutators.workbook.updatePresence(presenceArgs)))
+      try {
+        observeZeroMutationResult(zero.mutate(mutators.workbook.updatePresence(presenceArgs)))
+      } catch (error) {
+        logDebug('Failed to submit workbook presence mutation', error)
+        return
+      }
       lastPresencePublishedAtRef.current = publishedAt
     },
-    [currentPresenceClientId, documentId, enabled, sessionId, zero],
+    [currentPresenceClientId, documentId, sessionId, zero],
+  )
+
+  const schedulePresencePublish = useCallback(
+    (delayMs: number) => {
+      clearPendingPresencePublish()
+      const lifecycleToken = presenceLifecycleTokenRef.current
+      pendingPresencePublishTimeoutRef.current = window.setTimeout(() => {
+        pendingPresencePublishTimeoutRef.current = null
+        publishPresence(lifecycleToken, Date.now())
+      }, delayMs)
+    },
+    [clearPendingPresencePublish, publishPresence],
   )
 
   const publishPresenceNow = useCallback(() => {
     clearPendingPresencePublish()
-    publishPresence(Date.now())
+    publishPresence(presenceLifecycleTokenRef.current, Date.now())
   }, [clearPendingPresencePublish, publishPresence])
 
   useEffect(() => {
+    presenceLifecycleTokenRef.current += 1
     lastPresencePublishedAtRef.current = 0
     clearPendingPresencePublish()
-  }, [clearPendingPresencePublish, currentPresenceClientId, documentId, sessionId])
+    return () => {
+      presenceLifecycleTokenRef.current += 1
+      lastPresencePublishedAtRef.current = 0
+      clearPendingPresencePublish()
+    }
+  }, [clearPendingPresencePublish, currentPresenceClientId, documentId, enabled, sessionId, zero])
 
   useEffect(() => {
     if (!enabled) {
@@ -126,6 +154,7 @@ export function useWorkbookPresence(input: {
       publishRows(value)
     })
     return () => {
+      clearPendingPresencePublish()
       cleanup()
       view.destroy()
     }
@@ -152,17 +181,17 @@ export function useWorkbookPresence(input: {
     const publishedAt = lastPresencePublishedAtRef.current
     const currentTime = Date.now()
     const elapsedMs = currentTime - publishedAt
-    if (publishedAt === 0 || elapsedMs >= WORKBOOK_PRESENCE_SELECTION_PUBLISH_MS) {
+    if (publishedAt === 0) {
+      schedulePresencePublish(WORKBOOK_PRESENCE_INITIAL_PUBLISH_DELAY_MS)
+      return clearPendingPresencePublish
+    }
+    if (elapsedMs >= WORKBOOK_PRESENCE_SELECTION_PUBLISH_MS) {
       publishPresenceNow()
       return
     }
-    clearPendingPresencePublish()
-    pendingPresencePublishTimeoutRef.current = window.setTimeout(() => {
-      pendingPresencePublishTimeoutRef.current = null
-      publishPresence(Date.now())
-    }, WORKBOOK_PRESENCE_SELECTION_PUBLISH_MS - elapsedMs)
+    schedulePresencePublish(WORKBOOK_PRESENCE_SELECTION_PUBLISH_MS - elapsedMs)
     return clearPendingPresencePublish
-  }, [clearPendingPresencePublish, enabled, publishPresence, publishPresenceNow, selection.address, selection.sheetName])
+  }, [clearPendingPresencePublish, enabled, publishPresenceNow, schedulePresencePublish, selection.address, selection.sheetName])
 
   useEffect(() => {
     if (!enabled) {
