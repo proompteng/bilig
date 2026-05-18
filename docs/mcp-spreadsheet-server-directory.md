@@ -187,7 +187,7 @@ A useful result includes:
 
 Latest checked result on May 18, 2026: npm latest is `@bilig/headless@0.21.1`.
 The official Registry publish workflow for `0.21.1` succeeded at
-<https://github.com/proompteng/bilig/actions/runs/26008166576>, and the public
+<https://github.com/proompteng/bilig/actions/runs/26008585881>, and the public
 Registry API now returns a Bilig WorkPaper entry version `0.21.1` with
 `isLatest: true` on the cursor page after the first search page. The API also
 returns historical entries, so consumers should follow pagination, select the
