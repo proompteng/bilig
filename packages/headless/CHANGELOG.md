@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.23.1
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.23.0
+- Manual override: no
+
+## Fixes
+- fix(formula): propagate criteria aggregate ref errors (47f63810)
+
+## Internal runtime changes
+- docs(mcp): track registry refresh lag (3f70e797)
+
 ## 0.23.0
 
 - Release type: minor
