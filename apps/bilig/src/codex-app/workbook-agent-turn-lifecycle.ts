@@ -1,4 +1,5 @@
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
+import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 import type { WorkbookAgentThreadState } from './workbook-agent-service-shared.js'
 
 export interface WorkbookAgentStartedTurnInput {
@@ -93,4 +94,23 @@ export function failWorkbookAgentRuntime(sessionState: WorkbookAgentThreadState,
   sessionState.live.lastError = message
   sessionState.live.status = 'failed'
   return failedTurnId
+}
+
+export function assertWorkbookAgentToolCallOwnsTurn(sessionState: WorkbookAgentThreadState, turnId: string): void {
+  const activeTurnId = sessionState.live.activeTurnId
+  if (activeTurnId === turnId) {
+    return
+  }
+  if (!activeTurnId && sessionState.live.status === 'idle') {
+    return
+  }
+  throw createWorkbookAgentServiceError({
+    code: 'WORKBOOK_AGENT_STALE_TOOL_CALL',
+    message:
+      activeTurnId === null
+        ? 'Rejecting workbook tool call because the assistant turn is no longer active.'
+        : `Rejecting workbook tool call for stale turn ${turnId}; active turn is ${activeTurnId}.`,
+    statusCode: 409,
+    retryable: false,
+  })
 }

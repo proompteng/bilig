@@ -4582,6 +4582,97 @@ describe('workbook agent service', () => {
     }
   })
 
+  it('rejects stale dynamic tool calls for turns that no longer own the live session', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null }
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 7,
+      preview: createPreviewSummary({
+        cellDiffs: [
+          {
+            sheetName: 'Sheet1',
+            address: 'B2',
+            beforeInput: null,
+            beforeFormula: null,
+            afterInput: 42,
+            afterFormula: null,
+            changeKinds: ['input'],
+          },
+        ],
+      }),
+    }))
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options
+          return fakeCodex
+        },
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {},
+      })
+      await service.startTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          prompt: 'First turn',
+        },
+      })
+      fakeCodex.emit({
+        method: 'turn/started',
+        params: {
+          threadId: snapshot.threadId,
+          turn: {
+            id: 'turn-2',
+            status: 'inProgress',
+            items: [],
+            error: null,
+          },
+        },
+      })
+      const handler = capturedOptions.current?.handleDynamicToolCall
+      if (!handler) {
+        throw new Error('Expected dynamic tool handler to be captured')
+      }
+
+      await expect(
+        handler({
+          threadId: snapshot.threadId,
+          turnId: 'turn-1',
+          callId: 'call-stale-tool',
+          tool: 'bilig_write_range',
+          arguments: {
+            sheetName: 'Sheet1',
+            startAddress: 'B2',
+            values: [[42]],
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: 'WORKBOOK_AGENT_STALE_TOOL_CALL',
+        statusCode: 409,
+        retryable: false,
+      })
+      expect(applyAgentCommandBundle).not.toHaveBeenCalled()
+    } finally {
+      await service.close()
+    }
+  })
+
   it('falls back to a stable runtime message when the app-server emits an empty error', async () => {
     const fakeCodex = new FakeCodexTransport()
     const service = createWorkbookAgentService(createZeroSyncStub(), {

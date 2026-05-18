@@ -18,6 +18,7 @@ import {
   shouldWaitForRenderedTool,
   waitForWorkbookAgentRenderedContext,
 } from './workbook-agent-rendered-context-wait.js'
+import { assertWorkbookAgentToolCallOwnsTurn } from './workbook-agent-turn-lifecycle.js'
 
 function firstRenderedVerificationRange(bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>) {
   const targetRange = bundle.affectedRanges.find((range) => range.role === 'target') ?? null
@@ -63,6 +64,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
 }): (request: CodexDynamicToolCallRequest) => Promise<CodexDynamicToolCallResult> {
   return async (request: CodexDynamicToolCallRequest) => {
     const sessionState = input.getSessionByThreadId(request.threadId)
+    assertWorkbookAgentToolCallOwnsTurn(sessionState, request.turnId)
     const requestActorUserId = input.resolveTurnActorUserId(sessionState, request.turnId)
     let requestContext: WorkbookAgentThreadState['durable']['context'] = null
 
