@@ -21,18 +21,28 @@ describe('WorkPaper MCP server', () => {
     expect(parseWorkPaperMcpStdioCliArgs(['--workpaper', 'pricing.workpaper.json', '--writable'])).toEqual({
       demoWorkPaperTools: false,
       help: false,
+      initDemoWorkPaper: false,
       writable: true,
       workpaperPath: 'pricing.workpaper.json',
     })
     expect(parseWorkPaperMcpStdioCliArgs(['--help'])).toEqual({
       demoWorkPaperTools: false,
       help: true,
+      initDemoWorkPaper: false,
       writable: false,
     })
     expect(parseWorkPaperMcpStdioCliArgs(['--demo-workpaper-tools'])).toEqual({
       demoWorkPaperTools: true,
       help: false,
+      initDemoWorkPaper: false,
       writable: false,
+    })
+    expect(parseWorkPaperMcpStdioCliArgs(['--workpaper', 'pricing.workpaper.json', '--init-demo-workpaper', '--writable'])).toEqual({
+      demoWorkPaperTools: false,
+      help: false,
+      initDemoWorkPaper: true,
+      writable: true,
+      workpaperPath: 'pricing.workpaper.json',
     })
     expect(workPaperMcpStdioHelpText()).toContain('Usage: bilig-workpaper-mcp')
   })
@@ -43,6 +53,7 @@ describe('WorkPaper MCP server', () => {
     expect(() => parseWorkPaperMcpStdioCliArgs(['--demo-workpaper-tools', '--workpaper', 'pricing.workpaper.json'])).toThrow(
       '--demo-workpaper-tools cannot be combined with --workpaper',
     )
+    expect(() => parseWorkPaperMcpStdioCliArgs(['--init-demo-workpaper'])).toThrow('--init-demo-workpaper requires --workpaper')
   })
 
   it('starts the stdio bin and exposes the expected tools', async () => {
@@ -366,6 +377,88 @@ describe('WorkPaper MCP server', () => {
         throw new Error('Expected restored Inputs sheet')
       }
       expect(restored.getCellSerialized({ sheet: inputSheet, row: 2, col: 1 })).toBe(0.4)
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('initializes a missing demo WorkPaper file before starting file-backed stdio tools', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'bilig-workpaper-mcp-init-'))
+    const workpaperPath = join(tempDir, 'pricing.workpaper.json')
+
+    try {
+      const binPath = fileURLToPath(new URL('../work-paper-mcp-stdio-bin.ts', import.meta.url))
+      const child = spawn(
+        process.execPath,
+        ['--import', 'tsx', binPath, '--workpaper', workpaperPath, '--init-demo-workpaper', '--writable'],
+        {
+          stdio: ['pipe', 'pipe', 'pipe'],
+        },
+      )
+      const stdout: string[] = []
+      const stderr: string[] = []
+      const exitPromise = new Promise<number | null>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          child.kill('SIGKILL')
+          reject(new Error('Timed out waiting for demo-init bilig-workpaper-mcp smoke test process to exit'))
+        }, 5000)
+
+        child.once('error', (error) => {
+          clearTimeout(timeout)
+          reject(error)
+        })
+        child.once('exit', (code) => {
+          clearTimeout(timeout)
+          resolve(code)
+        })
+      })
+
+      child.stdout.setEncoding('utf8')
+      child.stdout.on('data', (chunk: string) => stdout.push(chunk))
+      child.stderr.setEncoding('utf8')
+      child.stderr.on('data', (chunk: string) => stderr.push(chunk))
+      child.stdin.end(
+        [
+          { jsonrpc: '2.0', id: 1, method: 'initialize' },
+          { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+          {
+            jsonrpc: '2.0',
+            id: 3,
+            method: 'tools/call',
+            params: {
+              name: 'read_cell',
+              arguments: {
+                sheetName: 'Summary',
+                address: 'B3',
+              },
+            },
+          },
+        ]
+          .map((request) => JSON.stringify(request))
+          .join('\n') + '\n',
+      )
+
+      await expect(exitPromise).resolves.toBe(0)
+      expect(stderr.join('')).toBe('')
+
+      const responses = stdout
+        .join('')
+        .trim()
+        .split('\n')
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line))
+
+      expect(responses[1].result.tools.map((tool: { name: string }) => tool.name)).toContain('set_cell_contents')
+      expect(responses[2].result.structuredContent).toMatchObject({
+        address: 'Summary!B3',
+        formula: '=B2*Inputs!B4',
+        value: {
+          value: 60000,
+        },
+      })
+
+      const restored = createWorkPaperFromDocument(parseWorkPaperDocument(readFileSync(workpaperPath, 'utf8')))
+      expect(restored.getSheetId('Inputs')).not.toBeUndefined()
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
     }

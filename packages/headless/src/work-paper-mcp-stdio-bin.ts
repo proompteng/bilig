@@ -23,6 +23,7 @@ if (cliOptions.demoWorkPaperTools) {
 } else {
   runDemoWorkPaperMcpStdioServer({
     server: createFileBackedWorkPaperMcpToolServerFromFile({
+      initDemoWorkPaper: cliOptions.initDemoWorkPaper,
       workpaperPath: cliOptions.workpaperPath,
       writable: cliOptions.writable,
     }),

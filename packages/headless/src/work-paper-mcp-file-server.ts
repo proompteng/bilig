@@ -7,9 +7,10 @@ import {
 } from './persistence.js'
 import type { WorkPaper } from './work-paper.js'
 import type { WorkPaperMcpCapabilities, WorkPaperMcpToolServer } from './work-paper-mcp-server.js'
+import { buildDemoWorkPaper } from './work-paper-mcp-server.js'
 import type { RawCellContent, WorkPaperCellAddress } from './work-paper-types.js'
 import { formatCellDisplayValue } from '@bilig/protocol'
-import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 
 type JsonObject = Record<string, unknown>
@@ -122,8 +123,16 @@ function createFileBackedWorkPaperMcpToolServer(options: FileBackedWorkPaperMcpO
   }
 }
 
-function createFileBackedWorkPaperMcpToolServerFromFile(input: { workpaperPath: string; writable?: boolean }): WorkPaperMcpToolServer {
+function createFileBackedWorkPaperMcpToolServerFromFile(input: {
+  workpaperPath: string
+  writable?: boolean
+  initDemoWorkPaper?: boolean
+}): WorkPaperMcpToolServer {
   const workpaperPath = resolve(input.workpaperPath)
+  if (input.initDemoWorkPaper && !existsSync(workpaperPath)) {
+    mkdirSync(dirname(workpaperPath), { recursive: true })
+    writeFileAtomically(workpaperPath, serializeWorkPaperDocument(exportWorkPaperDocument(buildDemoWorkPaper(), { includeConfig: true })))
+  }
   const workbook = createWorkPaperFromDocument(parseWorkPaperDocument(readFileSync(workpaperPath, 'utf8')))
 
   return createFileBackedWorkPaperMcpToolServer({
