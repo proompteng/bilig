@@ -772,7 +772,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   async close(): Promise<void> {
-    this.workflowRuntime.close()
+    await this.workflowRuntime.close()
     await this.codexRuntime.close()
     this.sessionRegistry.clear()
   }

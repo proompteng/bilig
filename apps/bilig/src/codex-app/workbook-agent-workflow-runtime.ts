@@ -27,6 +27,7 @@ import { logError } from '../runtime-logger.js'
 export class WorkbookAgentWorkflowRuntime {
   private readonly workflowRunTasks = new Map<string, Promise<void>>()
   private readonly workflowAbortControllers = new Map<string, AbortController>()
+  private readonly workflowRunInputs = new Map<string, QueuedWorkbookAgentWorkflowRun>()
 
   constructor(
     private readonly options: {
@@ -134,16 +135,20 @@ export class WorkbookAgentWorkflowRuntime {
     this.options.emitSnapshot(input.sessionState.threadId)
   }
 
-  close(): void {
+  async close(): Promise<void> {
+    await Promise.all([...this.workflowRunInputs.values()].map(async (input) => await this.cancelTrackedWorkflowForShutdown(input)))
     this.workflowAbortControllers.forEach((controller) => {
       controller.abort()
     })
     this.workflowAbortControllers.clear()
+    await Promise.allSettled(this.workflowRunTasks.values())
     this.workflowRunTasks.clear()
+    this.workflowRunInputs.clear()
   }
 
   private queueWorkflowRun(input: QueuedWorkbookAgentWorkflowRun): void {
     const existingTask = this.workflowRunTasks.get(input.sessionState.threadId) ?? Promise.resolve()
+    this.workflowRunInputs.set(input.runId, input)
     const nextTask = (async () => {
       try {
         await existingTask
@@ -162,8 +167,42 @@ export class WorkbookAgentWorkflowRuntime {
         if (this.workflowRunTasks.get(input.sessionState.threadId) === nextTask) {
           this.workflowRunTasks.delete(input.sessionState.threadId)
         }
+        this.workflowRunInputs.delete(input.runId)
       }
     })()
+  }
+
+  private async cancelTrackedWorkflowForShutdown(input: QueuedWorkbookAgentWorkflowRun): Promise<void> {
+    const runningWorkflow = input.sessionState.durable.workflowRuns.find((run) => run.runId === input.runId)
+    if (!runningWorkflow || runningWorkflow.status !== 'running') {
+      return
+    }
+    const now = this.options.now()
+    const cancelledRun: WorkbookAgentWorkflowRun = {
+      ...runningWorkflow,
+      status: 'cancelled',
+      summary: `Cancelled workflow: ${runningWorkflow.title}`,
+      updatedAtUnixMs: now,
+      completedAtUnixMs: now,
+      errorMessage: 'Cancelled because the workbook assistant service shut down.',
+      steps: cancelWorkflowSteps(runningWorkflow.steps, now),
+      artifact: null,
+    }
+    input.sessionState.durable.workflowRuns = upsertWorkflowRun(input.sessionState.durable.workflowRuns, cancelledRun)
+    input.sessionState.durable.entries = upsertEntry(
+      input.sessionState.durable.entries,
+      createSystemEntry(
+        `system-workflow-shutdown-cancel:${input.runId}:${now}`,
+        input.workflowTurnId,
+        `Cancelled workflow during service shutdown: ${runningWorkflow.title}`,
+      ),
+    )
+    this.workflowAbortControllers.get(input.runId)?.abort()
+    this.options.touch(input.sessionState)
+    this.options.incrementCounter('workflowCancelledCount')
+    await this.options.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, cancelledRun)
+    await this.options.persistSessionState(input.sessionState)
+    this.options.emitSnapshot(input.sessionState.threadId)
   }
 
   private async executeQueuedWorkflowRun(input: QueuedWorkbookAgentWorkflowRun): Promise<void> {

@@ -3945,6 +3945,129 @@ describe('workbook agent service', () => {
     }
   })
 
+  it('persists terminal workflow cancellation during service shutdown', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const engine = new SpreadsheetEngine({
+      workbookName: 'doc-1',
+      replicaId: 'server:test',
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 42)
+
+    let releaseInspection!: () => void
+    const inspectBarrier = new Promise<void>((resolve) => {
+      releaseInspection = () => {
+        resolve()
+      }
+    })
+    let resolveRunningPersisted!: () => void
+    const runningPersisted = new Promise<void>((resolve) => {
+      resolveRunningPersisted = () => {
+        resolve()
+      }
+    })
+    let resolveShutdownCancelPersisted!: () => void
+    const shutdownCancelPersisted = new Promise<void>((resolve) => {
+      resolveShutdownCancelPersisted = () => {
+        resolve()
+      }
+    })
+    const upsertWorkbookWorkflowRun = vi.fn(async (_documentId: string, run) => {
+      if (run.status === 'running') {
+        resolveRunningPersisted()
+      }
+      if (run.status === 'cancelled') {
+        resolveShutdownCancelPersisted()
+      }
+    })
+    const saveWorkbookAgentThreadState = vi.fn(async () => undefined)
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(_documentId: string, task: (runtime: WorkbookRuntime) => T | Promise<T>) {
+          await inspectBarrier
+          const runtime: WorkbookRuntime = {
+            documentId: 'doc-1',
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine('doc-1', engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: 'alex@example.com',
+              updatedBy: 'alex@example.com',
+              updatedAt: '2026-04-10T00:00:00.000Z',
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: 'alex@example.com',
+          }
+          return await task(runtime)
+        },
+        upsertWorkbookWorkflowRun,
+        saveWorkbookAgentThreadState,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => fakeCodex,
+      },
+    )
+
+    await service.createSession({
+      documentId: 'doc-1',
+      session: {
+        userID: 'alex@example.com',
+        roles: ['editor'],
+      },
+      body: {},
+    })
+
+    await service.startWorkflow({
+      documentId: 'doc-1',
+      threadId: 'thr-test',
+      session: {
+        userID: 'alex@example.com',
+        roles: ['editor'],
+      },
+      body: {
+        workflowTemplate: 'summarizeWorkbook',
+      },
+    })
+
+    await runningPersisted
+    const closePromise = service.close()
+    await shutdownCancelPersisted
+
+    expect(upsertWorkbookWorkflowRun.mock.calls.map(([, run]) => run.status)).toEqual(['running', 'cancelled'])
+    const cancelledRun = upsertWorkbookWorkflowRun.mock.calls.at(-1)?.[1]
+    expect(cancelledRun).toEqual(
+      expect.objectContaining({
+        status: 'cancelled',
+        summary: 'Cancelled workflow: Summarize Workbook',
+        errorMessage: 'Cancelled because the workbook assistant service shut down.',
+        artifact: null,
+      }),
+    )
+    expect(cancelledRun?.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stepId: 'inspect-workbook',
+          status: 'cancelled',
+        }),
+      ]),
+    )
+    expect(saveWorkbookAgentThreadState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        entries: expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'system',
+            text: 'Cancelled workflow during service shutdown: Summarize Workbook',
+          }),
+        ]),
+      }),
+    )
+
+    releaseInspection()
+    await closePromise
+  })
+
   it('uses nested app-server error messages instead of the generic fallback', async () => {
     const fakeCodex = new FakeCodexTransport()
     const service = createWorkbookAgentService(createZeroSyncStub(), {
