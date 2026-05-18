@@ -3,6 +3,7 @@ import { createWorkbookAgentCommandBundle, toWorkbookAgentCommandBundle } from '
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 import { createBundleRangeCitations } from './workbook-agent-bundle-state.js'
 import {
+  assertNoWorkbookAgentReviewItem,
   createWorkbookAgentReviewQueueItem,
   getCurrentWorkbookAgentReviewItem,
   replaceCurrentWorkbookAgentReviewItem,
@@ -68,6 +69,10 @@ export async function replayWorkbookAgentExecutionRecord(input: {
       retryable: false,
     })
   }
+  assertNoWorkbookAgentReviewItem({
+    sessionState: input.sessionState,
+    message: 'Finish the current workbook review item before replaying another workbook change.',
+  })
   const baseRevision = await input.context.getWorkbookHeadRevision(input.documentId)
   const replayedBundle = createWorkbookAgentCommandBundle({
     documentId: input.documentId,

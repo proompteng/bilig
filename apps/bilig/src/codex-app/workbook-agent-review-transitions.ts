@@ -71,6 +71,21 @@ export function requireWorkbookAgentReviewItem(input: {
   return input.reviewItem
 }
 
+export function assertNoWorkbookAgentReviewItem(input: {
+  readonly sessionState: WorkbookAgentThreadState
+  readonly message: string
+}): void {
+  if (input.sessionState.durable.reviewQueueItems.length === 0) {
+    return
+  }
+  throw createWorkbookAgentServiceError({
+    code: 'WORKBOOK_AGENT_REVIEW_ITEM_EXISTS',
+    message: input.message,
+    statusCode: 409,
+    retryable: false,
+  })
+}
+
 export function createWorkbookAgentDismissReviewEntry(input: { readonly reviewItem: WorkbookAgentReviewQueueItem; readonly now: number }) {
   return createSystemEntry(
     `system-dismiss:${input.reviewItem.id}:${input.now}`,

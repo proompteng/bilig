@@ -46,6 +46,7 @@ import {
   createWorkbookAgentThreadStartInput,
 } from './workbook-agent-codex-runtime.js'
 import {
+  assertNoWorkbookAgentReviewItem,
   assertWorkbookAgentReviewDismissAllowed,
   createWorkbookAgentDismissReviewEntry,
   getCurrentWorkbookAgentReviewItem,
@@ -567,12 +568,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
     const workflowTemplate = parsed.workflowTemplate
     this.assertWorkflowFamilyEnabled(workflowTemplate)
-    if (sessionState.durable.reviewQueueItems.length > 0 && isMutatingWorkflowTemplate(workflowTemplate)) {
-      throw createWorkbookAgentServiceError({
-        code: 'WORKBOOK_AGENT_REVIEW_ITEM_EXISTS',
+    if (isMutatingWorkflowTemplate(workflowTemplate)) {
+      assertNoWorkbookAgentReviewItem({
+        sessionState,
         message: 'Finish the current workbook review item before starting another mutating workflow.',
-        statusCode: 409,
-        retryable: false,
       })
     }
     if (parsed.context) {
