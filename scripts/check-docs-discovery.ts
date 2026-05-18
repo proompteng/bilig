@@ -701,6 +701,9 @@ requireIncludes(
 )
 for (const required of [
   'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+  'The first command is demo mode. The client configs below use file-backed mode',
+  '"args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"]',
+  'args = ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"]',
   'pnpm mcpb:workpaper:build',
   'claude-desktop-mcpb-workpaper.md',
   'claude mcp add-json bilig-workpaper',

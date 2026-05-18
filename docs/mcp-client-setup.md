@@ -29,6 +29,11 @@ npm exec --package @bilig/headless -- bilig-workpaper-mcp
 npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
+The first command is demo mode. The client configs below use file-backed mode
+because that is the useful agent setup: the server owns a real WorkPaper JSON
+file, initializes it when missing, writes through tools, recalculates formulas,
+and persists edits back to the same path.
+
 Quick protocol smoke test:
 
 ```sh
@@ -56,7 +61,7 @@ project:
 claude mcp add-json bilig-workpaper '{
   "type": "stdio",
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"],
+  "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"],
   "env": {}
 }' --scope project
 ```
@@ -86,7 +91,7 @@ Add the same stdio server to `claude_desktop_config.json`:
     "bilig-workpaper": {
       "type": "stdio",
       "command": "npm",
-      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"],
+      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"],
       "env": {}
     }
   }
@@ -122,7 +127,7 @@ For a project-local setup, create `.cursor/mcp.json`:
     "bilig-workpaper": {
       "type": "stdio",
       "command": "npm",
-      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"],
+      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"],
       "env": {}
     }
   }
@@ -143,7 +148,7 @@ For GitHub Copilot agent mode in VS Code, add `.vscode/mcp.json`:
     "bilig-workpaper": {
       "type": "stdio",
       "command": "npm",
-      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"]
+      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"]
     }
   }
 }
@@ -165,7 +170,7 @@ Configure MCP Servers, and add this entry to `cline_mcp_settings.json` under
   "mcpServers": {
     "bilig-workpaper": {
       "command": "npm",
-      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"],
+      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"],
       "env": {},
       "disabled": false
     }
@@ -192,7 +197,7 @@ For Codex CLI or the Codex IDE extension, add this to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.bilig-workpaper]
 command = "npm"
-args = ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"]
+args = ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--workpaper", "./pricing.workpaper.json", "--init-demo-workpaper", "--writable"]
 enabled = true
 startup_timeout_sec = 30
 ```
