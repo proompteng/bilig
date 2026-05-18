@@ -4,6 +4,19 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.22.2
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.22.1
+- Manual override: no
+
+## Fixes
+- fix(excel-import): avoid chartsheet worksheet path fallback (278f862b)
+
+## Internal runtime changes
+- ci(runtime): stop direct GitHub release pushes (c7cc8682)
+- docs(agent): publish agent discovery manifest (3ab9232a)
+
 ## 0.22.1
 
 - Release type: patch

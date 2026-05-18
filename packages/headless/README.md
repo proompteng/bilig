@@ -94,7 +94,7 @@ That command is published through `@bilig/create-workpaper`. The publish gate is
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.22.1`:
+Current checked npm footprint for `@bilig/headless@0.22.2`:
 
 - Pack dry run: `450 kB` tarball, `2.69 MB` unpacked, `450` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
