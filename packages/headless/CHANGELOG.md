@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.22.1
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.22.0
+- Manual override: no
+
+## Fixes
+- fix(docs): expose raw agent skill endpoints (ec73bf17)
+
+## Internal runtime changes
+- docs(agent): publish agent discovery pack (93f0e0bf)
+
 ## 0.22.0
 
 - Release type: minor
