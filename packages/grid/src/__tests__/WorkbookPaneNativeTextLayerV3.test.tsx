@@ -34,7 +34,14 @@ function createRun(overrides: Partial<TextQuadRun> = {}): TextQuadRun {
   }
 }
 
-function createPane(run: TextQuadRun | readonly TextQuadRun[] = createRun()): WorkbookRenderTilePaneState {
+function createPane(
+  run: TextQuadRun | readonly TextQuadRun[] = createRun(),
+  overrides: {
+    readonly lastBatchId?: number | undefined
+    readonly lastCameraSeq?: number | undefined
+    readonly version?: Partial<WorkbookRenderTilePaneState['tile']['version']> | undefined
+  } = {},
+): WorkbookRenderTilePaneState {
   const textRuns = Array.isArray(run) ? run : [run]
   return {
     contentOffset: { x: 0, y: 0 },
@@ -46,15 +53,15 @@ function createPane(run: TextQuadRun | readonly TextQuadRun[] = createRun()): Wo
     tile: {
       bounds: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
       coord: { colTile: 0, dprBucket: 2, paneKind: 'body', rowTile: 0, sheetId: 1, sheetOrdinal: 1 },
-      lastBatchId: 1,
-      lastCameraSeq: 1,
+      lastBatchId: overrides.lastBatchId ?? 1,
+      lastCameraSeq: overrides.lastCameraSeq ?? 1,
       rectCount: 0,
       rectInstances: new Float32Array(),
       textCount: textRuns.length,
       textMetrics: new Float32Array(),
       textRuns,
       tileId: 1,
-      version: { axisX: 1, axisY: 1, freeze: 0, styles: 1, text: 1, values: 1 },
+      version: { axisX: 1, axisY: 1, freeze: 0, styles: 1, text: 1, values: 1, ...overrides.version },
     },
     viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
   }
@@ -241,6 +248,108 @@ describe('WorkbookPaneNativeTextLayerV3', () => {
       expect(textLayer?.getAttribute('data-v3-native-text-run-count')).toBe('1')
       expect(host.querySelector('[data-native-text-run-row="2"][data-native-text-run-col="1"]')).toBeNull()
       expect(host.querySelector('[data-native-text-run-row="2"][data-native-text-run-col="2"]')?.textContent).toBe('neighbor-cell')
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      host.remove()
+    }
+  })
+
+  test('keeps text DOM nodes stable across tile revision churn', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const stableRun = createRun({ col: 1, row: 2, text: 'stable-cell' })
+
+    try {
+      await act(async () => {
+        root.render(
+          <WorkbookPaneNativeTextLayerV3
+            active
+            cameraStore={null}
+            geometry={null}
+            headerPanes={[]}
+            scrollTransformStore={null}
+            tilePanes={[createPane(stableRun)]}
+          />,
+        )
+      })
+
+      const firstRun = host.querySelector<HTMLElement>('[data-native-text-run-row="2"][data-native-text-run-col="1"]')
+      expect(firstRun?.textContent).toBe('stable-cell')
+
+      await act(async () => {
+        root.render(
+          <WorkbookPaneNativeTextLayerV3
+            active
+            cameraStore={null}
+            geometry={null}
+            headerPanes={[]}
+            scrollTransformStore={null}
+            tilePanes={[
+              createPane(stableRun, {
+                lastBatchId: 42,
+                lastCameraSeq: 11,
+                version: { styles: 7, text: 8, values: 9 },
+              }),
+            ]}
+          />,
+        )
+      })
+
+      expect(host.querySelector('[data-native-text-run-row="2"][data-native-text-run-col="1"]')).toBe(firstRun)
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      host.remove()
+    }
+  })
+
+  test('updates edited text in place instead of remounting the cell run', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <WorkbookPaneNativeTextLayerV3
+            active
+            cameraStore={null}
+            geometry={null}
+            headerPanes={[]}
+            scrollTransformStore={null}
+            tilePanes={[createPane(createRun({ col: 1, row: 2, text: 'before-edit' }))]}
+          />,
+        )
+      })
+
+      const firstRun = host.querySelector<HTMLElement>('[data-native-text-run-row="2"][data-native-text-run-col="1"]')
+      expect(firstRun?.textContent).toBe('before-edit')
+
+      await act(async () => {
+        root.render(
+          <WorkbookPaneNativeTextLayerV3
+            active
+            cameraStore={null}
+            geometry={null}
+            headerPanes={[]}
+            scrollTransformStore={null}
+            tilePanes={[
+              createPane(createRun({ col: 1, row: 2, text: 'after-edit' }), {
+                lastBatchId: 2,
+                version: { text: 2, values: 2 },
+              }),
+            ]}
+          />,
+        )
+      })
+
+      const updatedRun = host.querySelector<HTMLElement>('[data-native-text-run-row="2"][data-native-text-run-col="1"]')
+      expect(updatedRun).toBe(firstRun)
+      expect(updatedRun?.textContent).toBe('after-edit')
     } finally {
       await act(async () => {
         root.unmount()

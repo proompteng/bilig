@@ -104,23 +104,15 @@ function isNativeTextRunSuppressed(
 }
 
 function resolveNativeTextRunKey(pane: TextLayerPane, run: TextQuadRun): string {
-  const paneRevision =
+  const paneIdentity =
     'tile' in pane
-      ? [
-          pane.paneId,
-          pane.tile.tileId,
-          pane.tile.lastBatchId,
-          pane.tile.lastCameraSeq,
-          pane.tile.version.values,
-          pane.tile.version.text,
-          pane.tile.version.styles,
-        ].join(':')
+      ? [pane.paneId, pane.tile.tileId, pane.tile.coord.sheetOrdinal, pane.tile.coord.rowTile, pane.tile.coord.colTile].join(':')
       : pane.paneId
+  const runIdentity =
+    run.row !== undefined && run.col !== undefined ? ['cell', run.row, run.col].join(':') : ['header', run.text, run.x, run.y].join(':')
   return [
-    paneRevision,
-    run.row ?? '',
-    run.col ?? '',
-    run.text,
+    paneIdentity,
+    runIdentity,
     run.x,
     run.y,
     run.width ?? '',
