@@ -272,6 +272,11 @@ requireIncludes(headlessReadme, 'The npm tarball also includes `AGENTS.md`', 'pa
 requireIncludes(headlessPackageJson, '"AGENTS.md"', 'packages/headless/package.json')
 requireIncludes(headlessAgentNotes, '## Handoff prompt', 'packages/headless/AGENTS.md')
 requireIncludes(headlessAgentNotes, 'Do not claim success from a write call alone.', 'packages/headless/AGENTS.md')
+requireIncludes(
+  headlessAgentNotes,
+  'npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable',
+  'packages/headless/AGENTS.md',
+)
 requireIncludes(headlessReadme, '## Stay Connected', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '## More Guides', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'Pick a scoped first patch:', 'packages/headless/README.md')
