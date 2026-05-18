@@ -658,7 +658,7 @@ export function useWorkerWorkbookInteractionState(input: {
     (nextSelectionSnapshot: GridSelectionSnapshot) => {
       const activeExternalSelection = pendingExternalSelectionRef.current
       if (activeExternalSelection && !selectionSnapshotsEqual(activeExternalSelection, nextSelectionSnapshot)) {
-        return
+        pendingExternalSelectionRef.current = null
       }
       applySelectionSnapshot(nextSelectionSnapshot, { markAsExternal: false })
     },

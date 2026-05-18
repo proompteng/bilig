@@ -111,6 +111,52 @@ describe('worker runtime machine', () => {
     actor.stop()
   })
 
+  it('does not flash back to the startup selection when the session becomes ready after local navigation', async () => {
+    const controller = createController({ sheetName: 'Sheet1', address: 'A1' })
+    let releaseSession: (() => void) | null = null
+    const sessionReadyGate = new Promise<void>((resolve) => {
+      releaseSession = resolve
+    })
+    const createSession = vi.fn(
+      async (
+        _input: CreateWorkerRuntimeSessionInput,
+        callbacks: WorkerRuntimeSessionCallbacks,
+      ): Promise<WorkerRuntimeSessionController> => {
+        callbacks.onPhase?.('hydratingLocal')
+        callbacks.onRuntimeState(controller.runtimeState)
+        await sessionReadyGate
+        return controller
+      },
+    )
+
+    const actor = createActor(createWorkerRuntimeMachine(), {
+      input: {
+        documentId: 'book-1',
+        replicaId: 'browser:test',
+        persistState: true,
+        connectionStateName: 'closed',
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createSession,
+      },
+    })
+
+    actor.start()
+    const nextSelection = { sheetName: 'Sheet1', address: 'B9' } as const
+    actor.send({ type: 'selection.changed', selection: nextSelection })
+    expect(actor.getSnapshot().context.selection).toEqual(nextSelection)
+
+    releaseSession?.()
+    await vi.waitFor(() => {
+      expect(actor.getSnapshot().matches({ active: 'localReady' })).toBe(true)
+    })
+
+    expect(actor.getSnapshot().context.selection).toEqual(nextSelection)
+    await vi.waitFor(() => {
+      expect(controller.setSelection).toHaveBeenCalledWith(nextSelection)
+    })
+    actor.stop()
+  })
+
   it('normalizes controller runtime state when the session becomes ready', async () => {
     const controller = {
       ...createController(

@@ -39,7 +39,7 @@ type WorkerRuntimeMachineEvent =
   | { type: 'error.clear' }
   | { type: 'selection.changed'; selection: WorkerRuntimeSelection }
   | { type: 'connection.changed'; connectionStateName: ConnectionStateName }
-  | { type: 'session.ready'; controller: WorkerRuntimeSessionController }
+  | { type: 'session.ready'; controller: WorkerRuntimeSessionController; requestedSelection: WorkerRuntimeSelection }
   | { type: 'session.runtime'; runtimeState: WorkbookWorkerStateSnapshot }
   | { type: 'session.selection'; selection: WorkerRuntimeSelection }
   | { type: 'session.phase'; phase: WorkerRuntimeSessionPhase }
@@ -86,6 +86,16 @@ function mapConnectionStateToRuntimeSyncState(connectionStateName: ConnectionSta
 
 function sameWorkerRuntimeSelection(left: WorkerRuntimeSelection, right: WorkerRuntimeSelection): boolean {
   return left.sheetName === right.sheetName && left.address === right.address
+}
+
+function resolveSessionReadySelection(input: {
+  readonly context: WorkerRuntimeMachineContext
+  readonly event: { readonly controller: WorkerRuntimeSessionController; readonly requestedSelection: WorkerRuntimeSelection }
+}): WorkerRuntimeSelection {
+  if (!sameWorkerRuntimeSelection(input.context.selection, input.event.requestedSelection)) {
+    return input.context.selection
+  }
+  return input.event.controller.selection
 }
 
 function resolveSteadySubstate(input: {
@@ -316,7 +326,7 @@ export function createWorkerRuntimeMachine() {
             return
           }
           controller = createdController
-          sendBack({ type: 'session.ready', controller: createdController })
+          sendBack({ type: 'session.ready', controller: createdController, requestedSelection: input.initialSelection })
           try {
             await applyExternalSyncState()
           } catch (error) {
@@ -461,7 +471,7 @@ export function createWorkerRuntimeMachine() {
                 assign({
                   runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
                   runtimeState: ({ event }) => normalizeControllerRuntimeState(event['controller']),
-                  selection: ({ event }) => event['controller'].selection,
+                  selection: ({ context, event }) => resolveSessionReadySelection({ context, event }),
                   error: () => null,
                 }),
               ],
@@ -478,7 +488,7 @@ export function createWorkerRuntimeMachine() {
                 assign({
                   runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
                   runtimeState: ({ event }) => normalizeControllerRuntimeState(event['controller']),
-                  selection: ({ event }) => event['controller'].selection,
+                  selection: ({ context, event }) => resolveSessionReadySelection({ context, event }),
                   error: () => null,
                 }),
               ],
@@ -495,7 +505,7 @@ export function createWorkerRuntimeMachine() {
                 assign({
                   runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
                   runtimeState: ({ event }) => normalizeControllerRuntimeState(event['controller']),
-                  selection: ({ event }) => event['controller'].selection,
+                  selection: ({ context, event }) => resolveSessionReadySelection({ context, event }),
                   error: () => null,
                 }),
               ],
@@ -507,7 +517,7 @@ export function createWorkerRuntimeMachine() {
                 assign({
                   runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
                   runtimeState: ({ event }) => normalizeControllerRuntimeState(event['controller']),
-                  selection: ({ event }) => event['controller'].selection,
+                  selection: ({ context, event }) => resolveSessionReadySelection({ context, event }),
                   error: () => null,
                 }),
               ],

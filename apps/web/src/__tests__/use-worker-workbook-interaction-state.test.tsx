@@ -510,7 +510,7 @@ describe('useWorkerWorkbookInteractionState', () => {
     })
   })
 
-  it('accepts user selection after the grid acknowledges an external selection', async () => {
+  it('lets direct grid selection supersede a pending external selection before renderer acknowledgement', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const sendSelectionChanged = vi.fn()
@@ -540,13 +540,8 @@ describe('useWorkerWorkbookInteractionState', () => {
     await act(async () => {
       captured?.handleSelectionChange(singleCellSnapshot('Sheet1', 'C3'))
     })
-    expect(captured.selectionRef.current).toEqual({ sheetName: 'Sheet1', address: 'B2' })
-
-    await act(async () => {
-      captured?.acknowledgeExternalSelectionSync(singleCellSnapshot('Sheet1', 'B2'))
-      captured?.handleSelectionChange(singleCellSnapshot('Sheet1', 'C3'))
-    })
     expect(captured.selectionRef.current).toEqual({ sheetName: 'Sheet1', address: 'C3' })
+    expect(sendSelectionChanged).toHaveBeenLastCalledWith({ sheetName: 'Sheet1', address: 'C3' })
 
     await act(async () => {
       harness.root.unmount()

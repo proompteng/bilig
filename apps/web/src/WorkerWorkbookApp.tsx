@@ -119,6 +119,7 @@ function WorkerWorkbookAppInner({
   } = app
   const benchmarkCorpus = useMemo(() => new URLSearchParams(window.location.search).get('benchmarkCorpus'), [])
   const installedBenchmarkCorpusRef = useRef<string | null>(null)
+  const installingBenchmarkCorpusRef = useRef<string | null>(null)
   const { installBenchmarkCorpus, runtimeReady } = app
 
   useEffect(() => {
@@ -132,11 +133,15 @@ function WorkerWorkbookAppInner({
     if (installedBenchmarkCorpusRef.current === benchmarkCorpus) {
       return
     }
+    if (installingBenchmarkCorpusRef.current === benchmarkCorpus) {
+      return
+    }
     const collector = getWorkbookScrollPerfCollector()
     if (collector?.getBenchmarkState().state === 'ready' && collector.getBenchmarkState().fixture?.id === benchmarkCorpus) {
       installedBenchmarkCorpusRef.current = benchmarkCorpus
       return
     }
+    installingBenchmarkCorpusRef.current = benchmarkCorpus
     void (async () => {
       try {
         await installBenchmarkCorpus(benchmarkCorpus)
@@ -144,6 +149,10 @@ function WorkerWorkbookAppInner({
       } catch (error) {
         getWorkbookScrollPerfCollector()?.setBenchmarkState('error', error instanceof Error ? error.message : String(error))
         reportRuntimeError(error)
+      } finally {
+        if (installingBenchmarkCorpusRef.current === benchmarkCorpus) {
+          installingBenchmarkCorpusRef.current = null
+        }
       }
     })()
   }, [benchmarkCorpus, installBenchmarkCorpus, reportRuntimeError, runtimeReady])
