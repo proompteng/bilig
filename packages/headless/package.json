@@ -39,6 +39,7 @@
     "directory": "packages/headless"
   },
   "bin": {
+    "bilig-formula-clinic": "./dist/formula-clinic-bin.js",
     "bilig-workpaper-mcp": "./dist/work-paper-mcp-stdio-bin.js"
   },
   "files": [

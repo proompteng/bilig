@@ -32,6 +32,8 @@ The `bilig-workpaper-mcp` binary exposes file-backed WorkPaper tools with
 explicit parameter descriptions, `outputSchema` metadata, and MCP safety
 annotations, so clients and directories can see which calls read, write,
 persist, or validate workbook state before an agent invokes them.
+The `bilig-formula-clinic` binary turns a reduced XLSX into a paste-ready
+fixture report without uploading workbook contents.
 
 This package is not a browser grid, desktop Excel automation, or a source of
 truth for stale XLSX cached formula values. XLSX import/export is available from
@@ -53,6 +55,12 @@ around the same WorkPaper model.
 | Almost a fit             | [adoption blocker form](https://github.com/proompteng/bilig/discussions/new?category=general)                                                                                                                       | Name the formula, import/export, persistence, framework, MCP, package, or benchmark gap.     |
 | Formula or XLSX bug      | [formula bug clinic](https://proompteng.github.io/bilig/formula-bug-clinic.html)                                                                                                                                    | Share a reduced public case that can become a test, example, corpus fixture, or docs proof.  |
 | Real workbook blocked    | [submit a workbook fixture](https://proompteng.github.io/bilig/submit-workbook-fixture.html)                                                                                                                        | Use the structured form when a reduced workbook is ready.                                    |
+
+Reduced workbook already in hand?
+
+```sh
+npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+```
 
 ## Install
 
@@ -84,10 +92,11 @@ That command is published through `@bilig/create-workpaper`. The publish gate is
 
 Current checked npm footprint for `@bilig/headless@0.21.1`:
 
-- Pack dry run: `443 kB` tarball, `2.66 MB` unpacked, `445` package entries.
+- Pack dry run: `449 kB` tarball, `2.68 MB` unpacked, `452` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
-  `bilig-workpaper-mcp` binary wrapper.
+  `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the
+  `bilig-formula-clinic` binary.
 - Cold-start gate: Node imports the main entrypoint, builds a two-sheet
   WorkPaper, and reads `24000` under `1000 ms` without importing
   the XLSX subpath.
@@ -351,13 +360,17 @@ MCP examples:
   <https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md#copy-paste-json-rpc-transcript>.
 - `npm run agent:mcp-stdio` runs the same handlers over newline-delimited
   stdio.
-- The package ships a stdio binary:
+- The package ships npm-executable binaries:
 
 ```sh
+npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 npm exec --package @bilig/headless -- bilig-workpaper-mcp
 npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
 ```
+
+`bilig-formula-clinic` imports a reduced XLSX locally, samples formulas, reads
+requested cells through WorkPaper, and prints a Markdown fixture report.
 
 Default mode starts the built-in demo workbook. File-backed mode loads a
 persisted WorkPaper JSON document and exposes `list_sheets`, `read_range`,

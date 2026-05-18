@@ -33,15 +33,16 @@
       "xlsx-formula"
     ],
     "dependencyNames": ["@bilig/core", "@bilig/formula", "@bilig/protocol", "fast-xml-parser", "fflate", "xlsx", "xlsx-js-style"],
+    "hasFormulaClinicBinary": true,
     "hasXlsxSubpath": true,
     "hasMcpBinary": true
   },
   "npmPackDryRun": {
-    "tarballBytes": 443100,
-    "unpackedBytes": 2655505,
-    "entryCount": 445,
-    "readmeBytes": 41272,
-    "packageJsonBytes": 2103
+    "tarballBytes": 449497,
+    "unpackedBytes": 2683482,
+    "entryCount": 452,
+    "readmeBytes": 42064,
+    "packageJsonBytes": 2163
   },
   "coldStartProbe": {
     "runtime": "node",

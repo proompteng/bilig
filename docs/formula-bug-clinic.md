@@ -37,6 +37,17 @@ the Markdown output into the fixture form. It reads the file on your machine and
 does not upload workbook contents.
 
 ```sh
+npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx \
+  --cells "Summary!B7,Inputs!B2"
+```
+
+That is the lowest-friction path for package users. It imports the workbook,
+samples formulas, reads the requested cells through WorkPaper, and prints a
+paste-ready Markdown report.
+
+If you want to pin or edit the reporter script directly:
+
+```sh
 mkdir bilig-formula-clinic
 cd bilig-formula-clinic
 npm init -y

@@ -22,6 +22,12 @@ WorkPaper state as the source of truth. For MCP, start with:
 npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
+For a reduced XLSX formula/import blocker, generate a local fixture report with:
+
+```sh
+npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+```
+
 For Node or TypeScript, import `@bilig/headless` directly. Prove the edit by
 reading the relevant range, writing one small input or formula, reading the
 dependent calculated output, exporting or serializing the WorkPaper document,
@@ -262,12 +268,13 @@ npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.
   failures, unsupported formulas, WorkPaper restore mismatches, and agent
   readback blockers into public fixtures that can become tests, examples, or
   docs proof.
-- formula clinic report script:
+- formula clinic report command and script:
   https://proompteng.github.io/bilig/formula-clinic-report.ts
   https://github.com/proompteng/bilig/blob/main/docs/formula-clinic-report.ts
-  runs locally against a reduced XLSX file, imports it with @bilig/headless,
-  reads requested output cells, and prints a paste-ready Markdown report for
-  the fixture issue form.
+  `npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx
+  --cells "Summary!B7,Inputs!B2"` runs locally against a reduced XLSX file,
+  imports it with @bilig/headless, reads requested output cells, and prints a
+  paste-ready Markdown report for the fixture issue form.
 - Microsoft Graph Excel recalculation in Node.js:
   https://proompteng.github.io/bilig/microsoft-graph-excel-recalculation-node.html
   https://github.com/proompteng/bilig/blob/main/docs/microsoft-graph-excel-recalculation-node.md

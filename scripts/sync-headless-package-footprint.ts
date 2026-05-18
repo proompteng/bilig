@@ -97,6 +97,7 @@ interface HeadlessPackageFootprint {
     readonly keywordCount: number
     readonly keywords: readonly string[]
     readonly dependencyNames: readonly string[]
+    readonly hasFormulaClinicBinary: boolean
     readonly hasXlsxSubpath: boolean
     readonly hasMcpBinary: boolean
   }
@@ -293,6 +294,7 @@ function buildFootprint(manifest: PackageManifest, pack: PackResult): HeadlessPa
       keywordCount: manifest.keywords.length,
       keywords: manifest.keywords,
       dependencyNames: Object.keys(manifest.dependencies).toSorted(),
+      hasFormulaClinicBinary: Object.hasOwn(manifest.bin, 'bilig-formula-clinic'),
       hasXlsxSubpath: Object.hasOwn(manifest.exports, './xlsx'),
       hasMcpBinary: Object.hasOwn(manifest.bin, 'bilig-workpaper-mcp'),
     },
@@ -356,6 +358,7 @@ function parseFootprintJson(source: string): HeadlessPackageFootprint {
       keywordCount: readFiniteNumber(packageRecord, 'keywordCount', 'docs/headless-package-footprint.json.package'),
       keywords: readStringArray(packageRecord, 'keywords', 'docs/headless-package-footprint.json.package'),
       dependencyNames: readStringArray(packageRecord, 'dependencyNames', 'docs/headless-package-footprint.json.package'),
+      hasFormulaClinicBinary: readBoolean(packageRecord, 'hasFormulaClinicBinary', 'docs/headless-package-footprint.json.package'),
       hasXlsxSubpath: readBoolean(packageRecord, 'hasXlsxSubpath', 'docs/headless-package-footprint.json.package'),
       hasMcpBinary: readBoolean(packageRecord, 'hasMcpBinary', 'docs/headless-package-footprint.json.package'),
     },
@@ -386,7 +389,8 @@ function renderMarkdownBlock(footprint: HeadlessPackageFootprint): string {
     `- Pack dry run: \`${formatBytes(footprint.npmPackDryRun.tarballBytes)}\` tarball, \`${formatBytes(footprint.npmPackDryRun.unpackedBytes)}\` unpacked, \`${footprint.npmPackDryRun.entryCount.toString()}\` package entries.`,
     '- Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX',
     '  import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the',
-    '  `bilig-workpaper-mcp` binary wrapper.',
+    '  `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the',
+    '  `bilig-formula-clinic` binary.',
     '- Cold-start gate: Node imports the main entrypoint, builds a two-sheet',
     `  WorkPaper, and reads \`${footprint.coldStartProbe.expectedDisplayValue}\` under \`${footprint.coldStartProbe.maxElapsedMs.toString()} ms\` without importing`,
     '  the XLSX subpath.',

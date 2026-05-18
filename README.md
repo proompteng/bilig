@@ -42,6 +42,13 @@ Project site: <https://proompteng.github.io/bilig/>
 | Formula or XLSX bug      | [formula bug clinic](docs/formula-bug-clinic.md)                                                                                                    | Share a reduced public case that can become a test, example, corpus fixture, or docs proof. |
 | Real workbook blocked    | [submit a workbook fixture](docs/submit-workbook-fixture.md)                                                                                        | Use the structured form when a reduced workbook is ready.                                   |
 
+Reduced workbook already in hand? Generate the paste-ready fixture report in
+one command:
+
+```sh
+npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+```
+
 Handing a spreadsheet task to another coding agent? Start with the
 [agent handoff prompt](docs/headless-workpaper-agent-handbook.md#copy-paste-prompt-for-another-agent)
 before opening Excel, LibreOffice, Google Sheets, or a screenshot UI.
@@ -163,10 +170,11 @@ matters.
 
 Current checked npm footprint for `@bilig/headless@0.21.1`:
 
-- Pack dry run: `443 kB` tarball, `2.66 MB` unpacked, `445` package entries.
+- Pack dry run: `449 kB` tarball, `2.68 MB` unpacked, `452` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
-  `bilig-workpaper-mcp` binary wrapper.
+  `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the
+  `bilig-formula-clinic` binary.
 - Cold-start gate: Node imports the main entrypoint, builds a two-sheet
   WorkPaper, and reads `24000` under `1000 ms` without importing
   the XLSX subpath.
@@ -331,10 +339,15 @@ The agent framework guide is
 The package also ships the MCP stdio binary:
 
 ```sh
+npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 npm exec --package @bilig/headless -- bilig-workpaper-mcp
 npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
 ```
+
+`bilig-formula-clinic` imports a reduced XLSX locally, samples formulas, reads
+requested cells through WorkPaper, and prints a Markdown issue body. It does not
+upload workbook contents.
 
 Without `--workpaper`, the binary starts the built-in demo workbook. With
 `--workpaper`, it loads your persisted WorkPaper JSON and exposes

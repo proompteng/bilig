@@ -18,3 +18,17 @@ cpSync(excelImportDistDir, bundledXlsxDistDir, { recursive: true })
 
 writeFileSync(join(headlessDistDir, 'xlsx.js'), "export * from './xlsx-internal/index.js'\n")
 writeFileSync(join(headlessDistDir, 'xlsx.d.ts'), "export * from './xlsx-internal/index.js'\n")
+writeFileSync(
+  join(headlessDistDir, 'formula-clinic-bin.js'),
+  `#!/usr/bin/env node
+import { importXlsx } from './xlsx.js'
+import { runFormulaClinicCli } from './formula-clinic-cli.js'
+
+process.exitCode = runFormulaClinicCli({
+  argv: process.argv.slice(2),
+  importXlsx,
+  writeStderr: (text) => process.stderr.write(text),
+  writeStdout: (text) => process.stdout.write(text),
+})
+`,
+)

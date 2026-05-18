@@ -106,13 +106,24 @@ export async function requireHeadlessExampleDiscovery({
     llms,
   })
   requireIncludes(headlessPackageManifest, '"mcpName": "io.github.proompteng/bilig-workpaper"', 'packages/headless/package.json')
+  requireIncludes(headlessPackageManifest, '"bilig-formula-clinic": "./dist/formula-clinic-bin.js"', 'packages/headless/package.json')
   requireIncludes(headlessPackageManifest, '"bilig-workpaper-mcp": "./dist/work-paper-mcp-stdio-bin.js"', 'packages/headless/package.json')
+  requireIncludes(
+    headlessReadme,
+    'npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"',
+    'packages/headless/README.md',
+  )
   requireIncludes(
     headlessReadme,
     'bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable',
     'packages/headless/README.md',
   )
   requireIncludes(headlessReadme, '`set_cell_contents` edits back to the same file', 'packages/headless/README.md')
+  requireIncludes(
+    readme,
+    'npm exec --package @bilig/headless -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"',
+    'README.md',
+  )
   requireIncludes(readme, 'bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable', 'README.md')
   requireIncludes(readme, '`export_workpaper_document`, and `validate_formula`', 'README.md')
   requireIncludes(headlessServerJson, '"name": "io.github.proompteng/bilig-workpaper"', 'packages/headless/server.json')
