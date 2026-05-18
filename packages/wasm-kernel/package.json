@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@bilig/protocol": "workspace:*",
-    "assemblyscript": "0.28.12"
+    "assemblyscript": "0.28.17"
   },
   "engines": {
     "node": ">=22.0.0"
