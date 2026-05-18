@@ -6,7 +6,7 @@ Repository: https://github.com/proompteng/bilig
 Site: https://proompteng.github.io/bilig/
 npm: https://www.npmjs.com/package/@bilig/headless
 Agent instructions: https://proompteng.github.io/bilig/AGENTS.md
-Skill manifest: https://proompteng.github.io/bilig/skill.md
+Skill manifest: https://proompteng.github.io/bilig/skill.txt
 Compact index: https://proompteng.github.io/bilig/llms.txt
 
 ## Generated Agent Instructions
@@ -18,7 +18,7 @@ Use this file when an AI coding agent, MCP client, or tool host needs workbook f
 
 1. Read `https://proompteng.github.io/bilig/llms.txt` for the compact map.
 2. Read `https://proompteng.github.io/bilig/llms-full.txt` when you need enough context to implement a workflow without searching the whole site.
-3. Read `https://proompteng.github.io/bilig/skill.md` when your agent supports skill manifests.
+3. Read `https://proompteng.github.io/bilig/skill.txt` when your agent supports skill manifests.
 4. Start the MCP server or import `@bilig/headless` directly.
 
 ## Default Decision
@@ -786,7 +786,7 @@ The npm tarball also includes `AGENTS.md` and `SKILL.md` so coding agents
 inspecting `node_modules/@bilig/headless` can find the write/read/persist loop
 without leaving the package. The public docs expose the same path through
 [`AGENTS.md`](https://proompteng.github.io/bilig/AGENTS.md),
-[`skill.md`](https://proompteng.github.io/bilig/skill.md), and
+[`skill.txt`](https://proompteng.github.io/bilig/skill.txt), and
 [`llms-full.txt`](https://proompteng.github.io/bilig/llms-full.txt).
 
 The `bilig-workpaper-mcp` binary exposes file-backed WorkPaper tools with

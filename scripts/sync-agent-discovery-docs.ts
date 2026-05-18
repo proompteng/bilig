@@ -17,7 +17,7 @@ Use this file when an AI coding agent, MCP client, or tool host needs workbook f
 
 1. Read \`${siteRoot}/llms.txt\` for the compact map.
 2. Read \`${siteRoot}/llms-full.txt\` when you need enough context to implement a workflow without searching the whole site.
-3. Read \`${siteRoot}/skill.md\` when your agent supports skill manifests.
+3. Read \`${siteRoot}/skill.txt\` when your agent supports skill manifests.
 4. Start the MCP server or import \`@bilig/headless\` directly.
 
 ## Default Decision
@@ -241,8 +241,8 @@ function skillIndexJson(basePath: 'agent-skills' | 'skills'): string {
           title: 'Bilig WorkPaper agent workbook formulas',
           description:
             'Use @bilig/headless WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.',
-          url: `${siteRoot}/.well-known/${basePath}/${skillName}/SKILL.md`,
-          source_url: `${repositoryUrl}/blob/main/docs/.well-known/${basePath}/${skillName}/SKILL.md`,
+          url: `${siteRoot}/.well-known/${basePath}/${skillName}/SKILL.txt`,
+          source_url: `${repositoryUrl}/blob/main/docs/.well-known/${basePath}/${skillName}/SKILL.txt`,
           tags: ['ai-agents', 'spreadsheet-automation', 'formulas', 'xlsx', 'mcp', 'typescript'],
         },
       ],
@@ -269,7 +269,7 @@ async function buildLlmsFull(): Promise<string> {
     `Site: ${siteRoot}/`,
     `npm: https://www.npmjs.com/package/@bilig/headless`,
     `Agent instructions: ${siteRoot}/AGENTS.md`,
-    `Skill manifest: ${siteRoot}/skill.md`,
+    `Skill manifest: ${siteRoot}/skill.txt`,
     `Compact index: ${siteRoot}/llms.txt`,
     '',
     '## Generated Agent Instructions',
@@ -296,11 +296,14 @@ async function generatedTargets(): Promise<ReadonlyArray<readonly [string, strin
   return [
     ['docs/AGENTS.md', docsAgentInstructions],
     ['docs/skill.md', skillDocument],
+    ['docs/skill.txt', skillDocument],
     ['docs/llms-full.txt', llmsFull],
     ['docs/.well-known/agent-skills/index.json', skillIndexJson('agent-skills')],
     ['docs/.well-known/agent-skills/bilig-workpaper/SKILL.md', skillDocument],
+    ['docs/.well-known/agent-skills/bilig-workpaper/SKILL.txt', skillDocument],
     ['docs/.well-known/skills/index.json', skillIndexJson('skills')],
     ['docs/.well-known/skills/bilig-workpaper/SKILL.md', skillDocument],
+    ['docs/.well-known/skills/bilig-workpaper/SKILL.txt', skillDocument],
     ['packages/headless/SKILL.md', skillDocument],
   ] as const
 }

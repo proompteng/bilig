@@ -7,7 +7,7 @@ site: https://proompteng.github.io/bilig/
 repository: https://github.com/proompteng/bilig
 npm package: https://www.npmjs.com/package/@bilig/headless
 agent instructions: https://proompteng.github.io/bilig/AGENTS.md
-agent skill: https://proompteng.github.io/bilig/skill.md
+agent skill: https://proompteng.github.io/bilig/skill.txt
 full agent context: https://proompteng.github.io/bilig/llms-full.txt
 agent skill discovery: https://proompteng.github.io/bilig/.well-known/agent-skills/index.json
 legacy skill discovery: https://proompteng.github.io/bilig/.well-known/skills/index.json
@@ -45,7 +45,7 @@ restoring it, and confirming the restored value matches. Return `editedCell`,
 - https://proompteng.github.io/bilig/
 - https://proompteng.github.io/bilig/why-use-bilig.html
 - https://proompteng.github.io/bilig/AGENTS.md
-- https://proompteng.github.io/bilig/skill.md
+- https://proompteng.github.io/bilig/skill.txt
 - https://proompteng.github.io/bilig/llms-full.txt
 - https://proompteng.github.io/bilig/stop-driving-spreadsheets-with-screenshots.html
 - https://proompteng.github.io/bilig/show-hn-formula-workbooks-node-services.html
@@ -95,9 +95,9 @@ restoring it, and confirming the restored value matches. Return `editedCell`,
 - https://proompteng.github.io/bilig/.well-known/mcp.json
 - https://proompteng.github.io/bilig/.well-known/mcp-server-card.json
 - https://proompteng.github.io/bilig/.well-known/agent-skills/index.json
-- https://proompteng.github.io/bilig/.well-known/agent-skills/bilig-workpaper/SKILL.md
+- https://proompteng.github.io/bilig/.well-known/agent-skills/bilig-workpaper/SKILL.txt
 - https://proompteng.github.io/bilig/.well-known/skills/index.json
-- https://proompteng.github.io/bilig/.well-known/skills/bilig-workpaper/SKILL.md
+- https://proompteng.github.io/bilig/.well-known/skills/bilig-workpaper/SKILL.txt
 - https://proompteng.github.io/bilig/mcp-client-setup.html
 - https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html
 - https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html

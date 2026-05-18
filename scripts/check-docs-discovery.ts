@@ -269,7 +269,7 @@ requireIncludes(readme, 'agent handoff prompt', 'README.md')
 requireIncludes(index, './headless-workpaper-agent-handbook.html">Agent handoff prompt', 'docs/index.html')
 requireIncludes(llms, '## agent handoff prompt', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/AGENTS.md', 'docs/llms.txt')
-requireIncludes(llms, 'https://proompteng.github.io/bilig/skill.md', 'docs/llms.txt')
+requireIncludes(llms, 'https://proompteng.github.io/bilig/skill.txt', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/llms-full.txt', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/.well-known/agent-skills/index.json', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/.well-known/skills/index.json', 'docs/llms.txt')
@@ -300,12 +300,12 @@ requireIncludes(docsSkill, 'name: bilig-workpaper', 'docs/skill.md')
 requireIncludes(docsSkill, '## Required Verification', 'docs/skill.md')
 requireIncludes(
   agentSkillsIndex,
-  'https://proompteng.github.io/bilig/.well-known/agent-skills/bilig-workpaper/SKILL.md',
+  'https://proompteng.github.io/bilig/.well-known/agent-skills/bilig-workpaper/SKILL.txt',
   'docs/.well-known/agent-skills/index.json',
 )
 requireIncludes(
   legacySkillsIndex,
-  'https://proompteng.github.io/bilig/.well-known/skills/bilig-workpaper/SKILL.md',
+  'https://proompteng.github.io/bilig/.well-known/skills/bilig-workpaper/SKILL.txt',
   'docs/.well-known/skills/index.json',
 )
 requireIncludes(llmsFull, '## Generated Skill Manifest', 'docs/llms-full.txt')
