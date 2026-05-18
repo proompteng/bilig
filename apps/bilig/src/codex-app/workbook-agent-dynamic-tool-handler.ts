@@ -56,6 +56,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
   startWorkflow: (input: {
     documentId: string
     threadId: string
+    expectedActiveTurnId?: string
     session: SessionIdentity
     body: WorkbookAgentStartWorkflowRequest & {
       context?: WorkbookAgentThreadState['durable']['context']
@@ -211,6 +212,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
           const nextSnapshot = await input.startWorkflow({
             documentId: sessionState.documentId,
             threadId: sessionState.threadId,
+            expectedActiveTurnId: request.turnId,
             session: {
               userID: requestActorUserId,
               roles: ['editor'],

@@ -4024,6 +4024,89 @@ describe('workbook agent service', () => {
     }
   })
 
+  it('rejects workflow starts when the expected active turn no longer owns the session', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const upsertWorkbookWorkflowRun = vi.fn(async () => undefined)
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => fakeCodex,
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {},
+      })
+      await startWorkbookAgentTestTurn(service, {
+        threadId: snapshot.threadId,
+        prompt: 'Start a workflow',
+      })
+      fakeCodex.emit({
+        method: 'turn/completed',
+        params: {
+          threadId: snapshot.threadId,
+          turn: {
+            id: 'turn-1',
+            status: 'completed',
+            items: [],
+            error: null,
+          },
+        },
+      })
+      await vi.waitFor(() => {
+        expect(
+          service.getSnapshot({
+            documentId: 'doc-1',
+            threadId: snapshot.threadId,
+            session: {
+              userID: 'alex@example.com',
+              roles: ['editor'],
+            },
+          }).activeTurnId,
+        ).toBeNull()
+      })
+
+      const staleWorkflowStart = {
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        expectedActiveTurnId: 'turn-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          workflowTemplate: 'summarizeWorkbook',
+        },
+      }
+      await expect(service.startWorkflow(staleWorkflowStart)).rejects.toMatchObject({
+        code: 'WORKBOOK_AGENT_STALE_TOOL_CALL',
+        statusCode: 409,
+        retryable: false,
+      })
+      expect(upsertWorkbookWorkflowRun).not.toHaveBeenCalled()
+      expect(
+        service.getSnapshot({
+          documentId: 'doc-1',
+          threadId: snapshot.threadId,
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+        }).workflowRuns,
+      ).toEqual([])
+    } finally {
+      await service.close()
+    }
+  })
+
   it('clears legacy private review items before starting a new workflow', async () => {
     const service = createWorkbookAgentService(
       createZeroSyncStub({

@@ -98,7 +98,7 @@ import {
   finalizeWorkbookAgentPrivateTurnBundle,
 } from './workbook-agent-service-application.js'
 import { applyWorkbookAgentReviewItem, replayWorkbookAgentExecutionRecord } from './workbook-agent-service-review-actions.js'
-import { startWorkbookAgentTurn } from './workbook-agent-turn-lifecycle.js'
+import { assertWorkbookAgentToolCallOwnsTurn, startWorkbookAgentTurn } from './workbook-agent-turn-lifecycle.js'
 
 export type { EnabledWorkbookAgentServiceOptions, WorkbookAgentService } from './workbook-agent-service-options.js'
 
@@ -565,11 +565,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   async startWorkflow(input: {
     documentId: string
     threadId: string
+    expectedActiveTurnId?: string
     session: SessionIdentity
     body: unknown
   }): Promise<WorkbookAgentThreadSnapshot> {
     const parsed = startWorkflowBodySchema.parse(input.body)
     const sessionState = await this.getAuthorizedSession(input.documentId, input.threadId, input.session.userID)
+    if (input.expectedActiveTurnId) {
+      assertWorkbookAgentToolCallOwnsTurn(sessionState, input.expectedActiveTurnId)
+    }
     if (!this.featureFlags.workflowRunnerEnabled) {
       throw createWorkbookAgentServiceError({
         code: 'WORKBOOK_AGENT_WORKFLOW_RUNNER_DISABLED',

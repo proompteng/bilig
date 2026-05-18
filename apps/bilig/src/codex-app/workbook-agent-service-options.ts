@@ -36,6 +36,7 @@ export interface WorkbookAgentService {
   startWorkflow(input: {
     documentId: string
     threadId: string
+    expectedActiveTurnId?: string
     session: SessionIdentity
     body: unknown
   }): Promise<WorkbookAgentThreadSnapshot>
