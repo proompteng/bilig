@@ -92,6 +92,43 @@ describe('EngineRecalcService', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 50 })
   })
 
+  it('preserves imported cached unsupported formula values during full recalculation', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'recalc-imported-unsupported-cache' })
+    await engine.ready()
+    engine.importSnapshot({
+      version: 1,
+      workbook: { name: 'Imported cached external formulas' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            {
+              address: 'A1',
+              formula: '_xldudf_WISEPRICE(B1,"Shares Outstanding")',
+              value: 14935800000,
+            },
+            { address: 'B1', value: 'AAPL' },
+            { address: 'C1', formula: 'A1/1000000' },
+          ],
+        },
+      ],
+    })
+
+    const a1Index = engine.workbook.getCellIndex('Sheet1', 'A1')
+    const changed = Effect.runSync(getRecalcService(engine).recalculateNow())
+
+    expect(changed).not.toContain(a1Index)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 14935800000 })
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 14935.8 })
+
+    engine.setCellValue('Sheet1', 'B1', 'MSFT')
+
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name })
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name })
+  })
+
   it('emits tracked recalculation patches through the service event boundary', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'recalc-tracked-events' })
     await engine.ready()

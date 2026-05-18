@@ -42,6 +42,7 @@ export interface PreparedFormulaInitializationRef {
 
 export interface HydratedPreparedFormulaInitializationRef extends PreparedFormulaInitializationRef {
   readonly value: CellValue
+  readonly preserveCachedValueOnFullRecalc?: boolean
 }
 
 export interface EngineFormulaInitializationServiceArgs {
@@ -65,6 +66,7 @@ export interface EngineFormulaInitializationServiceArgs {
       readonly deferFamilyRegistration?: boolean
       readonly deferFormulaInstanceRegistration?: boolean
       readonly assumeFreshFormula?: boolean
+      readonly preserveCachedValueOnFullRecalc?: boolean
     },
   ) => boolean
   readonly upsertFormulaFamilyRun: (args: FormulaFamilyRunUpsertArgs) => void

@@ -343,6 +343,7 @@ export interface RuntimeFormula {
   directAggregate: RuntimeDirectAggregateDescriptor | undefined
   directScalar: RuntimeDirectScalarDescriptor | undefined
   directCriteria: RuntimeDirectCriteriaDescriptor | undefined
+  preserveCachedValueOnFullRecalc?: boolean
 }
 
 export type U32 = Uint32Array

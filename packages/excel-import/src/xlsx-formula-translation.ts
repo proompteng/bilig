@@ -279,15 +279,19 @@ function formatFormulaReference(sheetName: string, startRow: number, startCol: n
   return startAddress === endAddress ? `${prefix}${startAddress}` : `${prefix}${startAddress}:${endAddress}`
 }
 
+function normalizeStructuredColumnLookupName(columnName: string): string {
+  return columnName.replace(/\s+/gu, ' ').trim().toLocaleLowerCase('en-US')
+}
+
 function findTableColumnIndex(table: WorkbookTableSnapshot, columnName: string): number {
-  const normalizedColumnName = columnName.trim().toLocaleLowerCase('en-US')
-  return table.columnNames.findIndex((candidate) => candidate.trim().toLocaleLowerCase('en-US') === normalizedColumnName)
+  const normalizedColumnName = normalizeStructuredColumnLookupName(columnName)
+  return table.columnNames.findIndex((candidate) => normalizeStructuredColumnLookupName(candidate) === normalizedColumnName)
 }
 
 function rewriteStructuredReference(
   table: WorkbookTableSnapshot,
   parts: StructuredReferenceParts,
-  ownerSheetName: string,
+  _ownerSheetName: string,
   ownerAddress: string,
 ): string | undefined {
   const tableStart = decodeAddress(table.startAddress)
@@ -317,7 +321,7 @@ function rewriteStructuredReference(
     startRow = tableEnd.r
     endRow = tableEnd.r
   } else if (section === 'this-row') {
-    if (ownerSheetName !== table.sheetName || owner.r < tableStart.r || owner.r > tableEnd.r) {
+    if (owner.r < tableStart.r || owner.r > tableEnd.r) {
       return '#REF!'
     }
     startRow = owner.r

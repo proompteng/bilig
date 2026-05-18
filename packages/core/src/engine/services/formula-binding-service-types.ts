@@ -122,6 +122,7 @@ export interface BindPreparedFormulaOptions {
   readonly deferFamilyRegistration?: boolean
   readonly deferFormulaInstanceRegistration?: boolean
   readonly assumeFreshFormula?: boolean
+  readonly preserveCachedValueOnFullRecalc?: boolean
 }
 
 export interface FormulaOwnerPosition {

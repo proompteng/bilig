@@ -11,7 +11,7 @@ import { CellFlags } from '../cell-store.js'
 import { literalToValue, writeLiteralToCellStore } from '../engine-value-utils.js'
 import type { FormulaInstanceSnapshot } from '../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../formula/template-bank.js'
-import { collectDefinedFormulaNames, formulaShouldUseCachedUnsupportedFunctionValue } from './unsupported-formula-cache.js'
+import { collectDefinedFormulaNames, formulaShouldPreserveCachedUnsupportedFunctionValueOnFullRecalc } from './unsupported-formula-cache.js'
 import type { StringPool } from '../string-pool.js'
 import type { SheetRecord, WorkbookStore } from '../workbook-store.js'
 import { restoreVisualMetadata, restoreWorkbookStructure } from './runtime-image-metadata-restore.js'
@@ -98,6 +98,7 @@ export interface PreparedRuntimeFormulaRef {
 
 export interface HydratedPreparedRuntimeFormulaRef extends PreparedRuntimeFormulaRef {
   readonly value: CellValue
+  readonly preserveCachedValueOnFullRecalc?: boolean
 }
 
 const RUNTIME_IMAGE_COORD_STRIDE = 1_048_576
@@ -455,10 +456,15 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
           attachFreshCell(coords.row, coords.col, restoredCellIndex, rowId, colId)
           if (cell.formula !== undefined) {
             let hydratedCachedFormula = false
+            const shouldPreserveCachedUnsupportedValue =
+              canHydrateCachedFormulaValues &&
+              cell.value !== undefined &&
+              !shouldHydrateIterativeFormulaValues &&
+              formulaShouldPreserveCachedUnsupportedFunctionValueOnFullRecalc(cell.formula, definedFormulaNames!)
             if (
               canHydrateCachedFormulaValues &&
               cell.value !== undefined &&
-              (shouldHydrateIterativeFormulaValues || formulaShouldUseCachedUnsupportedFunctionValue(cell.formula, definedFormulaNames!))
+              (shouldHydrateIterativeFormulaValues || shouldPreserveCachedUnsupportedValue)
             ) {
               try {
                 const template = args.resolveTemplateForCell(cell.formula, coords.row, coords.col)
@@ -472,6 +478,7 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
                     compiled: template.compiled,
                     templateId: template.templateId,
                     value: literalToValue(cell.value, args.strings),
+                    ...(shouldPreserveCachedUnsupportedValue ? { preserveCachedValueOnFullRecalc: true } : {}),
                   })
                   hydratedCachedFormula = true
                 }

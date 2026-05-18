@@ -58,6 +58,27 @@ describe('imported UDF cached formula values', () => {
         stringId: expect.any(Number),
       })
 
+      workbook.rebuildAndRecalculate()
+
+      expect(cellValue(workbook, 'Model', 0, 0)).toEqual({
+        tag: ValueTag.Number,
+        value: 14935800000,
+      })
+      expect(cellValue(workbook, 'Model', 0, 2)).toEqual({
+        tag: ValueTag.Number,
+        value: 14935.8,
+      })
+      expect(cellValue(workbook, 'Model', 0, 3)).toEqual({
+        tag: ValueTag.String,
+        value: 'AAPL',
+        stringId: expect.any(Number),
+      })
+      expect(cellValue(workbook, 'Model', 0, 4)).toEqual({
+        tag: ValueTag.String,
+        value: 'AAPL ok',
+        stringId: expect.any(Number),
+      })
+
       workbook.setCellContents({ sheet, row: 0, col: 1 }, 'MSFT')
 
       expect(cellValue(workbook, 'Model', 0, 0)).toEqual({
@@ -77,6 +98,26 @@ describe('imported UDF cached formula values', () => {
     expect(cellValue(workbook, 'Model', 1, 0)).toEqual({
       tag: ValueTag.Number,
       value: 3,
+    })
+
+    workbook.dispose()
+  })
+
+  it('does not hydrate or preserve arbitrary unknown formula caches during full recalculation', () => {
+    const snapshot = issueSnapshot()
+    snapshot.sheets[0].cells = [{ address: 'A1', formula: 'UNKNOWNFUNC(42)', value: 99 }]
+    const workbook = WorkPaper.buildFromSnapshot(snapshot, { maxRows: 8, maxColumns: 8, useColumnIndex: true })
+
+    expect(cellValue(workbook, 'Model', 0, 0)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name,
+    })
+
+    workbook.rebuildAndRecalculate()
+
+    expect(cellValue(workbook, 'Model', 0, 0)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name,
     })
 
     workbook.dispose()

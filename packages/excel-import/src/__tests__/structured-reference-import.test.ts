@@ -4,6 +4,7 @@ import { SpreadsheetEngine } from '@bilig/core'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import { ValueTag } from '@bilig/protocol'
 import { exportXlsx, importXlsx } from '../index.js'
+import { translateImportedFormulaStructuredReferences } from '../xlsx-formula-translation.js'
 
 describe('structured reference XLSX import', () => {
   it('translates Excel table sections and this-row references into executable formulas', async () => {
@@ -168,6 +169,89 @@ describe('structured reference XLSX import', () => {
     expect(engine.getCellValue('Panel', 'C8')).toMatchObject({ tag: ValueTag.String, value: 'PUB-' })
     expect(engine.getCellValue('Panel', 'C13')).toEqual({ tag: ValueTag.Number, value: 0 })
     expect(engine.getCellValue('Panel', 'B2')).toMatchObject({ tag: ValueTag.String, value: 'PUB-0 ' })
+  })
+
+  it('translates cross-sheet current-row structured references by row position', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Structured Cross Sheet Rows',
+        metadata: {
+          tables: [
+            {
+              name: 'RevenueTable',
+              sheetName: 'Data',
+              startAddress: 'A1',
+              endAddress: 'C4',
+              columnNames: ['Segment', '2024', '2025'],
+              headerRow: true,
+              totalsRow: false,
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 'Segment' },
+            { address: 'B1', value: '2024' },
+            { address: 'C1', value: '2025' },
+            { address: 'A2', value: 'A' },
+            { address: 'B2', value: 100 },
+            { address: 'C2', value: 125 },
+            { address: 'A3', value: 'B' },
+            { address: 'B3', value: 200 },
+            { address: 'C3', value: 250 },
+            { address: 'A4', value: 'C' },
+            { address: 'B4', value: 300 },
+            { address: 'C4', value: 390 },
+          ],
+        },
+        {
+          id: 2,
+          name: 'Ratios',
+          order: 1,
+          cells: [{ address: 'B3', formula: 'RevenueTable[[#This Row],[2025]]/RevenueTable[[#This Row],[2024]]' }],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'structured-cross-sheet-rows.xlsx')
+    const ratios = imported.snapshot.sheets.find((sheet) => sheet.name === 'Ratios')
+
+    expect(ratios?.cells.find((cell) => cell.address === 'B3')?.formula).toBe("'Data'!C3/'Data'!B3")
+
+    const engine = new SpreadsheetEngine({ workbookName: 'structured-cross-sheet-rows' })
+    await engine.ready()
+    engine.importSnapshot(imported.snapshot)
+
+    expect(engine.getCellValue('Ratios', 'B3')).toEqual({ tag: ValueTag.Number, value: 1.25 })
+  })
+
+  it('normalizes XML line endings in structured reference column names', () => {
+    const formula = 'Budget[[#This Row],[Projected\r\ncost]]-Budget[[#This Row],[Actual \r\ncost]]'
+
+    expect(
+      translateImportedFormulaStructuredReferences({
+        formula,
+        ownerSheetName: 'Summary',
+        ownerAddress: 'E16',
+        tables: [
+          {
+            name: 'Budget',
+            sheetName: 'Summary',
+            startAddress: 'B15',
+            endAddress: 'E26',
+            columnNames: ['Category', 'Projected\ncost', 'Actual \ncost', 'Difference'],
+            headerRow: true,
+            totalsRow: true,
+          },
+        ],
+      }),
+    ).toBe("'Summary'!C16-'Summary'!D16")
   })
 
   it('decodes Excel-escaped table column names before rewriting structured references', async () => {

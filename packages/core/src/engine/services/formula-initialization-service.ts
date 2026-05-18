@@ -697,6 +697,7 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
             topologyChanged =
               args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId, {
                 deferFamilyRegistration: shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined,
+                preserveCachedValueOnFullRecalc: ref.preserveCachedValueOnFullRecalc === true,
               }) || topologyChanged
             noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, {
               cellIndex,

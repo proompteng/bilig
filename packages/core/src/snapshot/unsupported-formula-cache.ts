@@ -5,6 +5,14 @@ function normalizeFormulaName(name: string): string {
   return name.trim().toUpperCase()
 }
 
+type UnavailableCallMatcher = (normalizedName: string) => boolean
+
+const matchAnyUnavailableFormulaCall: UnavailableCallMatcher = () => true
+
+function isFullRecalcPreservableUnavailableFormulaCall(normalizedName: string): boolean {
+  return normalizedName.startsWith('_XLDUDF_') || normalizedName === '_FV'
+}
+
 function withLocalFormulaName(localNames: ReadonlySet<string>, name: string): ReadonlySet<string> {
   const normalized = normalizeFormulaName(name)
   if (normalized.length === 0 || localNames.has(normalized)) {
@@ -39,6 +47,7 @@ function lambdaBodyHasUnavailableCall(
   args: readonly FormulaNode[],
   definedNames: ReadonlySet<string>,
   localNames: ReadonlySet<string>,
+  matcher: UnavailableCallMatcher,
 ): boolean {
   if (args.length === 0) {
     return false
@@ -50,22 +59,23 @@ function lambdaBodyHasUnavailableCall(
       lambdaLocals = withLocalFormulaName(lambdaLocals, param.name)
     }
   }
-  return formulaNodeHasUnavailableCall(args[args.length - 1]!, definedNames, lambdaLocals)
+  return formulaNodeHasUnavailableCall(args[args.length - 1]!, definedNames, lambdaLocals, matcher)
 }
 
 function letBodyHasUnavailableCall(
   args: readonly FormulaNode[],
   definedNames: ReadonlySet<string>,
   localNames: ReadonlySet<string>,
+  matcher: UnavailableCallMatcher,
 ): boolean {
   if (args.length < 2) {
-    return args.some((arg) => formulaNodeHasUnavailableCall(arg, definedNames, localNames))
+    return args.some((arg) => formulaNodeHasUnavailableCall(arg, definedNames, localNames, matcher))
   }
   let letLocals = localNames
   const finalArgIndex = args.length - 1
   for (let index = 0; index < finalArgIndex; index += 2) {
     const valueNode = args[index + 1]
-    if (valueNode && formulaNodeHasUnavailableCall(valueNode, definedNames, letLocals)) {
+    if (valueNode && formulaNodeHasUnavailableCall(valueNode, definedNames, letLocals, matcher)) {
       return true
     }
     const nameNode = args[index]
@@ -73,10 +83,15 @@ function letBodyHasUnavailableCall(
       letLocals = withLocalFormulaName(letLocals, nameNode.name)
     }
   }
-  return formulaNodeHasUnavailableCall(args[finalArgIndex]!, definedNames, letLocals)
+  return formulaNodeHasUnavailableCall(args[finalArgIndex]!, definedNames, letLocals, matcher)
 }
 
-function formulaNodeHasUnavailableCall(node: FormulaNode, definedNames: ReadonlySet<string>, localNames: ReadonlySet<string>): boolean {
+function formulaNodeHasUnavailableCall(
+  node: FormulaNode,
+  definedNames: ReadonlySet<string>,
+  localNames: ReadonlySet<string>,
+  matcher: UnavailableCallMatcher,
+): boolean {
   switch (node.kind) {
     case 'NumberLiteral':
     case 'BooleanLiteral':
@@ -92,38 +107,49 @@ function formulaNodeHasUnavailableCall(node: FormulaNode, definedNames: Readonly
     case 'RangeRef':
       return false
     case 'ArrayConstant':
-      return node.rows.some((row) => row.some((entry) => formulaNodeHasUnavailableCall(entry, definedNames, localNames)))
+      return node.rows.some((row) => row.some((entry) => formulaNodeHasUnavailableCall(entry, definedNames, localNames, matcher)))
     case 'UnaryExpr':
-      return formulaNodeHasUnavailableCall(node.argument, definedNames, localNames)
+      return formulaNodeHasUnavailableCall(node.argument, definedNames, localNames, matcher)
     case 'BinaryExpr':
       return (
-        formulaNodeHasUnavailableCall(node.left, definedNames, localNames) ||
-        formulaNodeHasUnavailableCall(node.right, definedNames, localNames)
+        formulaNodeHasUnavailableCall(node.left, definedNames, localNames, matcher) ||
+        formulaNodeHasUnavailableCall(node.right, definedNames, localNames, matcher)
       )
     case 'CallExpr': {
       const normalized = normalizeFormulaName(node.callee)
       if (normalized === 'LAMBDA') {
-        return lambdaBodyHasUnavailableCall(node.args, definedNames, localNames)
+        return lambdaBodyHasUnavailableCall(node.args, definedNames, localNames, matcher)
       }
       if (normalized === 'LET') {
-        return letBodyHasUnavailableCall(node.args, definedNames, localNames)
+        return letBodyHasUnavailableCall(node.args, definedNames, localNames, matcher)
       }
       if (!isAvailableFormulaCall(node.callee, definedNames, localNames)) {
-        return true
+        return matcher(normalized)
       }
-      return node.args.some((arg) => formulaNodeHasUnavailableCall(arg, definedNames, localNames))
+      return node.args.some((arg) => formulaNodeHasUnavailableCall(arg, definedNames, localNames, matcher))
     }
     case 'InvokeExpr':
       return (
-        formulaNodeHasUnavailableCall(node.callee, definedNames, localNames) ||
-        node.args.some((arg) => formulaNodeHasUnavailableCall(arg, definedNames, localNames))
+        formulaNodeHasUnavailableCall(node.callee, definedNames, localNames, matcher) ||
+        node.args.some((arg) => formulaNodeHasUnavailableCall(arg, definedNames, localNames, matcher))
       )
   }
 }
 
 export function formulaShouldUseCachedUnsupportedFunctionValue(source: string, definedNames: ReadonlySet<string>): boolean {
   try {
-    return formulaNodeHasUnavailableCall(parseFormula(source), definedNames, new Set())
+    return formulaNodeHasUnavailableCall(parseFormula(source), definedNames, new Set(), matchAnyUnavailableFormulaCall)
+  } catch {
+    return false
+  }
+}
+
+export function formulaShouldPreserveCachedUnsupportedFunctionValueOnFullRecalc(
+  source: string,
+  definedNames: ReadonlySet<string>,
+): boolean {
+  try {
+    return formulaNodeHasUnavailableCall(parseFormula(source), definedNames, new Set(), isFullRecalcPreservableUnavailableFormulaCall)
   } catch {
     return false
   }

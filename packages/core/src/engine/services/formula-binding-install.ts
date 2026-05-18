@@ -83,6 +83,7 @@ export function installFreshFormulaBindingNow(args: {
     directAggregate: args.prepared.directAggregate,
     directScalar: args.prepared.directScalar,
     directCriteria: args.prepared.directCriteria,
+    ...(args.options?.preserveCachedValueOnFullRecalc === true ? { preserveCachedValueOnFullRecalc: true } : {}),
   }
   const formulaSlotId = serviceArgs.state.formulas.set(args.cellIndex, runtimeFormula)
   runtimeFormula.formulaSlotId = formulaSlotId

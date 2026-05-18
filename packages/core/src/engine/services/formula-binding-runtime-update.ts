@@ -12,6 +12,7 @@ export function applyFormulaRuntimePlanFields(formula: RuntimeFormula, update: F
   formula.source = update.source
   formula.structuralSourceTransform = undefined
   formula.sourceRenameTransforms = undefined
+  delete formula.preserveCachedValueOnFullRecalc
   formula.planId = update.plan.id
   formula.templateId = update.templateId
   formula.compiled = update.plan.compiled

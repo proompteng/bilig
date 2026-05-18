@@ -556,6 +556,11 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
       existing.directAggregate = prepared.directAggregate
       existing.directScalar = prepared.directScalar
       existing.directCriteria = prepared.directCriteria
+      if (options.preserveCachedValueOnFullRecalc === true) {
+        existing.preserveCachedValueOnFullRecalc = true
+      } else {
+        delete existing.preserveCachedValueOnFullRecalc
+      }
       updateVolatileFormulaIndex(cellIndex, existing)
       markFormulaCellBound(args.state.workbook.cellStore, cellIndex, existing.compiled.mode)
       if (prepared.compiled.mode === FormulaMode.WasmFastPath && prepared.runtimeProgram.length > 0) {

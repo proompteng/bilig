@@ -55,6 +55,29 @@ export interface EngineRecalcService {
   readonly reconcilePivotOutputsNow: (baseChanged: U32, forceAllPivots?: boolean) => U32
 }
 
+interface RecalculateInternalOptions {
+  readonly orderedFormulaCellIndices?: readonly number[] | U32
+  readonly orderedFormulaCount?: number
+  readonly preserveCachedValuesOnFullRecalc?: boolean
+}
+
+function filterSkippedCachedFormulaCells(ordered: U32, orderedCount: number, skipped: ReadonlySet<number> | undefined): U32 {
+  if (!skipped || skipped.size === 0) {
+    return ordered.length === orderedCount ? ordered : ordered.subarray(0, orderedCount)
+  }
+  const filtered = new Uint32Array(orderedCount)
+  let filteredCount = 0
+  for (let index = 0; index < orderedCount; index += 1) {
+    const cellIndex = ordered[index]
+    if (cellIndex === undefined || skipped.has(cellIndex)) {
+      continue
+    }
+    filtered[filteredCount] = cellIndex
+    filteredCount += 1
+  }
+  return filtered.subarray(0, filteredCount)
+}
+
 export function createEngineRecalcService(args: {
   readonly state: Pick<
     EngineRuntimeState,
@@ -166,10 +189,7 @@ export function createEngineRecalcService(args: {
   const recalculateInternal = (
     changedRoots: readonly number[] | U32,
     kernelSyncRoots: readonly number[] | U32,
-    firstPassOrder?: {
-      orderedFormulaCellIndices: readonly number[] | U32
-      orderedFormulaCount: number
-    },
+    options: RecalculateInternalOptions = {},
   ): U32 => {
     const started = args.performanceNow()
     args.beginEvaluationBudget(started)
@@ -196,11 +216,18 @@ export function createEngineRecalcService(args: {
         args.state.wasm.syncStringPool(args.state.strings.exportLayout())
       }
 
+      const skippedCachedFormulaCells = options.preserveCachedValuesOnFullRecalc === true ? new Set<number>() : undefined
       const allChangedRoots = [...changedRoots]
       const allOrdered: number[] = []
       let singlePassOrdered: readonly number[] | U32 | null = null
       let singlePassOrderedCount = 0
-      let pendingFirstPassOrder = firstPassOrder
+      let pendingFirstPassOrder =
+        options.orderedFormulaCellIndices !== undefined && options.orderedFormulaCount !== undefined
+          ? {
+              orderedFormulaCellIndices: options.orderedFormulaCellIndices,
+              orderedFormulaCount: options.orderedFormulaCount,
+            }
+          : undefined
       let passRoots = [...changedRoots]
       let passKernelRoots = [...kernelSyncRoots]
       let totalOrderedCount = 0
@@ -461,18 +488,26 @@ export function createEngineRecalcService(args: {
         const evaluateFormulaCell = (
           cellIndex: number,
           formula: RuntimeFormula,
-          options: {
+          evaluationOptions: {
             readonly allowCycleDependencyError: boolean
             readonly treatCycleFormulaAsError: boolean
             readonly forceJs: boolean
           },
         ): void => {
-          if (options.treatCycleFormulaAsError && ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+          if (skippedCachedFormulaCells && formula.preserveCachedValueOnFullRecalc === true) {
+            skippedCachedFormulaCells.add(cellIndex)
+            queueKernelSync(cellIndex)
+            return
+          }
+          if (
+            evaluationOptions.treatCycleFormulaAsError &&
+            ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0
+          ) {
             jsCount += 1
             materializeCycleFormulaError(cellIndex)
             return
           }
-          if (options.allowCycleDependencyError && hasCycleDependency(cellIndex)) {
+          if (evaluationOptions.allowCycleDependencyError && hasCycleDependency(cellIndex)) {
             jsCount += 1
             materializeCycleFormulaError(cellIndex)
             return
@@ -504,7 +539,7 @@ export function createEngineRecalcService(args: {
               return
             }
           }
-          if (!options.forceJs && formula.compiled.mode === FormulaMode.WasmFastPath && args.state.wasm.ready) {
+          if (!evaluationOptions.forceJs && formula.compiled.mode === FormulaMode.WasmFastPath && args.state.wasm.ready) {
             if (formula.compiled.producesSpill) {
               flushPendingWasmBatch()
               wasmCount += evaluateWasmSpillFormula(cellIndex, formula)
@@ -637,17 +672,19 @@ export function createEngineRecalcService(args: {
       args.state.setLastMetrics(lastMetrics)
       args.setDeferredKernelSyncCount(pendingKernelSyncCount)
       if (singlePassOrdered !== null) {
+        const ordered = filterSkippedCachedFormulaCells(
+          toOrderedUint32(singlePassOrdered, singlePassOrderedCount),
+          singlePassOrderedCount,
+          skippedCachedFormulaCells,
+        )
         return totalOrderedCount === 0 && allChangedRoots.length === 0
           ? args.emptyChangedSet()
-          : args.composeChangedRootsAndOrdered(
-              allChangedRoots,
-              toOrderedUint32(singlePassOrdered, singlePassOrderedCount),
-              singlePassOrderedCount,
-            )
+          : args.composeChangedRootsAndOrdered(allChangedRoots, ordered, ordered.length)
       }
+      const ordered = filterSkippedCachedFormulaCells(Uint32Array.from(allOrdered), allOrdered.length, skippedCachedFormulaCells)
       return totalOrderedCount === 0 && allChangedRoots.length === 0
         ? args.emptyChangedSet()
-        : args.composeChangedRootsAndOrdered(allChangedRoots, Uint32Array.from(allOrdered), allOrdered.length)
+        : args.composeChangedRootsAndOrdered(allChangedRoots, ordered, ordered.length)
     } finally {
       args.endEvaluationBudget()
     }
@@ -661,10 +698,12 @@ export function createEngineRecalcService(args: {
     orderedFormulaCellIndices: readonly number[] | U32,
     orderedFormulaCount: number,
     kernelSyncRoots: readonly number[] | U32 = changedRoots,
+    options: Pick<RecalculateInternalOptions, 'preserveCachedValuesOnFullRecalc'> = {},
   ): U32 =>
     recalculateInternal(changedRoots, kernelSyncRoots, {
       orderedFormulaCellIndices,
       orderedFormulaCount,
+      ...options,
     })
 
   const reconcilePivotOutputs = (baseChanged: U32, forceAllPivots = false): U32 => {
@@ -728,6 +767,9 @@ export function createEngineRecalcService(args: {
           let explicitChangedCount = 0
           let canUseFullFormulaOrder = true
           args.state.formulas.forEach((formula, cellIndex) => {
+            if (formula.preserveCachedValueOnFullRecalc === true) {
+              return
+            }
             formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
             explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
             if (formula.compiled.producesSpill || formula.directLookup !== undefined || formula.directCriteria !== undefined) {
@@ -743,9 +785,12 @@ export function createEngineRecalcService(args: {
               fullFormulaOrder.orderedFormulaCellIndices,
               fullFormulaOrder.orderedFormulaCount,
               args.emptyChangedSet(),
+              { preserveCachedValuesOnFullRecalc: true },
             )
           } else {
-            recalculatedBase = recalculate(mutationRoots, args.emptyChangedSet())
+            recalculatedBase = recalculateInternal(mutationRoots, args.emptyChangedSet(), {
+              preserveCachedValuesOnFullRecalc: true,
+            })
           }
           const recalculated = reconcilePivotOutputs(recalculatedBase, true)
           const changed = args.composeEventChanges(recalculated, explicitChangedCount)
