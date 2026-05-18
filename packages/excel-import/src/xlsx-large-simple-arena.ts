@@ -1,5 +1,6 @@
 import type { LiteralInput, WorkbookRichTextCellSnapshot, WorkbookSnapshot } from '@bilig/protocol'
 import { toDisplayText } from './workbook-import-helpers.js'
+import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 
 const initialCellCapacity = 1024
 const noPoolId = 0xffffffff
@@ -8,13 +9,22 @@ const valueKindNumber = 1
 const valueKindString = 2
 const valueKindBoolean = 3
 const valueKindNull = 4
+const valueKindSharedStringRef = 5
 const flagHasFormula = 1 << 0
+const initialStyleIndexCapacity = 256
 
 export interface ImportedWorksheetArenaCellInput {
   readonly sheetIndex: number
   readonly row: number
   readonly column: number
   readonly value: LiteralInput | undefined
+}
+
+export interface ImportedWorksheetArenaSharedStringCellInput {
+  readonly sheetIndex: number
+  readonly row: number
+  readonly column: number
+  readonly sharedStringIndex: number
 }
 
 export interface ImportedWorkbookArenaSnapshot {
@@ -30,6 +40,51 @@ export interface ImportedWorkbookArenaSnapshot {
   readonly flags: Uint8Array
   readonly strings: readonly string[]
   readonly formulas: readonly string[]
+}
+
+export class ImportedWorksheetStyleIndexArena {
+  private rows: Uint32Array<ArrayBuffer> = new Uint32Array(initialStyleIndexCapacity)
+  private columns: Uint32Array<ArrayBuffer> = new Uint32Array(initialStyleIndexCapacity)
+  private styleIndexes: Uint32Array<ArrayBuffer> = new Uint32Array(initialStyleIndexCapacity)
+  private length = 0
+
+  get count(): number {
+    return this.length
+  }
+
+  add(row: number, column: number, styleIndex: number): void {
+    this.ensureCapacity(this.length + 1)
+    const index = this.length
+    this.length += 1
+    this.rows[index] = row
+    this.columns[index] = column
+    this.styleIndexes[index] = styleIndex
+  }
+
+  collectRequiredStyleIndexes(output: Set<number>): void {
+    for (let index = 0; index < this.length; index += 1) {
+      output.add(this.styleIndexes[index] ?? 0)
+    }
+  }
+
+  forEach(callback: (row: number, column: number, styleIndex: number) => void): void {
+    for (let index = 0; index < this.length; index += 1) {
+      callback(this.rows[index] ?? 0, this.columns[index] ?? 0, this.styleIndexes[index] ?? 0)
+    }
+  }
+
+  private ensureCapacity(nextLength: number): void {
+    if (nextLength <= this.rows.length) {
+      return
+    }
+    let nextCapacity = this.rows.length
+    while (nextCapacity < nextLength) {
+      nextCapacity *= 2
+    }
+    this.rows = growUint32Array(this.rows, nextCapacity)
+    this.columns = growUint32Array(this.columns, nextCapacity)
+    this.styleIndexes = growUint32Array(this.styleIndexes, nextCapacity)
+  }
 }
 
 export class ImportedWorkbookArena {
@@ -56,18 +111,21 @@ export class ImportedWorkbookArena {
 
   addCell(input: ImportedWorksheetArenaCellInput): number {
     this.ensureCapacity(this.length + 1)
-    const index = this.length
-    this.length += 1
-    this.sheetIndexes[index] = input.sheetIndex
-    this.rows[index] = input.row
-    this.columns[index] = input.column
-    this.styleIds[index] = noPoolId
-    this.formulaIds[index] = noPoolId
-    this.flags[index] = 0
+    const index = this.appendCell(input.sheetIndex, input.row, input.column)
     this.addValue(index, input.value)
     if (input.row < 8 && input.column < 6 && input.value !== undefined) {
       this.previewValues.set(previewKey(input.row, input.column), input.value)
     }
+    return index
+  }
+
+  addSharedStringCell(input: ImportedWorksheetArenaSharedStringCellInput): number {
+    this.ensureCapacity(this.length + 1)
+    const index = this.appendCell(input.sheetIndex, input.row, input.column)
+    this.valueKinds[index] = valueKindSharedStringRef
+    this.numberValues[index] = 0
+    this.stringIds[index] = input.sharedStringIndex
+    this.booleanValues[index] = 0
     return index
   }
 
@@ -115,6 +173,48 @@ export class ImportedWorkbookArena {
     return toDisplayText(this.previewValues.get(previewKey(row, column)))
   }
 
+  collectSharedStringIndexes(output: Set<number>): void {
+    for (let index = 0; index < this.length; index += 1) {
+      if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
+        continue
+      }
+      const sharedStringIndex = this.stringIds[index] ?? noPoolId
+      if (sharedStringIndex !== noPoolId) {
+        output.add(sharedStringIndex)
+      }
+    }
+  }
+
+  resolveSharedStrings(sharedStrings: readonly LargeSimpleSharedStringEntry[]): WorkbookRichTextCellSnapshot[] | null {
+    const richTextCells: WorkbookRichTextCellSnapshot[] = []
+    for (let index = 0; index < this.length; index += 1) {
+      if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
+        continue
+      }
+      const sharedStringIndex = this.stringIds[index] ?? noPoolId
+      const entry = sharedStringIndex === noPoolId ? undefined : sharedStrings[sharedStringIndex]
+      if (!entry) {
+        return null
+      }
+      this.valueKinds[index] = valueKindString
+      this.stringIds[index] = this.internString(entry.text)
+      const row = this.rows[index] ?? 0
+      const column = this.columns[index] ?? 0
+      if (row < 8 && column < 6) {
+        this.previewValues.set(previewKey(row, column), entry.text)
+      }
+      if (entry.rich) {
+        richTextCells.push({
+          address: encodeCellAddress(row, column),
+          text: entry.text,
+          storage: 'sharedString',
+          xml: entry.xml ?? '',
+        })
+      }
+    }
+    return richTextCells
+  }
+
   snapshot(): ImportedWorkbookArenaSnapshot {
     return {
       sheetIndexes: this.sheetIndexes.subarray(0, this.length),
@@ -130,6 +230,18 @@ export class ImportedWorkbookArena {
       strings: this.strings,
       formulas: this.formulas,
     }
+  }
+
+  private appendCell(sheetIndex: number, row: number, column: number): number {
+    const index = this.length
+    this.length += 1
+    this.sheetIndexes[index] = sheetIndex
+    this.rows[index] = row
+    this.columns[index] = column
+    this.styleIds[index] = noPoolId
+    this.formulaIds[index] = noPoolId
+    this.flags[index] = 0
+    return index
   }
 
   private addValue(index: number, value: LiteralInput | undefined): void {
@@ -246,11 +358,14 @@ export interface ImportedWorksheetCellScan {
   readonly arena: ImportedWorkbookArena
   readonly sheetIndex: number
   readonly richTextCells: WorkbookRichTextCellSnapshot[]
-  readonly styleIndexes: readonly ImportedWorksheetCellStyleIndex[]
+  readonly styleIndexes: ImportedWorksheetStyleIndexArena
   readonly blankStyleCellCount: number
   readonly cellCount: number
   readonly valueCellCount: number
   readonly formulaCellCount: number
+  readonly mergeCount?: number
+  readonly conditionalFormatCount?: number
+  readonly tableCount?: number
   readonly rowCount: number
   readonly columnCount: number
   readonly usedRange: {
@@ -259,12 +374,6 @@ export interface ImportedWorksheetCellScan {
     readonly endRow: number
     readonly endColumn: number
   } | null
-}
-
-export interface ImportedWorksheetCellStyleIndex {
-  readonly row: number
-  readonly column: number
-  readonly styleIndex: number
 }
 
 function filledUint32Array(length: number, value: number): Uint32Array<ArrayBuffer> {

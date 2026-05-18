@@ -1,12 +1,14 @@
 import { strFromU8 } from 'fflate'
 
-import { translateFormulaReferences } from '@bilig/formula'
 import type { LiteralInput, WorkbookRichTextCellSnapshot } from '@bilig/protocol'
 import { toLiteralInput } from './workbook-import-helpers.js'
 import { decodeExcelEscapedText } from './xlsx-escaped-text.js'
-import { normalizeImportedFormulaSource } from './xlsx-formula-translation.js'
-import { formulaReferencesExternalWorkbook, formulaReferencesVolatileFunction } from './xlsx-import-warnings.js'
-import { ImportedWorkbookArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import {
+  LargeSimpleFormulaRecords,
+  parseLargeSimpleSharedFormulaIndex,
+  readLargeSimpleFormulaTypeCode,
+} from './xlsx-large-simple-formula-records.js'
+import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 
 const lessThan = 60
@@ -33,21 +35,6 @@ const metadataWorksheetTagNames = new Set([
 ])
 const richTextRunPattern = /<(?:[A-Za-z_][\w.-]*:)?r\b/u
 
-interface FormulaSpec {
-  readonly cellIndex: number
-  readonly row: number
-  readonly column: number
-  readonly type: string | null
-  readonly sharedIndex: string | null
-  readonly rawFormula: string
-}
-
-interface SharedFormulaBase {
-  readonly row: number
-  readonly column: number
-  readonly formula: string
-}
-
 export function parseLargeSimpleWorksheetCells(
   bytes: Uint8Array,
   sharedStrings: readonly LargeSimpleSharedStringEntry[],
@@ -56,8 +43,8 @@ export function parseLargeSimpleWorksheetCells(
 ): ImportedWorksheetCellScan | null {
   const arena = new ImportedWorkbookArena()
   const richTextCells: WorkbookRichTextCellSnapshot[] = []
-  const styleIndexes: ImportedWorksheetCellScan['styleIndexes'][number][] = []
-  const formulas: FormulaSpec[] = []
+  const styleIndexes = new ImportedWorksheetStyleIndexArena()
+  const formulas = new LargeSimpleFormulaRecords()
   const retainCells = options.retainCells !== false
   const dimension = readWorksheetDimensionFromBytes(bytes)
   let rowCount = dimension?.rowCount ?? 0
@@ -134,21 +121,10 @@ export function parseLargeSimpleWorksheetCells(
           })
         : -1
       if (formula && retainCells) {
-        formulas.push({
-          cellIndex,
-          row: decodedAddress.row,
-          column: decodedAddress.column,
-          type: formula.type,
-          sharedIndex: formula.sharedIndex,
-          rawFormula: formula.rawFormula,
-        })
+        formulas.add(cellIndex, decodedAddress.row, decodedAddress.column, formula.typeCode, formula.sharedIndex, formula.rawFormula)
       }
       if (retainCells && styleIndex !== null) {
-        styleIndexes.push({
-          row: decodedAddress.row,
-          column: decodedAddress.column,
-          styleIndex,
-        })
+        styleIndexes.add(decodedAddress.row, decodedAddress.column, styleIndex)
       }
       const richTextCell = readRichTextCellArtifact(bytes, contentStart, closing.start, decodedAddress, cellType, rawValue, sharedStrings)
       if (richTextCell) {
@@ -163,7 +139,7 @@ export function parseLargeSimpleWorksheetCells(
     index = selfClosing ? tagEnd + 1 : closing.end
   }
 
-  if (formulas.length > 0 && !resolveFormulas(arena, formulas)) {
+  if (formulas.count > 0 && !formulas.resolveIntoArena(arena)) {
     return null
   }
   return {
@@ -241,52 +217,6 @@ export function readLargeSimpleWorksheetMetadataXml(bytes: Uint8Array): string |
   return snippets.length > 0 ? `<worksheet>${snippets.join('')}</worksheet>` : undefined
 }
 
-function resolveFormulas(arena: ImportedWorkbookArena, formulas: readonly FormulaSpec[]): boolean {
-  const sharedBases = new Map<string, SharedFormulaBase>()
-  for (const formula of formulas) {
-    if (formula.type !== 'shared' || formula.sharedIndex === null || formula.rawFormula.trim().length === 0) {
-      continue
-    }
-    const normalized = normalizeLargeSimpleFormula(formula.rawFormula)
-    if (normalized === null) {
-      return false
-    }
-    sharedBases.set(formula.sharedIndex, {
-      row: formula.row,
-      column: formula.column,
-      formula: normalized,
-    })
-    arena.setFormula(formula.cellIndex, normalized)
-  }
-
-  for (const formula of formulas) {
-    if (formula.type === 'shared') {
-      if (formula.rawFormula.trim().length > 0) {
-        continue
-      }
-      if (formula.sharedIndex === null) {
-        return false
-      }
-      const base = sharedBases.get(formula.sharedIndex)
-      if (!base) {
-        return false
-      }
-      try {
-        arena.setFormula(formula.cellIndex, translateFormulaReferences(base.formula, formula.row - base.row, formula.column - base.column))
-      } catch {
-        return false
-      }
-      continue
-    }
-    const normalized = normalizeLargeSimpleFormula(formula.rawFormula)
-    if (normalized === null) {
-      return false
-    }
-    arena.setFormula(formula.cellIndex, normalized)
-  }
-  return true
-}
-
 function readCellValue(
   bytes: Uint8Array,
   contentStart: number,
@@ -330,7 +260,7 @@ function readFormulaSpec(
   bytes: Uint8Array,
   contentStart: number,
   contentEnd: number,
-): { readonly type: string | null; readonly sharedIndex: string | null; readonly rawFormula: string } | null | undefined {
+): { readonly typeCode: number; readonly sharedIndex: number | null; readonly rawFormula: string } | null | undefined {
   const tag = findNextOpeningTag(bytes, contentStart, 'f', contentEnd)
   if (!tag) {
     return undefined
@@ -349,9 +279,9 @@ function readFormulaSpec(
     return null
   }
   return {
-    type,
-    sharedIndex: readXmlAttributeFromTag(bytes, tag.nameEnd, tagEnd, 'si'),
-    rawFormula: selfClosing ? '' : decodeXmlText(decodeBytes(bytes, tagEnd + 1, closing.start)).trim(),
+    typeCode: readLargeSimpleFormulaTypeCode(type),
+    sharedIndex: parseLargeSimpleSharedFormulaIndex(readXmlAttributeFromTag(bytes, tag.nameEnd, tagEnd, 'si')),
+    rawFormula: selfClosing ? '' : decodeBytes(bytes, tagEnd + 1, closing.start).trim(),
   }
 }
 
@@ -359,24 +289,10 @@ function readCompactFormulaSpec(
   bytes: Uint8Array,
   contentStart: number,
   contentEnd: number,
-): { readonly type: string | null; readonly sharedIndex: string | null; readonly rawFormula: string } | null | undefined {
-  return hasElement(bytes, contentStart, contentEnd, 'f') ? { type: null, sharedIndex: null, rawFormula: '' } : undefined
-}
-
-function normalizeLargeSimpleFormula(rawFormula: string | undefined): string | null {
-  if (rawFormula === undefined || rawFormula.length === 0) {
-    return null
-  }
-  const formula = normalizeImportedFormulaSource(rawFormula)
-  return formulaReferencesExternalWorkbook(formula) ||
-    formulaReferencesVolatileFunction(formula) ||
-    formulaReferencesStructuredTable(formula)
-    ? null
-    : formula
-}
-
-function formulaReferencesStructuredTable(formula: string): boolean {
-  return /\[[#@\w]/u.test(formula)
+): { readonly typeCode: number; readonly sharedIndex: number | null; readonly rawFormula: string } | null | undefined {
+  return hasElement(bytes, contentStart, contentEnd, 'f')
+    ? { typeCode: readLargeSimpleFormulaTypeCode(null), sharedIndex: null, rawFormula: '' }
+    : undefined
 }
 
 function readRichTextCellArtifact(

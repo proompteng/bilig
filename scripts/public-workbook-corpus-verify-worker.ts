@@ -3,11 +3,13 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { parsePublicWorkbookArtifact, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
-import { tryImportLargeSimpleXlsx, type LargeSimpleXlsxImportStats } from '../packages/excel-import/src/xlsx-large-simple-import.js'
+import { tryInspectLargeSimpleXlsxHeadless } from '../packages/excel-import/src/xlsx-large-simple-headless-inspect.js'
+import type { LargeSimpleXlsxImportStats } from '../packages/excel-import/src/xlsx-large-simple-import.js'
 import { readXlsxZipEntriesLazy } from '../packages/excel-import/src/xlsx-zip.js'
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookFeatureCounts } from './public-workbook-corpus-types.ts'
 import { defaultSelfRssCheckIntervalMs, startSelfRssGuard } from './public-workbook-corpus-process.ts'
 import { readMegabytesArg, readNumberArg, readFlagArg, readStringArg } from './public-workbook-corpus-cli.ts'
+import { largeSimpleImportPhaseTelemetryEvidence } from './public-workbook-corpus-large-simple-evidence.ts'
 
 const verificationWorkerPhasePrefix = 'bilig-public-workbook-verify-phase='
 const defaultVerifyTimeoutMs = 180_000
@@ -63,8 +65,7 @@ function tryVerifyCompactLargeSimpleArtifact(
   }
   const zip = readXlsxZipEntriesLazy(bytes)
   writeWorkerPhase('import-xlsx')
-  const imported = tryImportLargeSimpleXlsx(bytes, artifact.fileName, zip, {
-    materializeCells: false,
+  const imported = tryInspectLargeSimpleXlsxHeadless(bytes, artifact.fileName, zip, {
     minByteLength: 0,
   })
   if (!imported) {
@@ -132,6 +133,7 @@ function tryVerifyCompactLargeSimpleArtifact(
       `sheets=${String(featureCounts.sheetCount)}`,
       `cells=${String(featureCounts.cellCount)}`,
       `formulas=${String(featureCounts.formulaCellCount)}`,
+      ...largeSimpleImportPhaseTelemetryEvidence(imported.stats),
       'resource-limit-classifier=2026-05-17-native-streaming-xlsx-footprint',
       ...(formulaOracleSkipped
         ? [

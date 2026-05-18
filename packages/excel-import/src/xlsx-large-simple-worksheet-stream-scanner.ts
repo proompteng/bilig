@@ -1,12 +1,14 @@
 import { strFromU8 } from 'fflate'
 
-import { translateFormulaReferences } from '@bilig/formula'
 import type { LiteralInput, WorkbookRichTextCellSnapshot } from '@bilig/protocol'
 import { toLiteralInput } from './workbook-import-helpers.js'
 import { decodeExcelEscapedText } from './xlsx-escaped-text.js'
-import { normalizeImportedFormulaSource } from './xlsx-formula-translation.js'
-import { formulaReferencesExternalWorkbook, formulaReferencesVolatileFunction } from './xlsx-import-warnings.js'
-import { ImportedWorkbookArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import {
+  LargeSimpleFormulaRecords,
+  parseLargeSimpleSharedFormulaIndex,
+  readLargeSimpleFormulaTypeCode,
+} from './xlsx-large-simple-formula-records.js'
+import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 
 const lessThan = 60
@@ -34,21 +36,6 @@ const metadataWorksheetTagNames = new Set([
 const rowMetadataAttributePattern = /\b(?:ht|hidden|customHeight|s|customFormat|outlineLevel|collapsed|thickTop|thickBottom)=/u
 const richTextRunPattern = /<(?:[A-Za-z_][\w.-]*:)?r\b/u
 
-interface FormulaSpec {
-  readonly cellIndex: number
-  readonly row: number
-  readonly column: number
-  readonly type: string | null
-  readonly sharedIndex: string | null
-  readonly rawFormula: string
-}
-
-interface SharedFormulaBase {
-  readonly row: number
-  readonly column: number
-  readonly formula: string
-}
-
 export interface LargeSimpleWorksheetStreamScan {
   readonly cellScan: ImportedWorksheetCellScan
   readonly metadataXml: string | undefined
@@ -64,6 +51,8 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     readonly sharedStrings?: readonly LargeSimpleSharedStringEntry[]
     readonly collectSharedStringIndexes?: boolean
     readonly allowInlineStringsWithoutRetention?: boolean
+    readonly deferSharedStrings?: boolean
+    readonly retainMetadataXml?: boolean
   },
 ): LargeSimpleWorksheetStreamScan | null {
   const scanner = new LargeSimpleWorksheetChunkScanner(sheetIndex, {
@@ -72,6 +61,8 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     sharedStrings: options.sharedStrings ?? [],
     collectSharedStringIndexes: options.collectSharedStringIndexes === true,
     allowInlineStringsWithoutRetention: options.allowInlineStringsWithoutRetention === true,
+    deferSharedStrings: options.deferSharedStrings === true,
+    retainMetadataXml: options.retainMetadataXml !== false,
   })
   if (!readChunks((chunk) => scanner.push(chunk))) {
     return null
@@ -84,15 +75,18 @@ class LargeSimpleWorksheetChunkScanner {
   private index = 0
   private failed = false
   private readonly arena = new ImportedWorkbookArena()
-  private readonly formulas: FormulaSpec[] = []
+  private readonly formulas = new LargeSimpleFormulaRecords()
   private readonly richTextCells: WorkbookRichTextCellSnapshot[] = []
-  private readonly styleIndexes: ImportedWorksheetCellScan['styleIndexes'][number][] = []
+  private readonly styleIndexes = new ImportedWorksheetStyleIndexArena()
   private rowCount = 0
   private columnCount = 0
   private cellCount = 0
   private valueCellCount = 0
   private formulaCellCount = 0
   private blankStyleCellCount = 0
+  private mergeCount = 0
+  private conditionalFormatCount = 0
+  private tableCount = 0
   private minRow = Number.POSITIVE_INFINITY
   private minColumn = Number.POSITIVE_INFINITY
   private maxRow = -1
@@ -103,6 +97,8 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
   private readonly collectSharedStringIndexes: boolean
   private readonly allowInlineStringsWithoutRetention: boolean
+  private readonly deferSharedStrings: boolean
+  private readonly retainMetadataXml: boolean
   private readonly sharedStringIndexes = new Set<number>()
 
   constructor(
@@ -113,6 +109,8 @@ class LargeSimpleWorksheetChunkScanner {
       readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
       readonly collectSharedStringIndexes: boolean
       readonly allowInlineStringsWithoutRetention: boolean
+      readonly deferSharedStrings: boolean
+      readonly retainMetadataXml: boolean
     },
   ) {
     this.hasSharedStrings = options.hasSharedStrings
@@ -120,6 +118,8 @@ class LargeSimpleWorksheetChunkScanner {
     this.sharedStrings = options.sharedStrings
     this.collectSharedStringIndexes = options.collectSharedStringIndexes
     this.allowInlineStringsWithoutRetention = options.allowInlineStringsWithoutRetention
+    this.deferSharedStrings = options.deferSharedStrings
+    this.retainMetadataXml = options.retainMetadataXml
   }
 
   push(chunk: Uint8Array): void {
@@ -137,7 +137,7 @@ class LargeSimpleWorksheetChunkScanner {
     }
     this.process(true)
     this.compact()
-    if (this.failed || (this.formulas.length > 0 && !resolveFormulas(this.arena, this.formulas))) {
+    if (this.failed || (this.formulas.count > 0 && !this.formulas.resolveIntoArena(this.arena))) {
       return null
     }
     return {
@@ -150,6 +150,9 @@ class LargeSimpleWorksheetChunkScanner {
         cellCount: this.cellCount,
         valueCellCount: this.valueCellCount,
         formulaCellCount: this.formulaCellCount,
+        mergeCount: this.mergeCount,
+        conditionalFormatCount: this.conditionalFormatCount,
+        tableCount: this.tableCount,
         rowCount: this.rowCount,
         columnCount: this.columnCount,
         usedRange:
@@ -222,7 +225,9 @@ class LargeSimpleWorksheetChunkScanner {
         continue
       }
       if (tag.localName === 'row') {
-        this.collectRowMetadata(tagEnd)
+        if (this.retainMetadataXml) {
+          this.collectRowMetadata(tagEnd)
+        }
         this.index = tagEnd + 1
         continue
       }
@@ -233,7 +238,7 @@ class LargeSimpleWorksheetChunkScanner {
         continue
       }
       if (metadataWorksheetTagNames.has(tag.localName)) {
-        if (!this.collectMetadataSnippet(tag.localName, tagEnd, final)) {
+        if (!this.collectMetadataElement(tag.localName, tagEnd, final)) {
           return
         }
         continue
@@ -296,32 +301,35 @@ class LargeSimpleWorksheetChunkScanner {
       return false
     }
     const styleIndex = readCellStyleIndexFromTag(this.buffer, nameEnd, tagEnd)
-    const rawValue = this.retainCells || cellType === 's' ? readElementText(this.buffer, contentStart, closing.start, 'v') : null
-    const sharedStringIndex = cellType === 's' ? readSharedStringIndex(rawValue) : null
-    if (cellType === 's' && rawValue !== null) {
+    const shouldReadSharedStringIndex = cellType === 's' && (this.retainCells || this.collectSharedStringIndexes || this.deferSharedStrings)
+    const rawValue = this.retainCells || shouldReadSharedStringIndex ? readElementText(this.buffer, contentStart, closing.start, 'v') : null
+    const sharedStringIndex = shouldReadSharedStringIndex ? readSharedStringIndex(rawValue) : null
+    if (shouldReadSharedStringIndex && rawValue !== null) {
       if (sharedStringIndex === null) {
         this.failed = true
         return false
       }
-      if (this.collectSharedStringIndexes) {
+      if (this.collectSharedStringIndexes || this.deferSharedStrings) {
         this.sharedStringIndexes.add(sharedStringIndex)
       }
     }
-    const value = this.retainCells
-      ? readCellValue(this.buffer, contentStart, closing.start, cellType, rawValue, this.sharedStrings)
-      : hasElement(this.buffer, contentStart, closing.start, 'v') || hasElement(this.buffer, contentStart, closing.start, 'is')
-        ? null
-        : undefined
+    const deferSharedStringValue = this.retainCells && this.deferSharedStrings && cellType === 's' && sharedStringIndex !== null
+    const value =
+      this.retainCells && !deferSharedStringValue
+        ? readCellValue(this.buffer, contentStart, closing.start, cellType, rawValue, this.sharedStrings)
+        : hasElement(this.buffer, contentStart, closing.start, 'v') || hasElement(this.buffer, contentStart, closing.start, 'is')
+          ? null
+          : undefined
     const formula = this.retainCells
       ? readFormulaSpec(this.buffer, contentStart, closing.start)
       : hasElement(this.buffer, contentStart, closing.start, 'f')
-        ? { type: null, sharedIndex: null, rawFormula: '' }
+        ? { typeCode: readLargeSimpleFormulaTypeCode(null), sharedIndex: null, rawFormula: '' }
         : undefined
     if (formula === null) {
       this.failed = true
       return false
     }
-    const hasValue = value !== undefined
+    const hasValue = deferSharedStringValue || value !== undefined
     const hasFormula = formula !== undefined
     if (hasValue || hasFormula) {
       this.cellCount += 1
@@ -338,33 +346,30 @@ class LargeSimpleWorksheetChunkScanner {
         this.formulaCellCount += 1
       }
       const cellIndex = this.retainCells
-        ? this.arena.addCell({
-            sheetIndex: this.sheetIndex,
-            row: decodedAddress.row,
-            column: decodedAddress.column,
-            value,
-          })
+        ? deferSharedStringValue
+          ? this.arena.addSharedStringCell({
+              sheetIndex: this.sheetIndex,
+              row: decodedAddress.row,
+              column: decodedAddress.column,
+              sharedStringIndex,
+            })
+          : this.arena.addCell({
+              sheetIndex: this.sheetIndex,
+              row: decodedAddress.row,
+              column: decodedAddress.column,
+              value,
+            })
         : -1
       if (formula && this.retainCells) {
-        this.formulas.push({
-          cellIndex,
-          row: decodedAddress.row,
-          column: decodedAddress.column,
-          type: formula.type,
-          sharedIndex: formula.sharedIndex,
-          rawFormula: formula.rawFormula,
-        })
+        this.formulas.add(cellIndex, decodedAddress.row, decodedAddress.column, formula.typeCode, formula.sharedIndex, formula.rawFormula)
       }
       if (this.retainCells && styleIndex !== null) {
-        this.styleIndexes.push({
-          row: decodedAddress.row,
-          column: decodedAddress.column,
-          styleIndex,
-        })
+        this.styleIndexes.add(decodedAddress.row, decodedAddress.column, styleIndex)
       }
-      const richTextCell = this.retainCells
-        ? readRichTextCellArtifact(this.buffer, contentStart, closing.start, decodedAddress, cellType, rawValue, this.sharedStrings)
-        : undefined
+      const richTextCell =
+        this.retainCells && !deferSharedStringValue
+          ? readRichTextCellArtifact(this.buffer, contentStart, closing.start, decodedAddress, cellType, rawValue, this.sharedStrings)
+          : undefined
       if (richTextCell) {
         this.richTextCells.push(richTextCell)
       }
@@ -375,9 +380,12 @@ class LargeSimpleWorksheetChunkScanner {
     return true
   }
 
-  private collectMetadataSnippet(localName: string, tagEnd: number, final: boolean): boolean {
+  private collectMetadataElement(localName: string, tagEnd: number, final: boolean): boolean {
     if (isSelfClosingTag(this.buffer, tagEnd)) {
-      this.metadataSnippets.push(decodeBytes(this.buffer, this.index, tagEnd + 1))
+      this.countMetadataElement(localName, tagEnd + 1, tagEnd + 1)
+      if (this.retainMetadataXml) {
+        this.metadataSnippets.push(decodeBytes(this.buffer, this.index, tagEnd + 1))
+      }
       this.index = tagEnd + 1
       return true
     }
@@ -388,56 +396,25 @@ class LargeSimpleWorksheetChunkScanner {
       }
       return false
     }
-    this.metadataSnippets.push(decodeBytes(this.buffer, this.index, closing.end))
+    this.countMetadataElement(localName, tagEnd + 1, closing.start)
+    if (this.retainMetadataXml) {
+      this.metadataSnippets.push(decodeBytes(this.buffer, this.index, closing.end))
+    }
     this.index = closing.end
     return true
   }
-}
 
-function resolveFormulas(arena: ImportedWorkbookArena, formulas: readonly FormulaSpec[]): boolean {
-  const sharedBases = new Map<string, SharedFormulaBase>()
-  for (const formula of formulas) {
-    if (formula.type !== 'shared' || formula.sharedIndex === null || formula.rawFormula.trim().length === 0) {
-      continue
+  private countMetadataElement(localName: string, contentStart: number, contentEnd: number): void {
+    if (localName === 'conditionalFormatting') {
+      this.conditionalFormatCount += Math.max(1, countOpeningTags(this.buffer, contentStart, contentEnd, 'cfRule'))
+      return
     }
-    const normalized = normalizeLargeSimpleFormula(formula.rawFormula)
-    if (normalized === null) {
-      return false
+    if (localName === 'mergeCells') {
+      this.mergeCount += countOpeningTags(this.buffer, contentStart, contentEnd, 'mergeCell')
+    } else if (localName === 'tableParts') {
+      this.tableCount += countOpeningTags(this.buffer, contentStart, contentEnd, 'tablePart')
     }
-    sharedBases.set(formula.sharedIndex, {
-      row: formula.row,
-      column: formula.column,
-      formula: normalized,
-    })
-    arena.setFormula(formula.cellIndex, normalized)
   }
-
-  for (const formula of formulas) {
-    if (formula.type === 'shared') {
-      if (formula.rawFormula.trim().length > 0) {
-        continue
-      }
-      if (formula.sharedIndex === null) {
-        return false
-      }
-      const base = sharedBases.get(formula.sharedIndex)
-      if (!base) {
-        return false
-      }
-      try {
-        arena.setFormula(formula.cellIndex, translateFormulaReferences(base.formula, formula.row - base.row, formula.column - base.column))
-      } catch {
-        return false
-      }
-      continue
-    }
-    const normalized = normalizeLargeSimpleFormula(formula.rawFormula)
-    if (normalized === null) {
-      return false
-    }
-    arena.setFormula(formula.cellIndex, normalized)
-  }
-  return true
 }
 
 function readCellValue(
@@ -491,7 +468,7 @@ function readFormulaSpec(
   bytes: Uint8Array,
   contentStart: number,
   contentEnd: number,
-): { readonly type: string | null; readonly sharedIndex: string | null; readonly rawFormula: string } | null | undefined {
+): { readonly typeCode: number; readonly sharedIndex: number | null; readonly rawFormula: string } | null | undefined {
   const tag = findNextOpeningTag(bytes, contentStart, 'f', contentEnd)
   if (!tag) {
     return undefined
@@ -510,26 +487,10 @@ function readFormulaSpec(
     return null
   }
   return {
-    type,
-    sharedIndex: readXmlAttributeFromTag(bytes, tag.nameEnd, tagEnd, 'si'),
-    rawFormula: selfClosing ? '' : decodeXmlText(decodeBytes(bytes, tagEnd + 1, closing.start)).trim(),
+    typeCode: readLargeSimpleFormulaTypeCode(type),
+    sharedIndex: parseLargeSimpleSharedFormulaIndex(readXmlAttributeFromTag(bytes, tag.nameEnd, tagEnd, 'si')),
+    rawFormula: selfClosing ? '' : decodeBytes(bytes, tagEnd + 1, closing.start).trim(),
   }
-}
-
-function normalizeLargeSimpleFormula(rawFormula: string | undefined): string | null {
-  if (rawFormula === undefined || rawFormula.length === 0) {
-    return null
-  }
-  const formula = normalizeImportedFormulaSource(rawFormula)
-  return formulaReferencesExternalWorkbook(formula) ||
-    formulaReferencesVolatileFunction(formula) ||
-    formulaReferencesStructuredTable(formula)
-    ? null
-    : formula
-}
-
-function formulaReferencesStructuredTable(formula: string): boolean {
-  return /\[[#@\w]/u.test(formula)
 }
 
 function readRichTextCellArtifact(
@@ -683,6 +644,25 @@ function hasElement(bytes: Uint8Array, startIndex: number, endIndex: number, ele
     index += 1
   }
   return false
+}
+
+function countOpeningTags(bytes: Uint8Array, startIndex: number, endIndex: number, localName: string): number {
+  let count = 0
+  let index = startIndex
+  while (index < endIndex) {
+    if (bytes[index] !== lessThan) {
+      index += 1
+      continue
+    }
+    const tag = readXmlTagName(bytes, index + 1)
+    if (tag?.localName === localName) {
+      count += 1
+      index = tag.endIndex
+      continue
+    }
+    index += 1
+  }
+  return count
 }
 
 function readXmlTagName(bytes: Uint8Array, startIndex: number): { readonly localName: string; readonly endIndex: number } | null {

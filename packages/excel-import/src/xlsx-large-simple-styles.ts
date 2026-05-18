@@ -56,6 +56,90 @@ export function readLargeSimpleWorkbookStyles(
   return styles
 }
 
+export function readLargeSimpleWorkbookStylesFromChunks(
+  readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
+  requiredStyleIndexes: ReadonlySet<number>,
+): Map<number, ImportedCellStyle> | null {
+  if (requiredStyleIndexes.size === 0) {
+    return new Map()
+  }
+  const cellXfs = collectIndexedXmlElementsFromChunks(readChunks, 'cellXfs', 'xf', requiredStyleIndexes)
+  if (!cellXfs) {
+    return null
+  }
+  const requiredFillIndexes = new Set<number>()
+  const requiredFontIndexes = new Set<number>()
+  const styleRefs = new Map<number, StyleComponentRefs>()
+  for (const styleIndex of requiredStyleIndexes) {
+    const xfXml = cellXfs.get(styleIndex)
+    if (!xfXml) {
+      return null
+    }
+    const refs = readStyleComponentRefs(xfXml)
+    if (!refs) {
+      return null
+    }
+    styleRefs.set(styleIndex, refs)
+    if (refs.fillApplied && refs.fillId !== null) {
+      requiredFillIndexes.add(refs.fillId)
+    }
+    if (refs.fontApplied && refs.fontId !== null) {
+      requiredFontIndexes.add(refs.fontId)
+    }
+  }
+  const fills = collectIndexedXmlElementsFromChunks(readChunks, 'fills', 'fill', requiredFillIndexes)
+  const fonts = collectIndexedXmlElementsFromChunks(readChunks, 'fonts', 'font', requiredFontIndexes)
+  if (!fills || !fonts) {
+    return null
+  }
+  const styles = new Map<number, ImportedCellStyle>()
+  for (const [styleIndex, refs] of styleRefs) {
+    const fill = refs.fillApplied && refs.fillId !== null ? readFillStyle(fills.get(refs.fillId) ?? '') : undefined
+    const font = refs.fontApplied && refs.fontId !== null ? readFontStyle(fonts.get(refs.fontId) ?? '') : undefined
+    if (fill === null || font === null) {
+      return null
+    }
+    const style: ImportedCellStyle = {
+      ...(fill ? { fill } : {}),
+      ...(font ? { font } : {}),
+    }
+    if (Object.keys(style).length > 0) {
+      styles.set(styleIndex, style)
+    }
+  }
+  return styles
+}
+
+interface StyleComponentRefs {
+  readonly fillId: number | null
+  readonly fontId: number | null
+  readonly fillApplied: boolean
+  readonly fontApplied: boolean
+}
+
+function readStyleComponentRefs(xfXml: string): StyleComponentRefs | null {
+  const openingTag = /<(?:[A-Za-z_][\w.-]*:)?xf\b(?:[^>"']|"[^"]*"|'[^']*')*(?:\/>|>)/u.exec(xfXml)?.[0]
+  if (!openingTag) {
+    return null
+  }
+  const numFmtId = readNonNegativeIntegerAttribute(openingTag, 'numFmtId')
+  if (numFmtId !== null && numFmtId !== 0) {
+    return null
+  }
+  const fillId = readNonNegativeIntegerAttribute(openingTag, 'fillId')
+  const fontId = readNonNegativeIntegerAttribute(openingTag, 'fontId')
+  const borderId = readNonNegativeIntegerAttribute(openingTag, 'borderId')
+  if (isApplied(openingTag, 'applyBorder', borderId) || hasChildElement(xfXml, 'alignment') || hasChildElement(xfXml, 'protection')) {
+    return null
+  }
+  return {
+    fillId,
+    fontId,
+    fillApplied: isApplied(openingTag, 'applyFill', fillId),
+    fontApplied: isApplied(openingTag, 'applyFont', fontId),
+  }
+}
+
 function readFillStyles(stylesXml: string): Array<ImportedCellStyle['fill'] | null> | null {
   const fillsXml = extractElementXml(stylesXml, 'fills')
   if (!fillsXml) {
@@ -162,6 +246,258 @@ function readColor(xml: string, elementName: string): string | undefined {
     return `#${normalized.toLocaleLowerCase('en-US')}`
   }
   return undefined
+}
+
+function collectIndexedXmlElementsFromChunks(
+  readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
+  parentName: string,
+  childName: string,
+  requiredIndexes: ReadonlySet<number>,
+): Map<number, string> | null {
+  if (requiredIndexes.size === 0) {
+    return new Map()
+  }
+  const collector = new IndexedXmlElementCollector(parentName, childName, requiredIndexes)
+  if (!readChunks((chunk) => collector.push(chunk))) {
+    return null
+  }
+  return collector.finish()
+}
+
+class IndexedXmlElementCollector {
+  private readonly decoder = new TextDecoder()
+  private buffer = ''
+  private index = 0
+  private inParent = false
+  private childIndex = 0
+  private failed = false
+  private readonly elements = new Map<number, string>()
+
+  constructor(
+    private readonly parentName: string,
+    private readonly childName: string,
+    private readonly requiredIndexes: ReadonlySet<number>,
+  ) {}
+
+  push(chunk: Uint8Array): void {
+    if (this.failed || chunk.byteLength === 0) {
+      return
+    }
+    this.buffer += this.decoder.decode(chunk, { stream: true })
+    this.process(false)
+    this.compact()
+  }
+
+  finish(): Map<number, string> | null {
+    if (this.failed) {
+      return null
+    }
+    this.buffer += this.decoder.decode()
+    this.process(true)
+    this.compact()
+    if (this.failed || this.elements.size !== this.requiredIndexes.size) {
+      return null
+    }
+    return this.elements
+  }
+
+  private process(final: boolean): void {
+    while (!this.failed && this.elements.size < this.requiredIndexes.size) {
+      if (!this.inParent) {
+        const parent = findNextOpeningTag(this.buffer, this.index, this.parentName)
+        if (!parent) {
+          this.index = Math.max(0, this.buffer.length - this.parentName.length - 4)
+          return
+        }
+        const tagEnd = findStringTagEnd(this.buffer, parent.nameEnd)
+        if (tagEnd === null) {
+          if (final) {
+            this.failed = true
+          }
+          this.index = parent.start
+          return
+        }
+        if (isSelfClosingStringTag(this.buffer, tagEnd)) {
+          this.index = tagEnd + 1
+          continue
+        }
+        this.inParent = true
+        this.childIndex = 0
+        this.index = tagEnd + 1
+        continue
+      }
+      const next = findNextParentBoundaryOrChild(this.buffer, this.index, this.parentName, this.childName)
+      if (!next) {
+        this.index = Math.max(0, this.buffer.length - Math.max(this.parentName.length, this.childName.length) - 4)
+        return
+      }
+      if (next.kind === 'parent-close') {
+        const tagEnd = findStringTagEnd(this.buffer, next.nameEnd)
+        if (tagEnd === null) {
+          if (final) {
+            this.failed = true
+          }
+          this.index = next.start
+          return
+        }
+        this.inParent = false
+        this.index = tagEnd + 1
+        continue
+      }
+      const tagEnd = findStringTagEnd(this.buffer, next.nameEnd)
+      if (tagEnd === null) {
+        if (final) {
+          this.failed = true
+        }
+        this.index = next.start
+        return
+      }
+      const childStart = next.start
+      const childEnd = isSelfClosingStringTag(this.buffer, tagEnd)
+        ? tagEnd + 1
+        : findClosingStringElementEnd(this.buffer, tagEnd + 1, this.childName)
+      if (childEnd === null) {
+        if (final) {
+          this.failed = true
+        }
+        this.index = childStart
+        return
+      }
+      if (this.requiredIndexes.has(this.childIndex)) {
+        this.elements.set(this.childIndex, this.buffer.slice(childStart, childEnd))
+      }
+      this.childIndex += 1
+      this.index = childEnd
+    }
+  }
+
+  private compact(): void {
+    if (this.index === 0) {
+      return
+    }
+    if (this.index >= this.buffer.length) {
+      this.buffer = ''
+      this.index = 0
+      return
+    }
+    this.buffer = this.buffer.slice(this.index)
+    this.index = 0
+  }
+}
+
+function findNextParentBoundaryOrChild(
+  xml: string,
+  startIndex: number,
+  parentName: string,
+  childName: string,
+): { readonly kind: 'child' | 'parent-close'; readonly start: number; readonly nameEnd: number } | null {
+  let index = startIndex
+  while (index < xml.length) {
+    const tagStart = xml.indexOf('<', index)
+    if (tagStart < 0) {
+      return null
+    }
+    if (xml.charCodeAt(tagStart + 1) === 47) {
+      const tag = readStringTagName(xml, tagStart + 2)
+      if (tag?.localName === parentName) {
+        return { kind: 'parent-close', start: tagStart, nameEnd: tag.endIndex }
+      }
+      index = tagStart + 1
+      continue
+    }
+    const tag = readStringTagName(xml, tagStart + 1)
+    if (tag?.localName === childName) {
+      return { kind: 'child', start: tagStart, nameEnd: tag.endIndex }
+    }
+    index = tagStart + 1
+  }
+  return null
+}
+
+function findNextOpeningTag(
+  xml: string,
+  startIndex: number,
+  localName: string,
+): { readonly start: number; readonly nameEnd: number } | null {
+  let index = startIndex
+  while (index < xml.length) {
+    const tagStart = xml.indexOf('<', index)
+    if (tagStart < 0) {
+      return null
+    }
+    const tag = readStringTagName(xml, tagStart + 1)
+    if (tag?.localName === localName) {
+      return { start: tagStart, nameEnd: tag.endIndex }
+    }
+    index = tagStart + 1
+  }
+  return null
+}
+
+function findClosingStringElementEnd(xml: string, startIndex: number, localName: string): number | null {
+  let index = startIndex
+  while (index < xml.length) {
+    const tagStart = xml.indexOf('</', index)
+    if (tagStart < 0) {
+      return null
+    }
+    const tag = readStringTagName(xml, tagStart + 2)
+    if (tag?.localName === localName) {
+      const tagEnd = findStringTagEnd(xml, tag.endIndex)
+      return tagEnd === null ? null : tagEnd + 1
+    }
+    index = tagStart + 2
+  }
+  return null
+}
+
+function findStringTagEnd(xml: string, startIndex: number): number | null {
+  let quote: string | null = null
+  for (let index = startIndex; index < xml.length; index += 1) {
+    const char = xml[index]
+    if (quote !== null) {
+      if (char === quote) {
+        quote = null
+      }
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (char === '>') {
+      return index
+    }
+  }
+  return null
+}
+
+function isSelfClosingStringTag(xml: string, tagEnd: number): boolean {
+  let index = tagEnd - 1
+  while (index >= 0 && /\s/u.test(xml[index] ?? '')) {
+    index -= 1
+  }
+  return xml[index] === '/'
+}
+
+function readStringTagName(xml: string, startIndex: number): { readonly localName: string; readonly endIndex: number } | null {
+  const first = xml.charCodeAt(startIndex)
+  if (!Number.isFinite(first) || first === 33 || first === 47 || first === 63) {
+    return null
+  }
+  let index = startIndex
+  let localNameStart = startIndex
+  while (index < xml.length && isXmlNameChar(xml[index] ?? '')) {
+    if (xml[index] === ':') {
+      localNameStart = index + 1
+    }
+    index += 1
+  }
+  return index === localNameStart ? null : { localName: xml.slice(localNameStart, index), endIndex: index }
+}
+
+function isXmlNameChar(char: string): boolean {
+  return /[A-Za-z0-9_.:-]/u.test(char)
 }
 
 function isApplied(tag: string, attributeName: string, componentId: number | null): boolean {

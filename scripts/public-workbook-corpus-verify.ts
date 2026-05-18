@@ -18,6 +18,7 @@ import { readXlsxZipEntriesLazy } from '../packages/excel-import/src/xlsx-zip.js
 import { ValueTag } from '../packages/protocol/src/enums.js'
 import type { CellValue, LiteralInput, WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import { validatePublicWorkbookManifest } from './public-workbook-corpus-json.ts'
+import { largeSimpleImportPhaseTelemetryEvidence } from './public-workbook-corpus-large-simple-evidence.ts'
 import {
   classifyUnsupportedLocaleDecimalCommaFormulaOracle,
   localeDecimalCommaFormulaOracleUnsupportedClassification,
@@ -480,6 +481,7 @@ async function verifyLargeSimpleWorkbookCompact(
       `sheets=${String(featureCounts.sheetCount)}`,
       `cells=${String(featureCounts.cellCount)}`,
       `formulas=${String(featureCounts.formulaCellCount)}`,
+      ...largeSimpleImportPhaseTelemetryEvidence(imported.stats),
       ...(hasResourceLimitUnsupportedClassifications(unsupportedFeatureClassifications)
         ? [publicWorkbookResourceLimitClassifierEvidence, ...phaseResourceLimitEvidence]
         : []),

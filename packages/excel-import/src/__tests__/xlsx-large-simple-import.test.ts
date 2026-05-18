@@ -176,6 +176,47 @@ describe('large simple XLSX import fast path', () => {
     })
   })
 
+  it('skips worksheet metadata XML retention in verifier-only headless mode', () => {
+    const bytes = buildLargeSimpleWorkbook({
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1:B2"/>',
+        '<sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1"><v>1</v></c></row></sheetData>',
+        '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
+        '<conditionalFormatting sqref="B1:B2"><cfRule type="cellIs" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>',
+        '<tableParts count="1"><tablePart r:id="rIdTable1"/></tableParts>',
+        '</worksheet>',
+      ].join(''),
+    })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/sharedStrings.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('sharedStrings.xml should not be inflated for headless verifier import')
+      },
+    })
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('worksheet XML should be streamed instead of inflated')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'headless-verifier.xlsx', zip, {
+      materializeCells: false,
+      materializeMetadata: false,
+      minByteLength: 0,
+    })
+
+    expect(imported?.snapshot.sheets[0]?.metadata).toBeUndefined()
+    expect(imported?.stats.tableCount).toBe(1)
+    expect(imported?.stats.mergeCount).toBe(1)
+    expect(imported?.stats.conditionalFormatCount).toBe(1)
+  })
+
   it('streams compressed worksheet zip entries across multiple compressed chunks', () => {
     const rows: string[] = []
     for (let row = 1; row <= 4_096; row += 1) {
@@ -287,6 +328,58 @@ describe('large simple XLSX import fast path', () => {
         },
       ],
     })
+  })
+
+  it('collects materialized shared-string references during the real worksheet stream', () => {
+    const bytes = buildLargeSimpleWorkbook({
+      sharedStringsXml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3">
+  <si><t>Unused</t></si>
+  <si><t>Alpha</t></si>
+  <si><t>Beta</t></si>
+</sst>`,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1:B1"/>',
+        '<sheetData><row r="1"><c r="A1" t="s"><v>1</v></c><c r="B1" t="s"><v>2</v></c></row></sheetData>',
+        '</worksheet>',
+      ].join(''),
+    })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    const worksheetStreamCount = countLazyZipEntryStreams(zip, 'xl/worksheets/sheet1.xml')
+    Object.defineProperty(zip, 'xl/sharedStrings.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('sharedStrings.xml should be streamed instead of fully inflated')
+      },
+    })
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('worksheet XML should be streamed instead of inflated')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'single-pass-shared-strings.xlsx', zip, { minByteLength: 0 })
+
+    expect(imported?.snapshot.sheets[0]?.cells).toEqual([
+      { address: 'A1', value: 'Alpha' },
+      { address: 'B1', value: 'Beta' },
+    ])
+    expect(worksheetStreamCount()).toBe(1)
+    expect(imported?.stats.phaseTelemetry.map((entry) => entry.phase)).toEqual([
+      'zip-setup',
+      'worksheet-scan',
+      'metadata-parsing',
+      'shared-string-resolution',
+      'style-parsing',
+      'public-snapshot-materialization',
+    ])
+    expect(imported?.stats.phaseTelemetry.every((entry) => Number.isInteger(entry.elapsedMs) && entry.elapsedMs >= 0)).toBe(true)
+    expect(imported?.stats.phaseTelemetry.every((entry) => (entry.rssBytes ?? 0) > 0)).toBe(true)
   })
 
   it('imports workbook defined names without falling back to SheetJS', () => {
@@ -581,6 +674,43 @@ describe('large simple XLSX import fast path', () => {
     expect(metadata?.conditionalFormatArtifacts?.xml).toContain('type="duplicateValues"')
   })
 
+  it('coalesces contiguous same-style cells into compact style ranges', () => {
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      includeStyles: true,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1:C2"/>',
+        '<sheetData>',
+        '<row r="1"><c r="A1" s="1"><v>1</v></c><c r="B1" s="1"><v>2</v></c><c r="C1"><v>3</v></c></row>',
+        '<row r="2"><c r="A2" s="1"><v>4</v></c></row>',
+        '</sheetData>',
+        '</worksheet>',
+      ].join(''),
+    })
+
+    const zip = readXlsxZipEntriesLazy(bytes)
+    const stylesStreamCount = countLazyZipEntryStreams(zip, 'xl/styles.xml')
+    Object.defineProperty(zip, 'xl/styles.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('styles.xml should be streamed instead of fully inflated')
+      },
+    })
+    const imported = tryImportLargeSimpleXlsx(bytes, 'coalesced-styles.xlsx', zip, { minByteLength: 0 })
+    const styleRanges = imported?.snapshot.sheets[0]?.metadata?.styleRanges
+    const styleId = styleRanges?.[0]?.styleId
+
+    expect(styleRanges).toEqual([
+      { range: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B1' }, styleId },
+      { range: { sheetName: 'Data', startAddress: 'A2', endAddress: 'A2' }, styleId },
+    ])
+    expect(imported?.snapshot.workbook.metadata?.styles).toEqual([{ id: styleId, fill: { backgroundColor: '#ffcc00' } }])
+    expect(stylesStreamCount()).toBe(2)
+  })
+
   it('falls back for broad style-only blank templates that need style-aware import', () => {
     const rows: string[] = []
     for (let row = 1; row <= 3_001; row += 1) {
@@ -782,6 +912,80 @@ function buildLargeSimpleWorkbook(input: {
       Object.entries(input.extraEntries ?? {}).map(([path, value]) => [path, typeof value === 'string' ? strToU8(value) : value]),
     ),
   })
+}
+
+function countLazyZipEntryStreams(zip: Record<string, Uint8Array>, path: string): () => number {
+  const metadata = readLazyZipMetadata(zip)
+  const entry = metadata?.entriesByPath.get(path)
+  if (!metadata || !entry) {
+    throw new Error(`Missing lazy ZIP metadata for ${path}`)
+  }
+  const source = metadata.source
+  const fileNameLength = readLittleEndianUint16(source, entry.localHeaderOffset + 26)
+  const extraFieldLength = readLittleEndianUint16(source, entry.localHeaderOffset + 28)
+  const dataStart = entry.localHeaderOffset + 30 + fileNameLength + extraFieldLength
+  const dataEnd = dataStart + entry.compressedSize
+  let streamCount = 0
+  metadata.source = new Proxy(source, {
+    get(target, property) {
+      if (property === 'subarray') {
+        return (start?: number, end?: number) => {
+          if (start === dataStart && end === dataEnd) {
+            streamCount += 1
+          }
+          return target.subarray(start, end)
+        }
+      }
+      const value = Reflect.get(target, property, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+  return () => streamCount
+}
+
+function readLazyZipMetadata(zip: Record<string, Uint8Array>):
+  | {
+      source: Uint8Array
+      readonly entriesByPath: ReadonlyMap<
+        string,
+        {
+          readonly localHeaderOffset: number
+          readonly compressedSize: number
+        }
+      >
+    }
+  | undefined {
+  for (const symbol of Object.getOwnPropertySymbols(zip)) {
+    const value = Reflect.get(zip, symbol) as unknown
+    if (isLazyZipMetadata(value)) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function isLazyZipMetadata(value: unknown): value is {
+  source: Uint8Array
+  readonly entriesByPath: ReadonlyMap<
+    string,
+    {
+      readonly localHeaderOffset: number
+      readonly compressedSize: number
+    }
+  >
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'source' in value &&
+    value.source instanceof Uint8Array &&
+    'entriesByPath' in value &&
+    value.entriesByPath instanceof Map
+  )
+}
+
+function readLittleEndianUint16(source: Uint8Array, offset: number): number {
+  return source[offset] | (source[offset + 1] << 8)
 }
 
 function encodeColumnName(index: number): string {

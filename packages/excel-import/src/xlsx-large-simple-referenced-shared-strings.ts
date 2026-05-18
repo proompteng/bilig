@@ -3,51 +3,25 @@ import {
   readLargeSimpleSharedStrings,
   type LargeSimpleSharedStringEntry,
 } from './xlsx-large-simple-shared-strings.js'
-import { parseLargeSimpleWorksheetCellsFromChunks } from './xlsx-large-simple-worksheet-stream-scanner.js'
 import { forEachInflatedXlsxZipEntryChunk, getZipText, type XlsxZipEntries } from './xlsx-zip.js'
 
 const sharedStringsPath = 'xl/sharedStrings.xml'
 
-export function readMaterializedLargeSimpleSharedStrings(
+export function readReferencedLargeSimpleSharedStrings(
   zip: XlsxZipEntries,
-  worksheetEntries: readonly { readonly path: string }[],
+  referencedIndexes: ReadonlySet<number>,
 ): LargeSimpleSharedStringEntry[] | null {
-  const referencedIndexes = collectLargeSimpleSharedStringIndexes(zip, worksheetEntries)
-  if (referencedIndexes) {
-    const streamed = readLargeSimpleReferencedSharedStringsFromChunks(
-      (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, sharedStringsPath, onChunk),
-      referencedIndexes,
-    )
-    if (streamed) {
-      return streamed
-    }
+  const streamed = readLargeSimpleReferencedSharedStringsFromChunks(
+    (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, sharedStringsPath, onChunk),
+    referencedIndexes,
+  )
+  if (streamed) {
+    return streamed
   }
-  const sharedStringsXml = getZipText(zip, sharedStringsPath)
-  return sharedStringsXml ? readLargeSimpleSharedStrings(sharedStringsXml) : null
+  return readAllLargeSimpleSharedStrings(zip)
 }
 
-function collectLargeSimpleSharedStringIndexes(
-  zip: XlsxZipEntries,
-  worksheetEntries: readonly { readonly path: string }[],
-): Set<number> | null {
-  const referencedIndexes = new Set<number>()
-  for (const [sheetIndex, entry] of worksheetEntries.entries()) {
-    const streamed = parseLargeSimpleWorksheetCellsFromChunks(
-      (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
-      sheetIndex,
-      {
-        hasSharedStrings: true,
-        retainCells: false,
-        collectSharedStringIndexes: true,
-        allowInlineStringsWithoutRetention: true,
-      },
-    )
-    if (!streamed) {
-      return null
-    }
-    for (const index of streamed.sharedStringIndexes) {
-      referencedIndexes.add(index)
-    }
-  }
-  return referencedIndexes
+export function readAllLargeSimpleSharedStrings(zip: XlsxZipEntries): LargeSimpleSharedStringEntry[] | null {
+  const sharedStringsXml = getZipText(zip, sharedStringsPath)
+  return sharedStringsXml ? readLargeSimpleSharedStrings(sharedStringsXml) : null
 }
