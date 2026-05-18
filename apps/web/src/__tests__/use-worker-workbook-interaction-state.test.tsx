@@ -359,6 +359,63 @@ describe('useWorkerWorkbookInteractionState', () => {
     })
   })
 
+  it('uses just-committed visible cell values when the next formula is entered before persistence settles', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const selectedCell = stringCell('Sheet1', 'A1', '')
+    const workerHandle = {
+      viewportStore: createViewportStoreMapStub([selectedCell, stringCell('Sheet1', 'A2', '')]),
+    }
+    let resolveFirstMutation: (() => void) | null = null
+    const firstMutation = new Promise<void>((resolve) => {
+      resolveFirstMutation = resolve
+    })
+    const invokeMutation = vi.fn((method: string) => (method === 'setCellValue' ? firstMutation : Promise.resolve()))
+    const sendSelectionChanged = vi.fn()
+    const harness = mountHarness()
+    let captured: ReturnType<typeof useWorkerWorkbookInteractionState> | null = null
+
+    await harness.render({
+      documentId: 'doc-1',
+      selection: { sheetName: 'Sheet1', address: 'A1' },
+      selectedCell,
+      workerHandle,
+      invokeMutation,
+      sendSelectionChanged,
+      capture: (value) => {
+        captured = value
+      },
+    })
+    if (!captured) {
+      throw new Error('Expected interaction state capture')
+    }
+
+    await act(async () => {
+      captured?.beginEditing('', 'select-all', 'formula')
+      captured?.handleEditorChange('hello')
+      captured?.commitEditor(undefined, 'hello')
+      captured?.selectAddress('Sheet1', 'A2')
+      captured?.beginEditing('', 'select-all', 'formula')
+      captured?.handleEditorChange('=A1="HELLO"')
+      captured?.commitEditor(undefined, '=A1="HELLO"')
+      await Promise.resolve()
+    })
+
+    expect(workerHandle.viewportStore.getCell('Sheet1', 'A1')).toMatchObject({
+      input: 'hello',
+      value: { tag: ValueTag.String, value: 'hello' },
+    })
+    expect(workerHandle.viewportStore.getCell('Sheet1', 'A2').value).toEqual({ tag: ValueTag.Boolean, value: true })
+    expect(invokeMutation).toHaveBeenCalledWith('setCellValue', 'Sheet1', 'A1', 'hello')
+    expect(invokeMutation).toHaveBeenCalledWith('setCellFormula', 'Sheet1', 'A2', 'A1="HELLO"')
+
+    await act(async () => {
+      resolveFirstMutation?.()
+      await firstMutation
+      harness.root.unmount()
+    })
+  })
+
   it('keeps detached optimistic value readback visible before the viewport store is ready', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

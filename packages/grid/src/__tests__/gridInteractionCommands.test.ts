@@ -42,7 +42,7 @@ describe('gridInteractionCommands', () => {
     expect(onBeginEdit).toHaveBeenNthCalledWith(2, 'from-cell', 'caret-end', { sheetName: 'Sheet1', address: 'A1' })
   })
 
-  it('should toggle boolean cells and ignore non-boolean cells', () => {
+  it('should toggle literal boolean cells and ignore formula or non-boolean cells', () => {
     // Arrange
     const onToggleBooleanCell = vi.fn()
     const engine = {
@@ -51,6 +51,7 @@ describe('gridInteractionCommands', () => {
         .mockReturnValueOnce({
           sheetName: 'Sheet1',
           address: 'B2',
+          input: true,
           value: { tag: 2, value: true },
           flags: 0,
           version: 1,
@@ -58,6 +59,14 @@ describe('gridInteractionCommands', () => {
         .mockReturnValueOnce({
           sheetName: 'Sheet1',
           address: 'C3',
+          formula: 'A1="HELLO"',
+          value: { tag: 2, value: true },
+          flags: 0,
+          version: 1,
+        })
+        .mockReturnValueOnce({
+          sheetName: 'Sheet1',
+          address: 'D4',
           value: { tag: 3, value: 'text', stringId: 1 },
           flags: 0,
           version: 1,
@@ -81,6 +90,15 @@ describe('gridInteractionCommands', () => {
         sheetName: 'Sheet1',
         col: 2,
         row: 2,
+      }),
+    ).toBe(false)
+    expect(
+      toggleWorkbookGridBooleanCell({
+        engine,
+        onToggleBooleanCell,
+        sheetName: 'Sheet1',
+        col: 3,
+        row: 3,
       }),
     ).toBe(false)
 

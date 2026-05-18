@@ -236,6 +236,7 @@ test('web app accepts string values and string comparison formulas', async ({ pa
   await formulaInput.fill('=A1="HELLO"')
   await formulaInput.press('Enter')
   await clickProductCell(page, 0, 1)
+  await expect(formulaInput).toHaveValue('=A1="HELLO"')
   await expect(resolvedValue).toHaveText('TRUE')
 })
 
@@ -513,6 +514,7 @@ test('web app preserves multi-digit numeric type-to-replace input', async ({ pag
   const nameBox = page.getByTestId('name-box')
   const formulaInput = page.getByTestId('formula-input')
   const cellEditor = page.getByTestId('cell-editor-input')
+  const grid = page.getByTestId('sheet-grid')
 
   await clickProductCell(page, 0, 0)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
@@ -584,6 +586,7 @@ test('@browser-serial web app supports F2 edit in the product shell', async ({ p
   await waitForWorkbookReady(page)
   await waitForWorkbookReady(page)
 
+  const grid = page.getByTestId('sheet-grid')
   const nameBox = page.getByTestId('name-box')
   const formulaInput = page.getByTestId('formula-input')
   const cellEditor = page.getByTestId('cell-editor-input')
@@ -609,7 +612,8 @@ test('@browser-serial web app supports F2 edit in the product shell', async ({ p
 })
 
 test('@browser-ci web app offers formula autocomplete and inserts a function with Tab', async ({ page }) => {
-  await page.goto('/')
+  const documentId = createTestDocumentId('playwright-formula-autocomplete')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')

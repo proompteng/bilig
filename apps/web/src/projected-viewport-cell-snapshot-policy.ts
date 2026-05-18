@@ -67,6 +67,14 @@ export function shouldKeepCurrentSnapshot(
     if (options.allowAuthoritativeClearOverride === true && isClearCellSnapshot(incoming) && !isClearCellSnapshot(current)) {
       return false
     }
+    if (
+      current.formula !== undefined &&
+      incoming.formula === undefined &&
+      incoming.input === undefined &&
+      incoming.value.tag !== ValueTag.Error
+    ) {
+      return true
+    }
     if (isClearCellSnapshot(current) && !isClearCellSnapshot(incoming)) {
       return true
     }

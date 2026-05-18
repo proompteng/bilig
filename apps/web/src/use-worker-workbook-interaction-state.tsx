@@ -127,6 +127,7 @@ export function useWorkerWorkbookInteractionState(input: {
   const pendingLocalSelectionRef = useRef<GridSelectionSnapshot | null>(null)
   const optimisticCellSeedsRef = useRef<Map<string, string>>(new Map())
   const optimisticCellResolvedValuesRef = useRef<Map<string, string>>(new Map())
+  const optimisticCellSnapshotsRef = useRef<Map<string, CellSnapshot>>(new Map())
   const editSessionRef = useRef(0)
   const pendingEditCommitSessionRef = useRef<number | null>(null)
   const pendingEditCommitMovementAppliedRef = useRef(false)
@@ -202,6 +203,7 @@ export function useWorkerWorkbookInteractionState(input: {
     if (optimisticCellSeedsRef.current.get(key) === seed) {
       optimisticCellSeedsRef.current.delete(key)
       optimisticCellResolvedValuesRef.current.delete(key)
+      optimisticCellSnapshotsRef.current.delete(key)
       bumpOptimisticSeedRevision((revision) => revision + 1)
     }
   }, [])
@@ -212,7 +214,7 @@ export function useWorkerWorkbookInteractionState(input: {
     const endRow = Math.max(start.row, end.row)
     const startCol = Math.min(start.col, end.col)
     const endCol = Math.max(start.col, end.col)
-    const removedSeeds: Array<readonly [string, string, string | undefined]> = []
+    const removedSeeds: Array<readonly [string, string, string | undefined, CellSnapshot | undefined]> = []
 
     for (let row = startRow; row <= endRow; row += 1) {
       for (let col = startCol; col <= endCol; col += 1) {
@@ -222,9 +224,10 @@ export function useWorkerWorkbookInteractionState(input: {
         if (seed === undefined) {
           continue
         }
-        removedSeeds.push([key, seed, optimisticCellResolvedValuesRef.current.get(key)])
+        removedSeeds.push([key, seed, optimisticCellResolvedValuesRef.current.get(key), optimisticCellSnapshotsRef.current.get(key)])
         optimisticCellSeedsRef.current.delete(key)
         optimisticCellResolvedValuesRef.current.delete(key)
+        optimisticCellSnapshotsRef.current.delete(key)
       }
     }
 
@@ -234,12 +237,15 @@ export function useWorkerWorkbookInteractionState(input: {
 
     bumpOptimisticSeedRevision((revision) => revision + 1)
     return () => {
-      for (const [key, seed, resolvedValue] of removedSeeds) {
+      for (const [key, seed, resolvedValue, snapshot] of removedSeeds) {
         if (!optimisticCellSeedsRef.current.has(key)) {
           optimisticCellSeedsRef.current.set(key, seed)
         }
         if (resolvedValue !== undefined && !optimisticCellResolvedValuesRef.current.has(key)) {
           optimisticCellResolvedValuesRef.current.set(key, resolvedValue)
+        }
+        if (snapshot !== undefined && !optimisticCellSnapshotsRef.current.has(key)) {
+          optimisticCellSnapshotsRef.current.set(key, snapshot)
         }
       }
       bumpOptimisticSeedRevision((revision) => revision + 1)
@@ -247,11 +253,11 @@ export function useWorkerWorkbookInteractionState(input: {
   }, [])
   const supersedeOptimisticCellSeedsForSheet = useCallback((sheetName: string): (() => void) | null => {
     const prefix = `${sheetName}:`
-    const removedSeeds: Array<readonly [string, string, string | undefined]> = []
+    const removedSeeds: Array<readonly [string, string, string | undefined, CellSnapshot | undefined]> = []
 
     for (const [key, seed] of optimisticCellSeedsRef.current) {
       if (key.startsWith(prefix)) {
-        removedSeeds.push([key, seed, optimisticCellResolvedValuesRef.current.get(key)])
+        removedSeeds.push([key, seed, optimisticCellResolvedValuesRef.current.get(key), optimisticCellSnapshotsRef.current.get(key)])
       }
     }
 
@@ -262,16 +268,20 @@ export function useWorkerWorkbookInteractionState(input: {
     for (const [key] of removedSeeds) {
       optimisticCellSeedsRef.current.delete(key)
       optimisticCellResolvedValuesRef.current.delete(key)
+      optimisticCellSnapshotsRef.current.delete(key)
     }
 
     bumpOptimisticSeedRevision((revision) => revision + 1)
     return () => {
-      for (const [key, seed, resolvedValue] of removedSeeds) {
+      for (const [key, seed, resolvedValue, snapshot] of removedSeeds) {
         if (!optimisticCellSeedsRef.current.has(key)) {
           optimisticCellSeedsRef.current.set(key, seed)
         }
         if (resolvedValue !== undefined && !optimisticCellResolvedValuesRef.current.has(key)) {
           optimisticCellResolvedValuesRef.current.set(key, resolvedValue)
+        }
+        if (snapshot !== undefined && !optimisticCellSnapshotsRef.current.has(key)) {
+          optimisticCellSnapshotsRef.current.set(key, snapshot)
         }
       }
       bumpOptimisticSeedRevision((revision) => revision + 1)
@@ -297,10 +307,23 @@ export function useWorkerWorkbookInteractionState(input: {
   const applyOptimisticParsedInput = useCallback(
     (targetSelection: EditTargetSelection, parsed: ParsedEditorInput) => {
       const viewportStore = workerHandleRef.current?.viewportStore
-      if (!viewportStore) {
-        return null
+      const targetKey = optimisticCellKey(targetSelection.sheetName, targetSelection.address)
+      const hadPreviousOptimisticSnapshot = optimisticCellSnapshotsRef.current.has(targetKey)
+      const previousOptimisticSnapshot = optimisticCellSnapshotsRef.current.get(targetKey)
+      const readVisibleCell = (sheetName: string, address: string): CellSnapshot => {
+        const optimisticSnapshot = optimisticCellSnapshotsRef.current.get(optimisticCellKey(sheetName, address))
+        if (optimisticSnapshot) {
+          return optimisticSnapshot
+        }
+        if (viewportStore) {
+          return viewportStore.getCell(sheetName, address)
+        }
+        if (selectedCell.sheetName === sheetName && selectedCell.address === address) {
+          return selectedCell
+        }
+        return emptyCellSnapshot(sheetName, address)
       }
-      const previous = viewportStore.getCell(targetSelection.sheetName, targetSelection.address)
+      const previous = readVisibleCell(targetSelection.sheetName, targetSelection.address)
       const optimistic = createOptimisticCellSnapshot({
         sheetName: targetSelection.sheetName,
         address: targetSelection.address,
@@ -311,19 +334,25 @@ export function useWorkerWorkbookInteractionState(input: {
             sheetName: targetSelection.sheetName,
             address: targetSelection.address,
             formula,
-            getCell: (sheetName, address) => viewportStore.getCell(sheetName, address),
+            getCell: readVisibleCell,
           }),
       })
-      viewportStore.setCellSnapshot(optimistic)
+      optimisticCellSnapshotsRef.current.set(targetKey, optimistic)
+      viewportStore?.setCellSnapshot(optimistic)
       return {
         editorSeed: toEditorValue(optimistic),
         resolvedValue: toResolvedValue(optimistic),
         rollback: (snapshot = previous) => {
-          viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, optimistic.version + 1))
+          if (hadPreviousOptimisticSnapshot && previousOptimisticSnapshot) {
+            optimisticCellSnapshotsRef.current.set(targetKey, previousOptimisticSnapshot)
+          } else {
+            optimisticCellSnapshotsRef.current.delete(targetKey)
+          }
+          viewportStore?.setCellSnapshot(createSupersedingCellSnapshot(snapshot, optimistic.version + 1))
         },
       }
     },
-    [workerHandleRef],
+    [selectedCell, workerHandleRef],
   )
 
   const cloneLiveSelectedCell = useCallback(
@@ -722,6 +751,7 @@ export function useWorkerWorkbookInteractionState(input: {
     if (optimisticSeed === toEditorValue(liveVisibleCell)) {
       optimisticCellSeedsRef.current.delete(visibleCellKey)
       optimisticCellResolvedValuesRef.current.delete(visibleCellKey)
+      optimisticCellSnapshotsRef.current.delete(visibleCellKey)
       bumpOptimisticSeedRevision((revision) => revision + 1)
     }
   }, [liveVisibleCell, visibleCellKey])

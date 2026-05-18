@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { formatAddress } from '@bilig/formula'
-import { ValueTag } from '@bilig/protocol'
+import type { CellSnapshot } from '@bilig/protocol'
 import {
   getNormalizedGridKeyboardKey,
   handleGridKey as dispatchGridKey,
@@ -11,6 +11,7 @@ import {
   shouldSuppressWorkbookChromeSelectionKeyUp,
   type GridKeyboardEventLike,
 } from './gridClipboardKeyboardController.js'
+import { isToggleableBooleanCellSnapshot } from './gridInteractionCommands.js'
 import type { InternalClipboardRange } from './gridInternalClipboard.js'
 import type { GridSelection, GridSelectionSnapshot } from './gridTypes.js'
 
@@ -123,7 +124,7 @@ export function useWorkbookGridKeyboardHandler(input: {
   beginSelectedEdit: (seed?: string, selectionBehavior?: 'select-all' | 'caret-end') => void
   captureInternalClipboardSelection: () => InternalClipboardRange | null
   editorValue: string
-  engine: { getCell(sheetName: string, address: string): { value: { tag: ValueTag } } }
+  engine: { getCell(sheetName: string, address: string): CellSnapshot }
   gridSelection: GridSelection
   getGridSelection?: (() => GridSelection) | undefined
   hostRef: MutableRefObject<HTMLDivElement | null>
@@ -199,7 +200,7 @@ export function useWorkbookGridKeyboardHandler(input: {
         gridSelection,
         internalClipboardRef: input.internalClipboardRef,
         isSelectedCellBoolean: () =>
-          input.engine.getCell(input.sheetName, formatAddress(selectedCell[1], selectedCell[0])).value.tag === ValueTag.Boolean,
+          isToggleableBooleanCellSnapshot(input.engine.getCell(input.sheetName, formatAddress(selectedCell[1], selectedCell[0]))),
         isEditingCell: input.isEditingCell,
         onCancelEdit: input.onCancelEdit,
         onClearCell: input.onClearCell,

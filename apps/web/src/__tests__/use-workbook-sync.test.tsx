@@ -512,7 +512,7 @@ describe('useWorkbookSync', () => {
     })
   })
 
-  it('keeps rapid follow-up clears visible while queueing local persistence', async () => {
+  it('keeps rapid follow-up clears visible while serializing local persistence', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     let resolveFirstMutation: ((mutation: PendingWorkbookMutation) => void) | null = null
     const firstMutation = new Promise<PendingWorkbookMutation>((resolve) => {
@@ -607,13 +607,11 @@ describe('useWorkbookSync', () => {
       value: { tag: ValueTag.Empty },
     })
     expect('input' in clearedOptimisticCell).toBe(false)
-    await vi.waitFor(() => {
-      expect(runtimeController.invoke).toHaveBeenCalledWith('enqueuePendingMutation', {
-        method: 'clearRange',
-        args: [clearRange],
-      })
+    expect(runtimeController.invoke).toHaveBeenCalledTimes(1)
+    expect(runtimeController.invoke).not.toHaveBeenCalledWith('enqueuePendingMutation', {
+      method: 'clearRange',
+      args: [clearRange],
     })
-    expect(runtimeController.invoke).toHaveBeenCalledTimes(2)
 
     await act(async () => {
       resolveFirstMutation?.({
@@ -634,6 +632,7 @@ describe('useWorkbookSync', () => {
       method: 'clearRange',
       args: [clearRange],
     })
+    expect(runtimeController.invoke).toHaveBeenCalledTimes(2)
 
     await act(async () => {
       root.unmount()

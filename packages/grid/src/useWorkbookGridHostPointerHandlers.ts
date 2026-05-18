@@ -55,7 +55,6 @@ export function useWorkbookGridHostPointerHandlers(input: {
   readonly onMoveRange: WorkbookGridSurfaceProps['onMoveRange']
   readonly pointerResolvers: ReturnType<typeof useWorkbookGridPointerResolvers>
   readonly renderState: ReturnType<typeof useWorkbookGridRenderState>
-  readonly toggleBooleanCellAt: (col: number, row: number) => boolean
 }) {
   const {
     activeSelectionCell,
@@ -71,7 +70,6 @@ export function useWorkbookGridHostPointerHandlers(input: {
     onMoveRange,
     pointerResolvers,
     renderState,
-    toggleBooleanCellAt,
   } = input
   const {
     activeResizeColumn,
@@ -621,7 +619,6 @@ export function useWorkbookGridHostPointerHandlers(input: {
         })
         return
       }
-      const clickedCell = dragDidMoveRef.current || dragHeaderSelectionRef.current ? null : resolvePointerCell(event.clientX, event.clientY)
       handleGridPointerUp({
         dragAnchorCell: dragAnchorCellRef.current,
         dragDidMove: dragDidMoveRef.current,
@@ -640,9 +637,6 @@ export function useWorkbookGridHostPointerHandlers(input: {
         setGridSelection,
         visibleRegion,
       })
-      if (clickedCell) {
-        toggleBooleanCellAt(clickedCell[0], clickedCell[1])
-      }
       focusGrid()
       setActiveHeaderDrag(null)
       refreshHoverState(event.clientX, event.clientY, 0)

@@ -199,7 +199,7 @@ export function useWorkbookSync(input: {
     }
   }, [])
 
-  const runSerializedLocalMutationTask = useCallback(async (task: () => Promise<unknown>): Promise<unknown> => {
+  const runSerializedLocalMutationTask = useCallback(async <T>(task: () => Promise<T>): Promise<T> => {
     const previousTask = localMutationQueueRef.current
     let releaseQueue = () => {}
     localMutationQueueRef.current = new Promise<void>((resolve) => {
@@ -213,23 +213,12 @@ export function useWorkbookSync(input: {
     }
   }, [])
 
-  const trackLocalMutationTask = useCallback(async <T>(task: () => Promise<T>): Promise<T> => {
-    const taskPromise = task()
-    const previousTask = localMutationQueueRef.current
-    localMutationQueueRef.current = (async () => {
-      try {
-        await previousTask
-      } catch {
-        // Keep later local history operations ordered even after a failed local mutation.
-      }
-      try {
-        await taskPromise
-      } catch {
-        // The caller receives the original failure through taskPromise.
-      }
-    })()
-    return await taskPromise
-  }, [])
+  const trackLocalMutationTask = useCallback(
+    async <T>(task: () => Promise<T>): Promise<T> => {
+      return await runSerializedLocalMutationTask(task)
+    },
+    [runSerializedLocalMutationTask],
+  )
 
   const scheduleAuthoritativeRefreshProbes = useCallback(() => {
     if (!runtimeController) {

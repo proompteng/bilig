@@ -576,6 +576,49 @@ describe('ProjectedViewportStore', () => {
     })
   })
 
+  it('keeps an optimistic formula snapshot when an eval-only patch drops source metadata', () => {
+    const cache = new ProjectedViewportStore()
+
+    cache.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'A2',
+      value: { tag: ValueTag.Boolean, value: true },
+      input: '=A1="HELLO"',
+      formula: 'A1="HELLO"',
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 1,
+    })
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      cells: [
+        {
+          row: 1,
+          col: 0,
+          snapshot: {
+            sheetName: 'Sheet1',
+            address: 'A2',
+            value: { tag: ValueTag.Boolean, value: false },
+            flags: 0,
+            version: 1,
+          },
+          displayText: 'FALSE',
+          copyText: 'FALSE',
+          editorText: 'FALSE',
+          formatId: 0,
+          styleId: 'style-0',
+        },
+      ],
+    })
+
+    expect(cache.getCell('Sheet1', 'A2')).toMatchObject({
+      value: { tag: ValueTag.Boolean, value: true },
+      formula: 'A1="HELLO"',
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 1,
+    })
+  })
+
   it('accepts a newer literal snapshot when the source input is present', () => {
     const cache = new ProjectedViewportStore()
 

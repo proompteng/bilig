@@ -386,7 +386,6 @@ export function useWorkbookGridInteractions(
     onMoveRange,
     pointerResolvers,
     renderState,
-    toggleBooleanCellAt,
   })
 
   const handleSelectEntireSheet = useCallback(() => {

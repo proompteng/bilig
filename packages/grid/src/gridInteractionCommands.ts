@@ -1,5 +1,5 @@
 import { formatAddress } from '@bilig/formula'
-import type { CellSnapshot } from '@bilig/protocol'
+import type { BooleanValue, CellSnapshot } from '@bilig/protocol'
 import { ValueTag } from '@bilig/protocol'
 import { cellToEditorSeed } from './gridCells.js'
 import type { GridEngineLike } from './grid-engine.js'
@@ -38,11 +38,27 @@ export function toggleWorkbookGridBooleanCell(input: {
   }
   const address = formatAddress(row, col)
   const snapshot = engine.getCell(sheetName, address)
-  if (snapshot.value.tag !== ValueTag.Boolean) {
+  if (!isToggleableBooleanCellSnapshot(snapshot)) {
     return false
   }
   onToggleBooleanCell(sheetName, address, !snapshot.value.value)
   return true
+}
+
+type ToggleableBooleanCellSnapshot = CellSnapshot & {
+  readonly formula?: undefined
+  readonly input: boolean
+  readonly value: BooleanValue
+}
+
+export function isToggleableBooleanCellSnapshot(snapshot: CellSnapshot): snapshot is ToggleableBooleanCellSnapshot {
+  return (
+    snapshot.value.tag === ValueTag.Boolean &&
+    'value' in snapshot.value &&
+    typeof snapshot.value.value === 'boolean' &&
+    snapshot.formula === undefined &&
+    typeof snapshot.input === 'boolean'
+  )
 }
 
 export function openWorkbookGridHeaderContextMenuFromKeyboard(input: {
