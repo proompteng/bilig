@@ -289,6 +289,9 @@ export async function finalizeWorkbookAgentPrivateTurnBundle(
   if (input.turnStatus !== 'completed') {
     return
   }
+  if (input.sessionState.live.activeTurnId !== input.turnId) {
+    return
+  }
   const actorUserId = context.resolveTurnActorUserId(input.sessionState, input.turnId)
   try {
     await applyWorkbookAgentCommandBundleForSessionState(context, {
