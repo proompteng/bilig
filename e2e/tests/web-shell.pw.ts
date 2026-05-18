@@ -1343,6 +1343,51 @@ test('web app does not resurrect a keyboard-cleared cell after click-away', asyn
   await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
 })
 
+test('web app clears selected in-cell editor text with primary-A and keeps continued typing anchored', async ({ page }) => {
+  const staleText = 'select-all-delete-me'
+  const replacementText = 'replacement'
+  await page.keyboard.up(PRIMARY_MODIFIER)
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-editor-primary-a-delete'))}`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+  const cellEditor = page.getByTestId('cell-editor-input')
+
+  await clickProductCell(page, 3, 6)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D7')
+  await formulaInput.fill(staleText)
+  await formulaInput.press('Enter')
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(true)
+
+  await clickProductCell(page, 3, 6)
+  await page.keyboard.press('F2')
+  await expect(cellEditor).toBeVisible()
+  await expect(cellEditor).toHaveValue(staleText)
+  await cellEditor.press(`${PRIMARY_MODIFIER}+A`)
+  await expect
+    .poll(async () => await cellEditor.evaluate((input) => (input instanceof HTMLTextAreaElement ? input.selectionStart : -1)))
+    .toBe(0)
+  await expect
+    .poll(async () => await cellEditor.evaluate((input) => (input instanceof HTMLTextAreaElement ? input.selectionEnd : -1)))
+    .toBe(staleText.length)
+
+  await cellEditor.press('Backspace')
+  await expect(cellEditor).toHaveValue('')
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+
+  await page.keyboard.type(replacementText)
+  await expect(cellEditor).toHaveValue(replacementText)
+  await expect
+    .poll(async () => await cellEditor.evaluate((input) => (input instanceof HTMLTextAreaElement ? input.selectionStart : -1)))
+    .toBe(replacementText.length)
+
+  await clickProductCell(page, 4, 6)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!E7')
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+  await expect.poll(() => nativeTextRunsInclude(page, replacementText)).toBe(true)
+})
+
 test('@browser-ci web app keeps deleted content cleared through viewport churn and reload', async ({ page }) => {
   const staleText = 'delete-clear-viewport-reload'
   const documentId = createTestDocumentId('playwright-delete-clear-viewport-reload')

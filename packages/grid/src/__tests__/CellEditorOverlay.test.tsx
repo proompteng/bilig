@@ -775,6 +775,71 @@ describe('CellEditorOverlay', () => {
     }
   })
 
+  it('owns primary select-all before delete and continued typing in the editor', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const onChange = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <CellEditorOverlay
+            label="Sheet1!B2"
+            targetSelection={makeTargetSelection()}
+            onCancel={() => {}}
+            onChange={onChange}
+            onCommit={() => {}}
+            resolvedValue=""
+            selectionBehavior="caret-end"
+            value="delete-me"
+          />,
+        )
+      })
+
+      const textarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
+      expect(textarea).not.toBeNull()
+      if (!textarea) {
+        throw new Error('Expected mounted cell editor input')
+      }
+
+      await act(async () => {
+        textarea.focus()
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+        const selectAllEvent = new KeyboardEvent('keydown', { key: 'a', metaKey: true, bubbles: true, cancelable: true })
+        textarea.dispatchEvent(selectAllEvent)
+        expect(selectAllEvent.defaultPrevented).toBe(true)
+      })
+      expect(textarea.value).toBe('delete-me')
+      expect(textarea.selectionStart).toBe(0)
+      expect(textarea.selectionEnd).toBe('delete-me'.length)
+
+      await act(async () => {
+        textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }))
+      })
+      expect(textarea.value).toBe('')
+      expect(textarea.selectionStart).toBe(0)
+      expect(textarea.selectionEnd).toBe(0)
+      expect(onChange).toHaveBeenLastCalledWith('')
+
+      await act(async () => {
+        textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true, cancelable: true }))
+        textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', bubbles: true, cancelable: true }))
+        textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }))
+      })
+      expect(textarea.value).toBe('new')
+      expect(textarea.selectionStart).toBe(3)
+      expect(textarea.selectionEnd).toBe(3)
+      expect(onChange).toHaveBeenLastCalledWith('new')
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+    }
+  })
+
   it('keeps editable text visible while a commit is completing to avoid blank click-away flashes', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

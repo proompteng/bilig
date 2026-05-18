@@ -313,6 +313,20 @@ export function CellEditorOverlay({
     }
 
     pendingKeyboardSelectionRef.current = nextSelection
+    input.setSelectionRange(nextSelection.start, nextSelection.end, nextSelection.direction)
+    scheduleSelectionRestore(input, nextSelection)
+  }
+
+  const selectAllText = (input: HTMLTextAreaElement) => {
+    const currentValue = pendingKeyboardSelectionRef.current ? draftValueRef.current : input.value
+    const nextSelection = {
+      direction: 'none',
+      end: currentValue.length,
+      start: 0,
+    } as const
+
+    pendingKeyboardSelectionRef.current = nextSelection
+    input.setSelectionRange(nextSelection.start, nextSelection.end, nextSelection.direction)
     scheduleSelectionRestore(input, nextSelection)
   }
 
@@ -510,6 +524,11 @@ export function CellEditorOverlay({
             event.preventDefault()
             moveCaretToBoundary(event.currentTarget, event.key === 'Home' ? 'start' : 'end', event.shiftKey)
             preserveCaretSelection(event.currentTarget)
+            return
+          }
+          if (!event.nativeEvent.isComposing && event.key.toLowerCase() === 'a' && (event.ctrlKey || event.metaKey) && !event.altKey) {
+            event.preventDefault()
+            selectAllText(event.currentTarget)
             return
           }
           if (event.key === 'Enter') {
