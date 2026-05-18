@@ -74,7 +74,7 @@ crawlers that probe those well-known variants.
 
 | Directory                       | Status                                                                 | Link                                                                                                  |
 | ------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Official MCP Registry           | Live, `0.21.0` indexed; search pagination may show older entries first | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper> |
+| Official MCP Registry           | Live, `0.21.1` indexed; search pagination may show older entries first | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper> |
 | Static MCP server card          | Live                                                                   | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                 |
 | Static MCP discovery aliases    | Live                                                                   | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                             |
 | Glama                           | Live, installability and tool indexing pending                         | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
@@ -94,11 +94,11 @@ crawlers that probe those well-known variants.
 PulseMCP says server listings are ingested from the official MCP Registry daily
 and processed weekly. The Bilig WorkPaper registry entry is live, and the
 repository's Publish MCP Registry workflow succeeded for
-`@bilig/headless@0.21.0`. The official Registry API now contains a
-`0.21.0` entry marked `isLatest: true`, although the search endpoint can return
+`@bilig/headless@0.21.1`. The official Registry API now contains a
+`0.21.1` entry marked `isLatest: true`, although the search endpoint can return
 historical entries first and expose the freshest entry behind pagination. Treat
 PulseMCP absence as downstream directory refresh lag unless the official
-Registry stops returning the `0.21.0` latest entry after its refresh window.
+Registry stops returning the `0.21.1` latest entry after its refresh window.
 Starter issue
 [#384](https://github.com/proompteng/bilig/issues/384) captured the first public
 verification pass and is now closed; reopen a narrower follow-up only if
@@ -118,11 +118,11 @@ Glama admin config prepared on May 18, 2026:
 
 - Node.js version: `24`
 - Build steps:
-  `["mkdir -p /workpaper && cd /workpaper && npm init -y >/dev/null && npm install --omit=dev @bilig/headless@0.21.0"]`
+  `["mkdir -p /workpaper && cd /workpaper && npm init -y >/dev/null && npm install --omit=dev @bilig/headless@0.21.1"]`
 - CMD arguments:
   `["/workpaper/node_modules/.bin/bilig-workpaper-mcp","--workpaper","/workpaper/pricing.workpaper.json","--init-demo-workpaper","--writable"]`
 - Local smoke proof: the same npm path installed
-  `@bilig/headless@0.21.0`, initialized `/workpaper/pricing.workpaper.json`,
+  `@bilig/headless@0.21.1`, initialized `/workpaper/pricing.workpaper.json`,
   started server `bilig-headless-workpaper`, exposed 7 tools, and returned
   `Summary!B3` with display value `60000`.
 
@@ -185,10 +185,10 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 18, 2026: npm latest is `@bilig/headless@0.21.0`.
-The official Registry publish workflow for `0.21.0` succeeded at
-<https://github.com/proompteng/bilig/actions/runs/26008166576>, and the public
-Registry API now returns a Bilig WorkPaper entry version `0.21.0` with
+Latest checked result on May 18, 2026: npm latest is `@bilig/headless@0.21.1`.
+The official Registry publish workflow for `0.21.1` succeeded at
+<https://github.com/proompteng/bilig/actions/runs/26008585881>, and the public
+Registry API now returns a Bilig WorkPaper entry version `0.21.1` with
 `isLatest: true` on the cursor page after the first search page. The API also
 returns historical entries, so consumers should follow pagination, select the
 latest-marked entry, or prefer the npm package version when they need a single
