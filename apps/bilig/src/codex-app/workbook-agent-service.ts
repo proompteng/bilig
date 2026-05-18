@@ -57,6 +57,11 @@ import {
   transitionWorkbookAgentSharedReview,
 } from './workbook-agent-review-transitions.js'
 import { WorkbookAgentThreadRepository } from './workbook-agent-thread-repository.js'
+import { WorkbookAgentSessionAuthority } from './workbook-agent-session-authority.js'
+import {
+  createWorkbookAgentBundleApplicationContext,
+  createWorkbookAgentReviewActionContext,
+} from './workbook-agent-service-action-contexts.js'
 import {
   buildSnapshot,
   cloneUiContext,
@@ -67,7 +72,6 @@ import {
 } from './workbook-agent-service-shared.js'
 import { updateWorkbookAgentDurableUiContextFromUser } from './workbook-agent-durable-context-sync.js'
 import {
-  assertWorkbookAgentSessionAccessPolicy,
   assertWorkbookAgentSharedThreadAccess,
   filterWorkbookAgentThreadSummariesByAccessPolicy,
 } from './workbook-agent-service-access-policy.js'
@@ -105,6 +109,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   private readonly maxActiveTurnsPerDocument: number
   private readonly featureFlags: WorkbookAgentFeatureFlags
   private readonly sessionRegistry: WorkbookAgentSessionRegistry
+  private readonly sessionAuthority: WorkbookAgentSessionAuthority
   private readonly codexRuntime: WorkbookAgentCodexRuntime
   private readonly threadRepository: WorkbookAgentThreadRepository
   private readonly workflowRuntime: WorkbookAgentWorkflowRuntime
@@ -127,14 +132,20 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       maxSessions: this.maxSessions,
       now: this.now,
     })
+    this.threadRepository = new WorkbookAgentThreadRepository(this.zeroSyncService)
+    this.sessionAuthority = new WorkbookAgentSessionAuthority({
+      featureFlags: () => this.featureFlags,
+      sessionRegistry: this.sessionRegistry,
+      threadRepository: this.threadRepository,
+    })
     this.codexRuntime = new WorkbookAgentCodexRuntime({
       zeroSyncService: this.zeroSyncService,
       now: this.now,
       maxCodexClients: this.maxCodexClients,
       maxConcurrentTurnsPerCodexClient: this.maxConcurrentTurnsPerCodexClient,
       maxQueuedTurnsPerCodexClient: this.maxQueuedTurnsPerCodexClient,
-      getSessionByThreadId: (threadId) => this.getSessionByThreadId(threadId),
-      tryGetSessionByThreadId: (threadId) => this.tryGetSessionByThreadId(threadId),
+      getSessionByThreadId: (threadId) => this.sessionAuthority.getSessionByThreadId(threadId),
+      tryGetSessionByThreadId: (threadId) => this.sessionAuthority.tryGetSessionByThreadId(threadId),
       listSessions: () => this.sessionRegistry.listSessions(),
       resolveTurnActorUserId: (sessionState, turnId) => this.resolveTurnActorUserId(sessionState, turnId),
       resolveTurnContext: (sessionState, turnId) => this.resolveTurnContext(sessionState, turnId),
@@ -158,7 +169,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       startWorkflow: async (request) => await this.startWorkflow(request),
       ...(options.codexClientFactory ? { codexClientFactory: options.codexClientFactory } : {}),
     })
-    this.threadRepository = new WorkbookAgentThreadRepository(this.zeroSyncService)
     this.workflowRuntime = new WorkbookAgentWorkflowRuntime({
       zeroSyncService: this.zeroSyncService,
       now: this.now,
@@ -210,13 +220,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   private createBundleApplicationContext() {
-    return {
+    return createWorkbookAgentBundleApplicationContext({
       zeroSyncService: this.zeroSyncService,
       now: this.now,
-      autoApplyLowRiskEnabled: this.featureFlags.autoApplyLowRiskEnabled,
+      featureFlags: this.featureFlags,
+      sessionRegistry: this.sessionRegistry,
       isRolloutAllowed: (documentId: string, userId: string) => this.isRolloutAllowed(documentId, userId),
-      touchSession: (sessionState: WorkbookAgentThreadState) => this.sessionRegistry.touch(sessionState),
-    }
+    })
   }
 
   private async buildAuthoritativePreview(documentId: string, bundle: WorkbookAgentCommandBundle): Promise<WorkbookAgentPreviewSummary> {
@@ -268,9 +278,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   private createReviewActionContext() {
-    return {
+    return createWorkbookAgentReviewActionContext({
+      zeroSyncService: this.zeroSyncService,
       now: this.now,
-      getWorkbookHeadRevision: async (documentId: string) => await this.zeroSyncService.getWorkbookHeadRevision(documentId),
+      sessionRegistry: this.sessionRegistry,
       buildAuthoritativePreview: async (documentId: string, bundle: WorkbookAgentCommandBundle) =>
         await this.buildAuthoritativePreview(documentId, bundle),
       applyCommandBundleForSessionState: async (input: {
@@ -284,9 +295,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       shouldApplyToolBundleImmediately: (sessionState: WorkbookAgentThreadState, bundle: WorkbookAgentCommandBundle) =>
         this.shouldApplyToolBundleImmediately(sessionState, bundle),
       persistSessionState: async (sessionState: WorkbookAgentThreadState) => await this.persistSessionState(sessionState),
-      emitSnapshot: (threadId: string) => this.sessionRegistry.emitSnapshot(threadId),
-      touchSession: (sessionState: WorkbookAgentThreadState) => this.sessionRegistry.touch(sessionState),
-    }
+    })
   }
 
   getObservabilitySnapshot(): WorkbookAgentObservabilitySnapshot {
@@ -336,8 +345,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (parsed.threadId !== undefined) {
       const sharedSession = this.tryGetSessionByThreadId(parsed.threadId)
       if (sharedSession) {
-        const accessibleSession = this.requireOwnedSession(sharedSession, input.documentId, input.session.userID)
-        await this.authorizeSharedSessionForUser(accessibleSession, input.documentId, input.session.userID)
+        const accessibleSession = this.sessionAuthority.requireOwnedSession(sharedSession, input.documentId, input.session.userID)
+        await this.sessionAuthority.authorizeSharedSessionForUser(accessibleSession, input.documentId, input.session.userID)
         let contextChanged = false
         if (parsed.context) {
           contextChanged = updateWorkbookAgentDurableUiContextFromUser({
@@ -752,8 +761,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   getSnapshot(input: { documentId: string; threadId: string; session: SessionIdentity }): WorkbookAgentThreadSnapshot {
-    const sessionState = this.getOwnedSession(input.documentId, input.threadId, input.session.userID)
-    this.assertSharedSessionAlreadyAuthorized(sessionState, input.session.userID)
+    const sessionState = this.sessionAuthority.getOwnedSession(input.documentId, input.threadId, input.session.userID)
+    this.sessionAuthority.assertSharedSessionAlreadyAuthorized(sessionState, input.session.userID)
     this.sessionRegistry.touch(sessionState)
     return buildSnapshot(sessionState)
   }
@@ -776,93 +785,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     return cloneUiContext(sessionState.live.turnContextByTurn.get(turnId) ?? sessionState.durable.context)
   }
 
-  private getOwnedSession(documentId: string, threadId: string, userId: string): WorkbookAgentThreadState {
-    const sessionState = this.sessionRegistry.tryGetSession(threadId)
-    if (!sessionState) {
-      throw createWorkbookAgentServiceError({
-        code: 'WORKBOOK_AGENT_THREAD_NOT_FOUND',
-        message: 'Workbook agent thread not found',
-        statusCode: 404,
-        retryable: true,
-      })
-    }
-    return this.requireOwnedSession(sessionState, documentId, userId)
-  }
-
   private async getAuthorizedSession(documentId: string, threadId: string, userId: string): Promise<WorkbookAgentThreadState> {
-    const sessionState = this.getOwnedSession(documentId, threadId, userId)
-    await this.authorizeSharedSessionForUser(sessionState, documentId, userId)
-    return sessionState
-  }
-
-  private requireOwnedSession(sessionState: WorkbookAgentThreadState, documentId: string, userId: string): WorkbookAgentThreadState {
-    if (sessionState.documentId !== documentId) {
-      throw createWorkbookAgentServiceError({
-        code: 'WORKBOOK_AGENT_THREAD_NOT_FOUND',
-        message: 'Workbook agent thread not found',
-        statusCode: 404,
-        retryable: false,
-      })
-    }
-    if (sessionState.scope !== 'shared' && sessionState.userId !== userId) {
-      throw createWorkbookAgentServiceError({
-        code: 'WORKBOOK_AGENT_THREAD_NOT_FOUND',
-        message: 'Workbook agent thread not found',
-        statusCode: 404,
-        retryable: false,
-      })
-    }
-    assertWorkbookAgentSessionAccessPolicy({
-      featureFlags: this.featureFlags,
-      sessionState,
-      documentId,
-      userId,
-    })
-    return sessionState
-  }
-
-  private assertSharedSessionAlreadyAuthorized(sessionState: WorkbookAgentThreadState, userId: string): void {
-    if (sessionState.scope !== 'shared' || sessionState.live.authorizedUserIds.has(userId)) {
-      return
-    }
-    throw createWorkbookAgentServiceError({
-      code: 'WORKBOOK_AGENT_THREAD_NOT_FOUND',
-      message: 'Workbook agent thread not found',
-      statusCode: 404,
-      retryable: false,
-    })
-  }
-
-  private async authorizeSharedSessionForUser(sessionState: WorkbookAgentThreadState, documentId: string, userId: string): Promise<void> {
-    if (sessionState.scope !== 'shared' || sessionState.live.authorizedUserIds.has(userId)) {
-      return
-    }
-    const durableThreadSession = await this.threadRepository.loadThreadState({
-      documentId,
-      actorUserId: userId,
-      threadId: sessionState.threadId,
-    })
-    if (durableThreadSession.threadState?.scope !== 'shared') {
-      throw createWorkbookAgentServiceError({
-        code: 'WORKBOOK_AGENT_THREAD_NOT_FOUND',
-        message: 'Workbook agent thread not found',
-        statusCode: 404,
-        retryable: false,
-      })
-    }
-    sessionState.live.authorizedUserIds.add(userId)
-  }
-
-  private getSessionByThreadId(threadId: string): WorkbookAgentThreadState {
-    const sessionState = this.tryGetSessionByThreadId(threadId)
-    if (!sessionState) {
-      throw new Error(`Workbook agent thread not found for thread ${threadId}`)
-    }
-    return sessionState
+    return await this.sessionAuthority.getAuthorizedSession(documentId, threadId, userId)
   }
 
   private tryGetSessionByThreadId(threadId: string): WorkbookAgentThreadState | null {
-    return this.sessionRegistry.tryGetSession(threadId)
+    return this.sessionAuthority.tryGetSessionByThreadId(threadId)
   }
 
   private assertTurnQuota(documentId: string, actorUserId: string): void {

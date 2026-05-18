@@ -28,7 +28,7 @@ import { createSystemEntry } from './workbook-agent-session-model.js'
 import { applyWorkbookAgentStructuralContextHints } from './workbook-agent-structural-context-hints.js'
 import { cloneUiContext, type WorkbookAgentThreadState, upsertEntry } from './workbook-agent-service-shared.js'
 
-interface WorkbookAgentBundleApplicationContext {
+export interface WorkbookAgentBundleApplicationContext {
   zeroSyncService: ZeroSyncService
   now: () => number
   autoApplyLowRiskEnabled: boolean

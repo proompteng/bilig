@@ -16,7 +16,7 @@ import {
 import { createSystemEntry } from './workbook-agent-session-model.js'
 import { toContextRef, upsertEntry, type WorkbookAgentThreadState } from './workbook-agent-service-shared.js'
 
-interface WorkbookAgentReviewActionContext {
+export interface WorkbookAgentReviewActionContext {
   readonly now: () => number
   readonly getWorkbookHeadRevision: (documentId: string) => Promise<number>
   readonly buildAuthoritativePreview: (documentId: string, bundle: WorkbookAgentCommandBundle) => Promise<WorkbookAgentPreviewSummary>
