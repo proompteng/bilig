@@ -77,7 +77,7 @@ crawlers that probe those well-known variants.
 | Official MCP Registry           | Live, `0.21.1` indexed; search pagination may show older entries first | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper> |
 | Static MCP server card          | Live                                                                   | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                 |
 | Static MCP discovery aliases    | Live                                                                   | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                             |
-| Glama                           | Live, installability and tool indexing pending                         | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
+| Glama                           | Live, release `0.21.1` created; seven tools indexed with A-grade TDQS   | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
 | mcp.so                          | Submitted for maintainer review; issue body refreshed for `0.21.1`     | <https://github.com/chatmcp/mcpso/issues/2295>                                                        |
 | Cline MCP Marketplace           | Submitted for maintainer review; issue body refreshed for `0.21.1`     | <https://github.com/cline/mcp-marketplace/issues/1557>                                                |
 | mcpserver.cc                    | Submitted for maintainer review                                        | <https://mcpserver.cc/en?q=bilig>                                                                     |
@@ -111,16 +111,16 @@ point reviewers at `@bilig/headless@0.21.1`, the file-backed command with
 Registry entry, and the static MCP server card.
 
 Glama lists Bilig WorkPaper publicly in search with TypeScript, Developer
-Tools, Workplace & Productivity, and Remote attributes. Its public API still
-reports `tools: 0`, `package: null`, and no installability. The score page now
-shows the concrete blocker: `No Glama release`. The repository already ships
-`glama.json` with maintainer `gregkonush`, and the claimed Glama Dockerfile
-admin page is prepared with the npm-backed file-mode config below. The remaining
-directory action is to run `Build & Release` in Glama so the
-`@bilig/headless` package and file-backed tool surface become installable in
-Glama.
+Tools, Workplace & Productivity, and Remote attributes. On May 18, 2026 the
+Glama Dockerfile test build `019e3900-c65c-73b4-b500-e3af43d37d46` succeeded
+and was published as release `0.21.1`. The public Schema and Overview pages now
+index the seven file-backed tools: `list_sheets`, `read_range`, `read_cell`,
+`set_cell_contents`, `get_cell_display_value`, `export_workpaper_document`, and
+`validate_formula`. The score page reports A-grade Tool Definition Quality for
+each tool, while Glama's JSON API can lag the HTML listing immediately after a
+release.
 
-Glama admin config prepared on May 18, 2026:
+Glama release config used on May 18, 2026:
 
 - Node.js version: `24`
 - Build steps:
@@ -131,6 +131,10 @@ Glama admin config prepared on May 18, 2026:
   `@bilig/headless@0.21.1`, initialized `/workpaper/pricing.workpaper.json`,
   started server `bilig-headless-workpaper`, exposed 7 tools, and returned
   `Summary!B3` with display value `60000`.
+- Published release proof: the Glama admin page reports version `0.21.1`
+  published on May 18, 2026, and the public tool pages expose
+  `set_cell_contents` as a destructive, idempotent single-cell write with
+  input/output schemas and verified readback instructions.
 
 The `mcpserver.cc` submission was accepted for review on May 13, 2026 with
 submission UUID `bcdce4e1-3b05-4be2-b611-2a2abb8baf79`. Search still returned no

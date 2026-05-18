@@ -245,16 +245,16 @@ registry refresh:
 - External MCP directory surface: MCPRepository has a live Bilig listing with
   the GitHub repository description mirrored as MCP server copy:
   <https://mcprepository.com/proompteng/bilig>
-- External MCP directory follow-up on May 18, 2026: Glama search now returns
-  Bilig WorkPaper with TypeScript, Developer Tools, Workplace & Productivity,
-  and Remote attributes, but the API still returns `tools: 0`, `package: null`,
-  and no installability. The score page now names the blocker as `No Glama release`;
-  the repo already has `glama.json` with maintainer `gregkonush`, and the
-  claimed Dockerfile admin page is prepared with an npm-backed file-mode config.
-  The same npm path was smoked locally with `@bilig/headless@0.21.1`, server
-  `bilig-headless-workpaper`, 7 file-backed tools, and `Summary!B3` display
-  value `60000`. The remaining action is running Glama `Build & Release` so the
-  `@bilig/headless` package/tool surface becomes installable:
+- External MCP directory follow-up on May 18, 2026: Glama search returns Bilig
+  WorkPaper with TypeScript, Developer Tools, Workplace & Productivity, and
+  Remote attributes. The Dockerfile test build
+  `019e3900-c65c-73b4-b500-e3af43d37d46` succeeded and was published as
+  Glama release `0.21.1`. The public Schema and Overview pages now expose the seven
+  file-backed tools, and the score page reports A-grade Tool Definition Quality
+  for each tool. The same npm path was smoked locally with
+  `@bilig/headless@0.21.1`, server `bilig-headless-workpaper`, 7 file-backed
+  tools, and `Summary!B3` display value `60000`; Glama's JSON API can lag the
+  HTML listing immediately after release:
   <https://glama.ai/mcp/servers/proompteng/bilig>
 - External MCP marketplace surface: the Cline MCP Marketplace server submission
   issue body was refreshed on May 18, 2026 with the GitHub repository, 400px
