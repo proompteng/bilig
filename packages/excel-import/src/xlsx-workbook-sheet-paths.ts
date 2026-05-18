@@ -123,7 +123,12 @@ export function workbookSheetPath(
   sheetName: string,
   sheetIndex: number,
 ): string | undefined {
-  return pathsByName.get(sheetName) ?? fallbackPaths[sheetIndex]
+  if (pathsByName.size > 0) {
+    // Relationship-aware workbooks can include non-worksheet sheets such as chartsheets.
+    // Missing relationship mappings must not be realigned to worksheet paths by index.
+    return pathsByName.get(sheetName)
+  }
+  return fallbackPaths[sheetIndex]
 }
 
 export function workbookSheetPathEntries(workbook: XLSX.WorkBook, sheetNames: readonly string[]): WorkbookSheetPathEntry[] {

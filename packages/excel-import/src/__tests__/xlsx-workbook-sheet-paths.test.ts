@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { strToU8, zipSync } from 'fflate'
 import * as XLSX from 'xlsx'
+import { readImportedWorksheetTextValues } from '../xlsx-worksheet-text-values.js'
 import { workbookSheetPathEntries } from '../xlsx-workbook-sheet-paths.js'
+
+const worksheetRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'
+const chartSheetRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet'
 
 function createWorkbookWithPackageParts(parts: {
   readonly Directory: { readonly sheets: readonly string[] }
@@ -55,5 +60,58 @@ describe('xlsx workbook sheet paths', () => {
       { name: 'Sheet1', index: 0, path: 'xl/worksheets/sheet1.xml' },
       { name: 'Sheet2', index: 1, path: 'xl/worksheets/sheet2.xml' },
     ])
+  })
+
+  it('does not align chartsheets to worksheet fallback paths by index', () => {
+    const workbook = createWorkbookWithPackageParts({
+      Directory: {
+        sheets: ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'],
+      },
+      files: {
+        'xl/workbook.xml': {
+          content: [
+            '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+            '<sheets>',
+            '<sheet name="Chart1" sheetId="1" r:id="rIdChart"/>',
+            '<sheet name="Sheet1" sheetId="2" r:id="rIdSheet1"/>',
+            '<sheet name="Source" sheetId="3" r:id="rIdSource"/>',
+            '</sheets>',
+            '</workbook>',
+          ].join(''),
+        },
+        'xl/_rels/workbook.xml.rels': {
+          content: [
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+            `<Relationship Id="rIdChart" Type="${chartSheetRelationshipType}" Target="chartsheets/sheet1.xml"/>`,
+            `<Relationship Id="rIdSheet1" Type="${worksheetRelationshipType}" Target="worksheets/sheet1.xml"/>`,
+            `<Relationship Id="rIdSource" Type="${worksheetRelationshipType}" Target="worksheets/sheet2.xml"/>`,
+            '</Relationships>',
+          ].join(''),
+        },
+      },
+    })
+
+    expect(workbookSheetPathEntries(workbook, ['Chart1', 'Sheet1', 'Source'])).toEqual([
+      { name: 'Sheet1', index: 1, path: 'xl/worksheets/sheet1.xml' },
+      { name: 'Source', index: 2, path: 'xl/worksheets/sheet2.xml' },
+    ])
+  })
+
+  it('does not read worksheet text values into unmapped chartsheets', () => {
+    const source = zipSync({
+      'xl/worksheets/sheet1.xml': strToU8(
+        [
+          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+          '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Actual text</t></is></c></row></sheetData>',
+          '</worksheet>',
+        ].join(''),
+      ),
+    })
+    const values = readImportedWorksheetTextValues(source, ['Chart1', 'Sheet1'], new Map([['Sheet1', 'xl/worksheets/sheet1.xml']]), [
+      'xl/worksheets/sheet1.xml',
+    ])
+
+    expect(values.has('Chart1')).toBe(false)
+    expect(values.get('Sheet1')?.get('A1')).toBe('Actual text')
   })
 })

@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 
 import { toLiteralInput } from './workbook-import-helpers.js'
 import { decodeExcelEscapedText } from './xlsx-escaped-text.js'
+import { workbookSheetPath } from './xlsx-workbook-sheet-paths.js'
 import { getZipText, readXlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
 
 interface SharedStringEntry {
@@ -155,7 +156,12 @@ export function readImportedWorksheetTextValues(
   const sharedStrings = readSharedStringEntries(zip)
   const valuesBySheet = new Map<string, Map<string, string>>()
   sheetNames.forEach((sheetName, index) => {
-    const sheetPath = sheetPathsByName.get(sheetName) ?? fallbackSheetPaths[index] ?? `xl/worksheets/sheet${String(index + 1)}.xml`
+    const sheetPath =
+      workbookSheetPath(sheetPathsByName, fallbackSheetPaths, sheetName, index) ??
+      (sheetPathsByName.size === 0 && fallbackSheetPaths.length === 0 ? `xl/worksheets/sheet${String(index + 1)}.xml` : undefined)
+    if (!sheetPath) {
+      return
+    }
     const values = readWorksheetTextValues(getZipText(zip, sheetPath), sharedStrings)
     if (values.size > 0) {
       valuesBySheet.set(sheetName, values)
