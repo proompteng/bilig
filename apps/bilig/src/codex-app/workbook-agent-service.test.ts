@@ -4068,6 +4068,71 @@ describe('workbook agent service', () => {
     await closePromise
   })
 
+  it('bounds workflow shutdown drain when a workflow ignores abort', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    let resolveRunningPersisted!: () => void
+    const runningPersisted = new Promise<void>((resolve) => {
+      resolveRunningPersisted = () => {
+        resolve()
+      }
+    })
+    let resolveShutdownCancelPersisted!: () => void
+    const shutdownCancelPersisted = new Promise<void>((resolve) => {
+      resolveShutdownCancelPersisted = () => {
+        resolve()
+      }
+    })
+    const upsertWorkbookWorkflowRun = vi.fn(async (_documentId: string, run) => {
+      if (run.status === 'running') {
+        resolveRunningPersisted()
+      }
+      if (run.status === 'cancelled') {
+        resolveShutdownCancelPersisted()
+      }
+    })
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(): Promise<T> {
+          return await new Promise<T>(() => {})
+        },
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => fakeCodex,
+        workflowShutdownDrainTimeoutMs: 1,
+      },
+    )
+
+    await service.createSession({
+      documentId: 'doc-1',
+      session: {
+        userID: 'alex@example.com',
+        roles: ['editor'],
+      },
+      body: {},
+    })
+
+    await service.startWorkflow({
+      documentId: 'doc-1',
+      threadId: 'thr-test',
+      session: {
+        userID: 'alex@example.com',
+        roles: ['editor'],
+      },
+      body: {
+        workflowTemplate: 'summarizeWorkbook',
+      },
+    })
+
+    await runningPersisted
+    const closePromise = service.close()
+    await shutdownCancelPersisted
+    await closePromise
+
+    expect(upsertWorkbookWorkflowRun.mock.calls.map(([, run]) => run.status)).toEqual(['running', 'cancelled'])
+    expect(fakeCodex.closeCount).toBeGreaterThan(0)
+  })
+
   it('uses nested app-server error messages instead of the generic fallback', async () => {
     const fakeCodex = new FakeCodexTransport()
     const service = createWorkbookAgentService(createZeroSyncStub(), {

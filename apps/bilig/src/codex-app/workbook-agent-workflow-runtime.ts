@@ -24,15 +24,19 @@ import {
 } from './workbook-agent-service-shared.js'
 import { logError } from '../runtime-logger.js'
 
+const DEFAULT_WORKFLOW_SHUTDOWN_DRAIN_TIMEOUT_MS = 5_000
+
 export class WorkbookAgentWorkflowRuntime {
   private readonly workflowRunTasks = new Map<string, Promise<void>>()
   private readonly workflowAbortControllers = new Map<string, AbortController>()
   private readonly workflowRunInputs = new Map<string, QueuedWorkbookAgentWorkflowRun>()
+  private readonly shutdownDrainTimeoutMs: number
 
   constructor(
     private readonly options: {
       zeroSyncService: ZeroSyncService
       now: () => number
+      shutdownDrainTimeoutMs?: number
       touch: (sessionState: WorkbookAgentThreadState) => void
       persistSessionState: (sessionState: WorkbookAgentThreadState) => Promise<void>
       emitSnapshot: (threadId: string) => void
@@ -54,7 +58,9 @@ export class WorkbookAgentWorkflowRuntime {
         counter: 'workflowStartedCount' | 'workflowCompletedCount' | 'workflowFailedCount' | 'workflowCancelledCount',
       ) => void
     },
-  ) {}
+  ) {
+    this.shutdownDrainTimeoutMs = options.shutdownDrainTimeoutMs ?? DEFAULT_WORKFLOW_SHUTDOWN_DRAIN_TIMEOUT_MS
+  }
 
   async startWorkflow(input: {
     sessionState: WorkbookAgentThreadState
@@ -141,9 +147,28 @@ export class WorkbookAgentWorkflowRuntime {
       controller.abort()
     })
     this.workflowAbortControllers.clear()
-    await Promise.allSettled(this.workflowRunTasks.values())
+    await this.drainWorkflowTasksForShutdown()
     this.workflowRunTasks.clear()
     this.workflowRunInputs.clear()
+  }
+
+  private async drainWorkflowTasksForShutdown(): Promise<void> {
+    if (this.workflowRunTasks.size === 0) {
+      return
+    }
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    try {
+      await Promise.race([
+        Promise.allSettled(this.workflowRunTasks.values()).then(() => undefined),
+        new Promise<void>((resolve) => {
+          timeout = setTimeout(resolve, this.shutdownDrainTimeoutMs)
+        }),
+      ])
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+    }
   }
 
   private queueWorkflowRun(input: QueuedWorkbookAgentWorkflowRun): void {

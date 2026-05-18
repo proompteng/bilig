@@ -172,6 +172,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     this.workflowRuntime = new WorkbookAgentWorkflowRuntime({
       zeroSyncService: this.zeroSyncService,
       now: this.now,
+      ...(options.workflowShutdownDrainTimeoutMs === undefined ? {} : { shutdownDrainTimeoutMs: options.workflowShutdownDrainTimeoutMs }),
       touch: (sessionState) => this.sessionRegistry.touch(sessionState),
       persistSessionState: (sessionState) => this.persistSessionState(sessionState),
       emitSnapshot: (threadId) => this.sessionRegistry.emitSnapshot(threadId),

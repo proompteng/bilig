@@ -91,6 +91,7 @@ export interface EnabledWorkbookAgentServiceOptions {
   maxQueuedTurnsPerCodexClient?: number
   maxActiveTurnsPerUser?: number
   maxActiveTurnsPerDocument?: number
+  workflowShutdownDrainTimeoutMs?: number
   featureFlags?: Partial<WorkbookAgentFeatureFlags>
 }
 
