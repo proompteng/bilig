@@ -749,7 +749,7 @@ for (const required of [
   `npm latest is \`@bilig/headless@${headlessPackageVersion}\``,
   `official Registry publish workflow for \`${headlessPackageVersion}\` succeeded`,
   `Registry API now returns a Bilig WorkPaper entry version \`${headlessPackageVersion}\` with\n\`isLatest: true\` on the cursor page`,
-  'https://github.com/proompteng/bilig/actions/runs/26012433643',
+  'https://github.com/proompteng/bilig/actions/runs/26013068334',
   'read_workpaper_summary',
   'set_workpaper_input_cell',
   'file-backed mode',

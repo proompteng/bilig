@@ -62,7 +62,7 @@ on:
         required: false
         default: false
       release_from_github_mirror:
-        description: 'Publish from GitHub main when Forgejo canonical refs are unavailable'
+        description: 'Deprecated: plan against GitHub mirror only; publishing still requires Forgejo canonical refs'
         type: boolean
         required: false
         default: false
@@ -584,23 +584,9 @@ jobs:
           set -euo pipefail
 
           if [[ "${RELEASE_FROM_GITHUB_MIRROR}" == "true" ]]; then
-            git remote rename origin github
-            git remote add origin "$(git remote get-url github)"
-
-            while read -r tag; do
-              [[ -n "$tag" ]] || continue
-              git tag -d "$tag"
-            done < <(git tag --list 'libraries-v*')
-
-            git fetch --force origin main
-            git fetch --force origin 'refs/tags/libraries-v*:refs/tags/libraries-v*'
-            git fetch --force github main
-            {
-              echo "### runtime release publishing from GitHub mirror"
-              echo
-              echo "This manual run is using GitHub main and GitHub runtime tags because Forgejo canonical refs are unavailable."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "Runtime release publishing from GitHub mirror is disabled." >&2
+            echo "Forgejo origin is the canonical release remote; fix Forgejo access instead of pushing release commits to GitHub." >&2
+            exit 1
           fi
 
           if [[ -z "${FORGEJO_PUSH_URL:-}" ]]; then
@@ -757,22 +743,22 @@ jobs:
             git rebase origin/main
           done
 
-          git fetch --force github main
-          if [[ "$(git rev-parse github/main)" == "$(git rev-parse HEAD)" ]]; then
-            echo "GitHub main already mirrors release metadata SHA"
-          else
-            if git push github HEAD:main; then
-              echo "Pushed release metadata SHA to GitHub main"
-            else
-              git fetch --force github main
-              if [[ "$(git rev-parse github/main)" == "$(git rev-parse HEAD)" ]]; then
-                echo "GitHub main reached release metadata SHA during push"
-              else
-                echo "Failed to mirror release metadata SHA to GitHub main" >&2
-                exit 1
-              fi
+          for attempt in $(seq 1 30); do
+            git fetch --force github main
+            if [[ "$(git rev-parse github/main)" == "$(git rev-parse HEAD)" ]]; then
+              echo "GitHub main mirrors release metadata SHA"
+              break
             fi
-          fi
+
+            if [[ "${attempt}" == "30" ]]; then
+              echo "GitHub main did not mirror release metadata SHA from Forgejo after ${attempt} attempts." >&2
+              echo "Refusing to push release metadata directly to GitHub main." >&2
+              exit 1
+            fi
+
+            echo "Waiting for GitHub main mirror to receive release metadata SHA; attempt ${attempt}/30"
+            sleep 10
+          done
 
           git fetch --force origin main
           git fetch --force github main
@@ -872,18 +858,23 @@ jobs:
           git tag -a "${TAG_NAME}" -m "Libraries v${TARGET_VERSION}" HEAD
           git push origin "refs/tags/${TAG_NAME}"
 
-          if git ls-remote --exit-code --tags github "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
-            echo "GitHub already has ${TAG_NAME}; skipping explicit mirror push"
-            exit 0
-          fi
-
-          if ! git push github "refs/tags/${TAG_NAME}"; then
-            if git ls-remote --exit-code --tags github "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
-              echo "GitHub acquired ${TAG_NAME} during push race; continuing"
+          tag_sha="$(git rev-parse "refs/tags/${TAG_NAME}")"
+          for attempt in $(seq 1 30); do
+            github_tag="$(git ls-remote --tags github "refs/tags/${TAG_NAME}" | awk '{print $1}')"
+            if [[ "${github_tag}" == "${tag_sha}" ]]; then
+              echo "GitHub tag mirror has ${TAG_NAME}"
               exit 0
             fi
-            exit 1
-          fi
+
+            if [[ "${attempt}" == "30" ]]; then
+              echo "GitHub tag mirror did not receive ${TAG_NAME} from Forgejo after ${attempt} attempts." >&2
+              echo "Refusing to push runtime tags directly to GitHub." >&2
+              exit 1
+            fi
+
+            echo "Waiting for GitHub tag mirror to receive ${TAG_NAME}; attempt ${attempt}/30"
+            sleep 10
+          done
 
       - name: Create GitHub release
         if: steps.npm_provisioning.outputs.publish_allowed == 'true' && needs.plan_release.outputs.dry_run != 'true'
