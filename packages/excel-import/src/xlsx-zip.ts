@@ -1,4 +1,5 @@
 import { inflateSync, strFromU8, unzipSync, type Unzipped } from 'fflate'
+import { Inflate } from 'fflate-stream'
 
 export type XlsxZipEntries = Unzipped
 export type XlsxZipSource = Uint8Array | XlsxZipEntries
@@ -23,6 +24,7 @@ export function readXlsxZipEntriesLazy(source: XlsxZipSource): XlsxZipEntries {
   for (const entry of entries) {
     defineLazyZipEntry(output, source, entry)
   }
+  defineLazyZipCentralDirectorySource(output, source, entries)
   return output
 }
 
@@ -35,6 +37,23 @@ export function getZipText(zip: XlsxZipEntries, path: string): string | null {
   return file ? strFromU8(file) : null
 }
 
+export function forEachInflatedXlsxZipEntryChunk(
+  zip: XlsxZipEntries,
+  path: string,
+  onChunk: (chunk: Uint8Array) => void,
+  options: { readonly chunkSize?: number } = {},
+): boolean {
+  const metadata = (zip as XlsxZipEntriesWithCentralDirectorySource)[xlsxZipCentralDirectorySourceSymbol]
+  const entry = metadata?.entriesByPath.get(normalizeZipPath(path))
+  if (!metadata || !entry) {
+    return false
+  }
+  inflateCentralDirectoryEntryChunks(metadata.source, entry.localHeaderOffset, entry.compressedSize, entry.compressionMethod, onChunk, {
+    chunkSize: options.chunkSize ?? defaultZipEntryChunkSize,
+  })
+  return true
+}
+
 const localFileHeaderSignature = 0x04034b50
 const centralDirectoryFileHeaderSignature = 0x02014b50
 const endOfCentralDirectorySignature = 0x06054b50
@@ -42,6 +61,8 @@ const storedCompressionMethod = 0
 const deflatedCompressionMethod = 8
 const zip64Sentinel = 0xffffffff
 const maxEndOfCentralDirectorySearch = 65_557
+const defaultZipEntryChunkSize = 64 * 1024
+const xlsxZipCentralDirectorySourceSymbol: unique symbol = Symbol('bilig.xlsxZipCentralDirectorySource')
 const textDecoder = new TextDecoder()
 
 interface CentralDirectoryEntry {
@@ -49,6 +70,15 @@ interface CentralDirectoryEntry {
   readonly localHeaderOffset: number
   readonly compressedSize: number
   readonly compressionMethod: number
+}
+
+interface XlsxZipCentralDirectorySource {
+  readonly source: Uint8Array
+  readonly entriesByPath: ReadonlyMap<string, CentralDirectoryEntry>
+}
+
+type XlsxZipEntriesWithCentralDirectorySource = XlsxZipEntries & {
+  readonly [xlsxZipCentralDirectorySourceSymbol]?: XlsxZipCentralDirectorySource
 }
 
 function shouldUseCentralDirectoryZipFallback(source: Uint8Array, zip: XlsxZipEntries): boolean {
@@ -128,6 +158,17 @@ function defineLazyZipEntry(output: Unzipped, source: Uint8Array, entry: Central
   })
 }
 
+function defineLazyZipCentralDirectorySource(output: Unzipped, source: Uint8Array, entries: readonly CentralDirectoryEntry[]): void {
+  Object.defineProperty(output, xlsxZipCentralDirectorySourceSymbol, {
+    configurable: false,
+    enumerable: false,
+    value: {
+      source,
+      entriesByPath: new Map(entries.map((entry) => [entry.path, entry])),
+    } satisfies XlsxZipCentralDirectorySource,
+  })
+}
+
 function inflateCentralDirectoryEntry(
   source: Uint8Array,
   localHeaderOffset: number,
@@ -152,6 +193,57 @@ function inflateCentralDirectoryEntry(
     return inflateSync(compressed)
   }
   throw new Error(`Unsupported XLSX compression method: ${String(compressionMethod)}`)
+}
+
+function inflateCentralDirectoryEntryChunks(
+  source: Uint8Array,
+  localHeaderOffset: number,
+  compressedSize: number,
+  compressionMethod: number,
+  onChunk: (chunk: Uint8Array) => void,
+  options: { readonly chunkSize: number },
+): void {
+  if (readUint32(source, localHeaderOffset) !== localFileHeaderSignature) {
+    throw new Error('Invalid XLSX local file header')
+  }
+  const fileNameLength = readUint16(source, localHeaderOffset + 26)
+  const extraFieldLength = readUint16(source, localHeaderOffset + 28)
+  const dataStart = localHeaderOffset + 30 + fileNameLength + extraFieldLength
+  const dataEnd = dataStart + compressedSize
+  if (dataEnd > source.byteLength) {
+    throw new Error('Invalid XLSX compressed data range')
+  }
+  const compressed = source.subarray(dataStart, dataEnd)
+  if (compressionMethod === storedCompressionMethod) {
+    forEachChunk(compressed, options.chunkSize, onChunk)
+    return
+  }
+  if (compressionMethod === deflatedCompressionMethod) {
+    const inflate = new Inflate((chunk) => {
+      onChunk(chunk)
+    })
+    if (compressed.byteLength === 0) {
+      inflate.push(compressed, true)
+      return
+    }
+    for (let offset = 0; offset < compressed.byteLength; offset += options.chunkSize) {
+      const end = Math.min(compressed.byteLength, offset + options.chunkSize)
+      inflate.push(compressed.subarray(offset, end), end === compressed.byteLength)
+    }
+    return
+  }
+  throw new Error(`Unsupported XLSX compression method: ${String(compressionMethod)}`)
+}
+
+function forEachChunk(bytes: Uint8Array, chunkSize: number, onChunk: (chunk: Uint8Array) => void): void {
+  const normalizedChunkSize = Math.max(1, Math.trunc(chunkSize))
+  if (bytes.byteLength === 0) {
+    onChunk(bytes)
+    return
+  }
+  for (let offset = 0; offset < bytes.byteLength; offset += normalizedChunkSize) {
+    onChunk(bytes.subarray(offset, Math.min(bytes.byteLength, offset + normalizedChunkSize)))
+  }
 }
 
 function findEndOfCentralDirectoryOffset(source: Uint8Array): number | null {

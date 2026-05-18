@@ -10,17 +10,27 @@ export interface LargeSimpleSharedStringEntry {
 const sharedStringElementPattern =
   /<(?:[A-Za-z_][\w.-]*:)?si\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?si)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/gu
 const richTextRunPattern = /<(?:[A-Za-z_][\w.-]*:)?r\b/u
+const partialSharedStringTagRetainLength = 256
 
 export function readLargeSimpleSharedStrings(sharedStringsXml: string): LargeSimpleSharedStringEntry[] {
   return [...sharedStringsXml.matchAll(sharedStringElementPattern)].map((match) => {
     const xml = match[0]
-    const rich = richTextRunPattern.test(xml)
-    const entry: LargeSimpleSharedStringEntry = { text: stringItemText(xml), rich }
-    if (rich) {
-      Object.assign(entry, { xml })
-    }
-    return entry
+    return readLargeSimpleSharedStringEntry(xml)
   })
+}
+
+export function readLargeSimpleReferencedSharedStringsFromChunks(
+  readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
+  referencedIndexes: ReadonlySet<number>,
+): LargeSimpleSharedStringEntry[] | null {
+  if (referencedIndexes.size === 0) {
+    return []
+  }
+  const scanner = new LargeSimpleSharedStringChunkScanner(referencedIndexes)
+  if (!readChunks((chunk) => scanner.push(chunk))) {
+    return null
+  }
+  return scanner.finish()
 }
 
 export function readLargeSimpleRichTextCellArtifact(
@@ -55,6 +65,94 @@ export function readLargeSimpleRichTextCellArtifact(
   return undefined
 }
 
+class LargeSimpleSharedStringChunkScanner {
+  private readonly decoder = new TextDecoder()
+  private readonly entries: LargeSimpleSharedStringEntry[] = []
+  private buffer = ''
+  private index = 0
+  private sharedStringIndex = 0
+  private failed = false
+
+  constructor(private readonly referencedIndexes: ReadonlySet<number>) {}
+
+  push(chunk: Uint8Array): void {
+    if (this.failed || chunk.byteLength === 0) {
+      return
+    }
+    this.buffer += this.decoder.decode(chunk, { stream: true })
+    this.process(false)
+    this.compact()
+  }
+
+  finish(): LargeSimpleSharedStringEntry[] | null {
+    if (this.failed) {
+      return null
+    }
+    this.buffer += this.decoder.decode()
+    this.process(true)
+    if (this.failed) {
+      return null
+    }
+    for (const index of this.referencedIndexes) {
+      if (!this.entries[index]) {
+        return null
+      }
+    }
+    return this.entries
+  }
+
+  private process(final: boolean): void {
+    while (!this.failed && this.index < this.buffer.length) {
+      const opening = findNextElementOpening(this.buffer, 'si', this.index)
+      if (!opening) {
+        this.index = final ? this.buffer.length : Math.max(this.index, this.buffer.length - partialSharedStringTagRetainLength)
+        return
+      }
+      const tagEnd = findTagEnd(this.buffer, opening.nameEnd)
+      if (tagEnd === null) {
+        if (final) {
+          this.failed = true
+        }
+        return
+      }
+      const xmlEnd = isSelfClosingTag(this.buffer, tagEnd) ? tagEnd + 1 : findClosingElementEnd(this.buffer, opening.name, tagEnd + 1)
+      if (xmlEnd === null) {
+        if (final) {
+          this.failed = true
+        }
+        return
+      }
+      if (this.referencedIndexes.has(this.sharedStringIndex)) {
+        this.entries[this.sharedStringIndex] = readLargeSimpleSharedStringEntry(this.buffer.slice(opening.start, xmlEnd))
+      }
+      this.sharedStringIndex += 1
+      this.index = xmlEnd
+    }
+  }
+
+  private compact(): void {
+    if (this.index === 0) {
+      return
+    }
+    if (this.index >= this.buffer.length) {
+      this.buffer = ''
+      this.index = 0
+      return
+    }
+    this.buffer = this.buffer.slice(this.index)
+    this.index = 0
+  }
+}
+
+function readLargeSimpleSharedStringEntry(xml: string): LargeSimpleSharedStringEntry {
+  const rich = richTextRunPattern.test(xml)
+  const entry: LargeSimpleSharedStringEntry = { text: stringItemText(xml), rich }
+  if (rich) {
+    Object.assign(entry, { xml })
+  }
+  return entry
+}
+
 function readSharedStringIndex(cellXml: string): number | null {
   const rawValue = readElementText(cellXml, 'v')?.trim()
   if (!rawValue) {
@@ -77,6 +175,93 @@ function readElementText(xml: string, elementName: 'v'): string | null {
 
 function readXmlAttribute(xml: string, attributeName: string): string | null {
   return new RegExp(`\\s${attributeName}=("|')([\\s\\S]*?)\\1`, 'u').exec(xml)?.[2] ?? null
+}
+
+function findNextElementOpening(
+  xml: string,
+  localName: string,
+  startIndex: number,
+): { readonly start: number; readonly name: string; readonly nameEnd: number } | null {
+  let index = startIndex
+  while (index < xml.length) {
+    const openingStart = xml.indexOf('<', index)
+    if (openingStart === -1) {
+      return null
+    }
+    const name = readElementName(xml, openingStart + 1)
+    if (!name) {
+      index = openingStart + 1
+      continue
+    }
+    if (readLocalName(name.name) === localName) {
+      return {
+        start: openingStart,
+        name: name.name,
+        nameEnd: name.end,
+      }
+    }
+    index = name.end
+  }
+  return null
+}
+
+function readElementName(xml: string, startIndex: number): { readonly name: string; readonly end: number } | null {
+  const first = xml[startIndex]
+  if (!first || first === '/' || first === '?' || first === '!') {
+    return null
+  }
+  let index = startIndex
+  while (index < xml.length && isXmlNameCharacter(xml.charCodeAt(index))) {
+    index += 1
+  }
+  return index > startIndex ? { name: xml.slice(startIndex, index), end: index } : null
+}
+
+function readLocalName(name: string): string {
+  return name.includes(':') ? name.slice(name.lastIndexOf(':') + 1) : name
+}
+
+function findTagEnd(xml: string, startIndex: number): number | null {
+  let quote: string | null = null
+  for (let index = startIndex; index < xml.length; index += 1) {
+    const character = xml[index]
+    if (quote) {
+      if (character === quote) {
+        quote = null
+      }
+      continue
+    }
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+    if (character === '>') {
+      return index
+    }
+  }
+  return null
+}
+
+function isSelfClosingTag(xml: string, tagEnd: number): boolean {
+  let index = tagEnd - 1
+  while (index >= 0 && isAsciiWhitespace(xml.charCodeAt(index))) {
+    index -= 1
+  }
+  return xml[index] === '/'
+}
+
+function findClosingElementEnd(xml: string, name: string, startIndex: number): number | null {
+  const closingStart = xml.indexOf(`</${name}`, startIndex)
+  if (closingStart === -1) {
+    return null
+  }
+  const closingNameEnd = closingStart + name.length + 2
+  const next = xml[closingNameEnd]
+  if (next !== '>' && !isAsciiWhitespace(next?.charCodeAt(0) ?? 0)) {
+    return findClosingElementEnd(xml, name, closingNameEnd)
+  }
+  const tagEnd = findTagEnd(xml, closingNameEnd)
+  return tagEnd === null ? null : tagEnd + 1
 }
 
 function stringItemText(xml: string): string {
@@ -117,4 +302,20 @@ function decodeXmlText(value: string): string {
 
 function isValidXmlCodePoint(value: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
+}
+
+function isAsciiWhitespace(value: number): boolean {
+  return value === 9 || value === 10 || value === 12 || value === 13 || value === 32
+}
+
+function isXmlNameCharacter(value: number): boolean {
+  return (
+    (value >= 65 && value <= 90) ||
+    (value >= 97 && value <= 122) ||
+    (value >= 48 && value <= 57) ||
+    value === 45 ||
+    value === 46 ||
+    value === 58 ||
+    value === 95
+  )
 }

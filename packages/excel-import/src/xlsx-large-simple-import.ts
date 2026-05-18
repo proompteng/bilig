@@ -21,7 +21,7 @@ import { readImportedWorkbookDrawingArtifacts } from './xlsx-drawing-artifacts.j
 import { readImportedSheetAutoFilters } from './xlsx-filters.js'
 import { readLargeSimpleSheetHyperlinks } from './xlsx-large-simple-hyperlinks.js'
 import { readLargeSimpleSheetPrintMetadata } from './xlsx-large-simple-printer-settings.js'
-import { readLargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
+import { readMaterializedLargeSimpleSharedStrings } from './xlsx-large-simple-referenced-shared-strings.js'
 import { buildLargeSimpleStyleRanges } from './xlsx-large-simple-style-ranges.js'
 import { readLargeSimpleWorkbookStyles } from './xlsx-large-simple-styles.js'
 import type { ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
@@ -31,8 +31,9 @@ import {
   readLargeSimpleWorksheetMetadataXml,
   parseLargeSimpleWorksheetCells,
 } from './xlsx-large-simple-worksheet-scanner.js'
+import { parseLargeSimpleWorksheetCellsFromChunks } from './xlsx-large-simple-worksheet-stream-scanner.js'
 import { readImportedSheetTablesFromWorksheetXml } from './xlsx-tables.js'
-import { getZipText, normalizeZipPath, type XlsxZipEntries } from './xlsx-zip.js'
+import { forEachInflatedXlsxZipEntryChunk, getZipText, normalizeZipPath, type XlsxZipEntries } from './xlsx-zip.js'
 
 export interface LargeSimpleXlsxImportResult {
   snapshot: WorkbookSnapshot
@@ -140,11 +141,22 @@ export function tryImportLargeSimpleXlsx(
     return null
   }
 
-  const sharedStringsXml = getZipText(zip, sharedStringsPath)
-  const hasSharedStrings = sharedStringsXml !== null
-  const sharedStrings = sharedStringsXml ? readLargeSimpleSharedStrings(sharedStringsXml) : []
-  const stylesXml = getZipText(zip, 'xl/styles.xml')
+  const worksheetEntries = workbookSheets.flatMap((entry) => {
+    const path = worksheetPathsByRelationshipId.get(entry.relationshipId)
+    return path ? [{ name: entry.name, relationshipId: entry.relationshipId, path }] : []
+  })
+  if (worksheetEntries.length !== workbookSheets.length) {
+    return null
+  }
   const materializeCells = options.materializeCells !== false
+  const hasSharedStrings = packagePaths.includes(sharedStringsPath)
+  const materializedSharedStrings =
+    materializeCells && hasSharedStrings ? readMaterializedLargeSimpleSharedStrings(zip, worksheetEntries) : []
+  if (materializedSharedStrings === null) {
+    return null
+  }
+  const sharedStrings = materializedSharedStrings
+  const stylesXml = materializeCells ? getZipText(zip, 'xl/styles.xml') : null
   delete zip[workbookPath]
   delete zip[workbookRelationshipsPath]
   delete zip[sharedStringsPath]
@@ -158,13 +170,6 @@ export function tryImportLargeSimpleXlsx(
           workbookSheets.map((entry) => entry.name),
         )
       : null
-  const worksheetEntries = workbookSheets.flatMap((entry) => {
-    const path = worksheetPathsByRelationshipId.get(entry.relationshipId)
-    return path ? [{ name: entry.name, relationshipId: entry.relationshipId, path }] : []
-  })
-  if (worksheetEntries.length !== workbookSheets.length) {
-    return null
-  }
   const importedTables: WorkbookTableSnapshot[] = []
   const sheets: WorkbookSnapshot['sheets'] = []
   const previewSheets: ParsedWorksheet['preview'][] = []
@@ -172,18 +177,33 @@ export function tryImportLargeSimpleXlsx(
   const styleCatalog = new Map<string, CellStyleRecord>()
 
   for (const [order, entry] of worksheetEntries.entries()) {
-    let worksheetBytes: Uint8Array | undefined = zip[entry.path]
-    if (!worksheetBytes) {
-      return null
+    let streamedWorksheetXml: string | undefined
+    let cellScan: ImportedWorksheetCellScan | null = null
+    const streamed = parseLargeSimpleWorksheetCellsFromChunks(
+      (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
+      order,
+      { hasSharedStrings, retainCells: materializeCells, sharedStrings },
+    )
+    if (streamed && (hasSharedStrings || streamed.cellScan.valueCellCount > 0)) {
+      cellScan = streamed.cellScan
+      streamedWorksheetXml = streamed.metadataXml
+      delete zip[entry.path]
     }
-    delete zip[entry.path]
-    if (!hasSharedStrings && !shouldUseSharedStringlessFastPathBytes(worksheetBytes)) {
-      return null
+    let worksheetBytes: Uint8Array | undefined
+    if (!cellScan) {
+      worksheetBytes = zip[entry.path]
+      if (!worksheetBytes) {
+        return null
+      }
+      delete zip[entry.path]
+      if (!hasSharedStrings && !shouldUseSharedStringlessFastPathBytes(worksheetBytes)) {
+        return null
+      }
+      if (hasUnsupportedLargeSimpleWorksheetTags(worksheetBytes)) {
+        return null
+      }
+      cellScan = parseLargeSimpleWorksheetCells(worksheetBytes, sharedStrings, order, { retainCells: materializeCells })
     }
-    if (hasUnsupportedLargeSimpleWorksheetTags(worksheetBytes)) {
-      return null
-    }
-    const cellScan = parseLargeSimpleWorksheetCells(worksheetBytes, sharedStrings, order, { retainCells: materializeCells })
     if (!cellScan) {
       return null
     }
@@ -206,10 +226,11 @@ export function tryImportLargeSimpleXlsx(
       | 'printerSettings'
       | 'printPageSetup'
     > = {}
-    const needsWorksheetXml = needsLargeSimpleWorksheetMetadataXml(worksheetBytes)
+    const needsWorksheetXml =
+      streamedWorksheetXml !== undefined || (worksheetBytes ? needsLargeSimpleWorksheetMetadataXml(worksheetBytes) : false)
     const drawingArtifacts = importedDrawingArtifacts?.sheetArtifactsByName.get(entry.name)
     if (needsWorksheetXml) {
-      worksheetXml = readLargeSimpleWorksheetMetadataXml(worksheetBytes)
+      worksheetXml = streamedWorksheetXml ?? (worksheetBytes ? readLargeSimpleWorksheetMetadataXml(worksheetBytes) : undefined)
       if (!worksheetXml) {
         return null
       }
