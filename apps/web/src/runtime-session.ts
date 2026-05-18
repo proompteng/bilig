@@ -278,6 +278,7 @@ export async function createWorkerRuntimeSessionController(
   let runtimeStateRefreshTimer: ReturnType<typeof setTimeout> | null = null
   let authoritativeBackstopTimer: ReturnType<typeof setTimeout> | null = null
   let authoritativeBackstopInFlight = false
+  let authoritativeBootstrapSnapshotFailed = false
   let authoritativeRefreshChannel: BroadcastChannel | null = null
   let liveSync: ZeroWorkbookRevisionSync | null = null
   const startLiveSync = (): void => {
@@ -751,6 +752,7 @@ export async function createWorkerRuntimeSessionController(
           fetchImpl,
         })
       } catch (error) {
+        authoritativeBootstrapSnapshotFailed = true
         callbacks.onError(toErrorMessage(error))
       }
       startLiveSync()
@@ -781,7 +783,9 @@ export async function createWorkerRuntimeSessionController(
       queueAuthoritativeRebase(pendingRevisionState)
     }
     startAuthoritativeRefreshChannel()
-    scheduleAuthoritativeBackstop(0)
+    if (!authoritativeBootstrapSnapshotFailed) {
+      scheduleAuthoritativeBackstop(0)
+    }
     await applySelection(reconcileSelection(currentSelection, currentRuntimeState.sheetNames))
     input.perfSession?.markFirstSelectionVisible()
   } catch (error) {

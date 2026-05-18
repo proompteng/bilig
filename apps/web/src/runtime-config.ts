@@ -76,11 +76,13 @@ export function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig 
 
 export function resolveRemoteSyncEnabled(env: { readonly DEV?: boolean; readonly VITE_BILIG_REMOTE_SYNC?: string | undefined }): boolean {
   const configured = env.VITE_BILIG_REMOTE_SYNC
+  const searchParams = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
+  const explicitPersistState = searchParams.get('persist')
   if (configured === undefined || configured.length === 0) {
-    return env.DEV !== true
+    return env.DEV !== true && explicitPersistState !== '0' && explicitPersistState !== 'false'
   }
   if (configured === '1' || configured === 'true') {
-    return true
+    return explicitPersistState !== '0' && explicitPersistState !== 'false'
   }
   if (configured === '0' || configured === 'false') {
     return false

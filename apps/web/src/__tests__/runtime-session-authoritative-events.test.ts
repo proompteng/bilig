@@ -457,6 +457,12 @@ describe('worker runtime session authoritative event loading', () => {
     expect(zero.materialize).toHaveBeenCalledOnce()
     expect(onRuntimeState).toHaveBeenCalledWith(expect.objectContaining({ sheetNames: ['Sheet1'] }))
     expect(onError).toHaveBeenCalledWith('Failed to load workbook snapshot (500)')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(
+      fetchImpl.mock.calls
+        .map(([url]) => (typeof url === 'string' ? url : url instanceof URL ? url.href : url.url))
+        .filter((url) => url.endsWith('/events?afterRevision=0')),
+    ).toEqual([])
   })
 
   it('polls authoritative events after bootstrap when the live revision callback misses an update', async () => {

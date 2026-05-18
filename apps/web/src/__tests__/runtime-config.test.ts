@@ -108,4 +108,16 @@ describe('resolveRuntimeConfig', () => {
       'VITE_BILIG_REMOTE_SYNC must be "1", "true", "0", or "false" when set, got yes',
     )
   })
+
+  it('keeps non-persistent browser QA sessions local-only even when remote sync is enabled', () => {
+    window.history.replaceState({}, '', '/?document=visual-smoke&persist=0')
+    expect(resolveRemoteSyncEnabled({ DEV: true, VITE_BILIG_REMOTE_SYNC: '1' })).toBe(false)
+    expect(resolveRemoteSyncEnabled({ DEV: false })).toBe(false)
+
+    window.history.replaceState({}, '', '/?document=visual-smoke&persist=false')
+    expect(resolveRemoteSyncEnabled({ DEV: true, VITE_BILIG_REMOTE_SYNC: 'true' })).toBe(false)
+
+    window.history.replaceState({}, '', '/?document=visual-smoke&persist=1')
+    expect(resolveRemoteSyncEnabled({ DEV: true, VITE_BILIG_REMOTE_SYNC: '1' })).toBe(true)
+  })
 })
