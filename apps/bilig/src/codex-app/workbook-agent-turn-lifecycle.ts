@@ -27,6 +27,17 @@ export function startWorkbookAgentTurn(sessionState: WorkbookAgentThreadState, i
 }
 
 export function markWorkbookAgentTurnStarted(sessionState: WorkbookAgentThreadState, turnId: string): void {
+  const activeTurnId = sessionState.live.activeTurnId
+  const knownTurn =
+    sessionState.live.promptByTurn.has(turnId) ||
+    sessionState.live.turnActorUserIdByTurn.has(turnId) ||
+    sessionState.live.turnContextByTurn.has(turnId) ||
+    sessionState.live.optimisticUserEntryIdByTurn.has(turnId) ||
+    sessionState.durable.entries.some((entry) => entry.turnId === turnId && entry.id.startsWith('optimistic-user:'))
+  if (activeTurnId && activeTurnId !== turnId && knownTurn) {
+    clearWorkbookAgentTurnState(sessionState, turnId)
+    return
+  }
   sessionState.live.activeTurnId = turnId
   sessionState.live.status = 'inProgress'
   sessionState.live.lastError = null

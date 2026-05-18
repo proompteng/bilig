@@ -4644,6 +4644,89 @@ describe('workbook agent service', () => {
     }
   })
 
+  it('does not let a stale started-turn notification reclaim a newer active turn', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => fakeCodex,
+      maxActiveTurnsPerUser: 1,
+      maxActiveTurnsPerDocument: 1,
+    })
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {},
+      })
+
+      await service.startTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          prompt: 'First turn',
+        },
+      })
+      fakeCodex.emit({
+        method: 'turn/started',
+        params: {
+          threadId: snapshot.threadId,
+          turn: {
+            id: 'turn-2',
+            status: 'inProgress',
+            items: [],
+            error: null,
+          },
+        },
+      })
+      await vi.waitFor(() => {
+        expect(
+          service.getSnapshot({
+            documentId: 'doc-1',
+            threadId: snapshot.threadId,
+            session: {
+              userID: 'alex@example.com',
+              roles: ['editor'],
+            },
+          }).activeTurnId,
+        ).toBe('turn-2')
+      })
+      fakeCodex.emit({
+        method: 'turn/started',
+        params: {
+          threadId: snapshot.threadId,
+          turn: {
+            id: 'turn-1',
+            status: 'inProgress',
+            items: [],
+            error: null,
+          },
+        },
+      })
+
+      await vi.waitFor(() => {
+        const stillActive = service.getSnapshot({
+          documentId: 'doc-1',
+          threadId: snapshot.threadId,
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+        })
+        expect(stillActive.status).toBe('inProgress')
+        expect(stillActive.activeTurnId).toBe('turn-2')
+      })
+    } finally {
+      await service.close()
+    }
+  })
+
   it('does not let a stale failed turn poison a newer active turn result', async () => {
     const fakeCodex = new FakeCodexTransport()
     const service = createWorkbookAgentService(createZeroSyncStub(), {
