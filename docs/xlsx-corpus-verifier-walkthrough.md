@@ -172,22 +172,26 @@ pnpm public-workbook-corpus:verify-recent-complex
 pnpm public-workbook-corpus:headless-recent-complex
 ```
 
+The default CKAN discovery set includes national and regional open-data portals
+that have produced qualifying recent workbook evidence, including Ontario,
+Alberta, British Columbia, and HDX, alongside the broader GitHub discovery lane.
+
 Latest local evidence from May 18, 2026:
 
 ```json
 {
   "targetWorkbookCount": 500,
-  "manifestArtifactCount": 2046,
-  "publicScorecardCaseCount": 2046,
-  "publicPassingRecentComplexCount": 184,
-  "headlessFileCount": 184,
-  "headlessOkFileCount": 184,
-  "headlessComparableFormulaFileCount": 178,
-  "endToEndPassingWorkbookCount": 178,
-  "remainingToTarget": 322,
-  "formulaCells": 124868,
-  "comparableFormulaCells": 121733,
-  "matchingFormulaCells": 121733,
+  "manifestArtifactCount": 2068,
+  "publicScorecardCaseCount": 2068,
+  "publicPassingRecentComplexCount": 189,
+  "headlessFileCount": 189,
+  "headlessOkFileCount": 189,
+  "headlessComparableFormulaFileCount": 183,
+  "endToEndPassingWorkbookCount": 183,
+  "remainingToTarget": 317,
+  "formulaCells": 125010,
+  "comparableFormulaCells": 121875,
+  "matchingFormulaCells": 121875,
   "mismatchedFormulaCells": 0,
   "skippedFormulaCells": 3135
 }

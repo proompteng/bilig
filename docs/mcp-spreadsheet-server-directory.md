@@ -74,7 +74,7 @@ crawlers that probe those well-known variants.
 
 | Directory                       | Status                                                                                | Link                                                                                                  |
 | ------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Official MCP Registry           | Live through `0.22.1` in public search; `0.23.0` npm release pending registry refresh | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper> |
+| Official MCP Registry           | Live through `0.22.1` in public search; `0.23.2` npm release pending registry refresh | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper> |
 | Static MCP server card          | Live                                                                                  | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                 |
 | Static MCP discovery aliases    | Live                                                                                  | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                             |
 | Glama                           | Live, release `0.21.1` created; seven tools indexed with A-grade TDQS                 | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
@@ -93,7 +93,7 @@ crawlers that probe those well-known variants.
 
 PulseMCP says server listings are ingested from the official MCP Registry daily
 and processed weekly. The Bilig WorkPaper registry entry is live, but after the
-`@bilig/headless@0.23.0` npm release the public Registry search still returns
+`@bilig/headless@0.23.2` npm release the public Registry search still returns
 versions through `0.22.1` as of May 18, 2026. Treat PulseMCP absence as
 downstream directory refresh lag unless the official Registry keeps lagging past
 its normal refresh window.
@@ -111,7 +111,7 @@ static MCP server card.
 Glama lists Bilig WorkPaper publicly in search with TypeScript, Developer
 Tools, Workplace & Productivity, and Remote attributes. On May 18, 2026 the
 Glama Dockerfile test build `019e3900-c65c-73b4-b500-e3af43d37d46` succeeded
-and was published as release `0.21.1`. npm now points at `0.23.0`, while the
+and was published as release `0.21.1`. npm now points at `0.23.2`, while the
 official MCP Registry public search still trails at `0.22.1`; Glama's hosted
 test release should be treated as a directory smoke proof until that hosted
 build is refreshed. The public Schema and Overview pages now index the seven
@@ -196,9 +196,9 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 18, 2026: npm latest is `@bilig/headless@0.23.0`.
+Latest checked result on May 18, 2026: npm latest is `@bilig/headless@0.23.2`.
 Official Registry search currently returns Bilig WorkPaper versions through
-`0.22.1`; do not treat absent `0.23.0` registry search results as package
+`0.22.1`; do not treat absent `0.23.2` registry search results as package
 publish failure unless the registry remains stale after its refresh window. The
 API also returns historical entries, so consumers should follow pagination,
 select the latest-marked entry, or prefer the npm package version when they need

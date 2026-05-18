@@ -36,7 +36,13 @@ export const defaultCkanPortalBases = [
   'https://data.nt.gov.au/api/3/action',
 ]
 
-export const defaultRecentComplexCkanPortalBases = [...defaultCkanPortalBases, 'https://data.humdata.org/api/3/action'] as const
+export const defaultRecentComplexCkanPortalBases = [
+  ...defaultCkanPortalBases,
+  'https://data.humdata.org/api/3/action',
+  'https://data.ontario.ca/api/3/action',
+  'https://open.alberta.ca/api/3/action',
+  'https://catalogue.data.gov.bc.ca/api/3/action',
+] as const
 
 export async function discoverCkanWorkbookSources(args: DiscoverCkanArgs): Promise<PublicWorkbookManifest> {
   validatePublicWorkbookManifest(args.manifest)

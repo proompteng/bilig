@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { defaultRecentComplexCkanPortalBases } from '../public-workbook-corpus-discovery.ts'
 import { createEmptyPublicWorkbookManifest } from '../public-workbook-corpus-json.ts'
 import { defaultRecentComplexGithubRepositoryQueries } from '../public-workbook-corpus-github.ts'
 import {
@@ -247,6 +248,16 @@ describe('public workbook recent complex headless corpus gate', () => {
     expect(templateIndex).toBeGreaterThanOrEqual(0)
     expect(modelIndex).toBeLessThan(broadBudgetIndex)
     expect(templateIndex).toBeLessThan(broadAccountingIndex)
+  })
+
+  it('includes productive Canadian CKAN portals in recent complex discovery', () => {
+    expect(defaultRecentComplexCkanPortalBases).toEqual(
+      expect.arrayContaining([
+        'https://data.ontario.ca/api/3/action',
+        'https://open.alberta.ca/api/3/action',
+        'https://catalogue.data.gov.bc.ca/api/3/action',
+      ]),
+    )
   })
 
   it('includes targeted financial-model repository queries for formula-heavy recent workbooks', () => {
