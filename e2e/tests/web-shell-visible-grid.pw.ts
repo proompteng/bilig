@@ -73,6 +73,26 @@ test('@browser-ci web app paints deep querystring-selected cell content in the v
   }
 })
 
+test('@browser-ci web app keeps table gridlines visible even when TypeGPU compositing is delayed', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-visible-gridline-floor')
+  await page.setViewportSize({ width: 1000, height: 760 })
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-renderer-mode', 'typegpu-v3')
+  await expect.poll(async () => await page.getByTestId('grid-pane-renderer').getAttribute('data-v3-frame-proof-status')).toBe('presented')
+  await expect(page.getByTestId('grid-pane-renderer-floor')).toBeVisible()
+  await expect(page.getByTestId('grid-pane-renderer-floor')).toHaveAttribute('data-v3-draw-text', 'false')
+  await expect(page.getByTestId('grid-pane-renderer-fallback')).toHaveCount(0)
+
+  await expect
+    .poll(() => countVisibleGridLinePixels(page), {
+      message: 'empty workbook view must still expose visible row and column gridlines, not blank white whitespace',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(1_000)
+})
+
 test('@browser-ci web app keeps a user click selection after opening from a deep cell URL', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-visible-click-deep-cell')
   await page.setViewportSize({ width: 1166, height: 820 })
@@ -561,6 +581,58 @@ async function countDarkInteriorPixelsInCell(page: Page, columnIndex: number, ro
         }
       }
       return darkPixels
+    },
+    { dataUrl: `data:image/png;base64,${buffer.toString('base64')}` },
+  )
+}
+
+async function countVisibleGridLinePixels(page: Page): Promise<number> {
+  const gridLocator = page.getByTestId('sheet-grid')
+  await expect(gridLocator).toBeVisible()
+  const grid = await gridLocator.boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+
+  const buffer = await page.screenshot({
+    animations: 'disabled',
+    caret: 'hide',
+    clip: {
+      x: Math.round(grid.x + PRODUCT_ROW_MARKER_WIDTH + 1),
+      y: Math.round(grid.y + PRODUCT_HEADER_HEIGHT + 1),
+      width: Math.max(1, Math.round(Math.min(grid.width - PRODUCT_ROW_MARKER_WIDTH - 2, 540))),
+      height: Math.max(1, Math.round(Math.min(grid.height - PRODUCT_HEADER_HEIGHT - 2, 420))),
+    },
+  })
+
+  return await page.evaluate(
+    async ({ dataUrl }) => {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const element = new Image()
+        element.addEventListener('load', () => resolve(element), { once: true })
+        element.addEventListener('error', () => reject(new Error('Failed to decode grid screenshot')), { once: true })
+        element.src = dataUrl
+      })
+      const canvas = document.createElement('canvas')
+      canvas.width = image.naturalWidth
+      canvas.height = image.naturalHeight
+      const context = canvas.getContext('2d')
+      if (!context) {
+        throw new Error('Missing 2d context for grid screenshot analysis')
+      }
+      context.drawImage(image, 0, 0)
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+      let gridlinePixels = 0
+      for (let index = 0; index < pixels.length; index += 4) {
+        const alpha = pixels[index + 3] ?? 0
+        const red = pixels[index] ?? 255
+        const green = pixels[index + 1] ?? 255
+        const blue = pixels[index + 2] ?? 255
+        if (alpha > 200 && red >= 205 && red <= 235 && green >= 198 && green <= 228 && blue >= 186 && blue <= 220) {
+          gridlinePixels += 1
+        }
+      }
+      return gridlinePixels
     },
     { dataUrl: `data:image/png;base64,${buffer.toString('base64')}` },
   )

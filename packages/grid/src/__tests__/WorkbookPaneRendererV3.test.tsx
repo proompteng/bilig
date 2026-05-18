@@ -16,6 +16,7 @@ import {
   shouldMountWorkbookCanvasProofLayerV3,
   shouldDeferTypeGpuV3PreloadSync,
 } from '../renderer-v3/WorkbookPaneRendererV3.js'
+import { WorkbookPaneCanvasFallbackV3 } from '../renderer-v3/WorkbookPaneCanvasFallbackV3.js'
 import { GridDrawSchedulerV3 } from '../renderer-v3/draw-scheduler.js'
 import { GridRenderLoop } from '../renderer-v3/gridRenderLoop.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
@@ -199,6 +200,44 @@ describe('WorkbookPaneRendererV3', () => {
     expect(fallbackCanvas).toBeInstanceOf(HTMLCanvasElement)
     expect(fallbackCanvas?.getAttribute('data-v3-draw-text')).toBe('false')
     expect(nativeTextLayer?.textContent).toContain('Expense Recognized')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  test('labels the non-text Canvas2D grid floor separately from fallback rendering', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 640 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 360 })
+    const root = createRoot(host)
+    const rendererHost = document.createElement('div')
+    Object.defineProperty(rendererHost, 'clientWidth', { configurable: true, value: 640 })
+    Object.defineProperty(rendererHost, 'clientHeight', { configurable: true, value: 360 })
+    host.appendChild(rendererHost)
+
+    await act(async () => {
+      root.render(
+        <WorkbookPaneCanvasFallbackV3
+          active
+          drawText={false}
+          geometry={null}
+          headerPanes={[]}
+          host={rendererHost}
+          layer="grid-floor"
+          overlay={null}
+          scrollTransformStore={null}
+          tilePanes={[createTilePane()]}
+        />,
+      )
+    })
+
+    const gridFloorCanvas = host.querySelector('[data-testid="grid-pane-renderer-floor"]')
+    expect(gridFloorCanvas).toBeInstanceOf(HTMLCanvasElement)
+    expect(gridFloorCanvas?.getAttribute('data-renderer-mode')).toBe('canvas2d-v3-grid-floor')
+    expect(gridFloorCanvas?.getAttribute('data-v3-draw-text')).toBe('false')
+    expect(host.querySelector('[data-testid="grid-pane-renderer-fallback"]')).toBeNull()
 
     await act(async () => {
       root.unmount()

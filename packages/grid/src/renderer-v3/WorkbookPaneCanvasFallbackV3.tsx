@@ -38,6 +38,7 @@ export interface WorkbookPaneCanvasFallbackV3Props {
   readonly geometry: GridGeometrySnapshot | null
   readonly headerPanes: readonly GridHeaderPaneState[]
   readonly host: HTMLDivElement | null
+  readonly layer?: 'fallback' | 'grid-floor' | undefined
   readonly overlay: DynamicGridOverlayBatchV3 | null
   readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayBatchV3 | null | undefined) | null | undefined
   readonly scrollTransformStore: WorkbookGridScrollStore | null
@@ -195,6 +196,7 @@ export const WorkbookPaneCanvasFallbackV3 = memo(function WorkbookPaneCanvasFall
   geometry,
   headerPanes,
   host,
+  layer = 'fallback',
   overlay,
   overlayBuilder,
   scrollTransformStore,
@@ -279,17 +281,19 @@ export const WorkbookPaneCanvasFallbackV3 = memo(function WorkbookPaneCanvasFall
   if (!active || !host) {
     return null
   }
+  const isGridFloor = layer === 'grid-floor'
 
   return (
     <canvas
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-[5]"
-      data-pane-renderer="workbook-pane-renderer-v3-fallback"
-      data-renderer-mode="canvas2d-v3-fallback"
-      data-testid="grid-pane-renderer-fallback"
+      data-pane-renderer={isGridFloor ? 'workbook-pane-renderer-v3-grid-floor' : 'workbook-pane-renderer-v3-fallback'}
+      data-renderer-mode={isGridFloor ? 'canvas2d-v3-grid-floor' : 'canvas2d-v3-fallback'}
+      data-testid={isGridFloor ? 'grid-pane-renderer-floor' : 'grid-pane-renderer-fallback'}
       data-v3-draw-text={drawText ? 'true' : 'false'}
       data-v3-header-pane-count={headerPanes.length}
       data-v3-header-text-run-count={headerPanes.reduce((total, pane) => total + pane.textRuns.length, 0)}
+      data-v3-layer-role={layer}
       data-v3-text-run-count={tilePanes.reduce((total, pane) => total + pane.tile.textRuns.length, 0)}
       data-v3-tile-pane-count={tilePanes.length}
       ref={canvasRef}

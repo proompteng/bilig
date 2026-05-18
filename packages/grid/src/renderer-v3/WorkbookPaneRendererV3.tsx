@@ -76,6 +76,11 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   const tileTextRunCount = tilePanes.reduce((total, pane) => total + pane.tile.textRuns.length, 0)
   const hasNativeTextRuns = headerTextRunCount + tileTextRunCount > 0
   const showNativeTextLayer = active && hasNativeTextRuns
+  const hasVisiblePaneContent = hasWorkbookPaneVisibleContentV3({
+    headerPaneCount: headerPanes.length,
+    overlayRectCount: overlay?.rectCount ?? 0,
+    tilePaneCount: tilePanes.length,
+  })
   const showCanvasFallback = shouldMountWorkbookCanvasProofLayerV3({
     backendStatus,
     enableCanvasFallback,
@@ -86,6 +91,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     tilePaneCount: tilePanes.length,
   })
   const showTypeGpuCanvas = backendStatus !== 'unavailable'
+  const showCanvasGridFloor = showTypeGpuCanvas && hasVisiblePaneContent
 
   useLayoutEffect(() => {
     hostRuntime.updateProps({
@@ -151,6 +157,21 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
 
   return (
     <>
+      {showCanvasGridFloor ? (
+        <WorkbookPaneCanvasFallbackV3
+          active={active}
+          cameraStore={cameraStore}
+          drawText={false}
+          geometry={geometry}
+          headerPanes={headerPanes}
+          host={host}
+          layer="grid-floor"
+          overlay={overlay ?? null}
+          overlayBuilder={overlayBuilder ?? null}
+          scrollTransformStore={scrollTransformStore}
+          tilePanes={tilePanes}
+        />
+      ) : null}
       {showCanvasFallback ? (
         <WorkbookPaneCanvasFallbackV3
           active={active}
@@ -227,11 +248,19 @@ export function shouldMountWorkbookCanvasProofLayerV3(input: {
   if (input.hasPresentedFrame) {
     return false
   }
-  const hasVisiblePaneContent = input.tilePaneCount > 0 || input.headerPaneCount > 0 || (input.overlayRectCount ?? 0) > 0
+  const hasVisiblePaneContent = hasWorkbookPaneVisibleContentV3(input)
   if (input.frameProofStatus === 'pending') {
     return hasVisiblePaneContent
   }
   return hasVisiblePaneContent && input.frameProofStatus !== 'presented'
+}
+
+export function hasWorkbookPaneVisibleContentV3(input: {
+  readonly headerPaneCount: number
+  readonly overlayRectCount?: number | undefined
+  readonly tilePaneCount: number
+}): boolean {
+  return input.tilePaneCount > 0 || input.headerPaneCount > 0 || (input.overlayRectCount ?? 0) > 0
 }
 
 export function resolveWorkbookPaneTileSceneRevisionV3(tilePanes: readonly WorkbookRenderTilePaneState[]): number | null {
