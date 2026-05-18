@@ -142,6 +142,22 @@ function createNoopWorkerEngineClient(): WorkerEngineClient {
 }
 
 describe('ProjectedViewportStore', () => {
+  it('renders range formatting for empty cells when the patch carries style ids outside the snapshot', () => {
+    const cache = new ProjectedViewportStore()
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      styles: [{ id: 'style-green', fill: { backgroundColor: '#00ff00' } }],
+      cells: createPatch().cells.map((cell) => Object.assign({}, cell, { styleId: 'style-green' })),
+    })
+
+    expect(cache.getCell('Sheet1', 'D5').styleId).toBe('style-green')
+    expect(cache.getCellStyle(cache.getCell('Sheet1', 'D5').styleId)).toEqual({
+      id: 'style-green',
+      fill: { backgroundColor: '#00ff00' },
+    })
+  })
+
   it('accepts equal-version empty snapshots that clear stale styling', () => {
     const cache = new ProjectedViewportStore()
 

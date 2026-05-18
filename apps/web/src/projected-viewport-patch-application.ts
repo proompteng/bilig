@@ -1,7 +1,7 @@
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import { PRODUCT_COLUMN_WIDTH, PRODUCT_ROW_HEIGHT } from '@bilig/grid'
 import { ValueTag, type CellSnapshot, type CellStyleRecord, type Viewport, type WorkbookMergeRangeSnapshot } from '@bilig/protocol'
-import type { ViewportPatch } from '@bilig/worker-transport'
+import type { ViewportPatch, ViewportPatchedCell } from '@bilig/worker-transport'
 import {
   cellSnapshotSignature,
   createClearTombstoneSnapshot,
@@ -45,6 +45,8 @@ export interface ProjectedViewportPatchApplicationResult {
   readonly mergesChanged: boolean
 }
 
+const DEFAULT_STYLE_ID = 'style-0'
+
 function cellStyleSignature(style: CellStyleRecord): string {
   const fill = style.fill?.backgroundColor ?? ''
   const font = style.font
@@ -70,6 +72,20 @@ function cellStyleSignature(style: CellStyleRecord): string {
     protection?.locked === undefined ? '' : protection.locked ? 1 : 0,
     protection?.hidden === undefined ? '' : protection.hidden ? 1 : 0,
   ].join('|')
+}
+
+function normalizePatchedCellSnapshot(cell: ViewportPatchedCell): CellSnapshot {
+  const styleId = cell.styleId === DEFAULT_STYLE_ID ? undefined : cell.styleId
+  if (cell.snapshot.styleId === styleId) {
+    return cell.snapshot
+  }
+  const snapshot = { ...cell.snapshot }
+  if (styleId === undefined) {
+    delete snapshot.styleId
+  } else {
+    snapshot.styleId = styleId
+  }
+  return snapshot
 }
 
 function isCellInsideViewport(snapshot: CellSnapshot, viewport: Viewport): boolean {
@@ -233,13 +249,14 @@ export function applyProjectedViewportPatch(input: {
   }
 
   for (const cell of patch.cells) {
-    const key = `${patch.viewport.sheetName}!${cell.snapshot.address}`
+    const patchedSnapshot = normalizePatchedCellSnapshot(cell)
+    const key = `${patch.viewport.sheetName}!${patchedSnapshot.address}`
     const current = state.cellSnapshots.get(key)
     const incoming = current
-      ? prepareIncomingSnapshot(current, cell.snapshot, {
+      ? prepareIncomingSnapshot(current, patchedSnapshot, {
           releaseConfirmedOptimisticClear: patch.authoritativeRevision !== undefined,
         })
-      : cell.snapshot
+      : patchedSnapshot
     if (current) {
       const allowResetEmptyOverride =
         !patch.full &&

@@ -103,6 +103,34 @@ describe('applyProjectedViewportPatch', () => {
     })
   })
 
+  it('preserves top-level patch style ids for styled empty cells', () => {
+    const state = createPatchState()
+
+    const result = applyProjectedViewportPatch({
+      state,
+      patch: {
+        ...createPatch(),
+        styles: [{ id: 'style-fill', fill: { backgroundColor: '#00ff00' } }],
+        cells: createPatch().cells.map((cell) => Object.assign({}, cell, { styleId: 'style-fill' })),
+      },
+    })
+
+    expect(result.damage).toEqual([{ cell: [3, 4] }])
+    expect(state.cellSnapshots.get('Sheet1!D5')?.styleId).toBe('style-fill')
+    expect(state.cellStyles.get('style-fill')).toEqual({
+      id: 'style-fill',
+      fill: { backgroundColor: '#00ff00' },
+    })
+
+    const clearResult = applyProjectedViewportPatch({
+      state,
+      patch: createPatch(),
+    })
+
+    expect(clearResult.damage).toEqual([{ cell: [3, 4] }])
+    expect(state.cellSnapshots.get('Sheet1!D5')?.styleId).toBeUndefined()
+  })
+
   it('clears stale viewport cells on full patches without dropping cells outside the viewport', () => {
     const state = createPatchState()
     state.cellSnapshots.set('Sheet1!A1', {
