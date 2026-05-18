@@ -690,8 +690,8 @@ this package:
 8. Run focused headless tests before broader gates.
 9. Preserve benchmark definitions and workload sizes.
 10. Document edge-case behavior honestly: tracked formula names are routed, but
-   arbitrary Excel workbooks, host features, and locale/date argument edges
-   still need fixtures before production claims.
+    arbitrary Excel workbooks, host features, and locale/date argument edges
+    still need fixtures before production claims.
 
 ## Public Entry Points
 

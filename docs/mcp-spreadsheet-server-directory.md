@@ -72,33 +72,31 @@ crawlers that probe those well-known variants.
 
 ## Directory Status
 
-| Directory                       | Status                                                                 | Link                                                                                                  |
-| ------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Official MCP Registry           | Live, `0.22.2` indexed; search pagination may show older entries first | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper> |
-| Static MCP server card          | Live                                                                   | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                 |
-| Static MCP discovery aliases    | Live                                                                   | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                             |
-| Glama                           | Live, release `0.21.1` created; seven tools indexed with A-grade TDQS   | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
-| mcp.so                          | Submitted for maintainer review; issue body refreshed for `0.22.2`     | <https://github.com/chatmcp/mcpso/issues/2295>                                                        |
-| Cline MCP Marketplace           | Submitted for maintainer review; issue body refreshed for `0.22.2`     | <https://github.com/cline/mcp-marketplace/issues/1557>                                                |
-| mcpserver.cc                    | Submitted for maintainer review                                        | <https://mcpserver.cc/en?q=bilig>                                                                     |
-| AgentNDX                        | Submitted for review                                                   | <https://agentndx.ai/browse?q=bilig>                                                                  |
-| YuzeHao2023 Awesome MCP Servers | Submitted for maintainer review                                        | <https://github.com/YuzeHao2023/Awesome-MCP-Servers/pull/244>                                         |
-| ToolSDK MCP Registry            | Submitted for maintainer review                                        | <https://github.com/toolsdk-ai/toolsdk-mcp-registry/pull/309>                                         |
-| Ever Works MCP data             | Submitted for maintainer review                                        | <https://github.com/ever-works/awesome-mcp-servers-data/pull/4>                                       |
-| mcpserve.com                    | Submitted for maintainer review                                        | <https://github.com/jmstfv/mcpserve/pull/19>                                                          |
-| MCPFind                         | Submitted for maintainer review                                        | <https://github.com/MCPFind/mcp-find/pull/37>                                                         |
-| mctrinh Awesome MCP Servers     | Submitted for maintainer review                                        | <https://github.com/mctrinh/awesome-mcp-servers/pull/46>                                              |
-| MCPRepository                   | Live                                                                   | <https://mcprepository.com/proompteng/bilig>                                                          |
-| PulseMCP                        | Still not indexed in public search on May 17, 2026                     | <https://www.pulsemcp.com/servers?search=bilig&q=bilig>                                               |
+| Directory                       | Status                                                                                | Link                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Official MCP Registry           | Live through `0.22.1` in public search; `0.23.0` npm release pending registry refresh | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper> |
+| Static MCP server card          | Live                                                                                  | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                 |
+| Static MCP discovery aliases    | Live                                                                                  | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                             |
+| Glama                           | Live, release `0.21.1` created; seven tools indexed with A-grade TDQS                 | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
+| mcp.so                          | Submitted for maintainer review; issue body refreshed on May 18                       | <https://github.com/chatmcp/mcpso/issues/2295>                                                        |
+| Cline MCP Marketplace           | Submitted for maintainer review; issue body refreshed on May 18                       | <https://github.com/cline/mcp-marketplace/issues/1557>                                                |
+| mcpserver.cc                    | Submitted for maintainer review                                                       | <https://mcpserver.cc/en?q=bilig>                                                                     |
+| AgentNDX                        | Submitted for review                                                                  | <https://agentndx.ai/browse?q=bilig>                                                                  |
+| YuzeHao2023 Awesome MCP Servers | Submitted for maintainer review                                                       | <https://github.com/YuzeHao2023/Awesome-MCP-Servers/pull/244>                                         |
+| ToolSDK MCP Registry            | Submitted for maintainer review                                                       | <https://github.com/toolsdk-ai/toolsdk-mcp-registry/pull/309>                                         |
+| Ever Works MCP data             | Submitted for maintainer review                                                       | <https://github.com/ever-works/awesome-mcp-servers-data/pull/4>                                       |
+| mcpserve.com                    | Submitted for maintainer review                                                       | <https://github.com/jmstfv/mcpserve/pull/19>                                                          |
+| MCPFind                         | Submitted for maintainer review                                                       | <https://github.com/MCPFind/mcp-find/pull/37>                                                         |
+| mctrinh Awesome MCP Servers     | Submitted for maintainer review                                                       | <https://github.com/mctrinh/awesome-mcp-servers/pull/46>                                              |
+| MCPRepository                   | Live                                                                                  | <https://mcprepository.com/proompteng/bilig>                                                          |
+| PulseMCP                        | Still not indexed in public search on May 17, 2026                                    | <https://www.pulsemcp.com/servers?search=bilig&q=bilig>                                               |
 
 PulseMCP says server listings are ingested from the official MCP Registry daily
-and processed weekly. The Bilig WorkPaper registry entry is live, and the
-repository's Publish MCP Registry workflow succeeded for
-`@bilig/headless@0.22.2`. The official Registry API now contains a
-`0.22.2` entry marked `isLatest: true`, although the search endpoint can return
-historical entries first and expose the freshest entry behind pagination. Treat
-PulseMCP absence as downstream directory refresh lag unless the official
-Registry stops returning the `0.22.2` latest entry after its refresh window.
+and processed weekly. The Bilig WorkPaper registry entry is live, but after the
+`@bilig/headless@0.23.0` npm release the public Registry search still returns
+versions through `0.22.1` as of May 18, 2026. Treat PulseMCP absence as
+downstream directory refresh lag unless the official Registry keeps lagging past
+its normal refresh window.
 Starter issue
 [#384](https://github.com/proompteng/bilig/issues/384) captured the first public
 verification pass and is now closed; reopen a narrower follow-up only if
@@ -106,21 +104,22 @@ PulseMCP remains missing after the official registry refresh window.
 
 The mcp.so and Cline MCP Marketplace submissions were refreshed on May 18, 2026
 by editing the existing issue bodies, not by adding more comments. Both now
-point reviewers at `@bilig/headless@0.22.2`, the file-backed command with
-`--init-demo-workpaper --writable`, the seven current tools, the official
-Registry entry, and the static MCP server card.
+point reviewers at the file-backed command with `--init-demo-workpaper
+--writable`, the seven current tools, the official Registry entry, and the
+static MCP server card.
 
 Glama lists Bilig WorkPaper publicly in search with TypeScript, Developer
 Tools, Workplace & Productivity, and Remote attributes. On May 18, 2026 the
 Glama Dockerfile test build `019e3900-c65c-73b4-b500-e3af43d37d46` succeeded
-and was published as release `0.21.1`. npm and the official MCP Registry now
-point at `0.22.2`; Glama's hosted test release should be treated as a directory
-smoke proof until that hosted build is refreshed. The public Schema and
-Overview pages now index the seven file-backed tools: `list_sheets`,
-`read_range`, `read_cell`, `set_cell_contents`, `get_cell_display_value`,
-`export_workpaper_document`, and `validate_formula`. The score page reports
-A-grade Tool Definition Quality for each tool, while Glama's JSON API can lag
-the HTML listing immediately after a release.
+and was published as release `0.21.1`. npm now points at `0.23.0`, while the
+official MCP Registry public search still trails at `0.22.1`; Glama's hosted
+test release should be treated as a directory smoke proof until that hosted
+build is refreshed. The public Schema and Overview pages now index the seven
+file-backed tools: `list_sheets`, `read_range`, `read_cell`,
+`set_cell_contents`, `get_cell_display_value`, `export_workpaper_document`, and
+`validate_formula`. The score page reports A-grade Tool Definition Quality for
+each tool, while Glama's JSON API can lag the HTML listing immediately after a
+release.
 
 Glama release config used on May 18, 2026:
 
@@ -197,14 +196,13 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 18, 2026: npm latest is `@bilig/headless@0.22.2`.
-The official Registry publish workflow for `0.22.2` succeeded at
-<https://github.com/proompteng/bilig/actions/runs/26013068334>, and the public
-Registry API now returns a Bilig WorkPaper entry version `0.22.2` with
-`isLatest: true` on the cursor page after the first search page. The API also
-returns historical entries, so consumers should follow pagination, select the
-latest-marked entry, or prefer the npm package version when they need a single
-freshest install coordinate.
+Latest checked result on May 18, 2026: npm latest is `@bilig/headless@0.23.0`.
+Official Registry search currently returns Bilig WorkPaper versions through
+`0.22.1`; do not treat absent `0.23.0` registry search results as package
+publish failure unless the registry remains stale after its refresh window. The
+API also returns historical entries, so consumers should follow pagination,
+select the latest-marked entry, or prefer the npm package version when they need
+a single freshest install coordinate.
 
 The package itself carries the matching `mcpName` field. That is the ownership
 signal the registry uses for npm package validation.

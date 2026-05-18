@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(mcp): expose workpaper prompts and resources (79a4d16a)
 
 ## Fixes
+
 - fix(mcp): keep server metadata publishable (5545f395)
 
 ## 0.22.2
@@ -23,9 +25,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(excel-import): avoid chartsheet worksheet path fallback (278f862b)
 
 ## Internal runtime changes
+
 - ci(runtime): stop direct GitHub release pushes (c7cc8682)
 - docs(agent): publish agent discovery manifest (3ab9232a)
 
@@ -36,9 +40,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(docs): expose raw agent skill endpoints (ec73bf17)
 
 ## Internal runtime changes
+
 - docs(agent): publish agent discovery pack (93f0e0bf)
 
 ## 0.22.0
@@ -48,9 +54,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(headless): ship formula clinic cli (7aef71db)
 
 ## Internal runtime changes
+
 - docs(headless): align package agent notes with mcp init (d837d0ca)
 - ci(runtime): keep mirror package checks green (e4d7fd96)
 - docs(mcp): mark glama release live (f34a7d40)
@@ -64,9 +72,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): preserve external formula caches (f67ed038)
 
 ## Internal runtime changes
+
 - docs(mcp): promote one-command workpaper init (c0b29802)
 
 ## 0.21.0
