@@ -9,6 +9,7 @@ import {
   buildRelativeFormulaTemplateKeyFromAst,
   renameFormulaSheetReferences,
   translateCompiledFormula,
+  translateCompiledFormulaWithoutAst,
   rewriteAddressForStructuralTransform,
   rewriteCompiledFormulaForStructuralTransform,
   rewriteFormulaForStructuralTransform,
@@ -71,6 +72,28 @@ describe('translateFormulaReferences', () => {
   it('translates standalone row and column references plus axis ranges', () => {
     expect(translateFormulaReferences('SUM(A:A)+SUM(2:2)', 3, 2)).toBe('SUM(C:C)+SUM(5:5)')
     expect(translateFormulaReferences('A:A+2:4', 1, 1)).toBe('B:B+3:5')
+  })
+
+  it('translates 3D sheet ranges through raw and legacy compiled metadata paths', () => {
+    expect(translateFormulaReferences('SUM(Jan:Mar!B2:C2)', 1, 1)).toBe('SUM(Jan:Mar!C3:D3)')
+
+    const compiled = compileFormula('SUM(Jan:Mar!B2:C2)')
+    const legacyCompiled = {
+      ...compiled,
+      parsedDeps: undefined,
+    }
+    const translated = translateCompiledFormulaWithoutAst(legacyCompiled, 1, 1)
+
+    expect(translated.compiled.deps).toEqual(['Jan:Mar!C3:D3'])
+    expect(translated.compiled.jsPlan).toContainEqual(
+      expect.objectContaining({
+        opcode: 'push-range',
+        sheetName: 'Jan',
+        sheetEndName: 'Mar',
+        start: 'C3',
+        end: 'D3',
+      }),
+    )
   })
 
   it('throws when a relative axis would move outside worksheet bounds even if the other axis is absolute', () => {

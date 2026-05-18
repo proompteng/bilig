@@ -199,22 +199,86 @@ export function translateQualifiedDependencyReference(raw: string, rowDelta: num
 }
 
 export function translateQualifiedRangeReference(raw: string, rowDelta: number, colDelta: number): string {
-  const explicitlyQualified = raw.includes('!')
-  const parsed = parseRangeAddress(raw)
-  const rawRange = splitRawRangeReference(raw)
-  const nextRange = translateRangeEndpoints(parsed.kind, rawRange.start, rawRange.end, rowDelta, colDelta)
-  if (explicitlyQualified) {
-    return formatQualifiedRangeReference(parsed.sheetName, undefined, nextRange.start, nextRange.end)
-  }
-  return `${nextRange.start}:${nextRange.end}`
+  const parsed = parseRawQualifiedRangeReference(raw)
+  const nextRange = translateRangeEndpoints(parsed.refKind, parsed.start, parsed.end, rowDelta, colDelta)
+  return formatQualifiedRangeReference(parsed.sheetName, parsed.sheetEndName, nextRange.start, nextRange.end)
 }
 
-function splitRawRangeReference(raw: string): { start: string; end: string } {
-  const separator = raw.indexOf(':')
-  return {
-    start: stripSheetQualifier(separator === -1 ? raw : raw.slice(0, separator).trim()),
-    end: stripSheetQualifier(separator === -1 ? raw : raw.slice(separator + 1).trim()),
+function parseRawQualifiedRangeReference(raw: string): {
+  readonly sheetName?: string
+  readonly sheetEndName?: string
+  readonly refKind: 'cells' | 'rows' | 'cols'
+  readonly start: string
+  readonly end: string
+} {
+  const bang = raw.lastIndexOf('!')
+  if (bang === -1) {
+    const parsed = parseRangeAddress(raw)
+    const rawRange = splitLocalRangeReference(raw)
+    return {
+      refKind: parsed.kind,
+      start: rawRange.start,
+      end: rawRange.end,
+    }
   }
+  const qualifier = raw.slice(0, bang).trim()
+  const localRangeText = raw.slice(bang + 1).trim()
+  const parsedLocalRange = parseRangeAddress(localRangeText)
+  const rawRange = splitLocalRangeReference(localRangeText)
+  const sheetRange = splitSheetRangeQualifier(qualifier)
+  if (sheetRange) {
+    return {
+      sheetName: unquoteSheetQualifierPart(sheetRange.start),
+      sheetEndName: unquoteSheetQualifierPart(sheetRange.end),
+      refKind: parsedLocalRange.kind,
+      start: rawRange.start,
+      end: rawRange.end,
+    }
+  }
+  return {
+    sheetName: unquoteSheetQualifierPart(qualifier),
+    refKind: parsedLocalRange.kind,
+    start: rawRange.start,
+    end: rawRange.end,
+  }
+}
+
+function splitLocalRangeReference(raw: string): { readonly start: string; readonly end: string } {
+  const separator = raw.indexOf(':')
+  if (separator <= 0 || separator >= raw.length - 1) {
+    throw new Error(`Invalid range address: ${raw}`)
+  }
+  return {
+    start: raw.slice(0, separator).trim(),
+    end: raw.slice(separator + 1).trim(),
+  }
+}
+
+function splitSheetRangeQualifier(qualifier: string): { start: string; end: string } | undefined {
+  let quoted = false
+  for (let index = 0; index < qualifier.length; index += 1) {
+    const char = qualifier[index]!
+    if (char === "'") {
+      if (quoted && qualifier[index + 1] === "'") {
+        index += 1
+        continue
+      }
+      quoted = !quoted
+      continue
+    }
+    if (char === ':' && !quoted) {
+      return {
+        start: qualifier.slice(0, index),
+        end: qualifier.slice(index + 1),
+      }
+    }
+  }
+  return undefined
+}
+
+function unquoteSheetQualifierPart(part: string): string {
+  const trimmed = part.trim()
+  return trimmed.startsWith("'") && trimmed.endsWith("'") ? trimmed.slice(1, -1).replace(/''/g, "'") : trimmed
 }
 
 function translateRangeEndpoints(
