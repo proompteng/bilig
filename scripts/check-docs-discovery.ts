@@ -96,6 +96,7 @@ const headlessSpreadsheetEngineNodeServicesAgents = await readFile(
   join(docsRoot, 'headless-spreadsheet-engine-node-services-agents.md'),
   'utf8',
 )
+const spreadsheetMcpServerComparison = await readFile(join(docsRoot, 'spreadsheet-mcp-server-comparison.md'), 'utf8')
 
 requireHomepageDiscovery(index, siteCss, productCss)
 await requireXlsxCalcAlternativeDiscovery(docsRoot)
@@ -654,6 +655,18 @@ requireIncludes(
 requireIncludes(mcpWorkPaperToolServerDoc, 'https://github.com/proompteng/bilig/discussions/230', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(agentToolCallingDoc, 'https://github.com/proompteng/bilig/discussions/335', 'docs/agent-workpaper-tool-calling-recipe.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'mcp-client-setup.md', 'docs/mcp-workpaper-tool-server.md')
+for (const required of [
+  '## Named Public Alternatives',
+  'https://github.com/henilcalagiya/google-sheets-mcp',
+  'https://github.com/dream-num/univer-mcp',
+  'https://github.com/GRID-is/claude-mcp',
+  'A file library can preserve formulas without recalculating fresh results in Node',
+  'Do not pitch Bilig as "another Google\nSheets MCP server"',
+  'A long-running SheetJS issue asks\nwhether a formula value can be refreshed after changing an input cell',
+  'ExcelJS discussion describes JSON-driven workbook edits where shared formulas',
+]) {
+  requireIncludes(spreadsheetMcpServerComparison, required, 'docs/spreadsheet-mcp-server-comparison.md')
+}
 for (const required of [
   'description: Live directory and install status for the Bilig WorkPaper MCP server',
   'npm exec --package @bilig/headless -- bilig-workpaper-mcp',

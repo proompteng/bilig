@@ -29,6 +29,24 @@ touch spreadsheet-shaped business logic.
 | Mutate service-owned workbook inputs, recalculate formulas, verify before/after values, and persist JSON | Bilig WorkPaper MCP                                         |
 | Exact Excel compatibility across macros, pivots, charts, external links, and every function              | Excel, LibreOffice, Graph API, or a dedicated Excel runtime |
 
+## Named Public Alternatives
+
+Use the existing spreadsheet MCP ecosystem when the source of truth is already
+somewhere else:
+
+| Server or path                                                          | Best fit                                                                                | Boundary to check before adopting                                                             |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [Google Sheets MCP](https://github.com/henilcalagiya/google-sheets-mcp) | Agents that need CRUD operations against live Google Sheets through a service account    | Requires Google Cloud, Sheets API, Drive API, and service-account setup                        |
+| [Univer MCP](https://github.com/dream-num/univer-mcp)                   | Agents that operate a Univer spreadsheet runtime through an MCP session                  | Requires an API key and a running Univer instance; the repo labels plain-text mode experimental |
+| [GRID MCP](https://github.com/GRID-is/claude-mcp)                       | Claude Desktop workflows against spreadsheets uploaded to GRID                           | Requires a GRID account, uploaded workbook, and API key                                        |
+| Excel file or SheetJS-style tooling                                     | Creating, reading, or preserving `.xlsx` files                                           | A file library can preserve formulas without recalculating fresh results in Node               |
+| Bilig WorkPaper MCP                                                     | Local agent tools that own WorkPaper JSON and need write, recalculate, readback, restore | Not a full Excel editor; use it when formula readback is the product                           |
+
+That split is useful for outreach too. Do not pitch Bilig as "another Google
+Sheets MCP server" or "another Excel file editor." Pitch it where the agent
+needs a local formula runtime and a machine-checkable proof object after an
+edit.
+
 ## Where Bilig Fits
 
 The Bilig MCP server is for workflows where the workbook is the service model,
@@ -58,6 +76,14 @@ mutation. It is not the same as a formula-runtime loop. For example, SheetForge
 MCP documents that its read tools do not recalculate Excel formulas and instead
 surface formula cells as formula text. That is the right behavior for a file
 editor that should not invent fresh values.
+
+The same user pain shows up outside MCP. A long-running SheetJS issue asks
+whether a formula value can be refreshed after changing an input cell, and an
+ExcelJS discussion describes JSON-driven workbook edits where shared formulas
+and calculated results only become trustworthy after opening and saving in a
+spreadsheet application. Those threads are not Bilig marketing claims; they are
+evidence that "write XLSX" and "trust a recalculated value in Node" are separate
+requirements.
 
 Bilig takes the opposite boundary for service-owned workbooks:
 
