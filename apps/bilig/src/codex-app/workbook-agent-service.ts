@@ -7,6 +7,7 @@ import type {
 import type { WorkbookAgentAppliedBy, WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from '@bilig/agent-api'
 import {
   canCancelWorkbookAgentWorkflowRun,
+  canInterruptWorkbookAgentTurn,
   isWorkbookAgentBundleAutoApplyEligible,
   resolveWorkbookAgentBundleExecutionPolicyInput,
   toWorkbookAgentCommandBundle,
@@ -650,6 +651,31 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
 
   async interruptTurn(input: { documentId: string; threadId: string; session: SessionIdentity }): Promise<WorkbookAgentThreadSnapshot> {
     const sessionState = await this.getAuthorizedSession(input.documentId, input.threadId, input.session.userID)
+    const activeTurnId = sessionState.live.activeTurnId
+    if (!activeTurnId || sessionState.live.status !== 'inProgress') {
+      throw createWorkbookAgentServiceError({
+        code: 'WORKBOOK_AGENT_TURN_NOT_RUNNING',
+        message: 'Workbook agent turn is not currently running',
+        statusCode: 409,
+        retryable: false,
+      })
+    }
+    const turnActorUserId = this.resolveTurnActorUserId(sessionState, activeTurnId)
+    if (
+      !canInterruptWorkbookAgentTurn({
+        scope: sessionState.scope,
+        ownerUserId: sessionState.storageActorUserId,
+        actorUserId: input.session.userID,
+        turnActorUserId,
+      })
+    ) {
+      throw createWorkbookAgentServiceError({
+        code: 'WORKBOOK_AGENT_TURN_INTERRUPT_FORBIDDEN',
+        message: 'Only the active turn author or shared thread owner can stop this turn.',
+        statusCode: 409,
+        retryable: false,
+      })
+    }
     const codexClient = await this.codexRuntime.getClient()
     await codexClient.turnInterrupt(sessionState.threadId)
     return buildSnapshot(sessionState)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   canCancelWorkbookAgentWorkflowRun,
+  canInterruptWorkbookAgentTurn,
   normalizeWorkbookAgentCommandIndexes,
   projectWorkbookAgentBundle,
   toWorkbookAgentCommandBundle,
@@ -299,6 +300,14 @@ export function useWorkbookAgentPane(input: {
   }, [pendingUserPrompt, snapshot])
   const showAssistantProgress = snapshot?.status === 'inProgress'
   const activeResponseTurnId = showAssistantProgress ? (snapshot?.activeTurnId ?? null) : null
+  const canInterruptTurn =
+    snapshot?.status === 'inProgress' &&
+    canInterruptWorkbookAgentTurn({
+      scope: snapshot.scope,
+      ownerUserId: activeThreadSummary?.ownerUserId ?? null,
+      actorUserId: currentUserId,
+      turnActorUserId: snapshot.activeTurnActorUserId ?? null,
+    })
   const canFinalizeSharedBundle =
     sharedReviewOwnerUserId !== null &&
     sharedReviewOwnerUserId === currentUserId &&
@@ -765,6 +774,7 @@ export function useWorkbookAgentPane(input: {
         snapshot={snapshot}
         threadSummaries={threadSummaries}
         workflowRuns={workflowRuns}
+        canInterruptTurn={canInterruptTurn}
         canCancelWorkflowRun={canCancelWorkflowRun}
         onApplyReviewItem={() => {
           void applyReviewItem('user')
@@ -810,6 +820,7 @@ export function useWorkbookAgentPane(input: {
       activeResponseTurnId,
       canFinalizeSharedBundle,
       canDismissReviewItem,
+      canInterruptTurn,
       canRecommendSharedBundle,
       currentUserSharedRecommendation,
       canCancelWorkflowRun,

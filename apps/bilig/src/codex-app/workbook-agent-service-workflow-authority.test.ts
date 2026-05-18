@@ -18,6 +18,7 @@ import { createWorkbookAgentService } from './workbook-agent-service.js'
 class FakeCodexTransport implements CodexAppServerTransport {
   private threadCounter = 0
   private turnCounter = 0
+  readonly interruptedThreadIds: string[] = []
 
   async ensureReady() {
     return {
@@ -59,7 +60,9 @@ class FakeCodexTransport implements CodexAppServerTransport {
     }
   }
 
-  async turnInterrupt(): Promise<void> {}
+  async turnInterrupt(threadId: string): Promise<void> {
+    this.interruptedThreadIds.push(threadId)
+  }
 
   async close(): Promise<void> {}
 }
@@ -335,6 +338,131 @@ describe('workbook agent workflow authority', () => {
       ).toEqual(expect.objectContaining({ status: 'running' }))
     } finally {
       releaseInspection()
+      await service.close()
+    }
+  })
+
+  it('prevents shared collaborators from interrupting active turns they did not start or own', async () => {
+    const codexTransport = new FakeCodexTransport()
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async loadWorkbookAgentThreadState() {
+          return createThreadState()
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => codexTransport,
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          threadId: 'thr-shared',
+        },
+      })
+      const running = await service.startTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          prompt: 'Audit the revenue sheet',
+          context: createContext('Sheet1', 'A1'),
+        },
+      })
+
+      await expect(
+        service.interruptTurn({
+          documentId: 'doc-1',
+          threadId: snapshot.threadId,
+          session: {
+            userID: 'casey@example.com',
+            roles: ['editor'],
+          },
+        }),
+      ).rejects.toThrow('Only the active turn author or shared thread owner can stop this turn.')
+
+      expect(codexTransport.interruptedThreadIds).toEqual([])
+      expect(
+        service.getSnapshot({
+          documentId: 'doc-1',
+          threadId: snapshot.threadId,
+          session: {
+            userID: 'casey@example.com',
+            roles: ['editor'],
+          },
+        }),
+      ).toEqual(
+        expect.objectContaining({
+          activeTurnActorUserId: 'alex@example.com',
+          activeTurnId: running.activeTurnId,
+          status: 'inProgress',
+        }),
+      )
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('lets a shared turn author interrupt their own active turn', async () => {
+    const codexTransport = new FakeCodexTransport()
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async loadWorkbookAgentThreadState() {
+          return createThreadState({
+            actorUserId: 'alex@example.com',
+          })
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => codexTransport,
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          threadId: 'thr-shared',
+        },
+      })
+      await service.startTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'casey@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          prompt: 'Audit the revenue sheet',
+          context: createContext('Sheet1', 'A1'),
+        },
+      })
+
+      const interrupted = await service.interruptTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'casey@example.com',
+          roles: ['editor'],
+        },
+      })
+
+      expect(codexTransport.interruptedThreadIds).toEqual([snapshot.threadId])
+      expect(interrupted.activeTurnActorUserId).toBe('casey@example.com')
+    } finally {
       await service.close()
     }
   })

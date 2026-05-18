@@ -234,4 +234,40 @@ describe('WorkbookAgentPanel command execution rendering', () => {
 
     await panel.unmount()
   })
+
+  it('disables turn interruption when the caller does not own the active shared turn', async () => {
+    const onInterrupt = vi.fn()
+    const panel = renderPanel(
+      {
+        ...createSnapshot([]),
+        scope: 'shared',
+        status: 'inProgress',
+        activeTurnId: 'turn-1',
+        activeTurnActorUserId: 'alex@example.com',
+      },
+      {
+        activeResponseTurnId: 'turn-1',
+        showAssistantProgress: true,
+        canInterruptTurn: false,
+        onInterrupt,
+      },
+    )
+
+    await panel.render()
+
+    const sendButton = panel.host.querySelector("[data-testid='workbook-agent-send']")
+    expect(sendButton instanceof HTMLButtonElement).toBe(true)
+    if (!(sendButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected send button')
+    }
+    expect(sendButton.disabled).toBe(true)
+
+    await act(async () => {
+      sendButton.click()
+    })
+
+    expect(onInterrupt).not.toHaveBeenCalled()
+
+    await panel.unmount()
+  })
 })

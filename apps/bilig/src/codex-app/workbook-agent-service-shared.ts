@@ -118,6 +118,9 @@ export function buildSnapshot(sessionState: WorkbookAgentThreadState): WorkbookA
     executionPolicy: sessionState.executionPolicy,
     status: sessionState.live.status,
     activeTurnId: sessionState.live.activeTurnId,
+    activeTurnActorUserId: sessionState.live.activeTurnId
+      ? (sessionState.live.turnActorUserIdByTurn.get(sessionState.live.activeTurnId) ?? sessionState.userId)
+      : null,
     lastError: sessionState.live.lastError,
     context: sessionState.durable.context ? structuredClone(sessionState.durable.context) : null,
     entries: sessionState.durable.entries.map((entry) => ({ ...entry })),

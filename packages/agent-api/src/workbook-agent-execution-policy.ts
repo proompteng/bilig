@@ -77,3 +77,12 @@ export function canCancelWorkbookAgentWorkflowRun(input: {
 }): boolean {
   return input.scope !== 'shared' || input.ownerUserId === input.actorUserId || input.startedByUserId === input.actorUserId
 }
+
+export function canInterruptWorkbookAgentTurn(input: {
+  readonly scope: 'private' | 'shared'
+  readonly ownerUserId: string | null
+  readonly actorUserId: string
+  readonly turnActorUserId: string | null
+}): boolean {
+  return input.scope !== 'shared' || input.ownerUserId === input.actorUserId || input.turnActorUserId === input.actorUserId
+}

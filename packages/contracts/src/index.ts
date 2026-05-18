@@ -237,6 +237,7 @@ export const WorkbookAgentThreadSnapshotSchema = Schema.Struct({
   executionPolicy: WorkbookAgentExecutionPolicySchema,
   status: WorkbookAgentSessionStatusSchema,
   activeTurnId: Schema.Union(Schema.String, Schema.Null),
+  activeTurnActorUserId: Schema.optionalWith(Schema.Union(Schema.String, Schema.Null), {}),
   lastError: Schema.Union(Schema.String, Schema.Null),
   context: Schema.Union(WorkbookAgentUiContextSchema, Schema.Null),
   entries: Schema.Array(WorkbookAgentTimelineEntrySchema),

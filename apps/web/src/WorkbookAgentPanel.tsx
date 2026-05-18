@@ -664,6 +664,7 @@ export function WorkbookAgentPanel(props: {
   readonly canDismissReviewItem: boolean
   readonly selectedCommandIndexes: readonly number[]
   readonly workflowRuns: readonly WorkbookAgentWorkflowRun[]
+  readonly canInterruptTurn?: boolean
   readonly canCancelWorkflowRun: (run: WorkbookAgentWorkflowRun) => boolean
   readonly cancellingWorkflowRunId: string | null
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[]
@@ -699,6 +700,7 @@ export function WorkbookAgentPanel(props: {
   }, [optimisticEntries.length, props.snapshot?.entries.length, props.snapshot?.status])
 
   const isRunning = props.snapshot?.status === 'inProgress'
+  const canInterruptTurn = props.canInterruptTurn ?? true
   const visibleEntries = [...optimisticEntries, ...(props.snapshot?.entries ?? [])].filter((entry) => !isHiddenTimelineEntry(entry))
   const progressAnchorIndex =
     props.showAssistantProgress && props.activeResponseTurnId
@@ -842,10 +844,13 @@ export function WorkbookAgentPanel(props: {
               aria-label={isRunning ? 'Stop' : 'Send message'}
               className={agentPanelComposerSendButtonClass()}
               data-testid="workbook-agent-send"
-              disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
+              disabled={isRunning ? !canInterruptTurn : props.draft.trim().length === 0 || props.isLoading}
               type="button"
               onClick={() => {
                 if (isRunning) {
+                  if (!canInterruptTurn) {
+                    return
+                  }
                   props.onInterrupt()
                   return
                 }

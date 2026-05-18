@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canCancelWorkbookAgentWorkflowRun,
+  canInterruptWorkbookAgentTurn,
   describeWorkbookAgentExecutionPolicy,
   isWorkbookAgentBundleAutoApplyEligible,
   requiresWorkbookAgentOwnerReview,
@@ -120,6 +121,41 @@ describe('workbook agent execution policy', () => {
         ownerUserId: 'alex@example.com',
         actorUserId: 'pat@example.com',
         startedByUserId: 'casey@example.com',
+      }),
+    ).toBe(false)
+  })
+
+  it('limits shared turn interruption to the active turn actor or thread owner', () => {
+    expect(
+      canInterruptWorkbookAgentTurn({
+        scope: 'shared',
+        ownerUserId: 'alex@example.com',
+        actorUserId: 'casey@example.com',
+        turnActorUserId: 'casey@example.com',
+      }),
+    ).toBe(true)
+    expect(
+      canInterruptWorkbookAgentTurn({
+        scope: 'shared',
+        ownerUserId: 'alex@example.com',
+        actorUserId: 'alex@example.com',
+        turnActorUserId: 'casey@example.com',
+      }),
+    ).toBe(true)
+    expect(
+      canInterruptWorkbookAgentTurn({
+        scope: 'shared',
+        ownerUserId: 'alex@example.com',
+        actorUserId: 'pat@example.com',
+        turnActorUserId: 'casey@example.com',
+      }),
+    ).toBe(false)
+    expect(
+      canInterruptWorkbookAgentTurn({
+        scope: 'shared',
+        ownerUserId: 'alex@example.com',
+        actorUserId: 'pat@example.com',
+        turnActorUserId: null,
       }),
     ).toBe(false)
   })
