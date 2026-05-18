@@ -100,6 +100,8 @@ export function useWorkbookAgentPane(input: {
   const getContextRef = useRef(getContext)
   const applyContextRef = useRef(applyContext)
   const syncAuthoritativeRevisionRef = useRef(syncAuthoritativeRevision)
+  const pendingSessionRequestRef = useRef<Promise<WorkbookAgentLiveSession> | null>(null)
+  const promptSubmissionInFlightRef = useRef(false)
   const activeDraftKey = draftKey(snapshot?.threadId ?? null, threadScope)
   const perfSession = useMemo(
     () =>
@@ -379,20 +381,29 @@ export function useWorkbookAgentPane(input: {
     if (activeSession) {
       return activeSession
     }
-    setIsLoading(true)
-    try {
-      const nextSnapshot = await client.createSession(getContextRef.current(), threadScope)
-      persistSessionSnapshot(nextSnapshot)
-      connectStream(nextSnapshot.threadId)
-      setError(null)
-      const nextSession = {
-        threadId: nextSnapshot.threadId,
-      }
-      sessionRef.current = nextSession
-      return nextSession
-    } finally {
-      setIsLoading(false)
+    const pendingSessionRequest = pendingSessionRequestRef.current
+    if (pendingSessionRequest) {
+      return await pendingSessionRequest
     }
+    const nextSessionRequest = (async () => {
+      setIsLoading(true)
+      try {
+        const nextSnapshot = await client.createSession(getContextRef.current(), threadScope)
+        persistSessionSnapshot(nextSnapshot)
+        connectStream(nextSnapshot.threadId)
+        setError(null)
+        const nextSession = {
+          threadId: nextSnapshot.threadId,
+        }
+        sessionRef.current = nextSession
+        return nextSession
+      } finally {
+        pendingSessionRequestRef.current = null
+        setIsLoading(false)
+      }
+    })()
+    pendingSessionRequestRef.current = nextSessionRequest
+    return await nextSessionRequest
   }, [apiEnabled, client, connectStream, persistSessionSnapshot, threadScope])
 
   useEffect(() => {
@@ -513,6 +524,8 @@ export function useWorkbookAgentPane(input: {
       closeStream()
       resetContextSync()
       sessionRef.current = null
+      pendingSessionRequestRef.current = null
+      promptSubmissionInFlightRef.current = false
       resetRecoveringStream()
       setFetchedThreadSummaries([])
       setSnapshot(null)
@@ -523,6 +536,7 @@ export function useWorkbookAgentPane(input: {
     resetContextSync()
     const storedSession = loadStoredSession(storageScope)
     sessionRef.current = null
+    pendingSessionRequestRef.current = null
 
     const bootstrapThreadSummaries = async () => {
       try {
@@ -617,6 +631,8 @@ export function useWorkbookAgentPane(input: {
     clearStoredSession(storageScope)
     resetRecoveringStream()
     sessionRef.current = null
+    pendingSessionRequestRef.current = null
+    promptSubmissionInFlightRef.current = false
     setSnapshot(null)
     setPendingUserPrompt(null)
     setPreview(null)
@@ -659,10 +675,14 @@ export function useWorkbookAgentPane(input: {
   }, [clearPendingContextSync])
 
   const sendPrompt = useCallback(async () => {
+    if (promptSubmissionInFlightRef.current) {
+      return
+    }
     const prompt = draft.trim()
     if (prompt.length === 0) {
       return
     }
+    promptSubmissionInFlightRef.current = true
     try {
       setError(null)
       setPendingUserPrompt(prompt)
@@ -676,6 +696,8 @@ export function useWorkbookAgentPane(input: {
       setPendingUserPrompt(null)
       setDraft(prompt)
       setError(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      promptSubmissionInFlightRef.current = false
     }
   }, [activeDraftKey, client, draft, ensureSession, persistSessionSnapshot, storageScope])
 

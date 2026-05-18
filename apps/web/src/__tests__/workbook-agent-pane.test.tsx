@@ -1394,6 +1394,114 @@ describe('workbook agent pane', () => {
     })
   })
 
+  it('coalesces rapid first prompt submits into one assistant session and one turn', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    let resolveSession: (() => void) | null = null
+    const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads') && requestMethod(init) === 'GET') {
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+      }
+      if (url.endsWith('/chat/threads') && requestMethod(init) === 'POST') {
+        return new Promise<Response>((resolve) => {
+          resolveSession = () => {
+            resolve(
+              new Response(JSON.stringify(createSnapshot({ entries: [] })), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              }),
+            )
+          }
+        })
+      }
+      if (url.endsWith('/chat/threads/thr-1/turns')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              createSnapshot({
+                status: 'inProgress',
+                activeTurnId: 'turn-1',
+                entries: [
+                  {
+                    id: 'user:turn-1',
+                    kind: 'user',
+                    turnId: 'turn-1',
+                    text: 'Summarize this sheet',
+                    phase: null,
+                    toolName: null,
+                    toolStatus: null,
+                    argumentsText: null,
+                    outputText: null,
+                    success: null,
+                  },
+                ],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        )
+      }
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const callsTo = (suffix: string, method: string) =>
+      fetchSpy.mock.calls.filter(([requestInput, init]) => requestUrl(requestInput).endsWith(suffix) && requestMethod(init) === method)
+
+    try {
+      await act(async () => {
+        root.render(<AgentHarness />)
+      })
+
+      const input = host.querySelector("[data-testid='workbook-agent-input']")
+      const submit = host.querySelector("[data-testid='workbook-agent-send']")
+      expect(input instanceof HTMLTextAreaElement).toBe(true)
+      expect(submit instanceof HTMLButtonElement).toBe(true)
+
+      await act(async () => {
+        if (!(input instanceof HTMLTextAreaElement) || !(submit instanceof HTMLButtonElement)) {
+          throw new Error('Assistant composer not found')
+        }
+        const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+        const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, 'set') : null
+        if (typeof valueSetter !== 'function') {
+          throw new Error('Textarea value setter not found')
+        }
+        Reflect.apply(valueSetter, input, ['Summarize this sheet'])
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        submit.click()
+        submit.click()
+      })
+
+      expect(callsTo('/chat/threads', 'POST')).toHaveLength(1)
+      expect(callsTo('/chat/threads/thr-1/turns', 'POST')).toHaveLength(0)
+
+      await act(async () => {
+        resolveSession?.()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(callsTo('/chat/threads', 'POST')).toHaveLength(1)
+      expect(callsTo('/chat/threads/thr-1/turns', 'POST')).toHaveLength(1)
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+    }
+  })
+
   it('submits follow-up prompts through the durable thread route when a thread is already active', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     window.sessionStorage.setItem(
