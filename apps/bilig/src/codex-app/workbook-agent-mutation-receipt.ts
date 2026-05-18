@@ -570,7 +570,7 @@ async function buildRenderedReadback(input: {
   return selectWorkbookRenderedReadback({
     renderedContext: uiContext?.rendered,
     requestedRange: range,
-    minBatchId: input.appliedRevision,
+    minRevision: input.appliedRevision,
     nextChunk,
     ...(authoritativeRows !== undefined ? { authoritativeRows } : {}),
   })
@@ -593,7 +593,7 @@ export async function buildWorkbookAgentVerificationReport(input: {
         renderedContext: uiContext?.rendered,
         requestedRange: range,
         authoritativeRows: asReadonlyRows(authoritativeRange.rows),
-        minBatchId: input.revision,
+        minRevision: input.revision,
       })
     })
     const formulaIssues =

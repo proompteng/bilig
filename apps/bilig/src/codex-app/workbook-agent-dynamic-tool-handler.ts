@@ -31,11 +31,10 @@ function hasRenderedContext(context: WorkbookAgentThreadState['durable']['contex
 
 function renderedRevision(context: WorkbookAgentThreadState['durable']['context']): number | null {
   const capturedRevision = context?.rendered?.capturedRevision
-  if (typeof capturedRevision === 'number') {
+  if (typeof capturedRevision === 'number' && Number.isSafeInteger(capturedRevision) && capturedRevision >= 0) {
     return capturedRevision
   }
-  const legacyBatchId = context?.rendered?.batchId
-  return typeof legacyBatchId === 'number' ? legacyBatchId : null
+  return null
 }
 
 function hasRenderedContextAtRevision(context: WorkbookAgentThreadState['durable']['context'], minRevision: number | null): boolean {
@@ -160,7 +159,7 @@ export function createWorkbookAgentDynamicToolHandler(input: {
           renderedContext: normalizedContext?.rendered,
           requestedRange: targetRange,
           authoritativeRows,
-          minBatchId: minRevision,
+          minRevision,
         })
         return renderedReadback.matched === true
       })

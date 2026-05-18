@@ -342,7 +342,7 @@ export async function handleWorkbookAgentToolCall(
               renderedContext: uiContext?.rendered,
               requestedRange: range,
               authoritativeRows,
-              minBatchId: runtime.headRevision,
+              minRevision: runtime.headRevision,
             }),
           }
         })
@@ -366,7 +366,7 @@ export async function handleWorkbookAgentToolCall(
               renderedContext: normalizedContext?.rendered,
               requestedRange: range,
               authoritativeRows,
-              minBatchId: runtime.headRevision,
+              minRevision: runtime.headRevision,
             }),
           }
         })

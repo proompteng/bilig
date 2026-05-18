@@ -51,6 +51,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function asNonNegativeSafeInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+}
+
 function isRenderedValueTag(value: unknown): value is ValueTag {
   return (
     value === ValueTag.Empty ||
@@ -80,12 +84,7 @@ function normalizeRenderedValue(value: unknown): unknown {
 }
 
 function renderedCaptureRevision(context: WorkbookAgentRenderedContext | null | undefined): number | null {
-  const capturedRevision = context?.capturedRevision
-  if (typeof capturedRevision === 'number') {
-    return capturedRevision
-  }
-  const legacyBatchId = context?.batchId
-  return typeof legacyBatchId === 'number' ? legacyBatchId : null
+  return asNonNegativeSafeInteger(context?.capturedRevision)
 }
 
 function valuesEqual(left: unknown, right: unknown): boolean {
@@ -318,16 +317,16 @@ export function selectWorkbookRenderedReadback(input: {
   readonly renderedContext: WorkbookAgentRenderedContext | null | undefined
   readonly requestedRange: CellRangeRef
   readonly authoritativeRows?: readonly (readonly unknown[])[]
-  readonly minBatchId?: number | null
+  readonly minRevision?: number | null
   readonly nextChunk?: WorkbookAgentRangeChunk | null
 }): WorkbookRenderedReadbackProof {
   const requestedRange = toWorkbookAgentRangeRef(input.requestedRange)
   const renderedContext = input.renderedContext ?? null
   const selectedRange = pickRenderedRange(renderedContext, requestedRange)
-  const capturedBatchId = renderedContext?.batchId ?? null
+  const capturedBatchId = asNonNegativeSafeInteger(renderedContext?.batchId)
   const capturedRevision = renderedCaptureRevision(renderedContext)
   const stale =
-    selectedRange === null || capturedRevision === null || (typeof input.minBatchId === 'number' && capturedRevision < input.minBatchId)
+    selectedRange === null || capturedRevision === null || (typeof input.minRevision === 'number' && capturedRevision < input.minRevision)
   const extracted = selectedRange
     ? buildExtractedRenderedRange({
         renderedRange: selectedRange,
