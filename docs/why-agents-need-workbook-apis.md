@@ -147,6 +147,52 @@ console.log({
 The maintained external-consumer example is in
 [`examples/headless-workpaper`](../examples/headless-workpaper).
 
+## MCP In 30 Seconds
+
+If the agent already supports MCP, skip the TypeScript wrapper and start the
+published stdio server in file-backed mode:
+
+```sh
+npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+```
+
+That command creates `pricing.workpaper.json` only when it is missing, exposes
+typed workbook tools, and persists `set_cell_contents` edits back to the same
+WorkPaper JSON file.
+
+Expected tools:
+
+- `list_sheets`
+- `read_range`
+- `read_cell`
+- `set_cell_contents`
+- `get_cell_display_value`
+- `export_workpaper_document`
+- `validate_formula`
+
+Ask the agent for this proof object after an edit:
+
+```json
+{
+  "editedCell": "Inputs!B3",
+  "before": {
+    "Summary!B3": 60000
+  },
+  "after": {
+    "Summary!B3": 96000
+  },
+  "checks": {
+    "formulaReadbackChanged": true,
+    "exportedWorkPaperDocument": true,
+    "restoredMatchesAfter": true
+  }
+}
+```
+
+The important distinction is that the agent is not reporting “clicked” or
+“updated.” It is reporting the exact edited cell, the recalculated dependent
+value, and persistence evidence.
+
 ## What This Enables
 
 For an agent tool, a WorkPaper API can expose a small set of reliable commands:

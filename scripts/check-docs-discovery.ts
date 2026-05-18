@@ -506,6 +506,16 @@ requireIncludes(
   'docs/why-agents-need-workbook-apis.md',
 )
 for (const required of [
+  '## MCP In 30 Seconds',
+  'bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable',
+  'set_cell_contents',
+  'export_workpaper_document',
+  '"editedCell": "Inputs!B3"',
+  '"restoredMatchesAfter": true',
+]) {
+  requireIncludes(whyAgentsDoc, required, 'docs/why-agents-need-workbook-apis.md')
+}
+for (const required of [
   'description: A compact playbook for agents that need workbook formulas without opening Excel',
   '## Copy-Paste Prompt For Another Agent',
   'Return a compact proof object with editedCell, before, after, afterRestore',
