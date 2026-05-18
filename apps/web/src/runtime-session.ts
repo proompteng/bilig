@@ -90,7 +90,6 @@ const EMPTY_METRICS: RecalcMetrics = {
   compileMs: 0,
 }
 const EMPTY_UNSUBSCRIBE = () => {}
-const BACKGROUND_RUNTIME_STATE_REFRESH_DELAY_MS = 96
 const AUTHORITATIVE_BACKSTOP_VISIBLE_INTERVAL_MS = 2_000
 const AUTHORITATIVE_BACKSTOP_HIDDEN_INTERVAL_MS = 30_000
 const AUTHORITATIVE_REFRESH_CHANNEL_PREFIX = 'bilig:workbook-authoritative-refresh:'
@@ -275,7 +274,6 @@ export async function createWorkerRuntimeSessionController(
   let rebaseQueue = Promise.resolve()
   let selectionViewportCleanup = EMPTY_UNSUBSCRIBE
   let currentPhase: WorkerRuntimeSessionPhase = 'hydratingLocal'
-  let runtimeStateRefreshTimer: ReturnType<typeof setTimeout> | null = null
   let authoritativeBackstopTimer: ReturnType<typeof setTimeout> | null = null
   let authoritativeBackstopInFlight = false
   let authoritativeBootstrapSnapshotFailed = false
@@ -390,24 +388,6 @@ export async function createWorkerRuntimeSessionController(
       await applySelection(reconciledSelection)
     }
     return publishedRuntimeState
-  }
-
-  const queueRuntimeStateRefresh = (): void => {
-    if (runtimeStateRefreshTimer) {
-      clearTimeout(runtimeStateRefreshTimer)
-    }
-    runtimeStateRefreshTimer = setTimeout(() => {
-      runtimeStateRefreshTimer = null
-      void (async () => {
-        try {
-          await refreshRuntimeState()
-        } catch (error) {
-          if (!disposed) {
-            callbacks.onError(toErrorMessage(error))
-          }
-        }
-      })()
-    }, BACKGROUND_RUNTIME_STATE_REFRESH_DELAY_MS)
   }
 
   const syncSelectionAfterRuntimeState = async (
@@ -832,9 +812,11 @@ export async function createWorkerRuntimeSessionController(
           throw new Error('installBenchmarkCorpus returned an unexpected payload')
         }
         if (method === 'enqueuePendingMutation') {
-          queueRuntimeStateRefresh()
+          await refreshRuntimeState()
+        } else if (method === 'recordPendingMutationAttempt' || method === 'ackPendingMutation') {
+          await refreshRuntimeState()
         } else if (method === 'markPendingMutationSubmitted') {
-          queueRuntimeStateRefresh()
+          await refreshRuntimeState()
           queueAuthoritativeRefresh()
           broadcastAuthoritativeRefresh(null)
         } else if (method === 'markPendingMutationFailed' || method === 'retryPendingMutation') {
@@ -880,10 +862,6 @@ export async function createWorkerRuntimeSessionController(
         return
       }
       disposed = true
-      if (runtimeStateRefreshTimer) {
-        clearTimeout(runtimeStateRefreshTimer)
-        runtimeStateRefreshTimer = null
-      }
       clearAuthoritativeBackstop()
       closeAuthoritativeRefreshChannel()
       selectionViewportCleanup()

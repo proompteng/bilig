@@ -7,12 +7,14 @@ import {
 } from '../workbookTheme.js'
 
 describe('workbookTheme', () => {
-  test('uses the bundled product font stack for every workbook text renderer', () => {
-    expect(WORKBOOK_FONT_SANS.startsWith('"Bilig Sans"')).toBe(true)
-    expect(WORKBOOK_FONT_SANS).toContain('"IBM Plex Sans"')
-    expect(WORKBOOK_FONT_SANS).toContain('Inter')
-    expect(WORKBOOK_FONT_SANS).toContain('"Segoe UI"')
+  test('uses a spreadsheet-native font stack for every workbook text renderer', () => {
+    expect(WORKBOOK_FONT_SANS.startsWith('Arial')).toBe(true)
     expect(WORKBOOK_FONT_SANS).toContain('"Helvetica Neue"')
+    expect(WORKBOOK_FONT_SANS).toContain('Helvetica')
+    expect(WORKBOOK_FONT_SANS).toContain('"Segoe UI"')
+    expect(WORKBOOK_FONT_SANS).not.toContain('"Bilig Sans"')
+    expect(WORKBOOK_FONT_SANS).not.toContain('"IBM Plex Sans"')
+    expect(WORKBOOK_FONT_SANS).not.toContain('Inter')
     expect(WORKBOOK_FONT_SANS).not.toContain('ui-sans-serif')
     expect(WORKBOOK_FONT_SANS).not.toContain('system-ui')
     expect(WORKBOOK_FONT_SANS).not.toContain('-apple-system')

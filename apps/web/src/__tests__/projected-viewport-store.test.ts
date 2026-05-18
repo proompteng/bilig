@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
+import { SpreadsheetEngine } from '@bilig/core'
+import { getGridMetrics } from '@bilig/grid'
 import { ValueTag, type RecalcMetrics } from '@bilig/protocol'
+import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../../../../packages/grid/src/renderer-v3/rect-instance-buffer.js'
+import { buildLocalFixedRenderTiles } from '../../../../packages/grid/src/renderer-v3/local-render-tile-materializer.js'
 import { encodeViewportPatch, type ViewportPatch, type WorkerEngineClient } from '@bilig/worker-transport'
 import { DEFAULT_MAX_CACHED_CELLS_PER_SHEET } from '../projected-viewport-cell-cache.js'
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
+import { buildViewportPatchFromEngine, DEFAULT_STYLE_ID } from '../worker-runtime-viewport.js'
 import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from '../workbook-optimistic-cell-flags.js'
+import type { WorkerEngine } from '../worker-runtime-support.js'
 
 const TEST_METRICS: RecalcMetrics = {
   batchId: 0,
@@ -128,6 +134,21 @@ function countSheetCells(cache: ProjectedViewportStore, sheetName: string): numb
   return count
 }
 
+function hasOpaqueGreenFillRect(rectInstances: Float32Array, rectCount: number): boolean {
+  for (let index = 0; index < rectCount; index += 1) {
+    const offset = index * GRID_RECT_INSTANCE_FLOAT_COUNT_V3
+    const red = rectInstances[offset + 4] ?? 1
+    const green = rectInstances[offset + 5] ?? 0
+    const blue = rectInstances[offset + 6] ?? 1
+    const alpha = rectInstances[offset + 7] ?? 0
+    const instanceKind = rectInstances[offset + 13] ?? -1
+    if (instanceKind === 0 && red < 0.05 && green > 0.95 && blue < 0.05 && alpha > 0.95) {
+      return true
+    }
+  }
+  return false
+}
+
 function createNoopWorkerEngineClient(): WorkerEngineClient {
   return {
     dispose: vi.fn(),
@@ -156,6 +177,83 @@ describe('ProjectedViewportStore', () => {
       id: 'style-green',
       fill: { backgroundColor: '#00ff00' },
     })
+  })
+
+  it('hydrates authoritative snapshot style ranges for empty cells into the viewport cache', async () => {
+    const seed = new SpreadsheetEngine({ workbookName: 'viewport-style-range-seed' })
+    await seed.ready()
+    seed.createSheet('Sheet1')
+    seed.setRangeStyle({ sheetName: 'Sheet1', startAddress: 'E6', endAddress: 'E6' }, { fill: { backgroundColor: '#00ff00' } })
+
+    const restored = new SpreadsheetEngine({ workbookName: 'viewport-style-range-restored' }) as SpreadsheetEngine & WorkerEngine
+    await restored.ready()
+    restored.importSnapshot(seed.exportSnapshot())
+    const cache = new ProjectedViewportStore()
+    const patch = buildViewportPatchFromEngine({
+      authoritativeRevision: 3,
+      emptyCellSnapshot: (sheetName, address) => ({
+        sheetName,
+        address,
+        flags: 0,
+        value: { tag: ValueTag.Empty },
+        version: 0,
+      }),
+      engine: restored,
+      event: null,
+      getFormatId: () => 0,
+      getStyleRecord: (styleId) => restored.getCellStyle(styleId) ?? { id: DEFAULT_STYLE_ID },
+      metrics: { ...TEST_METRICS, batchId: 3 },
+      sheetImpact: null,
+      state: {
+        knownStyleIds: new Set(),
+        lastCellSignatures: new Map(),
+        lastColumnSignatures: new Map(),
+        lastMergeSignatures: new Map(),
+        lastRowSignatures: new Map(),
+        lastStyleSignatures: new Map(),
+        listener: () => undefined,
+        nextVersion: 1,
+        subscription: {
+          sheetName: 'Sheet1',
+          rowStart: 0,
+          rowEnd: 31,
+          colStart: 0,
+          colEnd: 127,
+        },
+      },
+    })
+
+    cache.applyViewportPatch(patch)
+
+    expect(restored.getCell('Sheet1', 'E6').styleId).toBeDefined()
+    expect(cache.getCell('Sheet1', 'E6').styleId).toBe(restored.getCell('Sheet1', 'E6').styleId)
+    expect(cache.getCellStyle(cache.getCell('Sheet1', 'E6').styleId)).toEqual({
+      id: restored.getCell('Sheet1', 'E6').styleId,
+      fill: { backgroundColor: '#00ff00' },
+    })
+
+    const tiles = buildLocalFixedRenderTiles({
+      cameraSeq: 1,
+      columnWidths: cache.getColumnWidths('Sheet1'),
+      dprBucket: 1,
+      engine: cache,
+      generation: 3,
+      gridMetrics: getGridMetrics(),
+      rowHeights: cache.getRowHeights('Sheet1'),
+      sheetId: 7,
+      sheetOrdinal: 7,
+      sheetName: 'Sheet1',
+      sortedColumnWidthOverrides: [],
+      sortedRowHeightOverrides: [],
+      viewport: {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 31,
+        colStart: 0,
+        colEnd: 127,
+      },
+    })
+    expect(tiles.some((tile) => hasOpaqueGreenFillRect(tile.rectInstances, tile.rectCount))).toBe(true)
   })
 
   it('accepts equal-version empty snapshots that clear stale styling', () => {

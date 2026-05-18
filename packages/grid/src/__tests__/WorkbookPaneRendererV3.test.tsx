@@ -327,7 +327,7 @@ describe('WorkbookPaneRendererV3', () => {
             clipX: 4,
             clipY: 4,
             color: '#1f2933',
-            font: '400 13px "IBM Plex Sans", Inter, "SF Pro Text", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif',
+            font: '400 13px Arial, "Helvetica Neue", Helvetica, "Segoe UI", sans-serif',
             fontSize: 13,
             height: 21,
             row: 52,

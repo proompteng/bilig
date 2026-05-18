@@ -805,6 +805,7 @@ export class GridRenderTilePaneRuntime {
       const shouldLocalizeDirty = (options.localizeDirtyVisibleTiles ?? true) && isDirty
       const shouldLocalizeSelectedCellText =
         selectedCellTileKey === tileKey && tileSelectedTextNeedsLocalRefresh(tile, input.selectedCell, input.selectedCellSnapshot)
+      const shouldLocalizeProjectedRevision = tileProjectionRevisionIsBehind(tile, input.engine)
       const shouldLocalizeVisibleText =
         visibleTileKeys.has(tileKey) &&
         this.visibleTextRefreshCache.needsLocalRefresh(tileKey, tile, {
@@ -818,6 +819,7 @@ export class GridRenderTilePaneRuntime {
         shouldLocalizeDirty ||
         isMissingResidentTile ||
         isMissingGridPayload ||
+        shouldLocalizeProjectedRevision ||
         shouldLocalizeSelectedCellText ||
         shouldLocalizeVisibleText ||
         shouldLocalizeEditingCellText
@@ -900,6 +902,14 @@ export class GridRenderTilePaneRuntime {
 
 function normalizeNonNegativeInteger(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
+}
+
+function tileProjectionRevisionIsBehind(tile: GridRenderTile | null, engine: GridEngineLike): boolean {
+  if (!tile) {
+    return false
+  }
+  const projectedRevision = normalizeNonNegativeInteger(engine.getRenderRevisionSnapshot?.().projectedRevision)
+  return projectedRevision !== null && tile.lastBatchId < projectedRevision
 }
 
 export function getGridRenderTilePaneRuntime(current: unknown): GridRenderTilePaneRuntime {

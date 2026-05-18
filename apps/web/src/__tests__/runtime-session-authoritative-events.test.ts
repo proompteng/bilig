@@ -76,6 +76,104 @@ describe('worker runtime session authoritative event loading', () => {
     host = null
   })
 
+  it('publishes pending mutation state before enqueue resolves', async () => {
+    channel = new MessageChannel()
+    let state = runtimeState({
+      authoritativeRevision: 0,
+      pendingMutationSummary: {
+        activeCount: 0,
+        failedCount: 0,
+        firstFailed: null,
+      },
+    })
+    const runtimeStates: WorkbookWorkerStateSnapshot[] = []
+    host = createWorkerEngineHost(
+      {
+        async bootstrap() {
+          return {
+            runtimeState: state,
+            restoredFromPersistence: true,
+            requiresAuthoritativeHydrate: false,
+            localPersistenceMode: 'ephemeral',
+          }
+        },
+        getAuthoritativeRevision() {
+          return 0
+        },
+        getRuntimeState() {
+          return state
+        },
+        getCell(sheetName: string, address: string) {
+          return {
+            sheetName,
+            address,
+            value: { tag: ValueTag.Empty },
+            flags: 0,
+            version: 0,
+          }
+        },
+        enqueuePendingMutation() {
+          state = runtimeState({
+            authoritativeRevision: 0,
+            pendingMutationSummary: {
+              activeCount: 1,
+              failedCount: 0,
+              firstFailed: null,
+            },
+          })
+          return {
+            id: 'doc-1:browser:test:pending:1',
+            localSeq: 1,
+            baseRevision: 0,
+            method: 'setRangeStyle',
+            args: [{ sheetName: 'Sheet1', startAddress: 'E6', endAddress: 'E6' }, { fill: { backgroundColor: '#00ff00' } }],
+            enqueuedAtUnixMs: 1,
+            submittedAtUnixMs: null,
+            lastAttemptedAtUnixMs: null,
+            ackedAtUnixMs: null,
+            rebasedAtUnixMs: null,
+            failedAtUnixMs: null,
+            attemptCount: 0,
+            failureMessage: null,
+            status: 'local',
+          }
+        },
+        subscribeViewportPatches() {
+          return () => undefined
+        },
+      },
+      channel.port1,
+    )
+
+    controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'doc-1',
+        replicaId: 'browser:test',
+        persistState: false,
+        authoritativeSyncEnabled: false,
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createWorker: () => channel!.port2,
+      },
+      {
+        onError: (message) => {
+          throw new Error(message)
+        },
+        onRuntimeState: (snapshot) => {
+          runtimeStates.push(snapshot)
+        },
+        onSelection: () => undefined,
+      },
+    )
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setRangeStyle',
+      args: [{ sheetName: 'Sheet1', startAddress: 'E6', endAddress: 'E6' }, { fill: { backgroundColor: '#00ff00' } }],
+    })
+
+    expect(runtimeStates.at(-1)?.pendingMutationSummary?.activeCount).toBe(1)
+    expect(controller.runtimeState.pendingMutationSummary?.activeCount).toBe(1)
+  })
+
   it('keeps the browser fetch receiver intact for default authoritative refreshes', async () => {
     channel = new MessageChannel()
     const applyAuthoritativeEvents = vi.fn()

@@ -134,8 +134,12 @@ test('@browser-ci web app keeps dense accounting-sheet text payloads complete in
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B34')
   await expect(nameBox).toHaveValue('B34')
   await expect(formulaInput).toHaveValue('Annual software subscription')
-  await expect(page.getByTestId('sheet-grid')).toHaveCSS('font-family', /Arial|Helvetica/)
+  await expect(page.getByTestId('sheet-grid')).toHaveCSS('font-family', /^Arial/)
   await expect(page.getByTestId('sheet-grid')).toHaveCSS('font-size', DEFAULT_WORKBOOK_CSS_FONT_SIZE)
+  expect(
+    await page.evaluate(() => [...document.fonts].some((fontFace) => fontFace.family === 'Bilig Sans' || fontFace.family === 'Bilig Mono')),
+    'workbook shell should not register branded font faces that can swap under the grid',
+  ).toBe(false)
   await expect
     .poll(readRendererSurfaceState(page), {
       message: 'dense accounting sheet should render through TypeGPU plus the native text layer, not the fallback canvas',

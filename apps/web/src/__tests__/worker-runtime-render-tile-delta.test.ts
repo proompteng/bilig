@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { SpreadsheetEngine } from '@bilig/core'
 import { ValueTag, type CellSnapshot, type EngineEvent, type RecalcMetrics } from '@bilig/protocol'
 import { TextOverflowIndexV3 } from '../../../../packages/grid/src/renderer-v3/text-overflow-index.js'
+import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../../../../packages/grid/src/renderer-v3/rect-instance-buffer.js'
 import { DirtyMaskV3 } from '../../../../packages/grid/src/renderer-v3/tile-damage-index.js'
 import { packTileKey53, unpackTileKey53 } from '../../../../packages/grid/src/renderer-v3/tile-key.js'
 import { buildWorkerRenderTileDeltaBatch } from '../worker-runtime-render-tile-delta.js'
 import { buildFreezeVersion } from '../worker-runtime-render-axis.js'
+import type { WorkerEngine } from '../worker-runtime-support.js'
 
 const emptyCell: CellSnapshot = {
   sheetName: 'Sheet1',
@@ -44,6 +47,21 @@ const metrics: RecalcMetrics = {
 }
 
 const RANGE_VISUAL_DIRTY_MASK = DirtyMaskV3.Value | DirtyMaskV3.Style | DirtyMaskV3.Text | DirtyMaskV3.Rect | DirtyMaskV3.Border
+
+function hasOpaqueGreenFillRect(rectInstances: Float32Array, rectCount: number): boolean {
+  for (let index = 0; index < rectCount; index += 1) {
+    const offset = index * GRID_RECT_INSTANCE_FLOAT_COUNT_V3
+    const red = rectInstances[offset + 4] ?? 1
+    const green = rectInstances[offset + 5] ?? 0
+    const blue = rectInstances[offset + 6] ?? 1
+    const alpha = rectInstances[offset + 7] ?? 0
+    const instanceKind = rectInstances[offset + 13] ?? -1
+    if (instanceKind === 0 && red < 0.05 && green > 0.95 && blue < 0.05 && alpha > 0.95) {
+      return true
+    }
+  }
+  return false
+}
 
 function createRangeInvalidationEvent(startAddress: string, endAddress = startAddress): EngineEvent {
   return {
@@ -121,6 +139,45 @@ describe('worker-runtime-render-tile-delta', () => {
       { rowStart: 32, rowEnd: 63, colStart: 0, colEnd: 127 },
       { rowStart: 32, rowEnd: 63, colStart: 128, colEnd: 255 },
     ])
+  })
+
+  it('materializes authoritative snapshot style ranges on empty cells into initial render tiles', async () => {
+    const seed = new SpreadsheetEngine({ workbookName: 'render-tile-style-range-seed' })
+    await seed.ready()
+    seed.createSheet('Sheet1')
+    seed.setRangeStyle({ sheetName: 'Sheet1', startAddress: 'E6', endAddress: 'E6' }, { fill: { backgroundColor: '#00ff00' } })
+
+    const restored = new SpreadsheetEngine({ workbookName: 'render-tile-style-range-restored' }) as SpreadsheetEngine & WorkerEngine
+    await restored.ready()
+    restored.importSnapshot(seed.exportSnapshot())
+
+    const batch = buildWorkerRenderTileDeltaBatch({
+      engine: restored,
+      generation: 4,
+      subscription: {
+        sheetId: 7,
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 31,
+        colStart: 0,
+        colEnd: 127,
+        dprBucket: 1,
+        cameraSeq: 17,
+      },
+    })
+    const replacement = batch.mutations.find(
+      (mutation) =>
+        mutation.kind === 'tileReplace' &&
+        mutation.bounds.rowStart <= 5 &&
+        mutation.bounds.rowEnd >= 5 &&
+        mutation.bounds.colStart <= 4 &&
+        mutation.bounds.colEnd >= 4,
+    )
+
+    expect(restored.getCell('Sheet1', 'E6').styleId).toBeDefined()
+    expect(replacement?.kind === 'tileReplace' ? hasOpaqueGreenFillRect(replacement.rectInstances, replacement.rectCount) : false).toBe(
+      true,
+    )
   })
 
   it('materializes only dirty visible tiles for event-driven batches', () => {

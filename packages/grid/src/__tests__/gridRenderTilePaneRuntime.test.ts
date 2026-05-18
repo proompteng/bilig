@@ -72,6 +72,24 @@ function createGridBorderRectInstances(rectCount: number): Float32Array {
   return rectInstances
 }
 
+function hasOpaqueGreenFillRect(tile: GridRenderTile | undefined): boolean {
+  if (!tile) {
+    return false
+  }
+  for (let index = 0; index < tile.rectCount; index += 1) {
+    const offset = index * GRID_RECT_INSTANCE_FLOAT_COUNT_V3
+    const red = tile.rectInstances[offset + 4] ?? 1
+    const green = tile.rectInstances[offset + 5] ?? 0
+    const blue = tile.rectInstances[offset + 6] ?? 1
+    const alpha = tile.rectInstances[offset + 7] ?? 0
+    const instanceKind = tile.rectInstances[offset + 13] ?? -1
+    if (instanceKind === 0 && red < 0.05 && green > 0.95 && blue < 0.05 && alpha > 0.95) {
+      return true
+    }
+  }
+  return false
+}
+
 function createHost(): GridRuntimeHost {
   return new GridRuntimeHost({
     columnCount: 1000,
@@ -1634,6 +1652,56 @@ describe('GridRenderTilePaneRuntime', () => {
       renderTileRevision: 2,
     })
     expect(refreshed.residentBodyPane?.tile.textRuns).toEqual([])
+  })
+
+  it('rebuilds resident local fallback tiles when the projected workbook revision advances', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    let projectedRevision = 0
+    let greenFillVisible = false
+    const engineWithChangingStyle: GridEngineLike = {
+      getCell: (_sheetName, address) => ({
+        ...(address === 'E6' && greenFillVisible ? { styleId: 'style-green' } : {}),
+        ...createEmptyCellSnapshot(address),
+      }),
+      getCellStyle: (styleId) => (styleId === 'style-green' ? { id: 'style-green', fill: { backgroundColor: '#00ff00' } } : undefined),
+      getRenderRevisionSnapshot: () => ({
+        authoritativeRevision: projectedRevision,
+        projectedRevision,
+        tileSceneCameraSeq: null,
+        tileSceneRevision: null,
+      }),
+      subscribeCells: () => () => {},
+      workbook: {
+        getSheet: () => undefined,
+      },
+    }
+    const renderTileSource = createRenderTileSource([])
+
+    const initial = runtime.resolve(
+      createInput({
+        engine: engineWithChangingStyle,
+        gridRuntimeHost: host,
+        renderTileSource,
+        sceneRevision: 0,
+      }),
+    )
+    expect(hasOpaqueGreenFillRect(initial.residentBodyPane?.tile)).toBe(false)
+
+    projectedRevision = 1
+    greenFillVisible = true
+
+    const refreshed = runtime.resolve(
+      createInput({
+        engine: engineWithChangingStyle,
+        gridRuntimeHost: host,
+        renderTileSource,
+        sceneRevision: 0,
+      }),
+    )
+
+    expect(refreshed.residentBodyPane?.tile).not.toBe(initial.residentBodyPane?.tile)
+    expect(hasOpaqueGreenFillRect(refreshed.residentBodyPane?.tile)).toBe(true)
   })
 
   it('keeps local tiles through stale render tile deltas until the renderer batch catches up', () => {
