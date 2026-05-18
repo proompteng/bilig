@@ -329,8 +329,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ -z "${FORGEJO_PUSH_URL:-}" ]]; then
-            reason="FORGEJO_PUSH_URL secret is not configured; runtime release planning skipped after verification"
+          skip_release_planning() {
+            local reason="$1"
             {
               echo "ready=false"
               echo "reason=${reason}"
@@ -343,12 +343,11 @@ jobs:
               echo "The runtime package verification job still ran; only the release planning/publish path is disabled for this mirror."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
-          fi
+          }
 
-          {
-            echo "ready=true"
-            echo "reason="
-          } >> "$GITHUB_OUTPUT"
+          if [[ -z "${FORGEJO_PUSH_URL:-}" ]]; then
+            skip_release_planning "FORGEJO_PUSH_URL secret is not configured; runtime release planning skipped after verification"
+          fi
 
           git remote rename origin github
           git remote add origin "${FORGEJO_PUSH_URL}"
@@ -358,9 +357,20 @@ jobs:
             git tag -d "$tag"
           done < <(git tag --list 'libraries-v*')
 
-          git fetch --force origin main
-          git fetch --force origin 'refs/tags/libraries-v*:refs/tags/libraries-v*'
-          git fetch --force github main
+          if ! git fetch --force origin main; then
+            skip_release_planning "canonical Forgejo main could not be fetched; runtime release planning skipped after verification"
+          fi
+          if ! git fetch --force origin 'refs/tags/libraries-v*:refs/tags/libraries-v*'; then
+            skip_release_planning "canonical Forgejo runtime tags could not be fetched; runtime release planning skipped after verification"
+          fi
+          if ! git fetch --force github main; then
+            skip_release_planning "GitHub mirror main could not be fetched; runtime release planning skipped after verification"
+          fi
+
+          {
+            echo "ready=true"
+            echo "reason="
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate Forgejo and GitHub branch alignment
         id: release_alignment
