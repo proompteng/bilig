@@ -38,6 +38,8 @@ export function communityLaunchPackRequiredLinks(): readonly string[] {
     'https://www.libhunt.com/topic/headless-spreadsheet',
     'Latest LibHunt discovery snapshot on May 17, 2026',
     'TypeScript, Spreadsheet, Excel, Agents, and `ai-agents`',
+    'MCP directory reviewer surfaces: the existing mcp.so and Cline MCP',
+    '`@bilig/headless@0.21.1`, the file-backed MCP command',
     'tools: 0',
     'package: null',
     'No Glama release',
@@ -50,7 +52,7 @@ export function communityLaunchPackRequiredLinks(): readonly string[] {
     'comment child `48052854` is flagged',
     'JavaScript Weekly / Node Weekly Editorial Pitch',
     'editor@cooperpress.com',
-    'https://github.com/proompteng/bilig/actions/runs/26004819833',
+    'https://github.com/proompteng/bilig/actions/runs/26008585881',
   ] as const
 }
 

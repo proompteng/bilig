@@ -78,8 +78,8 @@ crawlers that probe those well-known variants.
 | Static MCP server card          | Live                                                                   | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                 |
 | Static MCP discovery aliases    | Live                                                                   | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                             |
 | Glama                           | Live, installability and tool indexing pending                         | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
-| mcp.so                          | Submitted for maintainer review                                        | <https://github.com/chatmcp/mcpso/issues/2295>                                                        |
-| Cline MCP Marketplace           | Submitted for maintainer review                                        | <https://github.com/cline/mcp-marketplace/issues/1557>                                                |
+| mcp.so                          | Submitted for maintainer review; issue body refreshed for `0.21.1`     | <https://github.com/chatmcp/mcpso/issues/2295>                                                        |
+| Cline MCP Marketplace           | Submitted for maintainer review; issue body refreshed for `0.21.1`     | <https://github.com/cline/mcp-marketplace/issues/1557>                                                |
 | mcpserver.cc                    | Submitted for maintainer review                                        | <https://mcpserver.cc/en?q=bilig>                                                                     |
 | AgentNDX                        | Submitted for review                                                   | <https://agentndx.ai/browse?q=bilig>                                                                  |
 | YuzeHao2023 Awesome MCP Servers | Submitted for maintainer review                                        | <https://github.com/YuzeHao2023/Awesome-MCP-Servers/pull/244>                                         |
@@ -103,6 +103,12 @@ Starter issue
 [#384](https://github.com/proompteng/bilig/issues/384) captured the first public
 verification pass and is now closed; reopen a narrower follow-up only if
 PulseMCP remains missing after the official registry refresh window.
+
+The mcp.so and Cline MCP Marketplace submissions were refreshed on May 18, 2026
+by editing the existing issue bodies, not by adding more comments. Both now
+point reviewers at `@bilig/headless@0.21.1`, the file-backed command with
+`--init-demo-workpaper --writable`, the seven current tools, the official
+Registry entry, and the static MCP server card.
 
 Glama lists Bilig WorkPaper publicly in search with TypeScript, Developer
 Tools, Workplace & Productivity, and Remote attributes. Its public API still

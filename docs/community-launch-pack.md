@@ -23,10 +23,10 @@ Latest public snapshot on May 8, 2026:
 - Contributor funnel: `18` open `good first issue`, `18` open
   `first-timers-only`, and `18` open `help wanted` issues
 
-Latest execution snapshot on May 17, 2026 at `22:43:02Z`:
+Latest execution snapshot on May 18, 2026 at `02:02:33Z`:
 
 - GitHub surface: public repo, `23` stars, `17` forks, `17` open issues
-- npm surface: `@bilig/headless@0.18.29`, MIT, TypeScript types, npm API
+- npm surface: `@bilig/headless@0.21.1`, MIT, TypeScript types, npm API
   downloads: `17,235` last week and `32,535` last month
 - Contributor funnel: `15` open `good first issue`, `15` open
   `first-timers-only`, and `15` open `help wanted` issues
@@ -53,6 +53,10 @@ Latest execution snapshot on May 17, 2026 at `22:43:02Z`:
 - MCP discovery is live in the official registry as
   `io.github.proompteng/bilig-workpaper`, backed by `@bilig/headless` stdio
   package metadata and the packaged `bilig-workpaper-mcp` binary.
+- MCP directory reviewer surfaces: the existing mcp.so and Cline MCP
+  Marketplace submission issue bodies were refreshed on May 18, 2026 for
+  `@bilig/headless@0.21.1`, the file-backed MCP command, the current seven-tool
+  surface, and the static server card, without adding duplicate comments.
 - External activity: `0` open external issues, `0` open external pull requests,
   `6` external issues opened in the last seven days, and `43` external pull
   requests opened in the last seven days
@@ -76,12 +80,12 @@ Latest public execution snapshot on May 13, 2026 after the landing-page pass:
   developers at the npm-only TypeScript smoke test:
   <https://github.com/proompteng/bilig/discussions/270>
 
-Latest growth snapshot on May 17, 2026 after the `0.18.29` release and MCP
+Latest growth snapshot on May 18, 2026 after the `0.21.1` release and MCP
 registry refresh:
 
 - GitHub surface: `23` stars, `17` forks, `17` open issues, and `0` open pull
   requests.
-- npm surface checked again on May 17, 2026: `@bilig/headless@0.18.29`, with
+- npm surface checked again on May 18, 2026: `@bilig/headless@0.21.1`, with
   `17,235` downloads last week and `32,535` downloads in the last 30 days.
 - Contributor funnel: `15` open `good first issue`, `15` open
   `first-timers-only`, and `15` open `help wanted` issues.
@@ -224,10 +228,11 @@ registry refresh:
   issue is open with the npm command, official registry name, tool list, and
   public package verification:
   <https://github.com/chatmcp/mcpso/issues/2295>
-- External MCP directory follow-up: the mcp.so submission issue was refreshed on
-  May 17, 2026 with `@bilig/headless@0.18.22`, the static MCP server card,
-  current tool names, and the maintained docs/transcript:
-  <https://github.com/chatmcp/mcpso/issues/2295#issuecomment-4470239663>
+- External MCP directory follow-up: the mcp.so submission issue body was
+  refreshed on May 18, 2026 with `@bilig/headless@0.21.1`, the file-backed MCP
+  command, the static MCP server card, current tool names, and the maintained
+  docs/transcript:
+  <https://github.com/chatmcp/mcpso/issues/2295>
 - External MCP directory surface: MCPFind's public submit page points
   contributors at `community-servers.yml`, and the Bilig WorkPaper PR is open
   with a single `@bilig/headless` npm entry plus repo, docs, transcript, and
@@ -240,20 +245,21 @@ registry refresh:
 - External MCP directory surface: MCPRepository has a live Bilig listing with
   the GitHub repository description mirrored as MCP server copy:
   <https://mcprepository.com/proompteng/bilig>
-- External MCP directory follow-up on May 17, 2026: Glama search now returns
+- External MCP directory follow-up on May 18, 2026: Glama search now returns
   Bilig WorkPaper with TypeScript, Developer Tools, Workplace & Productivity,
   and Remote attributes, but the API still returns `tools: 0`, `package: null`,
   and no installability. The score page now names the blocker as `No Glama release`;
   the repo already has `glama.json` with maintainer `gregkonush`, and the
   claimed Dockerfile admin page is prepared with an npm-backed file-mode config.
-  The same npm path was smoked locally with `@bilig/headless@0.18.29`, server
+  The same npm path was smoked locally with `@bilig/headless@0.21.1`, server
   `bilig-headless-workpaper`, 7 file-backed tools, and `Summary!B3` display
   value `60000`. The remaining action is running Glama `Build & Release` so the
   `@bilig/headless` package/tool surface becomes installable:
   <https://glama.ai/mcp/servers/proompteng/bilig>
 - External MCP marketplace surface: the Cline MCP Marketplace server submission
-  issue is open with the GitHub repository, 400px logo, public npm command, and
-  verified `tools/list` plus `set_workpaper_input_cell` readback proof:
+  issue body was refreshed on May 18, 2026 with the GitHub repository, 400px
+  logo, public npm command, `@bilig/headless@0.21.1`, the file-backed MCP
+  command, current seven-tool surface, and static server-card proof:
   <https://github.com/cline/mcp-marketplace/issues/1557>
 - External MCP directory surface: `mcpserver.cc` accepted the public Bilig
   WorkPaper submission for maintainer review with submission UUID
@@ -268,13 +274,13 @@ registry refresh:
 - External MCP directory follow-up: PulseMCP still does not return Bilig in
   public search on May 17, 2026, while its API page says server data comes from
   manual submissions, automated crawling, and the Official MCP Registry. The
-  Official Registry now marks `@bilig/headless@0.18.29` as latest, so the next
+  Official Registry now marks `@bilig/headless@0.21.1` as latest, so the next
   PulseMCP move is a concise refresh request only if the listing remains missing
   after its ingest window.
 - External MCP directory follow-up: starter issue `#384` closed after the first
   public PulseMCP verification pass. If the listing remains absent after the
   registry refresh window, reopen a narrower follow-up with the current
-  `@bilig/headless@0.18.29` registry evidence:
+  `@bilig/headless@0.21.1` registry evidence:
   <https://github.com/proompteng/bilig/issues/384>.
 
 Latest TypeScript-example guard action on May 14, 2026:
@@ -437,9 +443,9 @@ Latest conversion snapshot on May 17, 2026:
   star page beside npm install and GitHub, and the docs index links to the live
   community growth snapshot so visitors can inspect the current public signals.
 - MCP registry action: the official MCP Registry refresh was verified for
-  `@bilig/headless@0.18.29` with workflow run
-  <https://github.com/proompteng/bilig/actions/runs/26004819833>. The live API
-  now includes `0.18.29` with `isLatest: true`, so downstream directory
+  `@bilig/headless@0.21.1` with workflow run
+  <https://github.com/proompteng/bilig/actions/runs/26008585881>. The live API
+  now includes `0.21.1` with `isLatest: true`, so downstream directory
   verification should be rerun after each runtime package release.
 
 Latest star-spike research on May 16, 2026:
