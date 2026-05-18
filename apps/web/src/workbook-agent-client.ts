@@ -3,6 +3,7 @@ import {
   WorkbookAgentThreadScopeSchema,
   WorkbookAgentThreadSummarySchema,
   decodeUnknownSync,
+  stringifyWorkbookAgentUiContextSemanticKey,
   type WorkbookAgentThreadSnapshot,
   type WorkbookAgentThreadScope,
   type WorkbookAgentThreadSummary,
@@ -88,7 +89,108 @@ function createSessionBody(context: WorkbookAgentUiContext, scope: WorkbookAgent
   }
 }
 
+interface PendingContextSync {
+  context: WorkbookAgentUiContext
+  key: string
+  reject: (reason?: unknown) => void
+  resolve: () => void
+}
+
+interface ThreadContextSyncState {
+  inFlight: Promise<void> | null
+  lastSyncedKey: string | null
+  pending: PendingContextSync | null
+}
+
+function createThreadContextSyncState(): ThreadContextSyncState {
+  return {
+    inFlight: null,
+    lastSyncedKey: null,
+    pending: null,
+  }
+}
+
+function contextSyncKey(threadId: string, context: WorkbookAgentUiContext): string {
+  return `${threadId}:${stringifyWorkbookAgentUiContextSemanticKey(context)}`
+}
+
 export function createWorkbookAgentClient(documentId: string) {
+  const contextSyncStates = new Map<string, ThreadContextSyncState>()
+
+  const postThreadContext = async (threadId: string, context: WorkbookAgentUiContext): Promise<void> => {
+    await fetchOk(`${threadUrl(documentId, threadId)}/context`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        context,
+      }),
+    })
+  }
+
+  const drainThreadContextSync = (threadId: string, state: ThreadContextSyncState): void => {
+    const pending = state.pending
+    if (!pending || state.inFlight) {
+      return
+    }
+    state.pending = null
+    if (state.lastSyncedKey === pending.key) {
+      pending.resolve()
+      return
+    }
+    state.inFlight = (async () => {
+      try {
+        await postThreadContext(threadId, pending.context)
+        state.lastSyncedKey = pending.key
+        pending.resolve()
+      } catch (error: unknown) {
+        pending.reject(error)
+      } finally {
+        state.inFlight = null
+        drainThreadContextSync(threadId, state)
+      }
+    })()
+  }
+
+  const enqueueThreadContextSync = (threadId: string, context: WorkbookAgentUiContext): Promise<void> => {
+    const key = contextSyncKey(threadId, context)
+    const existingState = contextSyncStates.get(threadId)
+    const state = existingState ?? createThreadContextSyncState()
+    if (!existingState) {
+      contextSyncStates.set(threadId, state)
+    }
+    if (state.lastSyncedKey === key) {
+      return Promise.resolve()
+    }
+    if (!state.inFlight) {
+      state.inFlight = (async () => {
+        try {
+          await postThreadContext(threadId, context)
+          state.lastSyncedKey = key
+        } finally {
+          state.inFlight = null
+          drainThreadContextSync(threadId, state)
+        }
+      })()
+      return state.inFlight
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const previousPending = state.pending
+      state.pending = {
+        context,
+        key,
+        reject(error) {
+          previousPending?.reject(error)
+          reject(error)
+        },
+        resolve() {
+          previousPending?.resolve()
+          resolve()
+        },
+      }
+    })
+  }
+
   return {
     threadEventsUrl(threadId: string): string {
       return `${threadUrl(documentId, threadId)}/events`
@@ -109,13 +211,7 @@ export function createWorkbookAgentClient(documentId: string) {
       return decodeThreadSnapshot(await fetchJson(threadUrl(documentId, threadId)))
     },
     async syncThreadContext(threadId: string, context: WorkbookAgentUiContext): Promise<void> {
-      await fetchOk(`${threadUrl(documentId, threadId)}/context`, {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          context,
-        }),
-      })
+      await enqueueThreadContextSync(threadId, context)
     },
     async sendPrompt(threadId: string, prompt: string, context: WorkbookAgentUiContext): Promise<WorkbookAgentThreadSnapshot> {
       return decodeThreadSnapshot(
