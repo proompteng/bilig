@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.23.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.22.2
+- Manual override: no
+
+## Features
+- feat(mcp): expose workpaper prompts and resources (79a4d16a)
+
+## Fixes
+- fix(mcp): keep server metadata publishable (5545f395)
+
 ## 0.22.2
 
 - Release type: patch
