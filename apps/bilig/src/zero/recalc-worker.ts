@@ -1,4 +1,5 @@
 import type { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
+import { logError } from '../runtime-logger.js'
 import { materializeCellEvalProjection } from './projection.js'
 import { leaseNextRecalcJob, markRecalcJobCompleted, markRecalcJobFailed, markRecalcJobSuperseded } from './recalc-job-store.js'
 import { shouldPersistWorkbookCheckpointRevision, type Queryable, type WorkbookRuntimeStoreConnection } from './store.js'
@@ -52,6 +53,8 @@ export class ZeroRecalcWorker {
     let processed = false
     try {
       processed = await this.processNextJob()
+    } catch (error) {
+      logError('Zero recalc worker tick failed', error)
     } finally {
       this.running = false
       this.schedule(processed ? BUSY_POLL_MS : IDLE_POLL_MS)
@@ -100,7 +103,11 @@ export class ZeroRecalcWorker {
       })
     } catch (error) {
       this.runtimeManager.invalidate(lease.workbookId)
-      await markRecalcJobFailed(this.db, lease, error)
+      try {
+        await markRecalcJobFailed(this.db, lease, error)
+      } catch (markError) {
+        logError('Zero recalc worker failed to mark recalc job failed', markError)
+      }
     }
 
     return true
