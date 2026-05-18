@@ -206,6 +206,17 @@ function parseAutoFilter(sheetName: string, entry: unknown): WorkbookAutoFilterS
   return criteria.length > 0 ? { ...range, criteria } : range
 }
 
+export function readImportedSheetAutoFilters(sheetName: string, sheetXml: string): WorkbookAutoFilterSnapshot[] {
+  if (!/<autoFilter\b/u.test(sheetXml)) {
+    return []
+  }
+  const parsed: unknown = xmlParser.parse(sheetXml)
+  return asArray(recordChild(recordChild(parsed, 'worksheet'), 'autoFilter')).flatMap((entry) => {
+    const filter = parseAutoFilter(sheetName, entry)
+    return filter ? [filter] : []
+  })
+}
+
 function valueFilterCriteriaXml(criteria: WorkbookAutoFilterValueCriteriaSnapshot): string {
   const attributes = criteria.blank !== undefined ? ` blank="${booleanAttribute(criteria.blank)}"` : ''
   const filters = criteria.values.map((value) => `<filter val="${escapeXml(value)}"/>`).join('')
@@ -302,11 +313,7 @@ export function readImportedWorkbookFilters(
     if (!sheetXml || !/<autoFilter\b/u.test(sheetXml)) {
       return
     }
-    const parsed: unknown = xmlParser.parse(sheetXml)
-    const autoFilters = asArray(recordChild(recordChild(parsed, 'worksheet'), 'autoFilter')).flatMap((entry) => {
-      const filter = parseAutoFilter(sheetName, entry)
-      return filter ? [filter] : []
-    })
+    const autoFilters = readImportedSheetAutoFilters(sheetName, sheetXml)
     if (autoFilters.length > 0) {
       filtersBySheet.set(sheetName, autoFilters)
     }

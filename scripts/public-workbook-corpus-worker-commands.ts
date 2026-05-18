@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 
 import { fingerprintWorkbookFileIsolated } from './public-workbook-corpus-fetch.ts'
 import { startSelfRssGuard } from './public-workbook-corpus-process.ts'
-import { fingerprintWorkbookBytes, inspectWorkbookFootprint } from './public-workbook-corpus-workbook.ts'
+import { fingerprintWorkbookBytes, inspectWorkbookFootprintForWorker } from './public-workbook-corpus-workbook.ts'
 
 export async function writeFingerprintArtifactResult(args: {
   readonly filePath: string
@@ -48,11 +48,11 @@ function formatWorkerError(error: unknown): string {
   return String(error)
 }
 
-export function writeFootprintWorkerResult(args: { readonly fileName: string; readonly verifyMaxRssBytes: number }): void {
+export async function writeFootprintWorkerResult(args: { readonly fileName: string; readonly verifyMaxRssBytes: number }): Promise<void> {
   const stopSelfRssGuard = startSelfRssGuard(args.verifyMaxRssBytes, 'Workbook footprint worker')
   try {
     const bytes = readFileSync(0)
-    const footprint = inspectWorkbookFootprint(bytes, args.fileName)
+    const footprint = await inspectWorkbookFootprintForWorker(bytes, args.fileName)
     process.stdout.write(`${JSON.stringify({ footprint })}\n`)
   } finally {
     stopSelfRssGuard()

@@ -396,12 +396,12 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
   }
 
   formulaCells = markVolatileDependentFormulaCells(formulaCells, skippedByReason)
-  const importedSnapshot = importXlsx(workbookBytes, basename(filePath)).snapshot
+  const importedSnapshot = formulaCells.length === 0 ? undefined : importXlsx(workbookBytes, basename(filePath)).snapshot
 
   return {
-    sheets: formulaCells.length === 0 ? sheets : attachRuntimeSnapshot(sheets, importedSnapshot),
+    sheets: importedSnapshot ? attachRuntimeSnapshot(sheets, importedSnapshot) : sheets,
     formulaCells,
-    compatibility: compatibilitySummaryForSnapshot(importedSnapshot),
+    compatibility: importedSnapshot ? compatibilitySummaryForSnapshot(importedSnapshot) : emptyCompatibilitySummary(),
     maxRows,
     maxColumns,
   }

@@ -54,6 +54,10 @@ interface ImportedWorkbookStyleArtifacts {
   sheetArtifactsByName: Map<string, WorkbookSheetStyleArtifactsSnapshot>
 }
 
+interface ImportedWorkbookStyleArtifactsOptions {
+  maxSheetCellStyleArtifactCount?: number
+}
+
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '',
@@ -423,10 +427,31 @@ function isBlankCellXml(cellXml: string, openingTag: string): boolean {
   return !/<(?:v|f|is)\b/u.test(cellXml.slice(openingTag.length, -'</c>'.length))
 }
 
-function parseSheetCellStyleIndexArtifacts(sheetXml: string): WorkbookSheetStyleArtifactsSnapshot | undefined {
+function hasMoreCellStyleIndexesThan(sheetXml: string, maxArtifactCount: number): boolean {
+  if (!Number.isFinite(maxArtifactCount)) {
+    return false
+  }
+  let count = 0
+  for (const _match of sheetXml.matchAll(/<c\b(?:[^>"']|"[^"]*"|'[^']*')*\bs=/gu)) {
+    count += 1
+    if (count > maxArtifactCount) {
+      return true
+    }
+  }
+  return false
+}
+
+function parseSheetCellStyleIndexArtifacts(
+  sheetXml: string,
+  maxArtifactCount = Number.POSITIVE_INFINITY,
+): WorkbookSheetStyleArtifactsSnapshot | undefined {
+  if (hasMoreCellStyleIndexesThan(sheetXml, maxArtifactCount)) {
+    return undefined
+  }
   const cellStyleIndexes: WorkbookSheetStyleArtifactsSnapshot['cellStyleIndexes'] = []
   const blankCellAddresses: string[] = []
   const columnStyleRanges = parseColumnStyleRanges(sheetXml)
+  const shouldSkipArtifact = () => cellStyleIndexes.length + blankCellAddresses.length > maxArtifactCount
   for (const rowMatch of sheetXml.matchAll(/<row\b[^>]*(?:\/>|>[\s\S]*?<\/row>)/gu)) {
     const rowXml = rowMatch[0]
     const rowTag = /^<row\b[^>]*(?:\/>|>)/u.exec(rowXml)?.[0]
@@ -447,6 +472,9 @@ function parseSheetCellStyleIndexArtifacts(sheetXml: string): WorkbookSheetStyle
       const styleIndex = readXmlNonNegativeIntegerAttribute(cellTag, 's')
       if (styleIndex !== null) {
         cellStyleIndexes.push({ address, styleIndex })
+        if (shouldSkipArtifact()) {
+          return undefined
+        }
         continue
       }
       if (!isBlankCellXml(cellXml, cellTag)) {
@@ -455,6 +483,9 @@ function parseSheetCellStyleIndexArtifacts(sheetXml: string): WorkbookSheetStyle
       const columnIndex = XLSX.utils.decode_cell(address).c
       if (rowHasStyle || columnHasStyle(columnStyleRanges, columnIndex)) {
         blankCellAddresses.push(address)
+        if (shouldSkipArtifact()) {
+          return undefined
+        }
       }
     }
   }
@@ -749,6 +780,7 @@ export function readImportedWorkbookStyleArtifacts(
   workbook: XLSX.WorkBook,
   sheetNames: readonly string[],
   source?: XlsxZipSource,
+  options: ImportedWorkbookStyleArtifactsOptions = {},
 ): ImportedWorkbookStyleArtifacts {
   const zip = source ? readXlsxZipEntries(source) : null
   const files = workbookFiles(workbook)
@@ -768,7 +800,7 @@ export function readImportedWorkbookStyleArtifacts(
     if (!sheetXml) {
       continue
     }
-    const sheetArtifacts = parseSheetCellStyleIndexArtifacts(sheetXml)
+    const sheetArtifacts = parseSheetCellStyleIndexArtifacts(sheetXml, options.maxSheetCellStyleArtifactCount)
     if (sheetArtifacts) {
       sheetArtifactsByName.set(sheetName, sheetArtifacts)
     }

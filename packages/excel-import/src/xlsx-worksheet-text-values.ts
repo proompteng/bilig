@@ -14,6 +14,10 @@ const cellOpeningTagPattern = /<(?:[A-Za-z_][\w.-]*:)?c\b(?:[^>"']|"[^"]*"|'[^']
 const sharedStringElementPattern =
   /<(?:[A-Za-z_][\w.-]*:)?si\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?si)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/gu
 const cellAddressPattern = /^\$?[A-Za-z]{1,3}\$?[1-9][0-9]*$/u
+const underscoreCode = '_'.charCodeAt(0)
+const lowerXCode = 'x'.charCodeAt(0)
+const upperXCode = 'X'.charCodeAt(0)
+const escapedNumericEntityMarker = new TextEncoder().encode('&amp;#')
 
 function readXmlAttribute(xml: string, attributeName: string): string | null {
   return new RegExp(`\\s${attributeName}=("|')([\\s\\S]*?)\\1`, 'u').exec(xml)?.[2] ?? null
@@ -64,6 +68,53 @@ function normalizeAddress(address: string): string | null {
   } catch {
     return null
   }
+}
+
+function isHexByte(value: number | undefined): boolean {
+  return value !== undefined && ((value >= 48 && value <= 57) || (value >= 65 && value <= 70) || (value >= 97 && value <= 102))
+}
+
+function hasExcelEscapedText(bytes: Uint8Array | undefined): boolean {
+  if (!bytes) {
+    return false
+  }
+  for (let index = 0; index <= bytes.byteLength - 7; index += 1) {
+    if (
+      bytes[index] === underscoreCode &&
+      (bytes[index + 1] === lowerXCode || bytes[index + 1] === upperXCode) &&
+      isHexByte(bytes[index + 2]) &&
+      isHexByte(bytes[index + 3]) &&
+      isHexByte(bytes[index + 4]) &&
+      isHexByte(bytes[index + 5]) &&
+      bytes[index + 6] === underscoreCode
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+function hasByteSequence(bytes: Uint8Array | undefined, sequence: Uint8Array): boolean {
+  if (!bytes || bytes.byteLength < sequence.byteLength) {
+    return false
+  }
+  for (let index = 0; index <= bytes.byteLength - sequence.byteLength; index += 1) {
+    let matched = true
+    for (let offset = 0; offset < sequence.byteLength; offset += 1) {
+      if (bytes[index + offset] !== sequence[offset]) {
+        matched = false
+        break
+      }
+    }
+    if (matched) {
+      return true
+    }
+  }
+  return false
+}
+
+function hasTextOverrideMarker(bytes: Uint8Array | undefined): boolean {
+  return hasExcelEscapedText(bytes) || hasByteSequence(bytes, escapedNumericEntityMarker)
 }
 
 function stringItemText(xml: string): string {
@@ -162,4 +213,18 @@ export function readImportedWorksheetTextValues(
     }
   })
   return valuesBySheet
+}
+
+export function readImportedWorksheetTextValuesForSheet(source: XlsxZipSource, sheetPath: string): Map<string, string> {
+  const zip = readXlsxZipEntries(source)
+  return readWorksheetTextValues(getZipText(zip, sheetPath), readSharedStringEntries(zip))
+}
+
+export function shouldReadImportedWorksheetTextValuesForSheet(source: XlsxZipSource, sheetPath: string): boolean {
+  const zip = readXlsxZipEntries(source)
+  const sharedStrings = zip['xl/sharedStrings.xml']
+  if (hasTextOverrideMarker(sharedStrings)) {
+    return true
+  }
+  return !sharedStrings && hasTextOverrideMarker(zip[sheetPath])
 }

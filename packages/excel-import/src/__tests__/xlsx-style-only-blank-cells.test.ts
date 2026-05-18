@@ -53,4 +53,22 @@ describe('stripStyleOnlyBlankCellsForSheetJs', () => {
     expect(sheetXml).not.toContain('r="1"')
     expect(sheetXml).toContain('<row r="2"><c r="A2" s="2"/></row>')
   })
+
+  it('does not mutate the source zip while producing SheetJS parser bytes', () => {
+    const bytes = zipSync({
+      'xl/worksheets/sheet1.xml': strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1"><c r="A1" s="2"/></row>
+  </sheetData>
+</worksheet>`),
+    })
+    const zip = unzipSync(bytes)
+    const stripped = stripStyleOnlyBlankCellsForSheetJs(bytes, zip)
+    const originalSheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    const strippedSheetXml = strFromU8(unzipSync(stripped)['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+
+    expect(originalSheetXml).toContain('<c r="A1" s="2"/>')
+    expect(strippedSheetXml).not.toContain('<c r="A1" s="2"/>')
+  })
 })

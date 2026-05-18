@@ -308,7 +308,7 @@ function parsePublicWorkbookSource(value: unknown): PublicWorkbookSource {
   }
 }
 
-function parsePublicWorkbookArtifact(value: unknown): PublicWorkbookArtifact {
+export function parsePublicWorkbookArtifact(value: unknown): PublicWorkbookArtifact {
   const record = asRecord(value)
   return {
     id: readRequiredString(record, 'id'),

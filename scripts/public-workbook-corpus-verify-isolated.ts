@@ -15,7 +15,7 @@ import { artifactBaseEvidence, failedCase } from './public-workbook-corpus-verif
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase } from './public-workbook-corpus-types.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
-const publicWorkbookCorpusScriptPath = fileURLToPath(new URL('./public-workbook-corpus.ts', import.meta.url))
+const publicWorkbookCorpusVerifyWorkerScriptPath = fileURLToPath(new URL('./public-workbook-corpus-verify-worker.ts', import.meta.url))
 const noop = (): void => undefined
 
 export const verificationWorkerPhasePrefix = 'bilig-public-workbook-verify-phase='
@@ -34,7 +34,7 @@ export function verifyCachedWorkbookArtifactIsolated(args: {
   const runtimeMetrics = startVerificationRuntimeMetrics()
   return new Promise<PublicWorkbookCorpusCase>((resolvePromise) => {
     const childArgs = [
-      publicWorkbookCorpusScriptPath,
+      publicWorkbookCorpusVerifyWorkerScriptPath,
       'verify-artifact-worker',
       '--manifest',
       args.manifestPath,
@@ -42,6 +42,8 @@ export function verifyCachedWorkbookArtifactIsolated(args: {
       args.cacheDir,
       '--artifact-id',
       args.artifact.id,
+      '--artifact-json-base64',
+      Buffer.from(JSON.stringify(args.artifact), 'utf8').toString('base64'),
       '--verify-max-rss-mb',
       String(Math.ceil(args.maxRssBytes / 1024 / 1024)),
       '--verify-max-cells',

@@ -86,6 +86,7 @@ export function readFootprintWorkerResult(value: unknown): WorkbookFootprint | n
   const record = asRecord(value)
   const footprint = asRecord(record['footprint'])
   const featureCounts = asRecord(footprint['featureCounts'])
+  const largeSimpleXlsxImport = readLargeSimpleXlsxImport(footprint['largeSimpleXlsxImport'])
   return {
     featureCounts: {
       sheetCount: readInteger(featureCounts, 'sheetCount'),
@@ -105,6 +106,28 @@ export function readFootprintWorkerResult(value: unknown): WorkbookFootprint | n
     },
     workbookMetadata: readWorkbookMetadata(asRecord(footprint['workbookMetadata'])),
     externalWorkbookReferences: readExternalWorkbookReferences(footprint['externalWorkbookReferences']),
+    ...(largeSimpleXlsxImport ? { largeSimpleXlsxImport } : {}),
+  }
+}
+
+function readLargeSimpleXlsxImport(value: unknown): WorkbookFootprint['largeSimpleXlsxImport'] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  const record = asRecord(value)
+  const eligible = record['eligible']
+  const blockers = record['blockers']
+  if (typeof eligible !== 'boolean' || !Array.isArray(blockers)) {
+    throw new Error('Expected largeSimpleXlsxImport eligibility record')
+  }
+  return {
+    eligible,
+    blockers: blockers.map((entry) => {
+      if (typeof entry !== 'string') {
+        throw new Error('Expected string largeSimpleXlsxImport blocker')
+      }
+      return entry
+    }),
   }
 }
 

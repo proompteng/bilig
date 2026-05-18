@@ -2,7 +2,7 @@ import type { PublicWorkbookCorpusCase } from './public-workbook-corpus-types.ts
 
 export const publicWorkbookImportWarningClassifierEvidence = 'import-warning-classifier=2026-05-08-full-precision-formula-aware'
 export const publicWorkbookPivotClassifierEvidence = 'pivot-classifier=2026-05-08-external-cache-warning'
-export const publicWorkbookResourceLimitClassifierEvidence = 'resource-limit-classifier=2026-05-08-isolated-worker-footprint-aware'
+export const publicWorkbookResourceLimitClassifierEvidence = 'resource-limit-classifier=2026-05-17-native-streaming-xlsx-footprint'
 export const publicWorkbookFormulaOracleCacheClassifierEvidence =
   'formula-oracle-cache-classifier=2026-05-12-independent-recalculation-cross-check'
 

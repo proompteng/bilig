@@ -78,6 +78,10 @@ function getZipText(zip: ZipEntries, path: string): string | null {
   return file ? strFromU8(file) : null
 }
 
+function readXmlAttribute(xml: string, attributeName: string): string | null {
+  return new RegExp(`\\s(?:[A-Za-z_][\\w.-]*:)?${attributeName}=("|')([\\s\\S]*?)\\1`, 'u').exec(xml)?.[2] ?? null
+}
+
 function setZipText(zip: ZipEntries, path: string, text: string): void {
   zip[normalizeZipPath(path)] = strToU8(text)
 }
@@ -401,33 +405,73 @@ function isDefaultTableStyle(style: WorkbookTableStyleSnapshot): boolean {
 }
 
 export function readImportedWorkbookTables(source: XlsxZipSource, sheetNames: readonly string[]): WorkbookTableSnapshot[] | undefined {
+  return readImportedWorkbookTablesFromWorksheetPaths(
+    source,
+    sheetNames.map((sheetName, sheetIndex) => ({
+      name: sheetName,
+      path: `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`,
+    })),
+  )
+}
+
+export function readImportedWorkbookTablesFromWorksheetPaths(
+  source: XlsxZipSource,
+  worksheets: readonly { readonly name: string; readonly path: string }[],
+): WorkbookTableSnapshot[] | undefined {
   const zip = readXlsxZipEntries(source)
   const tables: WorkbookTableSnapshot[] = []
 
-  sheetNames.forEach((sheetName, sheetIndex) => {
-    const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
+  worksheets.forEach(({ name: sheetName, path: sheetPath }) => {
     const sheetXml = getZipText(zip, sheetPath)
-    if (!sheetXml || !/<tableParts\b/u.test(sheetXml)) {
+    if (!sheetXml) {
       return
     }
-    const sheetRelationships = parseRelationships(getZipText(zip, `xl/worksheets/_rels/sheet${String(sheetIndex + 1)}.xml.rels`))
-    const parsedSheet: unknown = xmlParser.parse(sheetXml)
-    const tableRefs = asArray(recordChild(recordChild(parsedSheet, 'worksheet'), 'tableParts')?.['tablePart'])
-    tableRefs.forEach((entry) => {
-      if (!isRecord(entry) || typeof entry['id'] !== 'string') {
-        return
-      }
-      const relationship = sheetRelationships.find((candidate) => candidate.id === entry['id'] && candidate.type === tableRelationshipType)
-      if (!relationship) {
-        return
-      }
-      const tablePath = resolveTargetPath(sheetPath, relationship.target)
-      const table = parseTableXml(sheetName, getZipText(zip, tablePath) ?? '')
-      if (table) {
-        tables.push(table)
-      }
-    })
+    const sheetTables = readImportedSheetTablesFromWorksheetXml(zip, sheetName, sheetPath, sheetXml)
+    if (sheetTables) {
+      tables.push(...sheetTables)
+    }
   })
 
   return tables.length > 0 ? tables.toSorted((left, right) => left.name.localeCompare(right.name)) : undefined
+}
+
+export function readImportedSheetTablesFromWorksheetXml(
+  source: XlsxZipSource,
+  sheetName: string,
+  sheetPath: string,
+  sheetXml: string,
+): WorkbookTableSnapshot[] | undefined {
+  if (!/<(?:[A-Za-z_][\w.-]*:)?tableParts\b/u.test(sheetXml)) {
+    return undefined
+  }
+  const zip = readXlsxZipEntries(source)
+  const sheetRelationships = parseRelationships(getZipText(zip, worksheetRelationshipsPath(sheetPath)))
+  const tables = readWorksheetTableRelationshipIds(sheetXml).flatMap((relationshipId) => {
+    const relationship = sheetRelationships.find(
+      (candidate) => candidate.id === relationshipId && (candidate.type === tableRelationshipType || candidate.type.endsWith('/table')),
+    )
+    if (!relationship) {
+      return []
+    }
+    const table = parseTableXml(sheetName, getZipText(zip, resolveTargetPath(sheetPath, relationship.target)) ?? '')
+    return table ? [table] : []
+  })
+  return tables.length > 0 ? tables.toSorted((left, right) => left.name.localeCompare(right.name)) : undefined
+}
+
+function readWorksheetTableRelationshipIds(sheetXml: string): string[] {
+  const tablePartsXml =
+    /<(?:[A-Za-z_][\w.-]*:)?tableParts\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?tableParts)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/u.exec(
+      sheetXml,
+    )?.[0] ?? ''
+  return [...tablePartsXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?tablePart\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gu)].flatMap((match) => {
+    const id = readXmlAttribute(match[0], 'id')
+    return id ? [id] : []
+  })
+}
+
+function worksheetRelationshipsPath(worksheetPath: string): string {
+  const directory = worksheetPath.slice(0, worksheetPath.lastIndexOf('/'))
+  const fileName = worksheetPath.slice(worksheetPath.lastIndexOf('/') + 1)
+  return `${directory}/_rels/${fileName}.rels`
 }

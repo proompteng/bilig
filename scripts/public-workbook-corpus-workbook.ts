@@ -8,11 +8,20 @@ import { readXlsxZipEntries } from '../packages/excel-import/src/xlsx-zip.js'
 import { ErrorCode, ValueTag } from '../packages/protocol/src/enums.js'
 import type { CellValue, WorkbookExternalWorkbookReferenceSnapshot, WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import type { FormulaOracle, PublicWorkbookCorpusCase, PublicWorkbookFeatureCounts } from './public-workbook-corpus-types.ts'
+import {
+  inspectXlsxWorkbookFootprintLowMemory,
+  inspectXlsxWorkbookFootprintLowMemoryAsync,
+  isZipWorkbook,
+} from './public-workbook-corpus-xlsx-footprint.ts'
 
 export interface WorkbookFootprint {
   readonly featureCounts: PublicWorkbookFeatureCounts
   readonly workbookMetadata: PublicWorkbookCorpusCase['workbookMetadata']
   readonly externalWorkbookReferences: readonly WorkbookExternalWorkbookReferenceSnapshot[]
+  readonly largeSimpleXlsxImport?: {
+    readonly eligible: boolean
+    readonly blockers: readonly string[]
+  }
 }
 
 type WorkbookSheetUsedRange = NonNullable<PublicWorkbookCorpusCase['workbookMetadata']['dimensions'][number]['usedRange']>
@@ -91,6 +100,9 @@ export function emptyFeatureCounts(): PublicWorkbookFeatureCounts {
 }
 
 export function inspectWorkbookFootprint(bytes: Uint8Array, fileName: string): WorkbookFootprint {
+  if (isOpenXmlWorkbookFileName(fileName) && isZipWorkbook(bytes)) {
+    return inspectXlsxWorkbookFootprintLowMemory(bytes, fileName)
+  }
   const workbook = XLSX.read(bytes, {
     type: 'array',
     cellFormula: true,
@@ -137,6 +149,17 @@ export function inspectWorkbookFootprint(bytes: Uint8Array, fileName: string): W
     },
     externalWorkbookReferences,
   }
+}
+
+export async function inspectWorkbookFootprintForWorker(bytes: Uint8Array, fileName: string): Promise<WorkbookFootprint> {
+  if (isOpenXmlWorkbookFileName(fileName) && isZipWorkbook(bytes)) {
+    return inspectXlsxWorkbookFootprintLowMemoryAsync(bytes, fileName)
+  }
+  return inspectWorkbookFootprint(bytes, fileName)
+}
+
+function isOpenXmlWorkbookFileName(fileName: string): boolean {
+  return /\.(xlsx|xlsm|xltx|xltm)$/iu.test(fileName)
 }
 
 function countRawPivotTableParts(bytes: Uint8Array): number {

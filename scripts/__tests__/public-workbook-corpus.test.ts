@@ -41,6 +41,7 @@ import {
   hasFormulaOracleBlockingWarning,
   mergeImportedAndFootprintFeatureCounts,
   rawPivotPartUnsupportedClassification,
+  localeDecimalCommaFormulaOracleUnsupportedClassification,
   staleFormulaCacheUnsupportedClassification,
   verifyCachedWorkbookArtifact,
 } from '../public-workbook-corpus-verify.ts'
@@ -721,6 +722,30 @@ describe('public workbook corpus', () => {
     })
     expect(scorecard.cases[0]?.evidence).toEqual(
       expect.arrayContaining([publicWorkbookFormulaOracleCacheClassifierEvidence, 'independent-recalc=Summary!B2 cached 6 recalculated 9']),
+    )
+  })
+
+  it('classifies locale decimal-comma text coercion formula oracles as unsupported', async () => {
+    const scorecard = await buildSingleWorkbookScorecard({
+      cacheDirPrefix: 'public-workbook-corpus-locale-decimal-comma-',
+      fileName: 'locale-decimal-comma.xlsx',
+      sourceId: 'source-locale-decimal-comma',
+      workbookBytes: buildLocaleDecimalCommaTextFormulaWorkbookBytes(),
+    })
+
+    expect(scorecard.summary.allCachedWorkbooksPassed).toBe(true)
+    expect(scorecard.summary.formulaOracleComparisonCount).toBe(1)
+    expect(scorecard.cases[0]).toMatchObject({
+      status: 'unsupported',
+      passed: true,
+      featureCounts: { formulaCellCount: 1, warningCount: 0 },
+      validation: { formulaOraclePassed: true, formulaOracleComparisons: 1, formulaOracleMismatches: [], roundTripPassed: true },
+      unsupportedFeatureClassifications: [localeDecimalCommaFormulaOracleUnsupportedClassification],
+    })
+    expect(scorecard.cases[0]?.evidence).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('locale-decimal-comma-formula=Summary!C2 cached -82.061588914166 refs Summary!B2=27,269'),
+      ]),
     )
   })
 
@@ -2493,6 +2518,18 @@ function buildStaleFormulaCacheWorkbookBytes(): Uint8Array {
   ])
   sheet.B2 = { t: 'n', f: 'LEN(TRIM(A2))-LEN(SUBSTITUTE(A2," ",""))+1', v: 6 }
   sheet['!ref'] = 'A1:B2'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
+  return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function buildLocaleDecimalCommaTextFormulaWorkbookBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Base', 'Locale Text', 'Result'],
+    [26335, '27,269', null],
+  ])
+  sheet.C2 = { t: 'n', f: '(((B2/A2)^0.25)-1)*100', v: -82.061588914166 }
+  sheet['!ref'] = 'A1:C2'
   XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
 }

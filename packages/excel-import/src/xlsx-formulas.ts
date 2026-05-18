@@ -37,6 +37,30 @@ const formulaOpeningTagPattern = /<(?:[A-Za-z_][\w.-]*:)?f\b(?:[^>"']|"[^"]*"|'[
 const formulaTextPattern = /<(?:[A-Za-z_][\w.-]*:)?f\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?f>/u
 const valueTextPattern = /<(?:[A-Za-z_][\w.-]*:)?v\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?v>/u
 const cellAddressPattern = /^\$?[A-Za-z]{1,3}\$?[1-9][0-9]*$/u
+const lessThanCode = '<'.charCodeAt(0)
+const colonCode = ':'.charCodeAt(0)
+const lowerFCode = 'f'.charCodeAt(0)
+const upperFCode = 'F'.charCodeAt(0)
+
+function isFormulaNameByte(value: number | undefined): boolean {
+  return value === lowerFCode || value === upperFCode
+}
+
+function hasFormulaElement(bytes: Uint8Array | undefined): boolean {
+  if (!bytes) {
+    return false
+  }
+  for (let index = 0; index < bytes.byteLength - 1; index += 1) {
+    const value = bytes[index]
+    if (value === lessThanCode && isFormulaNameByte(bytes[index + 1])) {
+      return true
+    }
+    if (value === colonCode && isFormulaNameByte(bytes[index + 1])) {
+      return true
+    }
+  }
+  return false
+}
 
 function readXmlAttribute(xml: string, attributeName: string): string | null {
   return new RegExp(`\\s${attributeName}=("|')([\\s\\S]*?)\\1`, 'u').exec(xml)?.[2] ?? null
@@ -167,7 +191,7 @@ export function readWorksheetFormulaCells(sheetXml: string | null): WorksheetFor
   return cells
 }
 
-function readWorksheetSharedFormulas(cells: readonly WorksheetFormulaCell[]): Map<string, string> {
+function readSharedFormulasFromCells(cells: readonly WorksheetFormulaCell[]): Map<string, string> {
   const sharedBases = new Map<string, SharedFormulaBase>()
   const formulas = new Map<string, string>()
 
@@ -201,9 +225,13 @@ function readWorksheetSharedFormulas(cells: readonly WorksheetFormulaCell[]): Ma
   return formulas
 }
 
+export function readWorksheetSharedFormulas(sheetXml: string | null): Map<string, string> {
+  return readSharedFormulasFromCells(readWorksheetFormulaCells(sheetXml))
+}
+
 export function readWorksheetFormulaCellManifest(sheetXml: string | null): Map<string, WorksheetFormulaCell> {
   const cells = readWorksheetFormulaCells(sheetXml)
-  const sharedFormulas = readWorksheetSharedFormulas(cells)
+  const sharedFormulas = readSharedFormulasFromCells(cells)
   const manifest = new Map<string, WorksheetFormulaCell>()
   for (const cell of cells) {
     manifest.set(cell.address, {
@@ -224,6 +252,9 @@ export function readImportedWorksheetFormulas(
   sheetNames.forEach((sheetName, index) => {
     const sheetPath = workbookSheetPath(sheetPathsByName, fallbackSheetPaths, sheetName, index)
     if (!sheetPath) {
+      return
+    }
+    if (!hasFormulaElement(zip[sheetPath])) {
       return
     }
     const formulas = new Map(
@@ -248,6 +279,9 @@ export function readImportedWorksheetFormulaManifests(
   sheetNames.forEach((sheetName, index) => {
     const sheetPath = workbookSheetPath(sheetPathsByName, fallbackSheetPaths, sheetName, index)
     if (!sheetPath) {
+      return
+    }
+    if (!hasFormulaElement(zip[sheetPath])) {
       return
     }
     const manifest = readWorksheetFormulaCellManifest(getZipText(zip, sheetPath))

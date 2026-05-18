@@ -120,6 +120,28 @@ describe('public workbook corpus evidence refresh reasons', () => {
     expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-resource-limit-classifier-evidence'])
   })
 
+  it('marks isolated-worker-only resource-limit evidence stale after native streaming scanner changes', () => {
+    const artifact = workbookArtifact('workbook-a')
+    const status = buildPublicWorkbookCorpusStatus({
+      manifest: manifestWithArtifacts([artifact]),
+      scorecard: emptyScorecard(),
+      checkpointCases: [
+        {
+          ...resourceLimitUnsupportedCase(artifact, { hasCurrentClassifierEvidence: false }),
+          evidence: [
+            `source=${artifact.sourceUrl}`,
+            `license=${artifact.license.title}`,
+            `sha256=${artifact.sha256}`,
+            'resource-limit-classifier=2026-05-08-isolated-worker-footprint-aware',
+          ],
+        },
+      ],
+    })
+
+    expect(status.staleRecordedVerificationCount).toBe(1)
+    expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-resource-limit-classifier-evidence'])
+  })
+
   it('marks formula-oracle cache classifier evidence stale after independent recalculation support changes', () => {
     const staleArtifact = workbookArtifact('workbook-a')
     const currentArtifact = workbookArtifact('workbook-b')

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
 import { decodeViewportPatch } from '@bilig/worker-transport'
@@ -44,6 +44,22 @@ function buildPendingMutation(overrides: Partial<PendingWorkbookMutation> = {}):
   }
 }
 
+const activeRuntimes = new Set<WorkbookWorkerRuntime>()
+
+function createRuntime(): WorkbookWorkerRuntime {
+  const runtime = new WorkbookWorkerRuntime()
+  activeRuntimes.add(runtime)
+  return runtime
+}
+
+afterEach(() => {
+  for (const runtime of activeRuntimes) {
+    runtime.dispose()
+  }
+  activeRuntimes.clear()
+  vi.restoreAllMocks()
+})
+
 function snapshotWithCell(address: string, value: string): WorkbookSnapshot {
   return {
     version: 1,
@@ -66,7 +82,7 @@ function snapshotWithCell(address: string, value: string): WorkbookSnapshot {
 describe('worker runtime authoritative bootstrap', () => {
   it('imports a bootstrap authoritative snapshot once for the projection state', async () => {
     const importSnapshot = vi.spyOn(SpreadsheetEngine.prototype, 'importSnapshot')
-    const runtime = new WorkbookWorkerRuntime()
+    const runtime = createRuntime()
 
     await runtime.bootstrap({
       documentId: 'single-import-bootstrap-doc',
@@ -129,7 +145,7 @@ describe('worker runtime authoritative bootstrap', () => {
   })
 
   it('replays restored pending clears over stale authoritative bootstrap snapshots', async () => {
-    const runtime = new WorkbookWorkerRuntime()
+    const runtime = createRuntime()
 
     await runtime.bootstrap({
       documentId: 'bootstrap-doc',
@@ -156,7 +172,7 @@ describe('worker runtime authoritative bootstrap', () => {
   })
 
   it('honors restored mutation high-water marks even when no pending entries remain', async () => {
-    const runtime = new WorkbookWorkerRuntime()
+    const runtime = createRuntime()
 
     await runtime.bootstrap({
       documentId: 'bootstrap-doc',

@@ -511,56 +511,29 @@ export function readImportedWorkbookConditionalFormats(
   source: XlsxZipSource,
   sheetNames: readonly string[],
 ): Map<string, WorkbookConditionalFormatSnapshot[]> {
+  return readImportedWorkbookConditionalFormatsFromWorksheetPaths(
+    source,
+    sheetNames.map((sheetName, sheetIndex) => ({
+      name: sheetName,
+      path: `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`,
+    })),
+  )
+}
+
+export function readImportedWorkbookConditionalFormatsFromWorksheetPaths(
+  source: XlsxZipSource,
+  worksheets: readonly { readonly name: string; readonly path: string }[],
+): Map<string, WorkbookConditionalFormatSnapshot[]> {
   const zip = readXlsxZipEntries(source)
-  const dxfs = readDxfs(getZipText(zip, 'xl/styles.xml'))
   const conditionalFormatsBySheet = new Map<string, WorkbookConditionalFormatSnapshot[]>()
 
-  sheetNames.forEach((sheetName, sheetIndex) => {
-    const sheetXml = getZipText(zip, `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`)
+  worksheets.forEach(({ name: sheetName, path }) => {
+    const sheetXml = getZipText(zip, path)
     if (!sheetXml) {
       return
     }
-    if (!hasWorksheetConditionalFormatting(sheetXml)) {
-      return
-    }
-    const parsed: unknown = xmlParser.parse(sheetXml)
-    const conditionalFormats: WorkbookConditionalFormatSnapshot[] = []
-    for (const conditionalFormatting of asArray(recordChild(parsed, 'worksheet')?.['conditionalFormatting'])) {
-      if (!isRecord(conditionalFormatting) || typeof conditionalFormatting['sqref'] !== 'string') {
-        continue
-      }
-      const ranges = conditionalFormatting['sqref'].split(/\s+/u).flatMap((ref) => {
-        const range = parseSqrefRange(sheetName, ref)
-        return range ? [range] : []
-      })
-      if (ranges.length === 0) {
-        continue
-      }
-      for (const ruleEntry of asArray(conditionalFormatting['cfRule'])) {
-        if (!isRecord(ruleEntry)) {
-          continue
-        }
-        const rule = parseConditionalFormatRule(ruleEntry)
-        if (!rule) {
-          continue
-        }
-        const dxfId = numberValue(ruleEntry['dxfId'])
-        const style = dxfId !== null ? (dxfs[dxfId] ?? {}) : {}
-        const stopIfTrue = booleanValue(ruleEntry['stopIfTrue'])
-        const priority = numberValue(ruleEntry['priority']) ?? undefined
-        for (const range of ranges) {
-          conditionalFormats.push({
-            id: `xlsx-cf:${sheetName}:${range.startAddress}:${range.endAddress}:${String(conditionalFormats.length + 1)}`,
-            range,
-            rule,
-            style,
-            ...(stopIfTrue !== undefined ? { stopIfTrue } : {}),
-            ...(priority !== undefined ? { priority } : {}),
-          })
-        }
-      }
-    }
-    if (conditionalFormats.length > 0) {
+    const conditionalFormats = readImportedSheetConditionalFormatsFromWorksheetXml(zip, sheetName, sheetXml)
+    if (conditionalFormats) {
       conditionalFormatsBySheet.set(sheetName, conditionalFormats)
     }
   })
@@ -568,23 +541,91 @@ export function readImportedWorkbookConditionalFormats(
   return conditionalFormatsBySheet
 }
 
+export function readImportedSheetConditionalFormatsFromWorksheetXml(
+  source: XlsxZipSource,
+  sheetName: string,
+  sheetXml: string,
+): WorkbookConditionalFormatSnapshot[] | undefined {
+  if (!hasWorksheetConditionalFormatting(sheetXml)) {
+    return undefined
+  }
+  const dxfs = readDxfs(getZipText(readXlsxZipEntries(source), 'xl/styles.xml'))
+  const parsed: unknown = xmlParser.parse(`<worksheet>${extractWorksheetConditionalFormattingXml(sheetXml).join('')}</worksheet>`)
+  const conditionalFormats: WorkbookConditionalFormatSnapshot[] = []
+  for (const conditionalFormatting of asArray(recordChild(parsed, 'worksheet')?.['conditionalFormatting'])) {
+    if (!isRecord(conditionalFormatting) || typeof conditionalFormatting['sqref'] !== 'string') {
+      continue
+    }
+    const ranges = conditionalFormatting['sqref'].split(/\s+/u).flatMap((ref) => {
+      const range = parseSqrefRange(sheetName, ref)
+      return range ? [range] : []
+    })
+    if (ranges.length === 0) {
+      continue
+    }
+    for (const ruleEntry of asArray(conditionalFormatting['cfRule'])) {
+      if (!isRecord(ruleEntry)) {
+        continue
+      }
+      const rule = parseConditionalFormatRule(ruleEntry)
+      if (!rule) {
+        continue
+      }
+      const dxfId = numberValue(ruleEntry['dxfId'])
+      const style = dxfId !== null ? (dxfs[dxfId] ?? {}) : {}
+      const stopIfTrue = booleanValue(ruleEntry['stopIfTrue'])
+      const priority = numberValue(ruleEntry['priority']) ?? undefined
+      for (const range of ranges) {
+        conditionalFormats.push({
+          id: `xlsx-cf:${sheetName}:${range.startAddress}:${range.endAddress}:${String(conditionalFormats.length + 1)}`,
+          range,
+          rule,
+          style,
+          ...(stopIfTrue !== undefined ? { stopIfTrue } : {}),
+          ...(priority !== undefined ? { priority } : {}),
+        })
+      }
+    }
+  }
+  return conditionalFormats.length > 0 ? conditionalFormats : undefined
+}
+
 export function readImportedWorkbookConditionalFormatArtifacts(
   source: XlsxZipSource,
   sheetNames: readonly string[],
 ): Map<string, WorkbookSheetConditionalFormatArtifactsSnapshot> {
+  return readImportedWorkbookConditionalFormatArtifactsFromWorksheetPaths(
+    source,
+    sheetNames.map((sheetName, sheetIndex) => ({
+      name: sheetName,
+      path: `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`,
+    })),
+  )
+}
+
+export function readImportedWorkbookConditionalFormatArtifactsFromWorksheetPaths(
+  source: XlsxZipSource,
+  worksheets: readonly { readonly name: string; readonly path: string }[],
+): Map<string, WorkbookSheetConditionalFormatArtifactsSnapshot> {
   const zip = readXlsxZipEntries(source)
   const artifactsBySheet = new Map<string, WorkbookSheetConditionalFormatArtifactsSnapshot>()
 
-  sheetNames.forEach((sheetName, sheetIndex) => {
-    const sheetXml = getZipText(zip, `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`)
-    if (!sheetXml || !hasWorksheetConditionalFormatting(sheetXml)) {
+  worksheets.forEach(({ name: sheetName, path }) => {
+    const sheetXml = getZipText(zip, path)
+    if (!sheetXml) {
       return
     }
-    const artifacts = readSheetConditionalFormatArtifacts(sheetXml)
+    const artifacts = readImportedSheetConditionalFormatArtifactsFromWorksheetXml(sheetXml)
     if (artifacts) {
       artifactsBySheet.set(sheetName, artifacts)
     }
   })
 
   return artifactsBySheet
+}
+
+export function readImportedSheetConditionalFormatArtifactsFromWorksheetXml(
+  sheetXml: string,
+): WorkbookSheetConditionalFormatArtifactsSnapshot | undefined {
+  return hasWorksheetConditionalFormatting(sheetXml) ? readSheetConditionalFormatArtifacts(sheetXml) : undefined
 }
