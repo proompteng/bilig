@@ -715,12 +715,14 @@ describe('lookup builtins', () => {
     expect(COUNTIF(num(2), text('>0'))).toEqual(err(ErrorCode.Value))
     expect(COUNTIF(values, cellRange([text('>0')], 1, 1))).toEqual(err(ErrorCode.Value))
     expect(COUNTIF(values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(COUNTIF(err(ErrorCode.Ref), text('>0'))).toEqual(err(ErrorCode.Ref))
 
     expect(COUNTIFS()).toEqual(err(ErrorCode.Value))
     expect(COUNTIFS(values)).toEqual(err(ErrorCode.Value))
     expect(COUNTIFS(num(1), text('>0'))).toEqual(err(ErrorCode.Value))
     expect(COUNTIFS(values, cellRange([text('>0')], 1, 1))).toEqual(err(ErrorCode.Value))
     expect(COUNTIFS(values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(COUNTIFS(err(ErrorCode.Ref), text('>0'))).toEqual(err(ErrorCode.Ref))
     expect(COUNTIFS(values, text('>0'), cellRange([text('a'), text('b')], 2, 1), text('a'))).toEqual(err(ErrorCode.Value))
 
     expect(SUMIF(num(2), text('>0'))).toEqual(err(ErrorCode.Value))
@@ -728,12 +730,19 @@ describe('lookup builtins', () => {
     expect(SUMIF(values, text('>0'), cellRange([num(10), num(20)], 2, 1))).toEqual(err(ErrorCode.Value))
     expect(SUMIF(values, cellRange([text('>0')], 1, 1))).toEqual(err(ErrorCode.Value))
     expect(SUMIF(values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(SUMIF(err(ErrorCode.Ref), text('>0'))).toEqual(err(ErrorCode.Ref))
+    expect(SUMIF(values, text('>0'), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref))
+    expect(SUMIF(cellRange([text('match')], 1, 1), text('match'), cellRange([err(ErrorCode.Ref)], 1, 1))).toEqual(err(ErrorCode.Ref))
 
     expect(SUMIFS(num(10))).toEqual(err(ErrorCode.Value))
     expect(SUMIFS(values)).toEqual(err(ErrorCode.Value))
     expect(SUMIFS(num(10), values, text('>0'))).toEqual(err(ErrorCode.Value))
     expect(SUMIFS(values, values, cellRange([text('>0')], 1, 1))).toEqual(err(ErrorCode.Value))
     expect(SUMIFS(values, values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(SUMIFS(err(ErrorCode.Ref), values, text('>0'))).toEqual(err(ErrorCode.Ref))
+    expect(SUMIFS(values, err(ErrorCode.Ref), text('>0'))).toEqual(err(ErrorCode.Ref))
+    expect(SUMIFS(cellRange([err(ErrorCode.Ref)], 1, 1), cellRange([text('match')], 1, 1), text('match'))).toEqual(err(ErrorCode.Ref))
+    expect(SUMIFS(cellRange([err(ErrorCode.Ref)], 1, 1), cellRange([text('skip')], 1, 1), text('match'))).toEqual(num(0))
     expect(SUMIFS(values, cellRange([text('a'), text('b')], 2, 1), text('a'))).toEqual(err(ErrorCode.Value))
 
     expect(AVERAGEIF(num(2), text('>0'))).toEqual(err(ErrorCode.Value))
@@ -741,6 +750,9 @@ describe('lookup builtins', () => {
     expect(AVERAGEIF(values, text('>0'), cellRange([num(10), num(20)], 2, 1))).toEqual(err(ErrorCode.Value))
     expect(AVERAGEIF(values, cellRange([text('>0')], 1, 1))).toEqual(err(ErrorCode.Value))
     expect(AVERAGEIF(values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(AVERAGEIF(err(ErrorCode.Ref), text('>0'))).toEqual(err(ErrorCode.Ref))
+    expect(AVERAGEIF(values, text('>0'), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref))
+    expect(AVERAGEIF(cellRange([text('match')], 1, 1), text('match'), cellRange([err(ErrorCode.Ref)], 1, 1))).toEqual(err(ErrorCode.Ref))
     expect(AVERAGEIF(values, text('<-100'))).toEqual(err(ErrorCode.Div0))
     expect(AVERAGEIF(values, text('>0'), otherValues)).toEqual(num(10))
 
@@ -1340,12 +1352,15 @@ describe('lookup builtins', () => {
     const MINIFS = getLookupBuiltin('MINIFS')!
     const MAXIFS = getLookupBuiltin('MAXIFS')!
 
-    expect(AVERAGEIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text('>0'))).toEqual(err(ErrorCode.Value))
+    expect(AVERAGEIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text('>0'))).toEqual(err(ErrorCode.Ref))
+    expect(AVERAGEIFS(cellRange([err(ErrorCode.Ref)], 1, 1), cellRange([text('match')], 1, 1), text('match'))).toEqual(err(ErrorCode.Ref))
     expect(AVERAGEIFS(cellRange([text('skip')], 1, 1), cellRange([num(1)], 1, 1), text('>0'))).toEqual(err(ErrorCode.Div0))
-    expect(MINIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text('>0'))).toEqual(err(ErrorCode.Value))
-    expect(MINIFS(cellRange([num(1)], 1, 1), err(ErrorCode.Name), text('>0'))).toEqual(err(ErrorCode.Value))
-    expect(MAXIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text('>0'))).toEqual(err(ErrorCode.Value))
-    expect(MAXIFS(cellRange([num(1)], 1, 1), err(ErrorCode.Name), text('>0'))).toEqual(err(ErrorCode.Value))
+    expect(MINIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text('>0'))).toEqual(err(ErrorCode.Ref))
+    expect(MINIFS(cellRange([err(ErrorCode.Ref)], 1, 1), cellRange([text('match')], 1, 1), text('match'))).toEqual(err(ErrorCode.Ref))
+    expect(MINIFS(cellRange([num(1)], 1, 1), err(ErrorCode.Name), text('>0'))).toEqual(err(ErrorCode.Name))
+    expect(MAXIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text('>0'))).toEqual(err(ErrorCode.Ref))
+    expect(MAXIFS(cellRange([err(ErrorCode.Ref)], 1, 1), cellRange([text('match')], 1, 1), text('match'))).toEqual(err(ErrorCode.Ref))
+    expect(MAXIFS(cellRange([num(1)], 1, 1), err(ErrorCode.Name), text('>0'))).toEqual(err(ErrorCode.Name))
   })
 
   it('covers remaining matrix, sort, and criteria edge cases', () => {

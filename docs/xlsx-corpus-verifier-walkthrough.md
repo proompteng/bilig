@@ -177,19 +177,19 @@ Latest local evidence from May 18, 2026:
 ```json
 {
   "targetWorkbookCount": 500,
-  "manifestArtifactCount": 1475,
-  "publicScorecardCaseCount": 1475,
-  "publicPassingRecentComplexCount": 153,
-  "headlessFileCount": 153,
-  "headlessOkFileCount": 153,
-  "headlessComparableFormulaFileCount": 148,
-  "endToEndPassingWorkbookCount": 148,
-  "remainingToTarget": 352,
-  "formulaCells": 108401,
-  "comparableFormulaCells": 105267,
-  "matchingFormulaCells": 105267,
+  "manifestArtifactCount": 2046,
+  "publicScorecardCaseCount": 2046,
+  "publicPassingRecentComplexCount": 184,
+  "headlessFileCount": 184,
+  "headlessOkFileCount": 184,
+  "headlessComparableFormulaFileCount": 178,
+  "endToEndPassingWorkbookCount": 178,
+  "remainingToTarget": 322,
+  "formulaCells": 124868,
+  "comparableFormulaCells": 121733,
+  "matchingFormulaCells": 121733,
   "mismatchedFormulaCells": 0,
-  "skippedFormulaCells": 3134
+  "skippedFormulaCells": 3135
 }
 ```
 

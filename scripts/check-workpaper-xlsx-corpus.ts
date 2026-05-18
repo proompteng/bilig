@@ -68,7 +68,7 @@ const xlsxErrorTextByCode = new Map<number, string>([
   [42, '#N/A'],
   [43, '#GETTING_DATA'],
 ])
-const volatileOrEnvironmentFunctionPattern = /\b(CELL|INFO|NOW|RAND|RANDBETWEEN|TODAY)\s*\(/i
+const volatileOrEnvironmentFunctionPattern = /\b(CELL|FILTERXML|IMAGE|INFO|NOW|RAND|RANDBETWEEN|STOCKHISTORY|TODAY|WEBSERVICE)\s*\(/i
 
 export function runWorkPaperXlsxCorpus(paths: readonly string[], options: WorkPaperXlsxCorpusOptions = {}): WorkPaperXlsxCorpusResult {
   const startedAt = performance.now()

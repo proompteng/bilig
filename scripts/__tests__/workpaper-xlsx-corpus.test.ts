@@ -364,10 +364,11 @@ describe('WorkPaper XLSX corpus verifier', () => {
   it('counts cached-less and volatile formulas as skipped instead of comparable parity failures', () => {
     withTempCorpus((corpusDir) => {
       const workbook = XLSX.utils.book_new()
-      const sheet = XLSX.utils.aoa_to_sheet([[null, null]])
+      const sheet = XLSX.utils.aoa_to_sheet([[null, null, null]])
       sheet.A1 = { t: 'n', f: 'NOW()', v: 46_127 }
       sheet.B1 = { t: 'n', f: 'A1+1' }
-      sheet['!ref'] = 'A1:B1'
+      sheet.C1 = { t: 'e', f: 'IMAGE("https://example.com/proof.png")', v: 15, w: '#VALUE!' }
+      sheet['!ref'] = 'A1:C1'
       XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
       writeWorkbook(join(corpusDir, 'skipped.xlsx'), workbook)
 
@@ -377,20 +378,20 @@ describe('WorkPaper XLSX corpus verifier', () => {
         totalFiles: 1,
         filesProcessed: 1,
         ok: 1,
-        formulaCells: 2,
+        formulaCells: 3,
         comparableFormulaCells: 0,
         matchingFormulaCells: 0,
         mismatchedFormulaCells: 0,
-        skippedFormulaCells: 2,
+        skippedFormulaCells: 3,
         matchRate: 1,
       })
-      expect(result.files[0]?.skippedFormulaCells).toBe(2)
+      expect(result.files[0]?.skippedFormulaCells).toBe(3)
       expect(result.skippedByReason).toEqual({
         'missing-cached-result': 1,
         'stale-cached-result': 0,
         'stale-cached-name-error': 0,
         'unsupported-cached-result-type': 0,
-        'volatile-or-environment-dependent-formula': 1,
+        'volatile-or-environment-dependent-formula': 2,
       })
     })
   })

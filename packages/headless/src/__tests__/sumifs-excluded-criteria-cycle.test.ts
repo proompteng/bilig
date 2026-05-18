@@ -26,6 +26,48 @@ function issueWorkbook(formula: string, useColumnIndex: boolean): WorkPaper {
 }
 
 describe('SUMIFS excluded criteria cycle', () => {
+  it.each([false, true])('propagates #REF! for structurally broken SUMIFS ranges with useColumnIndex=%s', (useColumnIndex) => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Sheet1: [
+          ['=SUMIFS(#REF!,#REF!,B2,#REF!,A2)', 'category'],
+          ['row', 'category'],
+        ],
+      },
+      { maxRows: 8, maxColumns: 8, useColumnIndex },
+    )
+
+    expect(cellValue(workbook, 'Sheet1!A1')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    })
+
+    workbook.dispose()
+  })
+
+  it.each([false, true])('propagates matched #REF! values in SUMIFS sum ranges with useColumnIndex=%s', (useColumnIndex) => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Sheet1: [
+          ['=#REF!', 'match'],
+          ['=SUMIFS(A1:A1,B1:B1,"match")', '=SUMIFS(A1:A1,B1:B1,"skip")'],
+        ],
+      },
+      { maxRows: 8, maxColumns: 8, useColumnIndex },
+    )
+
+    expect(cellValue(workbook, 'Sheet1!A2')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    })
+    expect(cellValue(workbook, 'Sheet1!B2')).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    })
+
+    workbook.dispose()
+  })
+
   it.each([['=SUMIFS(B1:C1,B2:C2,"include")'], ['=IFERROR(SUMIFS(B1:C1,B2:C2,"include"),"")']])(
     'ignores excluded self-referential sum cells for %s',
     (formula) => {

@@ -391,6 +391,14 @@ export function createEngineFormulaEvaluationService(args: {
       rowEnd: aggregateRange.rowEnd,
       col: aggregateRange.col,
     })
+    const matchedAggregateError = firstMatchedAggregateError(aggregateView, matches.rows, matches.length)
+    if (matchedAggregateError) {
+      return applyDirectCriteriaResultTransforms(
+        readCellValueByIndex,
+        formula,
+        rememberDirectCriteriaResult(directCriteriaAggregateCache, aggregateCacheKey, matchedAggregateError),
+      )
+    }
 
     if (directCriteria.aggregateKind === 'sum') {
       let sum = 0
@@ -463,6 +471,20 @@ export function createEngineFormulaEvaluationService(args: {
         directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum),
       ),
     )
+  }
+
+  const firstMatchedAggregateError = (
+    view: ReturnType<EngineRuntimeColumnStoreService['getColumnView']>,
+    rows: ArrayLike<number>,
+    length: number,
+  ): CellValue | undefined => {
+    for (let index = 0; index < length; index += 1) {
+      const row = rows[index]!
+      if ((view.readTagAt(row) as ValueTag) === ValueTag.Error) {
+        return directErrorResult(view.readErrorAt(row) as ErrorCode)
+      }
+    }
+    return undefined
   }
 
   const resolveStructuredReferenceNow = (tableName: string, columnName: string): FormulaNode | undefined => {
