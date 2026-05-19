@@ -10,6 +10,7 @@ const headlessPackageSpec = `@bilig/headless@${parsePackageVersion(
   await readFile(join(repoRoot, 'packages', 'headless', 'package.json'), 'utf8'),
 )}`
 const skillTags = ['ai-agents', 'spreadsheet-automation', 'formulas', 'xlsx', 'mcp', 'typescript'] as const
+const mcpPromptNames = ['edit_and_verify_workpaper', 'debug_workpaper_formula'] as const
 const agentNotAFitBoundaries = [
   'manual spreadsheet editing as the main product',
   'Office macros or desktop Excel automation',
@@ -404,7 +405,8 @@ function agentJsonManifest(): string {
     null,
     2,
   )
-  return `${compactStringArrayProperty(json, 'not_a_fit', agentNotAFitBoundaries, '    ')}\n`
+  const compactPrompts = compactStringArrayProperty(json, 'prompts', mcpPromptNames, '    ')
+  return `${compactStringArrayProperty(compactPrompts, 'not_a_fit', agentNotAFitBoundaries, '    ')}\n`
 }
 
 function compactStringArrayProperty(json: string, propertyName: string, values: readonly string[], indent: string): string {
