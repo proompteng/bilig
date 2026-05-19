@@ -93,7 +93,7 @@ same-origin static server-card discovery.
 
 | Directory                       | Status                                                                        | Link                                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Official MCP Registry           | Live; `0.29.0` is latest-marked and matches npm                               | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper&limit=100> |
+| Official MCP Registry           | Live but latest marker lags npm; `0.27.0` is latest-marked while npm latest is `0.29.0` | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper&limit=100> |
 | Hosted Streamable HTTP endpoint | App runtime endpoint for JSON-only stateless MCP smoke tests                  | <https://bilig.proompteng.ai/mcp>                                                                               |
 | Hosted MCP server card          | Same-origin server card for Streamable HTTP scanners                          | <https://bilig.proompteng.ai/.well-known/mcp/server-card.json>                                                  |
 | Static MCP server card          | Live                                                                          | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                           |
@@ -221,11 +221,11 @@ A useful result includes:
 
 Latest checked result on May 19, 2026: npm latest is `@bilig/headless@0.29.0`,
 and the official Registry latest-marked entry is
-`io.github.proompteng/bilig-workpaper@0.29.0` with package
-`@bilig/headless@0.29.0` and remote `https://bilig.proompteng.ai/mcp`.
-The API also returns historical entries, so consumers should follow pagination,
-request a sufficient limit, and select the latest-marked entry when they need a
-single freshest install coordinate.
+`io.github.proompteng/bilig-workpaper@0.27.0` with package
+`@bilig/headless@0.27.0`, so it does not yet match npm latest `@bilig/headless@0.29.0`. The API also returns historical entries, so
+consumers should follow pagination, request a sufficient limit, and select the
+latest-marked entry when they need the Registry-owned freshest install
+coordinate. The hosted server-card path still advertises remote `https://bilig.proompteng.ai/mcp` for live smoke tests.
 
 The package itself carries the matching `mcpName` field. That is the ownership
 signal the registry uses for npm package validation.

@@ -57,6 +57,7 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
   const headlessPackageSpec = `@bilig/headless@${headlessPackageVersion}`
   const mcpbReleaseAssetUrl = `https://github.com/proompteng/bilig/releases/download/libraries-v${headlessPackageVersion}/bilig-workpaper.mcpb`
   const mcpbReleaseChecksumUrl = `${mcpbReleaseAssetUrl}.sha256`
+  const officialRegistryLatestMarkedVersion = '0.27.0'
 
   const jekyllConfig = await readFile(join(docsRoot, '_config.yml'), 'utf8')
   const openAiAgentsSdkDoc = await readFile(join(docsRoot, 'openai-agents-sdk-workpaper-tool.md'), 'utf8')
@@ -416,7 +417,7 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     'https://mcprepository.com/proompteng/bilig',
     'MCPRepository search returns a live Bilig page',
     'Live; `smithery mcp add` smoke connected and listed demo workbook sheets',
-    `Live; \`${headlessPackageVersion}\` is latest-marked and matches npm`,
+    `Live but latest marker lags npm; \`${officialRegistryLatestMarkedVersion}\` is latest-marked while npm latest is \`${headlessPackageVersion}\``,
     'Live with `Try in Browser`; seven tools indexed with A-grade TDQS',
     'Live in PulseMCP-backed lookup as `Bilig WorkPaper`',
     'https://www.pulsemcp.com/servers?search=bilig&q=bilig',
@@ -429,7 +430,8 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     'A-grade Tool Definition Quality',
     "Glama's source crawl, hosted smoke build, and JSON\nAPI can refresh on different cadences",
     `npm latest is \`@bilig/headless@${headlessPackageVersion}\``,
-    `official Registry latest-marked entry is\n\`io.github.proompteng/bilig-workpaper@${headlessPackageVersion}\``,
+    `official Registry latest-marked entry is\n\`io.github.proompteng/bilig-workpaper@${officialRegistryLatestMarkedVersion}\``,
+    `does not yet match npm latest \`@bilig/headless@${headlessPackageVersion}\``,
     'remote `https://bilig.proompteng.ai/mcp`',
     'limit=100',
     'read_workpaper_summary',
