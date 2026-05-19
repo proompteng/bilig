@@ -46,6 +46,7 @@ const oracleAggregateCounterKeys = [
   'directFormulaKernelSyncOnlyRecalcSkips',
   'directFormulaInitialEvaluations',
   'nativeDirectScalarInitialEvaluations',
+  'nativeDirectScalarRecalcEvaluations',
   'nativeDirectLookupInitialEvaluations',
   'nativeDirectCriteriaAggregateEvaluations',
   'directCriteriaMatchCacheHits',

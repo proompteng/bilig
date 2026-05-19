@@ -92,6 +92,60 @@ describe('EngineRecalcService', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 50 })
   })
 
+  it('batches large direct scalar full recalculation through the native scalar kernel', async () => {
+    const rowCount = 160
+    const engine = new SpreadsheetEngine({ workbookName: 'recalc-native-direct-scalar' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    for (let row = 1; row <= rowCount; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `A${row}*2+1`)
+    }
+
+    for (let row = 1; row <= rowCount; row += 1) {
+      const cellIndex = engine.workbook.ensureCell('Sheet1', `A${row}`)
+      engine.workbook.cellStore.setValue(cellIndex, { tag: ValueTag.Number, value: row + 10 })
+    }
+
+    engine.resetPerformanceCounters()
+    const changed = Effect.runSync(getRecalcService(engine).recalculateNow())
+    const counters = engine.getPerformanceCounters() as Record<string, number | undefined> & {
+      readonly nativeDirectScalarRecalcEvaluations?: number
+    }
+
+    expect(changed).toContain(engine.workbook.getCellIndex('Sheet1', `B${rowCount}`))
+    expect(engine.getCellValue('Sheet1', `B${rowCount}`)).toEqual({ tag: ValueTag.Number, value: (rowCount + 10) * 2 + 1 })
+    expect(engine.getLastMetrics().wasmFormulaCount).toBeGreaterThanOrEqual(rowCount)
+    expect(counters.nativeDirectScalarRecalcEvaluations).toBeGreaterThanOrEqual(rowCount)
+  })
+
+  it('keeps numeric text direct scalar recalculation on the JS oracle path', async () => {
+    const rowCount = 80
+    const engine = new SpreadsheetEngine({ workbookName: 'recalc-native-direct-scalar-text' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    for (let row = 1; row <= rowCount; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, `${row}`)
+      engine.setCellFormula('Sheet1', `B${row}`, `A${row}*2+1`)
+    }
+
+    for (let row = 1; row <= rowCount; row += 1) {
+      const textValue = `${row + 10}`
+      const stringId = engine.strings.intern(textValue)
+      const cellIndex = engine.workbook.ensureCell('Sheet1', `A${row}`)
+      engine.workbook.cellStore.setValue(cellIndex, { tag: ValueTag.String, value: textValue, stringId }, stringId)
+    }
+
+    engine.resetPerformanceCounters()
+    const changed = Effect.runSync(getRecalcService(engine).recalculateNow())
+
+    expect(changed).toContain(engine.workbook.getCellIndex('Sheet1', `B${rowCount}`))
+    expect(engine.getCellValue('Sheet1', `B${rowCount}`)).toEqual({ tag: ValueTag.Number, value: (rowCount + 10) * 2 + 1 })
+    expect(engine.getPerformanceCounters().nativeDirectScalarRecalcEvaluations).toBe(0)
+  })
+
   it('preserves imported cached unsupported formula values during full recalculation', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'recalc-imported-unsupported-cache' })
     await engine.ready()
