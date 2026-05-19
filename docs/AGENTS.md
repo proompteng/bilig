@@ -36,15 +36,15 @@ Do not claim success from a write call alone. The proof is computed readback plu
 ## Fast Commands
 
 ```sh
-npm exec --package @bilig/headless@0.25.3 -- bilig-agent-challenge
-npm exec --package @bilig/headless@0.25.3 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
-npm exec --package @bilig/headless@0.25.3 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.25.4 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.25.4 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.25.4 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 Claude Desktop users can install the released MCPB bundle from:
 
-- https://github.com/proompteng/bilig/releases/download/libraries-v0.25.3/bilig-workpaper.mcpb
-- https://github.com/proompteng/bilig/releases/download/libraries-v0.25.3/bilig-workpaper.mcpb.sha256
+- https://github.com/proompteng/bilig/releases/download/libraries-v0.25.4/bilig-workpaper.mcpb
+- https://github.com/proompteng/bilig/releases/download/libraries-v0.25.4/bilig-workpaper.mcpb.sha256
 
 ## Direct TypeScript
 

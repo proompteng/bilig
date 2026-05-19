@@ -36,7 +36,7 @@
     "args": [
       "exec",
       "--package",
-      "@bilig/headless@0.25.3",
+      "@bilig/headless@0.25.4",
       "--",
       "bilig-workpaper-mcp",
       "--workpaper",
@@ -79,9 +79,9 @@
     {
       "name": "claude-desktop-mcpb",
       "type": "mcpb-desktop-extension",
-      "package_version": "0.25.3",
-      "download_url": "https://github.com/proompteng/bilig/releases/download/libraries-v0.25.3/bilig-workpaper.mcpb",
-      "checksum_url": "https://github.com/proompteng/bilig/releases/download/libraries-v0.25.3/bilig-workpaper.mcpb.sha256",
+      "package_version": "0.25.4",
+      "download_url": "https://github.com/proompteng/bilig/releases/download/libraries-v0.25.4/bilig-workpaper.mcpb",
+      "checksum_url": "https://github.com/proompteng/bilig/releases/download/libraries-v0.25.4/bilig-workpaper.mcpb.sha256",
       "docs": "https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html"
     },
     {
@@ -96,7 +96,7 @@
     {
       "name": "formula-clinic",
       "type": "local-cli",
-      "command": "npm exec --package @bilig/headless@0.25.3 -- bilig-formula-clinic ./reduced.xlsx --cells \"Summary!B7,Inputs!B2\"",
+      "command": "npm exec --package @bilig/headless@0.25.4 -- bilig-formula-clinic ./reduced.xlsx --cells \"Summary!B7,Inputs!B2\"",
       "docs": "https://proompteng.github.io/bilig/formula-bug-clinic.html"
     }
   ],
