@@ -142,7 +142,9 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
   return [
     {
       name: 'list_sheets',
-      description: 'List sheets and their current used dimensions.',
+      title: 'List WorkPaper Sheets',
+      description:
+        'Discover sheet names and used dimensions before reading or editing a WorkPaper. Returns metadata only; use read_range or read_cell for values.',
       inputSchema: emptySchema(),
       outputSchema: objectSchema({
         required: ['writable', 'sheets'],
@@ -152,7 +154,20 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
           sheets: {
             type: 'array',
             description: 'Sheet names, ids, and current used dimensions.',
-            items: { type: 'object' },
+            items: objectSchema({
+              required: ['id', 'name', 'dimensions'],
+              properties: {
+                id: numberOutput('Stable numeric sheet id inside the WorkPaper engine.'),
+                name: stringOutput('Sheet name to pass as sheetName in read and write calls.'),
+                dimensions: objectSchema({
+                  description: 'Current used rows and columns for the sheet.',
+                  properties: {
+                    rowCount: numberOutput('Used row count for the sheet.'),
+                    columnCount: numberOutput('Used column count for the sheet.'),
+                  },
+                }),
+              },
+            }),
           },
         },
       }),
@@ -160,12 +175,14 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
     },
     {
       name: 'read_range',
-      description: 'Read evaluated values and serialized cell contents for a WorkPaper range.',
+      title: 'Read WorkPaper Range',
+      description:
+        'Read calculated values plus serialized formulas/inputs for an A1 range. Use for audit readback after edits; use read_cell for one address.',
       inputSchema: objectSchema({
         required: ['range'],
         properties: {
-          range: stringInput('A1 range. Include a sheet name or pass sheetName separately.'),
-          sheetName: stringInput('Default sheet name when range omits a sheet name.'),
+          range: stringInput('A1 range such as Summary!A1:B5. If omitted from the range, pass sheetName separately.'),
+          sheetName: stringInput('Default sheet name when range omits a sheet name, for example Summary.'),
         },
       }),
       outputSchema: objectSchema({
@@ -180,7 +197,9 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
     },
     {
       name: 'read_cell',
-      description: 'Read one cell with evaluated value, display value, formula, and serialized content.',
+      title: 'Read WorkPaper Cell',
+      description:
+        'Read one cell with calculated value, display text, formula text, and serialized content. Use after set_cell_contents to verify readback.',
       inputSchema: cellAddressInputSchema(
         'Existing sheet name, for example Inputs.',
         'Single A1 cell address such as B3. Ranges are not accepted.',
@@ -190,7 +209,9 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
     },
     {
       name: 'set_cell_contents',
-      description: 'Set one WorkPaper cell. Start the server with --writable to persist the updated WorkPaper JSON file.',
+      title: 'Set WorkPaper Cell Contents',
+      description:
+        'Write raw content to one cell, recalculate dependents, persist the WorkPaper JSON file when writable, and return before/after/restored readback.',
       inputSchema: objectSchema({
         required: ['sheetName', 'address', 'value'],
         properties: {
@@ -206,18 +227,37 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
         required: ['editedCell', 'before', 'after', 'restored', 'persistence', 'checks'],
         properties: {
           editedCell: stringOutput('Canonical sheet-qualified address that was edited.'),
-          before: objectOutput('Cell readback before the edit.'),
-          after: objectOutput('Cell readback after recalculation.'),
-          restored: objectOutput('Cell readback after exporting and restoring WorkPaper JSON.'),
-          persistence: objectOutput('Persistence result for the WorkPaper JSON document.'),
-          checks: objectOutput('Boolean receipt for persisted state and restored readback.'),
+          before: cellReadOutputSchema('Cell readback before the edit.'),
+          after: cellReadOutputSchema('Cell readback after recalculation.'),
+          restored: cellReadOutputSchema('Cell readback after exporting and restoring WorkPaper JSON.'),
+          persistence: objectSchema({
+            description: 'Persistence result for the WorkPaper JSON document.',
+            required: ['persisted', 'serializedBytes'],
+            properties: {
+              persisted: booleanOutput('True when the server wrote the updated WorkPaper JSON file.'),
+              path: stringOutput('Absolute JSON file path written by the server when writable.'),
+              serializedBytes: numberOutput('UTF-8 byte length of the serialized WorkPaper document.'),
+            },
+          }),
+          checks: objectSchema({
+            description: 'Boolean receipt for persisted state and restored readback.',
+            required: ['persisted', 'restoredMatchesAfter', 'previousSerialized', 'newSerialized'],
+            properties: {
+              persisted: booleanOutput('Echo of whether the edit was persisted to disk.'),
+              restoredMatchesAfter: booleanOutput('True when exported and re-imported JSON preserves the edited cell readback.'),
+              previousSerialized: rawCellContentOutput('Raw serialized cell content before the edit.'),
+              newSerialized: rawCellContentOutput('Raw serialized cell content after the edit.'),
+            },
+          }),
         },
       }),
       annotations: toolAnnotations('Set WorkPaper Cell Contents', false, true),
     },
     {
       name: 'get_cell_display_value',
-      description: 'Return the formatted display value for one WorkPaper cell.',
+      title: 'Get WorkPaper Cell Display Value',
+      description:
+        'Return the formatted display string for one cell. Use when an agent needs what a user would see, not the raw numeric value.',
       inputSchema: cellAddressInputSchema(
         'Existing sheet name, for example Summary.',
         'Single A1 cell address such as B2. Ranges are not accepted.',
@@ -233,7 +273,9 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
     },
     {
       name: 'export_workpaper_document',
-      description: 'Export the current WorkPaper JSON document.',
+      title: 'Export WorkPaper Document',
+      description:
+        'Export the current WorkPaper JSON document for persistence, review, or handoff to another agent. Does not write files by itself.',
       inputSchema: objectSchema({
         properties: {
           includeConfig: {
@@ -247,7 +289,7 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
         required: ['document', 'serializedBytes'],
         properties: {
           sourcePath: stringOutput('Absolute JSON file path when the server was started with --workpaper.'),
-          document: objectOutput('Persisted WorkPaper JSON document.'),
+          document: objectSchema({ description: 'Persisted WorkPaper JSON document.' }),
           serializedBytes: numberOutput('UTF-8 byte length of the serialized WorkPaper document.'),
         },
       }),
@@ -255,11 +297,13 @@ function fileBackedWorkPaperTools(): readonly JsonObject[] {
     },
     {
       name: 'validate_formula',
-      description: 'Validate formula syntax using the WorkPaper formula parser.',
+      title: 'Validate WorkPaper Formula',
+      description:
+        'Validate formula syntax with the WorkPaper parser before writing it to a cell. This checks syntax only; use set_cell_contents plus readback to evaluate.',
       inputSchema: objectSchema({
         required: ['formula'],
         properties: {
-          formula: stringInput('Formula string, including the leading =.'),
+          formula: stringInput('Formula string including the leading =, for example =SUM(Inputs!B2:B4).'),
         },
       }),
       outputSchema: objectSchema({
@@ -278,9 +322,14 @@ function emptySchema(): JsonObject {
   return objectSchema({})
 }
 
-function objectSchema(input: { readonly required?: readonly string[]; readonly properties?: JsonObject }): JsonObject {
+function objectSchema(input: {
+  readonly description?: string
+  readonly required?: readonly string[]
+  readonly properties?: JsonObject
+}): JsonObject {
   return {
     type: 'object',
+    ...(input.description === undefined ? {} : { description: input.description }),
     ...(input.required === undefined ? {} : { required: input.required }),
     ...(input.properties === undefined ? {} : { properties: input.properties }),
     additionalProperties: false,
@@ -297,24 +346,30 @@ function cellAddressInputSchema(sheetDescription: string, addressDescription: st
   })
 }
 
-function cellReadOutputSchema(): JsonObject {
+function cellReadOutputSchema(description?: string): JsonObject {
   return objectSchema({
+    description,
     required: ['address', 'value', 'serialized', 'formula', 'displayValue'],
     properties: {
       address: stringOutput('Canonical sheet-qualified A1 address.'),
       value: {
-        description: 'Evaluated WorkPaper cell value.',
+        description: 'Calculated cell value.',
       },
-      serialized: {
-        description: 'Raw serialized cell content, preserving formulas.',
-      },
+      serialized: rawCellContentOutput('Raw serialized cell content, preserving formulas.'),
       formula: {
         type: ['string', 'null'],
-        description: 'Formula text when the cell contains a formula.',
+        description: 'Formula text without losing the original calculated value context, or null for literal cells.',
       },
-      displayValue: stringOutput('Formatted value string suitable for human readback.'),
+      displayValue: stringOutput('Formatted value as a user would see it.'),
     },
   })
+}
+
+function rawCellContentOutput(description: string): JsonObject {
+  return {
+    type: ['string', 'number', 'boolean', 'null'],
+    description,
+  }
 }
 
 function toolAnnotations(title: string, readOnlyHint: boolean, destructiveHint = false): JsonObject {
@@ -345,10 +400,6 @@ function booleanOutput(description: string): JsonObject {
 
 function arrayOutput(description: string): JsonObject {
   return { type: 'array', description }
-}
-
-function objectOutput(description: string): JsonObject {
-  return { type: 'object', description }
 }
 
 function compactStringOnlyArrays(json: string): string {

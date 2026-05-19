@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(create-workpaper): add agent starter (87fb5c74)
 
 ## Internal runtime changes
+
 - docs(discovery): sync runtime package 0.26.1 (9c2eefa0)
 
 ## 0.26.1
@@ -23,10 +25,12 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): split mcp exports from main entry (32a5dc8b)
 - fix(release): upload headless mcpb assets (40288dd4)
 
 ## Internal runtime changes
+
 - docs(discovery): sync runtime package 0.26.0 (09ec7e80)
 
 ## 0.26.0
@@ -36,9 +40,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(headless): add mcp challenge cli (a0f3eba8)
 
 ## Internal runtime changes
+
 - docs(discovery): sync headless 0.25.7 references (9cd5e8c4)
 - docs(mcp): refresh registry distribution proof (b2d6f700)
 
@@ -49,9 +55,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): trust scalar template translation (191bc3af)
 
 ## Internal runtime changes
+
 - docs(discovery): sync headless 0.25.6 references (96a3cbe7)
 
 ## 0.25.6
@@ -61,9 +69,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(formula): preserve cached formula parity (0fd14b37)
 
 ## Internal runtime changes
+
 - docs(mcp): add Smithery install surface (aeddfc39)
 
 ## 0.25.5
@@ -73,9 +83,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): skip redundant csv import recalcs (b1254e8a)
 
 ## Internal runtime changes
+
 - docs(discovery): sync headless 0.25.4 references (a73453a9)
 
 ## 0.25.4
@@ -85,9 +97,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(excel-import): enable formula import restore sidecar (8313f2d7)
 
 ## Internal runtime changes
+
 - docs(discovery): sync headless 0.25.3 references (ea015ad6)
 - docs(agent): publish Claude Desktop MCPB install path (6d25dad4)
 
@@ -98,9 +112,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(excel-import): add import restore coordinate fast path (0788025e)
 
 ## Internal runtime changes
+
 - docs(discovery): sync headless 0.25.2 references (f3196fb4)
 - test(headless): stabilize guarded sumifs budget (e33507fc)
 
@@ -111,9 +127,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): precompile csv numeric parsing (9c4e5af1)
 
 ## Internal runtime changes
+
 - docs(discovery): sync headless 0.25.1 surfaces (fa0ab38c)
 
 ## 0.25.1
@@ -123,9 +141,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): harden recent workbook parity (df0b9d88)
 
 ## Internal runtime changes
+
 - docs(discovery): sync headless 0.25.0 surfaces (6f372228)
 
 ## 0.25.0
@@ -135,6 +155,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(headless): add agent workbook challenge cli (bf7c2f81)
 
 ## 0.24.5
@@ -144,9 +165,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): reduce physical range write lookups (2170ba56)
 
 ## Internal runtime changes
+
 - docs(headless): sync discovery package version (a17e8163)
 
 ## 0.24.4
@@ -156,9 +179,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(workbook): stabilize grid typography and focus ownership (96abe1e7)
 
 ## Internal runtime changes
+
 - chore(ci): update github action pins (b33db000)
 
 ## 0.24.3

@@ -43,7 +43,8 @@
   "tools": [
     {
       "name": "list_sheets",
-      "description": "List sheets and their current used dimensions.",
+      "title": "List WorkPaper Sheets",
+      "description": "Discover sheet names and used dimensions before reading or editing a WorkPaper. Returns metadata only; use read_range or read_cell for values.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false
@@ -64,7 +65,34 @@
             "type": "array",
             "description": "Sheet names, ids, and current used dimensions.",
             "items": {
-              "type": "object"
+              "type": "object",
+              "required": ["id", "name", "dimensions"],
+              "properties": {
+                "id": {
+                  "type": "number",
+                  "description": "Stable numeric sheet id inside the WorkPaper engine."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Sheet name to pass as sheetName in read and write calls."
+                },
+                "dimensions": {
+                  "type": "object",
+                  "description": "Current used rows and columns for the sheet.",
+                  "properties": {
+                    "rowCount": {
+                      "type": "number",
+                      "description": "Used row count for the sheet."
+                    },
+                    "columnCount": {
+                      "type": "number",
+                      "description": "Used column count for the sheet."
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
             }
           }
         },
@@ -80,18 +108,19 @@
     },
     {
       "name": "read_range",
-      "description": "Read evaluated values and serialized cell contents for a WorkPaper range.",
+      "title": "Read WorkPaper Range",
+      "description": "Read calculated values plus serialized formulas/inputs for an A1 range. Use for audit readback after edits; use read_cell for one address.",
       "inputSchema": {
         "type": "object",
         "required": ["range"],
         "properties": {
           "range": {
             "type": "string",
-            "description": "A1 range. Include a sheet name or pass sheetName separately."
+            "description": "A1 range such as Summary!A1:B5. If omitted from the range, pass sheetName separately."
           },
           "sheetName": {
             "type": "string",
-            "description": "Default sheet name when range omits a sheet name."
+            "description": "Default sheet name when range omits a sheet name, for example Summary."
           }
         },
         "additionalProperties": false
@@ -125,7 +154,8 @@
     },
     {
       "name": "read_cell",
-      "description": "Read one cell with evaluated value, display value, formula, and serialized content.",
+      "title": "Read WorkPaper Cell",
+      "description": "Read one cell with calculated value, display text, formula text, and serialized content. Use after set_cell_contents to verify readback.",
       "inputSchema": {
         "type": "object",
         "required": ["sheetName", "address"],
@@ -150,18 +180,19 @@
             "description": "Canonical sheet-qualified A1 address."
           },
           "value": {
-            "description": "Evaluated WorkPaper cell value."
+            "description": "Calculated cell value."
           },
           "serialized": {
+            "type": ["string", "number", "boolean", "null"],
             "description": "Raw serialized cell content, preserving formulas."
           },
           "formula": {
             "type": ["string", "null"],
-            "description": "Formula text when the cell contains a formula."
+            "description": "Formula text without losing the original calculated value context, or null for literal cells."
           },
           "displayValue": {
             "type": "string",
-            "description": "Formatted value string suitable for human readback."
+            "description": "Formatted value as a user would see it."
           }
         },
         "additionalProperties": false
@@ -176,7 +207,8 @@
     },
     {
       "name": "set_cell_contents",
-      "description": "Set one WorkPaper cell. Start the server with --writable to persist the updated WorkPaper JSON file.",
+      "title": "Set WorkPaper Cell Contents",
+      "description": "Write raw content to one cell, recalculate dependents, persist the WorkPaper JSON file when writable, and return before/after/restored readback.",
       "inputSchema": {
         "type": "object",
         "required": ["sheetName", "address", "value"],
@@ -206,23 +238,128 @@
           },
           "before": {
             "type": "object",
-            "description": "Cell readback before the edit."
+            "description": "Cell readback before the edit.",
+            "required": ["address", "value", "serialized", "formula", "displayValue"],
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Canonical sheet-qualified A1 address."
+              },
+              "value": {
+                "description": "Calculated cell value."
+              },
+              "serialized": {
+                "type": ["string", "number", "boolean", "null"],
+                "description": "Raw serialized cell content, preserving formulas."
+              },
+              "formula": {
+                "type": ["string", "null"],
+                "description": "Formula text without losing the original calculated value context, or null for literal cells."
+              },
+              "displayValue": {
+                "type": "string",
+                "description": "Formatted value as a user would see it."
+              }
+            },
+            "additionalProperties": false
           },
           "after": {
             "type": "object",
-            "description": "Cell readback after recalculation."
+            "description": "Cell readback after recalculation.",
+            "required": ["address", "value", "serialized", "formula", "displayValue"],
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Canonical sheet-qualified A1 address."
+              },
+              "value": {
+                "description": "Calculated cell value."
+              },
+              "serialized": {
+                "type": ["string", "number", "boolean", "null"],
+                "description": "Raw serialized cell content, preserving formulas."
+              },
+              "formula": {
+                "type": ["string", "null"],
+                "description": "Formula text without losing the original calculated value context, or null for literal cells."
+              },
+              "displayValue": {
+                "type": "string",
+                "description": "Formatted value as a user would see it."
+              }
+            },
+            "additionalProperties": false
           },
           "restored": {
             "type": "object",
-            "description": "Cell readback after exporting and restoring WorkPaper JSON."
+            "description": "Cell readback after exporting and restoring WorkPaper JSON.",
+            "required": ["address", "value", "serialized", "formula", "displayValue"],
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Canonical sheet-qualified A1 address."
+              },
+              "value": {
+                "description": "Calculated cell value."
+              },
+              "serialized": {
+                "type": ["string", "number", "boolean", "null"],
+                "description": "Raw serialized cell content, preserving formulas."
+              },
+              "formula": {
+                "type": ["string", "null"],
+                "description": "Formula text without losing the original calculated value context, or null for literal cells."
+              },
+              "displayValue": {
+                "type": "string",
+                "description": "Formatted value as a user would see it."
+              }
+            },
+            "additionalProperties": false
           },
           "persistence": {
             "type": "object",
-            "description": "Persistence result for the WorkPaper JSON document."
+            "description": "Persistence result for the WorkPaper JSON document.",
+            "required": ["persisted", "serializedBytes"],
+            "properties": {
+              "persisted": {
+                "type": "boolean",
+                "description": "True when the server wrote the updated WorkPaper JSON file."
+              },
+              "path": {
+                "type": "string",
+                "description": "Absolute JSON file path written by the server when writable."
+              },
+              "serializedBytes": {
+                "type": "number",
+                "description": "UTF-8 byte length of the serialized WorkPaper document."
+              }
+            },
+            "additionalProperties": false
           },
           "checks": {
             "type": "object",
-            "description": "Boolean receipt for persisted state and restored readback."
+            "description": "Boolean receipt for persisted state and restored readback.",
+            "required": ["persisted", "restoredMatchesAfter", "previousSerialized", "newSerialized"],
+            "properties": {
+              "persisted": {
+                "type": "boolean",
+                "description": "Echo of whether the edit was persisted to disk."
+              },
+              "restoredMatchesAfter": {
+                "type": "boolean",
+                "description": "True when exported and re-imported JSON preserves the edited cell readback."
+              },
+              "previousSerialized": {
+                "type": ["string", "number", "boolean", "null"],
+                "description": "Raw serialized cell content before the edit."
+              },
+              "newSerialized": {
+                "type": ["string", "number", "boolean", "null"],
+                "description": "Raw serialized cell content after the edit."
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -237,7 +374,8 @@
     },
     {
       "name": "get_cell_display_value",
-      "description": "Return the formatted display value for one WorkPaper cell.",
+      "title": "Get WorkPaper Cell Display Value",
+      "description": "Return the formatted display string for one cell. Use when an agent needs what a user would see, not the raw numeric value.",
       "inputSchema": {
         "type": "object",
         "required": ["sheetName", "address"],
@@ -278,7 +416,8 @@
     },
     {
       "name": "export_workpaper_document",
-      "description": "Export the current WorkPaper JSON document.",
+      "title": "Export WorkPaper Document",
+      "description": "Export the current WorkPaper JSON document for persistence, review, or handoff to another agent. Does not write files by itself.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -300,7 +439,8 @@
           },
           "document": {
             "type": "object",
-            "description": "Persisted WorkPaper JSON document."
+            "description": "Persisted WorkPaper JSON document.",
+            "additionalProperties": false
           },
           "serializedBytes": {
             "type": "number",
@@ -319,14 +459,15 @@
     },
     {
       "name": "validate_formula",
-      "description": "Validate formula syntax using the WorkPaper formula parser.",
+      "title": "Validate WorkPaper Formula",
+      "description": "Validate formula syntax with the WorkPaper parser before writing it to a cell. This checks syntax only; use set_cell_contents plus readback to evaluate.",
       "inputSchema": {
         "type": "object",
         "required": ["formula"],
         "properties": {
           "formula": {
             "type": "string",
-            "description": "Formula string, including the leading =."
+            "description": "Formula string including the leading =, for example =SUM(Inputs!B2:B4)."
           }
         },
         "additionalProperties": false
