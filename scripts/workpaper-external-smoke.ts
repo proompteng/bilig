@@ -159,6 +159,11 @@ function runNodeSmoke(
     bytes: number
     verified: boolean
   }
+  exceljsFormulaRecalc: {
+    cachedResult: number
+    readback: number
+    workbookMutated: boolean
+  }
   projectDir: string
   snapshotImport: {
     currencyLabel: string
@@ -405,9 +410,13 @@ function runNodeSmoke(
     ].join('\n'),
   )
   writeXlsxImportScript(projectDir)
+  writeExceljsFormulaRecalcScript(projectDir)
 
-  installTarballs(projectDir, tarballPaths)
+  installTarballs(projectDir, tarballPaths, ['exceljs@4.4.0'])
   const npmEval = parseNodeNpmEvalOutput(runTextCommand('npm', ['run', '--silent', 'npm-eval'], { cwd: projectDir }))
+  const exceljsFormulaRecalc = parseNodeExceljsFormulaRecalcOutput(
+    runTextCommand('npx', ['--no-install', 'tsx', 'exceljs-formula-recalc.ts'], { cwd: projectDir }),
+  )
   const output = parseNodeSmokeOutput(runTextCommand('npm', ['run', '--silent', 'start'], { cwd: projectDir }))
   const persistence = parseNodePersistenceOutput(runTextCommand('npm', ['run', '--silent', 'persistence'], { cwd: projectDir }))
   const scenarios = parseNodeRevenueScenarioOutput(runTextCommand('npm', ['run', '--silent', 'scenarios'], { cwd: projectDir }))
@@ -501,6 +510,7 @@ function runNodeSmoke(
     packageMcpStdio,
     persistence,
     projectDir,
+    exceljsFormulaRecalc,
     npmEval,
     rangeReadback,
     scenarios,
@@ -510,6 +520,45 @@ function runNodeSmoke(
     xlsxImport,
     output,
   }
+}
+
+function writeExceljsFormulaRecalcScript(projectDir: string): void {
+  writeFileSync(
+    join(projectDir, 'exceljs-formula-recalc.ts'),
+    [
+      'import ExcelJS from "exceljs";',
+      'import { recalculateExceljsWorkbook } from "exceljs-formula-recalc";',
+      '',
+      'const workbook = new ExcelJS.Workbook();',
+      'const inputs = workbook.addWorksheet("Inputs");',
+      'inputs.getCell("A1").value = "Metric";',
+      'inputs.getCell("B1").value = "Value";',
+      'inputs.getCell("A2").value = "Units";',
+      'inputs.getCell("B2").value = 40;',
+      'inputs.getCell("A3").value = "Price";',
+      'inputs.getCell("B3").value = 1200;',
+      'const summary = workbook.addWorksheet("Summary");',
+      'summary.getCell("A1").value = "Metric";',
+      'summary.getCell("B1").value = "Value";',
+      'summary.getCell("A2").value = "Revenue";',
+      'summary.getCell("B2").value = { formula: "Inputs!B2*Inputs!B3", result: 48000 };',
+      '',
+      'const result = await recalculateExceljsWorkbook(workbook, {',
+      '  edits: [',
+      '    { target: "Inputs!B2", value: 48 },',
+      '    { target: "Inputs!B3", value: 1500 },',
+      '  ],',
+      '  reads: ["Summary!B2"],',
+      '});',
+      '',
+      'const readbackCell = result.reads["Summary!B2"];',
+      'const readback = typeof readbackCell === "object" && readbackCell !== null && "value" in readbackCell ? readbackCell.value : null;',
+      'const cachedCell = workbook.getWorksheet("Summary")?.getCell("B2").value;',
+      'const cachedResult = typeof cachedCell === "object" && cachedCell !== null && "result" in cachedCell ? cachedCell.result : null;',
+      'console.log(JSON.stringify({ cachedResult, readback, workbookMutated: result.workbookMutated }));',
+      '',
+    ].join('\n'),
+  )
 }
 
 function parseNodeNpmEvalOutput(output: string): {
@@ -549,6 +598,26 @@ function parseNodeNpmEvalOutput(output: string): {
     sheets,
     bytes,
     verified,
+  }
+}
+
+function parseNodeExceljsFormulaRecalcOutput(output: string): {
+  cachedResult: number
+  readback: number
+  workbookMutated: boolean
+} {
+  const record = parseJsonRecord(output, 'ExcelJS formula recalculation output')
+  const cachedResult = record.cachedResult
+  const readback = record.readback
+  const workbookMutated = record.workbookMutated
+  if (cachedResult !== 72000 || readback !== 72000 || workbookMutated !== true) {
+    throw new Error(`Unexpected ExcelJS formula recalculation output: ${output}`)
+  }
+
+  return {
+    cachedResult,
+    readback,
+    workbookMutated,
   }
 }
 

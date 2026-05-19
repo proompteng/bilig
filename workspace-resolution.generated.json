@@ -102,5 +102,13 @@
   "@bilig/zero-sync": {
     "packageDir": "packages/zero-sync",
     "sourceEntry": "packages/zero-sync/src/index.ts"
+  },
+  "exceljs-formula-recalc": {
+    "packageDir": "packages/exceljs-formula-recalc",
+    "sourceEntry": "packages/exceljs-formula-recalc/src/index.ts"
+  },
+  "xlsx-formula-recalc": {
+    "packageDir": "packages/xlsx-formula-recalc",
+    "sourceEntry": "packages/xlsx-formula-recalc/src/index.ts"
   }
 }

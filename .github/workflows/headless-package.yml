@@ -15,6 +15,7 @@ on:
       - 'packages/excel-import/**'
       - 'packages/create-workpaper/**'
       - 'packages/xlsx-formula-recalc/**'
+      - 'packages/exceljs-formula-recalc/**'
       - 'packages/benchmarks/**'
       - 'packages/headless/CHANGELOG.md'
       - 'docs/public-api.md'
@@ -129,6 +130,7 @@ jobs:
           pnpm --filter @bilig/excel-import build
           pnpm --filter @bilig/headless build
           pnpm --filter xlsx-formula-recalc build
+          pnpm --filter exceljs-formula-recalc build
 
       - name: Lint runtime package sources
         run: |
@@ -151,6 +153,7 @@ jobs:
             packages/headless/src/__tests__/persistence.test.ts \
             packages/headless/src/__tests__/persistence.fuzz.test.ts \
             packages/headless/src/__tests__/hyperformula-surface-parity.test.ts \
+            packages/exceljs-formula-recalc/src/__tests__/exceljs-formula-recalc.test.ts \
             scripts/__tests__/runtime-package-publish-validation.test.ts
 
       - name: Validate publishable runtime package set
@@ -209,6 +212,7 @@ jobs:
             packages/excel-import
             packages/headless
             packages/xlsx-formula-recalc
+            packages/exceljs-formula-recalc
             packages/create-workpaper
           )
 
@@ -654,6 +658,7 @@ jobs:
             'packages/excel-import/package.json',
             'packages/headless/package.json',
             'packages/xlsx-formula-recalc/package.json',
+            'packages/exceljs-formula-recalc/package.json',
             'packages/create-workpaper/package.json',
           ];
           const packages = packagePaths.map((packagePath) =>
@@ -701,10 +706,12 @@ jobs:
             packages/excel-import/package.json
             packages/headless/package.json
             packages/xlsx-formula-recalc/package.json
+            packages/exceljs-formula-recalc/package.json
             packages/create-workpaper/package.json
             packages/headless/server.json
             packages/headless/README.md
             packages/xlsx-formula-recalc/README.md
+            packages/exceljs-formula-recalc/README.md
             packages/headless/CHANGELOG.md
           )
 
@@ -729,6 +736,7 @@ jobs:
           pnpm --filter @bilig/core build
           pnpm --filter @bilig/headless build
           pnpm --filter xlsx-formula-recalc build
+          pnpm --filter exceljs-formula-recalc build
 
           bun scripts/sync-headless-package-footprint.ts
 
@@ -793,6 +801,7 @@ jobs:
           pnpm --filter @bilig/excel-import build
           pnpm --filter @bilig/headless build
           pnpm --filter xlsx-formula-recalc build
+          pnpm --filter exceljs-formula-recalc build
 
       - name: Validate publishable runtime package set
         run: |

@@ -17,6 +17,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/headless" },
     { "path": "./packages/xlsx-formula-recalc" },
+    { "path": "./packages/exceljs-formula-recalc" },
     { "path": "./packages/worker-transport" },
     { "path": "./packages/renderer" },
     { "path": "./packages/grid" },
