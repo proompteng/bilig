@@ -53,6 +53,9 @@ describe('large simple worksheet stream scanners', () => {
           },
         ],
       },
+      conditionalFormattingXml: [
+        '<conditionalFormatting sqref="A1:B2"><cfRule type="cellIs" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>',
+      ],
       drawingRelationshipId: 'rIdDrawing1',
       filters: [
         {
@@ -171,6 +174,7 @@ function metadataWorksheetXml(): string {
     '</row>',
     '</sheetData>',
     '<autoFilter ref="A1:B2"><filterColumn colId="0"><filters><filter val="Open"/></filters></filterColumn></autoFilter>',
+    '<conditionalFormatting sqref="A1:B2"><cfRule type="cellIs" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>',
     '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
     '<hyperlinks><hyperlink ref="A1:B1" location="Summary!A1" tooltip="Jump" display="Summary"/></hyperlinks>',
     '<printOptions horizontalCentered="1"/>',

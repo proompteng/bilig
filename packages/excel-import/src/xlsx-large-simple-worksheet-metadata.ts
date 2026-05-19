@@ -22,6 +22,7 @@ export interface LargeSimpleWorksheetMergeRef {
 
 export interface LargeSimpleWorksheetScannedMetadata {
   readonly columns?: LargeSimpleWorksheetAxisMetadata
+  readonly conditionalFormattingXml?: readonly string[]
   readonly drawingRelationshipId?: string
   readonly filters?: readonly WorkbookAutoFilterSnapshot[]
   readonly hyperlinks?: readonly LargeSimpleHyperlinkRef[]

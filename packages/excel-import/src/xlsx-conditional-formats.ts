@@ -125,11 +125,6 @@ function removeWorksheetConditionalFormattingXml(sheetXml: string): string {
   return sheetXml.replace(worksheetConditionalFormattingRegex(), '')
 }
 
-function readSheetConditionalFormatArtifacts(sheetXml: string): WorkbookSheetConditionalFormatArtifactsSnapshot | undefined {
-  const xml = extractWorksheetConditionalFormattingXml(sheetXml).join('')
-  return xml.length > 0 ? { xml } : undefined
-}
-
 function normalizeRgbColor(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
@@ -549,8 +544,19 @@ export function readImportedSheetConditionalFormatsFromWorksheetXml(
   if (!hasWorksheetConditionalFormatting(sheetXml)) {
     return undefined
   }
+  return readImportedSheetConditionalFormatsFromElementXml(source, sheetName, extractWorksheetConditionalFormattingXml(sheetXml))
+}
+
+export function readImportedSheetConditionalFormatsFromElementXml(
+  source: XlsxZipSource,
+  sheetName: string,
+  conditionalFormattingXml: readonly string[],
+): WorkbookConditionalFormatSnapshot[] | undefined {
+  if (conditionalFormattingXml.length === 0) {
+    return undefined
+  }
   const dxfs = readDxfs(getZipText(readXlsxZipEntries(source), 'xl/styles.xml'))
-  const parsed: unknown = xmlParser.parse(`<worksheet>${extractWorksheetConditionalFormattingXml(sheetXml).join('')}</worksheet>`)
+  const parsed: unknown = xmlParser.parse(`<worksheet>${conditionalFormattingXml.join('')}</worksheet>`)
   const conditionalFormats: WorkbookConditionalFormatSnapshot[] = []
   for (const conditionalFormatting of asArray(recordChild(parsed, 'worksheet')?.['conditionalFormatting'])) {
     if (!isRecord(conditionalFormatting) || typeof conditionalFormatting['sqref'] !== 'string') {
@@ -627,5 +633,12 @@ export function readImportedWorkbookConditionalFormatArtifactsFromWorksheetPaths
 export function readImportedSheetConditionalFormatArtifactsFromWorksheetXml(
   sheetXml: string,
 ): WorkbookSheetConditionalFormatArtifactsSnapshot | undefined {
-  return hasWorksheetConditionalFormatting(sheetXml) ? readSheetConditionalFormatArtifacts(sheetXml) : undefined
+  return readImportedSheetConditionalFormatArtifactsFromElementXml(extractWorksheetConditionalFormattingXml(sheetXml))
+}
+
+export function readImportedSheetConditionalFormatArtifactsFromElementXml(
+  conditionalFormattingXml: readonly string[],
+): WorkbookSheetConditionalFormatArtifactsSnapshot | undefined {
+  const xml = conditionalFormattingXml.join('')
+  return xml.length > 0 ? { xml } : undefined
 }

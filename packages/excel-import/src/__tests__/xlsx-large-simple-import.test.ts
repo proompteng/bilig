@@ -671,7 +671,16 @@ describe('large simple XLSX import fast path', () => {
       },
     })
 
-    const imported = tryImportLargeSimpleXlsx(bytes, 'conditional-format.xlsx', unzipSync(bytes), { minByteLength: 0 })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('conditional formatting metadata should use streamed records instead of inflating worksheet XML')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'conditional-format.xlsx', zip, { minByteLength: 0 })
     const metadata = imported?.snapshot.sheets[0]?.metadata
 
     expect(imported?.snapshot.sheets[0]?.cells).toEqual([
@@ -703,7 +712,16 @@ describe('large simple XLSX import fast path', () => {
       ].join(''),
     })
 
-    const imported = tryImportLargeSimpleXlsx(bytes, 'duplicate-format.xlsx', unzipSync(bytes), { minByteLength: 0 })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('unsupported conditional formatting artifacts should use streamed XML instead of inflating worksheet XML')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'duplicate-format.xlsx', zip, { minByteLength: 0 })
     const metadata = imported?.snapshot.sheets[0]?.metadata
 
     expect(imported?.snapshot.sheets[0]?.cells).toEqual([

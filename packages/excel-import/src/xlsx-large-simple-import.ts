@@ -10,7 +10,9 @@ import { createSheetPreview, normalizeWorkbookName } from './workbook-import-hel
 import { XLSX_CONTENT_TYPE } from './workbook-import-content-types.js'
 import { createWorkbookPreview, type ImportedWorkbookPreview } from './workbook-import-preview.js'
 import {
+  readImportedSheetConditionalFormatArtifactsFromElementXml,
   readImportedSheetConditionalFormatArtifactsFromWorksheetXml,
+  readImportedSheetConditionalFormatsFromElementXml,
   readImportedSheetConditionalFormatsFromWorksheetXml,
 } from './xlsx-conditional-formats.js'
 import { readImportedWorkbookDrawingArtifactsFromWorksheetRelationships } from './xlsx-drawing-artifacts.js'
@@ -328,6 +330,21 @@ export function tryImportLargeSimpleXlsx(
         }
       } else {
         metadataInput = conditionalFormats ? { conditionalFormats } : {}
+      }
+    }
+    if (materializeMetadata && streamedMetadataScan?.conditionalFormattingXml && streamedMetadataScan.conditionalFormattingXml.length > 0) {
+      const conditionalFormats = readImportedSheetConditionalFormatsFromElementXml(
+        zip,
+        entry.name,
+        streamedMetadataScan.conditionalFormattingXml,
+      )
+      const conditionalFormatArtifacts = materializeCells
+        ? readImportedSheetConditionalFormatArtifactsFromElementXml(streamedMetadataScan.conditionalFormattingXml)
+        : undefined
+      metadataInput = {
+        ...metadataInput,
+        ...(conditionalFormats ? { conditionalFormats } : {}),
+        ...(conditionalFormatArtifacts ? { conditionalFormatArtifacts } : {}),
       }
     }
     if (materializeMetadata && streamedMetadataScan?.tableRelationshipIds && streamedMetadataScan.tableRelationshipIds.length > 0) {

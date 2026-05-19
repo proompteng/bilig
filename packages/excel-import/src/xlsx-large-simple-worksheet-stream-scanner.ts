@@ -97,6 +97,7 @@ class LargeSimpleWorksheetChunkScanner {
   private maxColumn = -1
   private columnEntries: WorkbookAxisEntrySnapshot[] | undefined
   private columnMetadata: WorkbookAxisMetadataSnapshot[] | undefined
+  private conditionalFormattingXml: string[] | undefined
   private drawingRelationshipId: string | undefined
   private filters: LargeSimpleWorksheetScannedMetadata['filters']
   private hyperlinks: LargeSimpleWorksheetScannedMetadata['hyperlinks']
@@ -220,6 +221,9 @@ class LargeSimpleWorksheetChunkScanner {
         : undefined
     const metadata: LargeSimpleWorksheetScannedMetadata = {
       ...(columns ? { columns } : {}),
+      ...(this.conditionalFormattingXml && this.conditionalFormattingXml.length > 0
+        ? { conditionalFormattingXml: this.conditionalFormattingXml }
+        : {}),
       ...(this.drawingRelationshipId ? { drawingRelationshipId: this.drawingRelationshipId } : {}),
       ...(this.filters && this.filters.length > 0 ? { filters: this.filters } : {}),
       ...(this.hyperlinks && this.hyperlinks.length > 0 ? { hyperlinks: this.hyperlinks } : {}),
@@ -502,6 +506,12 @@ class LargeSimpleWorksheetChunkScanner {
         this.tableRelationshipIds ??= []
         this.tableRelationshipIds.push(...relationshipIds)
       }
+      return true
+    }
+    if (localName === 'conditionalFormatting') {
+      this.conditionalFormatCount += Math.max(1, countOpeningTags(this.buffer, startIndex, endIndex, 'cfRule'))
+      this.conditionalFormattingXml ??= []
+      this.conditionalFormattingXml.push(decodeBytes(this.buffer, startIndex, endIndex))
       return true
     }
     return false
