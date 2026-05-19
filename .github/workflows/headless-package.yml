@@ -13,6 +13,7 @@ on:
       - 'packages/workbook-domain/**'
       - 'packages/wasm-kernel/**'
       - 'packages/excel-import/**'
+      - 'packages/bilig/**'
       - 'packages/create-workpaper/**'
       - 'packages/xlsx-formula-recalc/**'
       - 'packages/exceljs-formula-recalc/**'
@@ -129,13 +130,14 @@ jobs:
           pnpm --filter @bilig/core build
           pnpm --filter @bilig/excel-import build
           pnpm --filter @bilig/headless build
+          pnpm --filter bilig build
           pnpm --filter xlsx-formula-recalc build
           pnpm --filter exceljs-formula-recalc build
 
       - name: Lint runtime package sources
         run: |
           set -euo pipefail
-          pnpm exec oxlint --config .oxlintrc.json --type-aware --deny-warnings packages/headless/src packages/excel-import/src
+          pnpm exec oxlint --config .oxlintrc.json --type-aware --deny-warnings packages/headless/src packages/excel-import/src packages/bilig/src
 
       - name: Run import and headless parity tests
         run: |
@@ -153,6 +155,7 @@ jobs:
             packages/headless/src/__tests__/persistence.test.ts \
             packages/headless/src/__tests__/persistence.fuzz.test.ts \
             packages/headless/src/__tests__/hyperformula-surface-parity.test.ts \
+            packages/bilig/src/__tests__/bilig-alias.test.ts \
             packages/exceljs-formula-recalc/src/__tests__/exceljs-formula-recalc.test.ts \
             scripts/__tests__/runtime-package-publish-validation.test.ts
 
@@ -211,6 +214,7 @@ jobs:
             packages/core
             packages/excel-import
             packages/headless
+            packages/bilig
             packages/xlsx-formula-recalc
             packages/exceljs-formula-recalc
             packages/create-workpaper
@@ -657,6 +661,7 @@ jobs:
             'packages/core/package.json',
             'packages/excel-import/package.json',
             'packages/headless/package.json',
+            'packages/bilig/package.json',
             'packages/xlsx-formula-recalc/package.json',
             'packages/exceljs-formula-recalc/package.json',
             'packages/create-workpaper/package.json',
@@ -705,11 +710,13 @@ jobs:
             packages/core/package.json
             packages/excel-import/package.json
             packages/headless/package.json
+            packages/bilig/package.json
             packages/xlsx-formula-recalc/package.json
             packages/exceljs-formula-recalc/package.json
             packages/create-workpaper/package.json
             packages/headless/server.json
             packages/headless/README.md
+            packages/bilig/README.md
             packages/xlsx-formula-recalc/README.md
             packages/exceljs-formula-recalc/README.md
             packages/headless/CHANGELOG.md
@@ -735,6 +742,7 @@ jobs:
           pnpm --filter @bilig/formula build
           pnpm --filter @bilig/core build
           pnpm --filter @bilig/headless build
+          pnpm --filter bilig build
           pnpm --filter xlsx-formula-recalc build
           pnpm --filter exceljs-formula-recalc build
 
@@ -800,6 +808,7 @@ jobs:
           pnpm --filter @bilig/core build
           pnpm --filter @bilig/excel-import build
           pnpm --filter @bilig/headless build
+          pnpm --filter bilig build
           pnpm --filter xlsx-formula-recalc build
           pnpm --filter exceljs-formula-recalc build
 

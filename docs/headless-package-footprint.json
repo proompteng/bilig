@@ -11,15 +11,15 @@
       "ai-agents",
       "excel",
       "excel-formulas",
+      "exceljs",
       "formula-engine",
-      "formula-evaluation",
       "formula-recalculation",
       "headless-spreadsheet",
       "hyperformula",
       "mcp",
       "mcp-server",
-      "model-context-protocol",
       "node",
+      "sheetjs",
       "spreadsheet-agent",
       "spreadsheet-automation",
       "spreadsheet-engine",
@@ -30,7 +30,7 @@
       "workbook-api",
       "workpaper",
       "xlsx",
-      "xlsx-formula"
+      "xlsx-calc"
     ],
     "dependencyNames": ["@bilig/core", "@bilig/formula", "@bilig/protocol", "fast-xml-parser", "fflate", "xlsx", "xlsx-js-style"],
     "hasFormulaClinicBinary": true,
@@ -38,11 +38,11 @@
     "hasMcpBinary": true
   },
   "npmPackDryRun": {
-    "tarballBytes": 496762,
-    "unpackedBytes": 2984235,
-    "entryCount": 489,
+    "tarballBytes": 497433,
+    "unpackedBytes": 2986585,
+    "entryCount": 492,
     "readmeBytes": 45447,
-    "packageJsonBytes": 2396
+    "packageJsonBytes": 2367
   },
   "coldStartProbe": {
     "runtime": "node",

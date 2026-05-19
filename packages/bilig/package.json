@@ -1,32 +1,33 @@
 {
-  "name": "@bilig/headless",
+  "name": "bilig",
   "version": "0.31.1",
-  "description": "Formula WorkPaper runtime for Node.js services and agent tools with JSON persistence and formula readback.",
+  "description": "Formula WorkPaper runtime for Node.js services, agent tools, and server-side spreadsheet formulas.",
   "keywords": [
     "agent-tools",
     "ai-agents",
+    "bilig",
     "excel",
+    "excel-calculation-engine",
     "excel-formulas",
     "exceljs",
     "formula-engine",
     "formula-recalculation",
     "headless-spreadsheet",
     "hyperformula",
-    "mcp",
-    "mcp-server",
     "node",
+    "server-side-spreadsheet",
     "sheetjs",
-    "spreadsheet-agent",
+    "spreadsheet",
     "spreadsheet-automation",
     "spreadsheet-engine",
     "spreadsheet-formulas",
-    "spreadsheet-mcp",
-    "typescript",
-    "workbook-agent",
+    "workbook",
     "workbook-api",
     "workpaper",
     "xlsx",
-    "xlsx-calc"
+    "xlsx-calc",
+    "xlsx-formula",
+    "xlsx-recalculation"
   ],
   "homepage": "https://proompteng.github.io/bilig/",
   "bugs": {
@@ -36,19 +37,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/headless"
-  },
-  "bin": {
-    "bilig-agent-challenge": "./dist/agent-workbook-challenge-bin.js",
-    "bilig-formula-clinic": "./dist/formula-clinic-bin.js",
-    "bilig-mcp-challenge": "./dist/mcp-challenge-bin.js",
-    "bilig-workpaper-mcp": "./dist/work-paper-mcp-stdio-bin.js"
+    "directory": "packages/bilig"
   },
   "files": [
     "dist",
-    "AGENTS.md",
-    "SKILL.md",
-    "server.json",
     "README.md",
     "LICENSE"
   ],
@@ -74,19 +66,12 @@
     "access": "public"
   },
   "scripts": {
-    "build": "pnpm --dir ../.. --filter @bilig/excel-import build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json && bun ../../scripts/build-headless-xlsx-subpath.ts"
+    "build": "pnpm --dir ../.. --filter @bilig/headless build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@bilig/core": "workspace:*",
-    "@bilig/formula": "workspace:*",
-    "@bilig/protocol": "workspace:*",
-    "fast-xml-parser": "5.7.3",
-    "fflate": "0.3.11",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "xlsx-js-style": "1.2.0"
+    "@bilig/headless": "workspace:*"
   },
   "engines": {
     "node": ">=22.0.0"
-  },
-  "mcpName": "io.github.proompteng/bilig-workpaper"
+  }
 }

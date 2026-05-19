@@ -103,6 +103,18 @@
     "packageDir": "packages/zero-sync",
     "sourceEntry": "packages/zero-sync/src/index.ts"
   },
+  "bilig": {
+    "packageDir": "packages/bilig",
+    "sourceEntry": "packages/bilig/src/index.ts"
+  },
+  "bilig/mcp": {
+    "packageDir": "packages/bilig",
+    "sourceEntry": "packages/bilig/src/mcp.ts"
+  },
+  "bilig/xlsx": {
+    "packageDir": "packages/bilig",
+    "sourceEntry": "packages/bilig/src/xlsx.ts"
+  },
   "exceljs-formula-recalc": {
     "packageDir": "packages/exceljs-formula-recalc",
     "sourceEntry": "packages/exceljs-formula-recalc/src/index.ts"

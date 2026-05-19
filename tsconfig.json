@@ -16,6 +16,7 @@
     { "path": "./packages/wasm-kernel" },
     { "path": "./packages/core" },
     { "path": "./packages/headless" },
+    { "path": "./packages/bilig" },
     { "path": "./packages/xlsx-formula-recalc" },
     { "path": "./packages/exceljs-formula-recalc" },
     { "path": "./packages/worker-transport" },

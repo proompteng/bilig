@@ -13,22 +13,22 @@ npm install exceljs exceljs-formula-recalc
 ## Use With ExcelJS
 
 ```ts
-import ExcelJS from "exceljs";
-import { recalculateExceljsWorkbook } from "exceljs-formula-recalc";
+import ExcelJS from 'exceljs'
+import { recalculateExceljsWorkbook } from 'exceljs-formula-recalc'
 
-const workbook = new ExcelJS.Workbook();
-await workbook.xlsx.readFile("quote.xlsx");
+const workbook = new ExcelJS.Workbook()
+await workbook.xlsx.readFile('quote.xlsx')
 
 const result = await recalculateExceljsWorkbook(workbook, {
   edits: [
-    { target: "Inputs!B2", value: 48 },
-    { target: "Inputs!B3", value: 1500 },
+    { target: 'Inputs!B2', value: 48 },
+    { target: 'Inputs!B3', value: 1500 },
   ],
-  reads: ["Summary!B7"],
-});
+  reads: ['Summary!B7'],
+})
 
-console.log(result.reads["Summary!B7"]);
-await workbook.xlsx.writeFile("quote.recalculated.xlsx");
+console.log(result.reads['Summary!B7'])
+await workbook.xlsx.writeFile('quote.recalculated.xlsx')
 ```
 
 By default, `recalculateExceljsWorkbook` mutates the provided ExcelJS workbook by loading the recalculated XLSX bytes back into it. For targets listed in `reads`, it also patches the ExcelJS formula cell object with the recalculated `result`, so backend code can inspect proof values without reopening the file. Pass `mutateWorkbook: false` if you only need the returned `xlsx` bytes.
@@ -36,10 +36,7 @@ By default, `recalculateExceljsWorkbook` mutates the provided ExcelJS workbook b
 ## API
 
 ```ts
-import {
-  recalculateExceljsBuffer,
-  recalculateExceljsWorkbook,
-} from "exceljs-formula-recalc";
+import { recalculateExceljsBuffer, recalculateExceljsWorkbook } from 'exceljs-formula-recalc'
 ```
 
 `recalculateExceljsWorkbook(workbook, options)` accepts any workbook-like object with `workbook.xlsx.writeBuffer()` and `workbook.xlsx.load(...)`, which matches ExcelJS workbooks.

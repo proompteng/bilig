@@ -28,6 +28,9 @@
       "@bilig/workbook-domain": ["./packages/workbook-domain/src/index.ts"],
       "@bilig/worker-transport": ["./packages/worker-transport/src/index.ts"],
       "@bilig/zero-sync": ["./packages/zero-sync/src/index.ts"],
+      "bilig": ["./packages/bilig/src/index.ts"],
+      "bilig/mcp": ["./packages/bilig/src/mcp.ts"],
+      "bilig/xlsx": ["./packages/bilig/src/xlsx.ts"],
       "exceljs-formula-recalc": ["./packages/exceljs-formula-recalc/src/index.ts"],
       "xlsx-formula-recalc": ["./packages/xlsx-formula-recalc/src/index.ts"]
     }

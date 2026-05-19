@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): cache runtime restore string ids (87276c1e)
 
 ## Internal runtime changes
+
 - docs(discovery): sync 0.31.0 agent surfaces (03bfead1)
 
 ## 0.31.0
@@ -23,13 +25,16 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(package): add exceljs formula recalc adapter (e24ca045)
 
 ## Fixes
+
 - perf(headless): narrow custom function adapter import (5d04174c)
 - fix(agent): throttle passive context churn (0febed2b)
 
 ## Internal runtime changes
+
 - docs(discovery): sync 0.30.2 agent surfaces (fc4a6030)
 
 ## 0.30.2
@@ -39,6 +44,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(grid): stabilize editor terminal shortcuts (68e0d32f)
 
 ## 0.30.1

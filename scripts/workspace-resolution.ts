@@ -12,7 +12,7 @@ export type WorkspaceResolutionMap = Record<string, WorkspaceResolutionEntry>
 export const workspaceRootDir = fileURLToPath(new URL('..', import.meta.url))
 export const workspaceResolutionJsonPath = join(workspaceRootDir, 'workspace-resolution.generated.json')
 export const workspaceResolutionTsconfigPath = join(workspaceRootDir, 'tsconfig.workspace-paths.json')
-const WORKSPACE_ALIAS_PACKAGE_NAMES = new Set(['xlsx-formula-recalc', 'exceljs-formula-recalc'])
+const WORKSPACE_ALIAS_PACKAGE_NAMES = new Set(['bilig', 'xlsx-formula-recalc', 'exceljs-formula-recalc'])
 
 function normalizePath(value: string): string {
   return value.replaceAll('\\', '/')

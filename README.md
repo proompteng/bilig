@@ -11,9 +11,13 @@
 
 **Formula workbooks for Node services and agent tools.**
 
-Use [`@bilig/headless`](https://www.npmjs.com/package/@bilig/headless) when a
+Use [`bilig`](https://www.npmjs.com/package/bilig) or
+[`@bilig/headless`](https://www.npmjs.com/package/@bilig/headless) when a
 calculation is easiest to review as cells and formulas, but it has to run in a
-Node service, queue worker, serverless route, test, or coding-agent tool.
+Node service, queue worker, serverless route, test, or coding-agent tool. The
+short `bilig` package re-exports the headless runtime for humans searching npm;
+`@bilig/headless` remains the fully qualified runtime package with bundled
+agent metadata.
 
 It gives you a `WorkPaper`: build sheets, write inputs, recalculate, read the
 cell value, and save the workbook as JSON. No browser grid is involved.
@@ -194,7 +198,7 @@ matters.
 
 Current checked npm footprint for `@bilig/headless@0.31.1`:
 
-- Pack dry run: `497 kB` tarball, `2.98 MB` unpacked, `489` package entries.
+- Pack dry run: `497 kB` tarball, `2.99 MB` unpacked, `492` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the
