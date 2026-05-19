@@ -83,13 +83,13 @@ function createDefaultAxisIndex(axisLength: number, defaultSize: number): AxisIn
       }
     },
     resolveOffset(index) {
-      return clampAxisIndex(index, axisLength) * defaultSize
+      return clampAxisEndExclusive(index, axisLength) * defaultSize
     },
     resolveSize(index) {
       return index >= 0 && index < axisLength ? defaultSize : 0
     },
     resolveSpan(start, endExclusive) {
-      const clampedStart = clampAxisIndex(start, axisLength)
+      const clampedStart = clampAxisEndExclusive(start, axisLength)
       const clampedEnd = clampAxisEndExclusive(endExclusive, axisLength)
       return Math.max(0, clampedEnd - clampedStart) * defaultSize
     },
