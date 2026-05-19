@@ -1334,6 +1334,22 @@ test('@browser-webgpu @browser-deep large range fill remains applied after scrol
     (result) => result.sequence > initialReadback.sequence && allReadbackPointsMatch(result, isThemeGreenFill),
   )
   expect(scrolledReadback.sequence).toBeGreaterThan(initialReadback.sequence)
+
+  await clickProductCell(page, 4, 8)
+  await pickToolbarPresetColor(page, 'Fill color', 'light cornflower blue 2')
+  const overrideReadback = await waitForReadback(
+    page,
+    {
+      points: scrolledPoints,
+      regions: [],
+    },
+    (result) =>
+      result.sequence > scrolledReadback.sequence &&
+      isThemeGreenFill(result.points.scrolledD) &&
+      isCornflowerBlueFill(result.points.scrolledE) &&
+      isThemeGreenFill(result.points.scrolledF),
+  )
+  expect(overrideReadback.sequence).toBeGreaterThan(scrolledReadback.sequence)
   await saveReadbackArtifact(
     page,
     testInfo,

@@ -406,6 +406,39 @@ describe('ProjectedViewportStore', () => {
     unsubscribeViewport()
   })
 
+  it('lets newer small style edits override an older large range overlay', () => {
+    const cache = new ProjectedViewportStore(createNoopWorkerEngineClient())
+
+    const rollbackLarge = cache.setRangeStyle(
+      { sheetName: 'Sheet1', startAddress: 'D5', endAddress: 'F900' },
+      { fill: { backgroundColor: '#00ff00' } },
+    )
+    const rollbackSmall = cache.setRangeStyle(
+      { sheetName: 'Sheet1', startAddress: 'E700', endAddress: 'E700' },
+      { fill: { backgroundColor: '#a4c2f4' } },
+    )
+
+    const overriddenCell = cache.getCell('Sheet1', 'E700')
+    expect(cache.getCellStyle(overriddenCell.styleId)).toEqual({
+      id: overriddenCell.styleId,
+      fill: { backgroundColor: '#a4c2f4' },
+    })
+    const neighborCell = cache.getCell('Sheet1', 'D700')
+    expect(cache.getCellStyle(neighborCell.styleId)).toEqual({
+      id: neighborCell.styleId,
+      fill: { backgroundColor: '#00ff00' },
+    })
+
+    rollbackSmall?.()
+    const restoredCell = cache.getCell('Sheet1', 'E700')
+    expect(cache.getCellStyle(restoredCell.styleId)).toEqual({
+      id: restoredCell.styleId,
+      fill: { backgroundColor: '#00ff00' },
+    })
+    rollbackLarge?.()
+    expect(cache.peekCell('Sheet1', 'E700')).toBeUndefined()
+  })
+
   it('keeps large clears visible for future viewports without materializing the whole range', () => {
     const cache = new ProjectedViewportStore(createNoopWorkerEngineClient())
 

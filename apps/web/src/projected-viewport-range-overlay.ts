@@ -125,6 +125,7 @@ export class ProjectedViewportRangeOverlayStore {
         this.callbacks.setCellSnapshot(nextSnapshot)
         return
       }
+      this.callbacks.setCellSnapshot(snapshot)
       this.callbacks.deleteCellSnapshot(snapshot.sheetName, snapshot.address)
     })
     overlay.materializedPreviousSnapshots.clear()

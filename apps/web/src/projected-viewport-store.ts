@@ -28,7 +28,7 @@ import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { normalizeWorkbookMergeRange } from './worker-runtime-support.js'
 import { buildLocalAxisWorkbookDelta, buildLocalCellSnapshotWorkbookDelta } from './projected-workbook-local-delta.js'
 import { ProjectedViewportPatchRevisionGate } from './projected-viewport-patch-revision-gate.js'
-import { normalizeViewportRange, ProjectedViewportRangeOverlayStore, viewportRangeCellCount } from './projected-viewport-range-overlay.js'
+import { ProjectedViewportRangeOverlayStore } from './projected-viewport-range-overlay.js'
 import { createContentClearedOptimisticSnapshot } from './workbook-optimistic-range.js'
 import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from './workbook-optimistic-cell-flags.js'
 
@@ -45,7 +45,6 @@ type CellItem = readonly [number, number]
 type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze' | 'merges'
 type SheetIdentity = { readonly sheetId: number; readonly sheetOrdinal: number }
 const DEFAULT_STYLE_ID = 'style-0'
-const MAX_MATERIALIZED_OPTIMISTIC_STYLE_CELLS = 512
 
 export class ProjectedViewportStore implements GridEngineLike {
   private readonly options: ProjectedViewportStoreOptions
@@ -585,32 +584,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     range: CellRangeRef,
     mutateStyle: (baseStyle: CellStyleRecord) => Omit<CellStyleRecord, 'id'>,
   ): (() => void) | null {
-    if (viewportRangeCellCount(normalizeViewportRange(range)) > MAX_MATERIALIZED_OPTIMISTIC_STYLE_CELLS) {
-      return this.rangeOverlayStore.register(range, (snapshot) => this.applyStyleMutationToSnapshot(snapshot, mutateStyle))
-    }
-    const previousSnapshots: Array<{ readonly existed: boolean; readonly snapshot: CellSnapshot }> = []
-    this.cellCache.forEachCachedOrVisibleCellSnapshotInRange(range, (snapshot) => {
-      const nextSnapshot = this.applyStyleMutationToSnapshot(snapshot, mutateStyle)
-      if (snapshotStyleId(snapshot) === snapshotStyleId(nextSnapshot)) {
-        return
-      }
-      previousSnapshots.push({
-        existed: this.cellCache.hasCellSnapshot(snapshot.sheetName, snapshot.address),
-        snapshot: structuredClone(snapshot),
-      })
-      this.setCellSnapshot(nextSnapshot, { force: true, forceOptimistic: true })
-    })
-    if (previousSnapshots.length === 0) {
-      return null
-    }
-    return () => {
-      previousSnapshots.forEach(({ existed, snapshot }) => {
-        this.setCellSnapshot(snapshot, { force: true, forceOptimistic: true })
-        if (!existed) {
-          this.cellCache.deleteCellSnapshot(snapshot.sheetName, snapshot.address)
-        }
-      })
-    }
+    return this.rangeOverlayStore.register(range, (snapshot) => this.applyStyleMutationToSnapshot(snapshot, mutateStyle))
   }
 
   private internLocalCellStyle(style: Omit<CellStyleRecord, 'id'>): CellStyleRecord {
@@ -630,10 +604,6 @@ export class ProjectedViewportStore implements GridEngineLike {
     const nextStyle = this.internLocalCellStyle(mutateStyle(baseStyle))
     return nextStyle.id === DEFAULT_STYLE_ID ? omitSnapshotStyleId(snapshot) : { ...snapshot, styleId: nextStyle.id }
   }
-}
-
-function snapshotStyleId(snapshot: CellSnapshot): string {
-  return snapshot.styleId ?? DEFAULT_STYLE_ID
 }
 
 function createIdempotentContentClearedSnapshot(snapshot: CellSnapshot): CellSnapshot {
