@@ -63,7 +63,7 @@ around the same WorkPaper model.
 Reduced workbook already in hand?
 
 ```sh
-npm exec --package @bilig/headless@0.24.1 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.24.2 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 ## Install
@@ -370,9 +370,9 @@ MCP examples:
 - The package ships npm-executable binaries:
 
 ```sh
-npm exec --package @bilig/headless@0.24.1 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
-npm exec --package @bilig/headless@0.24.1 -- bilig-workpaper-mcp
-npm exec --package @bilig/headless@0.24.1 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.24.2 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.24.2 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.24.2 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
 ```
 
