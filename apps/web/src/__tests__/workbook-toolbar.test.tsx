@@ -852,7 +852,7 @@ describe('WorkbookToolbar', () => {
     })
   })
 
-  it('returns grid focus after direct and transient toolbar commands', async () => {
+  it('returns grid focus after direct toolbar and transient palette commands', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const requestGridFocus = vi.fn()

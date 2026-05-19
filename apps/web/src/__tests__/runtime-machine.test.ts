@@ -157,6 +157,46 @@ describe('worker runtime machine', () => {
     actor.stop()
   })
 
+  it('accepts runtime-reconciled selections when startup sheet names replace the default sheet', async () => {
+    const reconciledSelection = { sheetName: 'Dashboard', address: 'A1' } as const
+    const controller = createController(reconciledSelection, {
+      sheets: [
+        { id: 1, name: 'Dashboard', order: 0 },
+        { id: 2, name: 'Ledger', order: 1 },
+      ],
+      sheetNames: ['Dashboard', 'Ledger'],
+    })
+    const createSession = vi.fn(
+      async (
+        _input: CreateWorkerRuntimeSessionInput,
+        callbacks: WorkerRuntimeSessionCallbacks,
+      ): Promise<WorkerRuntimeSessionController> => {
+        callbacks.onRuntimeState(controller.runtimeState)
+        callbacks.onSelection(reconciledSelection)
+        return controller
+      },
+    )
+
+    const actor = createActor(createWorkerRuntimeMachine(), {
+      input: {
+        documentId: 'xlsx:imported',
+        replicaId: 'browser:test',
+        persistState: true,
+        connectionStateName: 'closed',
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createSession,
+      },
+    })
+
+    actor.start()
+    await vi.waitFor(() => {
+      expect(actor.getSnapshot().matches({ active: 'localReady' })).toBe(true)
+    })
+
+    expect(actor.getSnapshot().context.selection).toEqual(reconciledSelection)
+    actor.stop()
+  })
+
   it('normalizes controller runtime state when the session becomes ready', async () => {
     const controller = {
       ...createController(

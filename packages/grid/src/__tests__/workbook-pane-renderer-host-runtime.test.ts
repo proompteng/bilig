@@ -8,6 +8,7 @@ import {
 } from '../renderer-v3/workbook-pane-renderer-runtime.js'
 import { WorkbookPaneSurfaceRuntimeV3 } from '../renderer-v3/workbook-pane-surface-runtime.js'
 import { DirtyMaskV3 } from '../renderer-v3/tile-damage-index.js'
+import { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 
 function createHost(width: number, height: number): HTMLDivElement {
   const host = document.createElement('div')
@@ -406,6 +407,64 @@ describe('WorkbookPaneRendererHostRuntimeV3', () => {
 
     expect(destroyBackend).toHaveBeenCalledWith(backend)
     runtime.dispose()
+  })
+
+  test('publishes presented visual frames only after the subscribed scroll draw is submitted', async () => {
+    const animationFrames = installManualAnimationFrames()
+    const backend = {}
+    const scrollStore = new WorkbookGridScrollStore()
+    scrollStore.setSnapshot({ renderTx: 0, renderTy: 0, scrollLeft: 0, scrollTop: 0, tx: 0, ty: 0 })
+    const runtime = new WorkbookPaneRendererHostRuntimeV3({
+      rendererRuntime: new WorkbookPaneRendererRuntimeV3(vi.fn<WorkbookPaneFrameDrawerV3>(() => true)),
+      surfaceRuntime: new WorkbookPaneSurfaceRuntimeV3({
+        createBackend: vi.fn(async () => backend),
+        createResizeObserver: () => null,
+        syncSurface: vi.fn(),
+      }),
+    })
+
+    runtime.updateProps({
+      active: true,
+      cameraStore: null,
+      geometry: null,
+      headerPanes: [],
+      host: createHost(640, 360),
+      overlay: null,
+      overlayBuilder: null,
+      preloadTilePanes: [],
+      renderRevisionSnapshot: null,
+      scrollTransformStore: scrollStore,
+      tilePanes: [createDirtyTilePane()],
+    })
+    runtime.setCanvas(document.createElement('canvas'))
+    await Promise.resolve()
+    animationFrames.flushNextFrame()
+
+    const firstPresentedFrame = runtime.getPresentedVisualFrameSnapshot()
+    expect(firstPresentedFrame?.scrollSnapshot).toMatchObject({ scrollLeft: 0, scrollTop: 0 })
+    expect(runtime.getFrameProofStatusSnapshot()).toBe('presented')
+    expect(runtime.getHasPresentedFrameSnapshot()).toBe(true)
+
+    scrollStore.setSnapshot({ renderTx: 56, renderTy: 18, scrollLeft: 56, scrollTop: 18, tx: 56, ty: 18 })
+
+    expect(runtime.getFrameProofStatusSnapshot()).toBe('pending')
+    expect(runtime.getHasPresentedFrameSnapshot()).toBe(false)
+    expect(runtime.getPresentedVisualFrameSnapshot()).toBe(firstPresentedFrame)
+
+    animationFrames.flushNextFrame()
+
+    expect(runtime.getFrameProofStatusSnapshot()).toBe('presented')
+    expect(runtime.getHasPresentedFrameSnapshot()).toBe(true)
+    expect(runtime.getPresentedVisualFrameSnapshot()).not.toBe(firstPresentedFrame)
+    expect(runtime.getPresentedVisualFrameSnapshot()?.scrollSnapshot).toMatchObject({
+      renderTx: 56,
+      renderTy: 18,
+      scrollLeft: 56,
+      scrollTop: 18,
+    })
+
+    runtime.dispose()
+    animationFrames.restore()
   })
 
   test('defers preload sync for dirty structural tile updates', () => {

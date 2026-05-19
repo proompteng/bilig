@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { describe, expect, test } from 'vitest'
 import {
   WorkbookPaneNativeTextLayerV3,
+  resolveNativeTextLayerDrawScrollSnapshotV3,
   resolveNativeTextRunFontStyleV3,
   resolveNativeTextRunInnerStyleV3,
   resolveNativeTextRunOuterStyleV3,
@@ -11,6 +12,7 @@ import {
 } from '../renderer-v3/WorkbookPaneNativeTextLayerV3.js'
 import type { TextQuadRun } from '../renderer-v3/line-text-quad-buffer.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
+import { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 
 function createRun(overrides: Partial<TextQuadRun> = {}): TextQuadRun {
   return {
@@ -172,6 +174,77 @@ describe('WorkbookPaneNativeTextLayerV3', () => {
         scrollSnapshot: { tx: 0, ty: 0 },
       }),
     ).toBeNull()
+  })
+
+  test('uses the presented renderer scroll frame instead of racing ahead on live scroll', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const scrollStore = new WorkbookGridScrollStore()
+    const pane = createPane(createRun({ clipX: 40, col: 1, row: 2, text: 'stable-frame', x: 40 }))
+    const presentedAtOrigin = { renderTx: 0, renderTy: 0, scrollLeft: 0, scrollTop: 0, tx: 0, ty: 0 }
+    const presentedAfterScroll = { renderTx: 20, renderTy: 8, scrollLeft: 20, scrollTop: 8, tx: 20, ty: 8 }
+    const readRunLeft = () => host.querySelector<HTMLElement>('[data-native-text-run]')?.style.left ?? null
+    const readLayer = () => host.querySelector<HTMLElement>('[data-testid="grid-native-text-layer"]')
+
+    try {
+      scrollStore.setSnapshot(presentedAfterScroll)
+
+      await act(async () => {
+        root.render(
+          <WorkbookPaneNativeTextLayerV3
+            active
+            cameraStore={null}
+            geometry={null}
+            headerPanes={[]}
+            presentedScrollSnapshot={presentedAtOrigin}
+            scrollTransformStore={scrollStore}
+            tilePanes={[pane]}
+          />,
+        )
+      })
+
+      expect(readRunLeft()).toBe('86px')
+      expect(readLayer()?.getAttribute('data-v3-native-text-render-tx')).toBe('0')
+      expect(
+        resolveNativeTextLayerDrawScrollSnapshotV3({
+          geometry: null,
+          liveScrollSnapshot: presentedAfterScroll,
+          panes: [pane],
+          presentedScrollSnapshot: presentedAtOrigin,
+        }),
+      ).toBe(presentedAtOrigin)
+
+      await act(async () => {
+        scrollStore.setSnapshot({ renderTx: 48, renderTy: 16, scrollLeft: 48, scrollTop: 16, tx: 48, ty: 16 })
+      })
+
+      expect(readRunLeft()).toBe('86px')
+      expect(readLayer()?.getAttribute('data-v3-native-text-render-tx')).toBe('0')
+
+      await act(async () => {
+        root.render(
+          <WorkbookPaneNativeTextLayerV3
+            active
+            cameraStore={null}
+            geometry={null}
+            headerPanes={[]}
+            presentedScrollSnapshot={presentedAfterScroll}
+            scrollTransformStore={scrollStore}
+            tilePanes={[pane]}
+          />,
+        )
+      })
+
+      expect(readRunLeft()).toBe('66px')
+      expect(readLayer()?.getAttribute('data-v3-native-text-render-tx')).toBe('20')
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      host.remove()
+    }
   })
 
   test('rerenders snapped native text geometry when device pixel ratio changes', async () => {

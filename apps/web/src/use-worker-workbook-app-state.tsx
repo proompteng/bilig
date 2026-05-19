@@ -4,7 +4,7 @@ import { isWorkbookAgentCommandBundle, isWorkbookAgentPreviewSummary, type Workb
 import { parseCellAddress } from '@bilig/formula'
 import type { CellRangeRef, WorkbookMergeRangeSnapshot } from '@bilig/protocol'
 import { createWorkerRuntimeMachine, getWorkerRuntimeController, getWorkerRuntimeHandle } from './runtime-machine.js'
-import type { resolveRuntimeConfig } from './runtime-config.js'
+import { createRuntimeFetch, type resolveRuntimeConfig } from './runtime-config.js'
 import type { ZeroClient } from './runtime-session.js'
 import { loadPersistedSelection } from './selection-persistence.js'
 import { type ZeroConnectionState, canAttemptRemoteSync, emptyCellSnapshot } from './worker-workbook-app-model.js'
@@ -73,6 +73,8 @@ export function useWorkerWorkbookAppState(input: {
   const { runtimeConfig, connectionState, zero, toolbarControls } = input
   const documentId = runtimeConfig.documentId
   const zeroConfigured = Boolean(zero)
+  const fetchImpl = useMemo(() => createRuntimeFetch(runtimeConfig.serverUrl), [runtimeConfig.serverUrl])
+  const authoritativeSyncEnabled = zeroConfigured || Boolean(runtimeConfig.serverUrl)
   const zeroSource = useMemo<LocalOnlyZeroSource>(
     () =>
       zero ??
@@ -116,9 +118,11 @@ export function useWorkerWorkbookAppState(input: {
       documentId,
       replicaId,
       persistState: runtimeConfig.persistState,
-      authoritativeSyncEnabled: zeroConfigured,
+      authoritativeSyncEnabled,
+      authoritativeEventSyncEnabled: zeroConfigured,
       perfSession,
       connectionStateName: connectionState.name,
+      fetchImpl,
       ...(zero ? { zero } : {}),
       initialSelection,
     },

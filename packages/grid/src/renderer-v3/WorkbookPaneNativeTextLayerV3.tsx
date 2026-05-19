@@ -39,6 +39,7 @@ export interface WorkbookPaneNativeTextLayerV3Props {
   readonly cameraStore?: GridCameraStore | null | undefined
   readonly geometry: GridGeometrySnapshot | null
   readonly headerPanes: readonly GridHeaderPaneState[]
+  readonly presentedScrollSnapshot?: WorkbookGridScrollSnapshot | null | undefined
   readonly scrollTransformStore: WorkbookGridScrollStore | null
   readonly suppressedTextCell?: SuppressedNativeTextCellV3 | null | undefined
   readonly tilePanes: readonly WorkbookRenderTilePaneState[]
@@ -85,6 +86,22 @@ function resolveLatestGeometry(
     return propGeometry
   }
   return liveGeometry.camera.seq > propGeometry.camera.seq ? liveGeometry : propGeometry
+}
+
+export function resolveNativeTextLayerDrawScrollSnapshotV3(input: {
+  readonly geometry: GridGeometrySnapshot | null
+  readonly liveScrollSnapshot: WorkbookGridScrollSnapshot
+  readonly panes: readonly WorkbookRenderTilePaneState[]
+  readonly presentedScrollSnapshot?: WorkbookGridScrollSnapshot | null | undefined
+}): WorkbookGridScrollSnapshot {
+  if (input.presentedScrollSnapshot) {
+    return input.presentedScrollSnapshot
+  }
+  return resolveTypeGpuV3DrawScrollSnapshot({
+    fallback: input.liveScrollSnapshot,
+    geometry: input.geometry,
+    panes: input.panes,
+  })
 }
 
 function isPaneDrawVisible(pane: TextLayerPane): boolean {
@@ -353,6 +370,7 @@ export const WorkbookPaneNativeTextLayerV3 = memo(function WorkbookPaneNativeTex
   cameraStore = null,
   geometry,
   headerPanes,
+  presentedScrollSnapshot = null,
   scrollTransformStore,
   suppressedTextCell = null,
   tilePanes,
@@ -370,12 +388,13 @@ export const WorkbookPaneNativeTextLayerV3 = memo(function WorkbookPaneNativeTex
   const resolvedGeometry = resolveLatestGeometry(geometry, liveGeometry)
   const drawScrollSnapshot = useMemo(
     () =>
-      resolveTypeGpuV3DrawScrollSnapshot({
-        fallback: scrollSnapshot,
+      resolveNativeTextLayerDrawScrollSnapshotV3({
         geometry: resolvedGeometry,
+        liveScrollSnapshot: scrollSnapshot,
         panes: tilePanes,
+        presentedScrollSnapshot,
       }),
-    [resolvedGeometry, scrollSnapshot, tilePanes],
+    [presentedScrollSnapshot, resolvedGeometry, scrollSnapshot, tilePanes],
   )
   const panes = useMemo<readonly TextLayerPane[]>(() => [...tilePanes, ...headerPanes], [headerPanes, tilePanes])
   const dpr = useSyncExternalStore(subscribeDevicePixelRatioChange, getDevicePixelRatio, () => 1)
@@ -415,6 +434,10 @@ export const WorkbookPaneNativeTextLayerV3 = memo(function WorkbookPaneNativeTex
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-[15] overflow-hidden"
       data-v3-native-text-layer="mounted"
+      data-v3-native-text-presented-scroll-left={drawScrollSnapshot.scrollLeft ?? ''}
+      data-v3-native-text-presented-scroll-top={drawScrollSnapshot.scrollTop ?? ''}
+      data-v3-native-text-render-tx={drawScrollSnapshot.renderTx ?? drawScrollSnapshot.tx}
+      data-v3-native-text-render-ty={drawScrollSnapshot.renderTy ?? drawScrollSnapshot.ty}
       data-v3-native-text-run-count={textRunCount}
       data-testid="grid-native-text-layer"
       style={{ contain: 'strict' }}

@@ -75,6 +75,11 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     hostRuntime.getPresentedFrameProofSignatureSnapshot,
     hostRuntime.getPresentedFrameProofSignatureSnapshot,
   )
+  const presentedVisualFrame = useSyncExternalStore(
+    hostRuntime.subscribeFrameProofStatus,
+    hostRuntime.getPresentedVisualFrameSnapshot,
+    hostRuntime.getPresentedVisualFrameSnapshot,
+  )
   const hasPresentedVisibleFrame = presentedFrameProofSignature.length > 0
 
   const setCanvasRef = useCallback(
@@ -154,7 +159,11 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   if (!active || !host) {
     return null
   }
-  const typeGpuCanvasOpacity = showCanvasFallback ? 0 : 1
+  const typeGpuCanvasOpacity = resolveWorkbookPaneTypeGpuCanvasOpacityV3({
+    frameProofStatus,
+    hasPresentedVisibleFrame,
+    showCanvasFallback,
+  })
   const tileSceneRevision = resolveWorkbookPaneTileSceneRevisionV3(tilePanes)
   const tileSceneCameraSeq = resolveWorkbookPaneTileSceneCameraSeqV3(tilePanes)
   const visibleRenderRevision = resolveWorkbookPanePresentedRevisionV3(frameProofStatus, tileSceneRevision)
@@ -218,6 +227,13 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           data-v3-authoritative-render-revision={renderRevisionSnapshot?.authoritativeRevision ?? ''}
           data-v3-local-render-revision={renderRevisionSnapshot?.localRevision ?? ''}
           data-v3-presented-frame-proof-signature={presentedFrameProofSignature}
+          data-v3-presented-camera-seq={presentedVisualFrame?.cameraSeq ?? ''}
+          data-v3-presented-overlay-camera-seq={presentedVisualFrame?.overlayCameraSeq ?? ''}
+          data-v3-presented-overlay-seq={presentedVisualFrame?.overlaySeq ?? ''}
+          data-v3-presented-render-tx={presentedVisualFrame?.scrollSnapshot.renderTx ?? presentedVisualFrame?.scrollSnapshot.tx ?? ''}
+          data-v3-presented-render-ty={presentedVisualFrame?.scrollSnapshot.renderTy ?? presentedVisualFrame?.scrollSnapshot.ty ?? ''}
+          data-v3-presented-scroll-left={presentedVisualFrame?.scrollSnapshot.scrollLeft ?? ''}
+          data-v3-presented-scroll-top={presentedVisualFrame?.scrollSnapshot.scrollTop ?? ''}
           data-v3-preload-pane-count={preloadTilePanes.length}
           data-v3-projected-render-revision={renderRevisionSnapshot?.projectedRevision ?? ''}
           data-v3-text-run-count={tileTextRunCount}
@@ -239,6 +255,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           cameraStore={cameraStore}
           geometry={geometry}
           headerPanes={headerPanes}
+          presentedScrollSnapshot={presentedVisualFrame?.scrollSnapshot ?? null}
           scrollTransformStore={scrollTransformStore}
           suppressedTextCell={suppressedTextCell}
           tilePanes={tilePanes}
@@ -275,6 +292,20 @@ export function shouldMountWorkbookCanvasProofLayerV3(input: {
     return false
   }
   return hasVisiblePaneContent
+}
+
+export function resolveWorkbookPaneTypeGpuCanvasOpacityV3(input: {
+  readonly frameProofStatus: 'idle' | 'pending' | 'presented'
+  readonly hasPresentedVisibleFrame: boolean
+  readonly showCanvasFallback: boolean
+}): number {
+  if (!input.showCanvasFallback) {
+    return 1
+  }
+  if (input.frameProofStatus === 'pending' && input.hasPresentedVisibleFrame) {
+    return 1
+  }
+  return 0
 }
 
 export function hasWorkbookPaneVisibleContentV3(input: {

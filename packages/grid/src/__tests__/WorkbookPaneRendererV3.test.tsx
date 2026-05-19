@@ -12,6 +12,7 @@ import {
   resolveWorkbookPanePresentedRevisionV3,
   resolveWorkbookPaneTileSceneCameraSeqV3,
   resolveWorkbookPaneTileSceneRevisionV3,
+  resolveWorkbookPaneTypeGpuCanvasOpacityV3,
   resolveTypeGpuV3DrawScrollSnapshot,
   shouldMountWorkbookCanvasProofLayerV3,
   shouldDeferTypeGpuV3PreloadSync,
@@ -337,6 +338,30 @@ describe('WorkbookPaneRendererV3', () => {
         tilePaneCount: 0,
       }),
     ).toBe(true)
+  })
+
+  test('keeps the last presented TypeGPU frame visible while a replacement frame is pending', () => {
+    expect(
+      resolveWorkbookPaneTypeGpuCanvasOpacityV3({
+        frameProofStatus: 'pending',
+        hasPresentedVisibleFrame: true,
+        showCanvasFallback: true,
+      }),
+    ).toBe(1)
+    expect(
+      resolveWorkbookPaneTypeGpuCanvasOpacityV3({
+        frameProofStatus: 'pending',
+        hasPresentedVisibleFrame: false,
+        showCanvasFallback: true,
+      }),
+    ).toBe(0)
+    expect(
+      resolveWorkbookPaneTypeGpuCanvasOpacityV3({
+        frameProofStatus: 'presented',
+        hasPresentedVisibleFrame: true,
+        showCanvasFallback: false,
+      }),
+    ).toBe(1)
   })
 
   test('includes surface size and device scale in frame proof identity', () => {

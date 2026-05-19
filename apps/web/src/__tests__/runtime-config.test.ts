@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  createRuntimeFetch,
   createLocalOnlyRuntimeConfig,
   createZeroQueryContext,
   normalizeRuntimeConfigUserId,
@@ -40,6 +41,32 @@ describe('resolveRuntimeConfig', () => {
       documentId: 'visual-smoke',
       persistState: false,
     })
+  })
+
+  it('keeps the authoritative workbook server URL from imported workbook navigation', () => {
+    window.history.replaceState({}, '', '/?document=xlsx%3Aabc&server=http%3A%2F%2F127.0.0.1%3A54422%2F')
+
+    expect(resolveRuntimeConfig(BASE_CONFIG)).toMatchObject({
+      documentId: 'xlsx:abc',
+      serverUrl: 'http://127.0.0.1:54422',
+    })
+  })
+
+  it('routes runtime API reads through the imported workbook server when present', async () => {
+    const fetchCalls: Array<readonly [RequestInfo | URL, RequestInit | undefined]> = []
+    const fetchImpl: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init])
+      return new Response('{}')
+    }
+    const runtimeFetch = createRuntimeFetch('http://127.0.0.1:54422', fetchImpl)
+
+    await runtimeFetch('/v2/documents/xlsx%3Aabc/snapshot/latest')
+    await runtimeFetch('https://example.com/healthz')
+
+    expect(fetchCalls).toEqual([
+      ['http://127.0.0.1:54422/v2/documents/xlsx%3Aabc/snapshot/latest', undefined],
+      ['https://example.com/healthz', undefined],
+    ])
   })
 
   it('rejects malformed persistence query overrides instead of silently using defaults', () => {

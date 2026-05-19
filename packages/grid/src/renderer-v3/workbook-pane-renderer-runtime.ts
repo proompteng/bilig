@@ -43,8 +43,17 @@ export interface WorkbookPaneFrameInputV3 {
   readonly surface: TypeGpuSurfaceSizeV3
 }
 
+export interface WorkbookPanePresentedVisualFrameV3 {
+  readonly cameraSeq: number | null
+  readonly overlayCameraSeq: number | null
+  readonly overlaySeq: number | null
+  readonly scrollSnapshot: WorkbookGridScrollSnapshot
+  readonly surface: TypeGpuSurfaceSizeV3
+}
+
 export interface WorkbookPaneFrameResultV3 {
   readonly submitted: boolean
+  readonly visualFrame: WorkbookPanePresentedVisualFrameV3 | null
 }
 
 export type WorkbookPaneFrameDrawerV3 = (input: WorkbookPaneFrameInputV3) => boolean | void
@@ -141,6 +150,7 @@ export class WorkbookPaneRendererRuntimeV3 {
   private scrollStoreUnsubscribe: (() => void) | null = null
   private state: WorkbookPaneRendererRuntimeStateV3 = EMPTY_RUNTIME_STATE
   private frameResultListener: ((result: WorkbookPaneFrameResultV3) => void) | null = null
+  private inputSignalListener: (() => void) | null = null
   private subscribedCameraStore: GridCameraStore | null = null
   private subscribedScrollStore: WorkbookGridScrollStore | null = null
 
@@ -166,16 +176,21 @@ export class WorkbookPaneRendererRuntimeV3 {
     this.frameResultListener = listener
   }
 
+  setInputSignalListener(listener: (() => void) | null): void {
+    this.inputSignalListener = listener
+  }
+
   requestDraw(): void {
     this.scheduler.requestDraw(() => this.drawNow())
   }
 
   noteInputSignal(): void {
     this.scheduler.noteInputSignal()
+    this.inputSignalListener?.()
   }
 
   noteInputSignalAndRequestDraw(): void {
-    this.scheduler.noteInputSignal()
+    this.noteInputSignal()
     this.requestDraw()
   }
 
@@ -202,6 +217,11 @@ export class WorkbookPaneRendererRuntimeV3 {
     })
     const overlayBatch = state.overlayBuilder && latestGeometry ? state.overlayBuilder(latestGeometry) : state.overlay
 
+    const scrollSnapshot = resolveTypeGpuV3DrawScrollSnapshot({
+      fallback: state.scrollTransformStore?.getSnapshot() ?? { tx: 0, ty: 0 },
+      geometry: latestGeometry,
+      panes: state.tilePanes,
+    })
     const submitted =
       this.drawFrame({
         backend: state.backend,
@@ -209,22 +229,30 @@ export class WorkbookPaneRendererRuntimeV3 {
         headerPanes: state.headerPanes,
         overlay: overlayBatch ?? null,
         preloadTilePanes: state.preloadTilePanes,
-        scrollSnapshot: resolveTypeGpuV3DrawScrollSnapshot({
-          fallback: state.scrollTransformStore?.getSnapshot() ?? { tx: 0, ty: 0 },
-          geometry: latestGeometry,
-          panes: state.tilePanes,
-        }),
+        scrollSnapshot,
         surface: state.surface,
         syncPreloadPanes: frameDecision.syncPreloadPanes,
         tilePanes: state.tilePanes,
       }) === true
-    this.frameResultListener?.({ submitted })
+    this.frameResultListener?.({
+      submitted,
+      visualFrame: submitted
+        ? {
+            cameraSeq: latestGeometry?.camera.seq ?? null,
+            overlayCameraSeq: overlayBatch?.cameraSeq ?? null,
+            overlaySeq: overlayBatch?.seq ?? null,
+            scrollSnapshot: { ...scrollSnapshot },
+            surface: { ...state.surface },
+          }
+        : null,
+    })
   }
 
   dispose(): void {
     this.clearStoreSubscriptions()
     this.scheduler.cancel()
     this.frameResultListener = null
+    this.inputSignalListener = null
     this.state = EMPTY_RUNTIME_STATE
   }
 

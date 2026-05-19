@@ -165,6 +165,7 @@ function drawOverlay(context: CanvasRenderingContext2D, overlay: DynamicGridOver
 export function resolveWorkbookPaneCanvasFallbackFrame(input: {
   readonly cameraStore?: GridCameraStore | null | undefined
   readonly geometry: GridGeometrySnapshot | null
+  readonly layer?: 'fallback' | 'grid-floor' | undefined
   readonly overlay: DynamicGridOverlayBatchV3 | null
   readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayBatchV3 | null | undefined) | null | undefined
   readonly scrollTransformStore: WorkbookGridScrollStore | null
@@ -178,9 +179,10 @@ export function resolveWorkbookPaneCanvasFallbackFrame(input: {
     cameraStore: input.cameraStore,
     geometry: input.geometry,
   })
+  const shouldDrawOverlay = input.layer !== 'grid-floor'
   return {
     geometry,
-    overlay: input.overlayBuilder && geometry ? (input.overlayBuilder(geometry) ?? null) : input.overlay,
+    overlay: shouldDrawOverlay ? (input.overlayBuilder && geometry ? (input.overlayBuilder(geometry) ?? null) : input.overlay) : null,
     scrollSnapshot: resolveTypeGpuV3DrawScrollSnapshot({
       fallback: input.scrollTransformStore?.getSnapshot() ?? { tx: 0, ty: 0 },
       geometry,
@@ -232,6 +234,7 @@ export const WorkbookPaneCanvasFallbackV3 = memo(function WorkbookPaneCanvasFall
     const frame = resolveWorkbookPaneCanvasFallbackFrame({
       cameraStore,
       geometry,
+      layer,
       overlay,
       overlayBuilder,
       scrollTransformStore,
@@ -240,7 +243,7 @@ export const WorkbookPaneCanvasFallbackV3 = memo(function WorkbookPaneCanvasFall
     tilePanes.forEach((pane) => drawPane(context, pane, frame.scrollSnapshot, drawText))
     headerPanes.forEach((pane) => drawPane(context, pane, frame.scrollSnapshot, drawText))
     drawOverlay(context, frame.overlay)
-  }, [active, cameraStore, drawText, geometry, headerPanes, host, overlay, overlayBuilder, scrollTransformStore, tilePanes])
+  }, [active, cameraStore, drawText, geometry, headerPanes, host, layer, overlay, overlayBuilder, scrollTransformStore, tilePanes])
 
   useLayoutEffect(() => {
     if (!active || !host) {
@@ -294,6 +297,7 @@ export const WorkbookPaneCanvasFallbackV3 = memo(function WorkbookPaneCanvasFall
       data-v3-header-pane-count={headerPanes.length}
       data-v3-header-text-run-count={headerPanes.reduce((total, pane) => total + pane.textRuns.length, 0)}
       data-v3-layer-role={layer}
+      data-v3-overlay-enabled={isGridFloor ? 'false' : 'true'}
       data-v3-text-run-count={tilePanes.reduce((total, pane) => total + pane.tile.textRuns.length, 0)}
       data-v3-tile-pane-count={tilePanes.length}
       ref={canvasRef}

@@ -10,6 +10,7 @@ import {
   WorkbookPaneRendererRuntimeV3,
   type TypeGpuSurfaceSizeV3,
   type WorkbookPaneFrameResultV3,
+  type WorkbookPanePresentedVisualFrameV3,
 } from './workbook-pane-renderer-runtime.js'
 import {
   EMPTY_WORKBOOK_PANE_SURFACE_SNAPSHOT_V3,
@@ -64,6 +65,7 @@ export class WorkbookPaneRendererHostRuntimeV3 {
   private frameProofStatus: WorkbookPaneFrameProofStatusV3 = 'idle'
   private hasPresentedFrame = false
   private presentedFrameProofSignature = ''
+  private presentedVisualFrame: WorkbookPanePresentedVisualFrameV3 | null = null
   private props: WorkbookPaneRendererHostPropsV3 = EMPTY_HOST_PROPS
   private readonly rendererRuntime: WorkbookPaneRendererRuntimeV3
   private surfaceBackendStatus: WorkbookPaneSurfaceBackendStatusV3
@@ -73,6 +75,7 @@ export class WorkbookPaneRendererHostRuntimeV3 {
 
   constructor(options: WorkbookPaneRendererHostRuntimeOptionsV3 = {}) {
     this.rendererRuntime = options.rendererRuntime ?? new WorkbookPaneRendererRuntimeV3()
+    this.rendererRuntime.setInputSignalListener(() => this.handleInputSignal())
     this.rendererRuntime.setFrameResultListener((result) => this.handleFrameResult(result))
     this.surfaceRuntime = options.surfaceRuntime ?? new WorkbookPaneSurfaceRuntimeV3()
     this.surfaceBackendStatus = this.surfaceRuntime.getSnapshot().backendStatus
@@ -96,6 +99,7 @@ export class WorkbookPaneRendererHostRuntimeV3 {
   readonly getFrameProofStatusSnapshot = (): WorkbookPaneFrameProofStatusV3 => this.frameProofStatus
   readonly getHasPresentedFrameSnapshot = (): boolean => this.hasPresentedFrame
   readonly getPresentedFrameProofSignatureSnapshot = (): string => this.presentedFrameProofSignature
+  readonly getPresentedVisualFrameSnapshot = (): WorkbookPanePresentedVisualFrameV3 | null => this.presentedVisualFrame
 
   readonly subscribeBackendStatus = (listener: () => void): (() => void) => {
     if (this.disposed) {
@@ -146,6 +150,7 @@ export class WorkbookPaneRendererHostRuntimeV3 {
     this.unsubscribeSurface()
     this.backendStatusListeners.clear()
     this.frameProofListeners.clear()
+    this.rendererRuntime.setInputSignalListener(null)
     this.rendererRuntime.setFrameResultListener(null)
     const canvas = this.canvas
     this.canvas = null
@@ -189,12 +194,21 @@ export class WorkbookPaneRendererHostRuntimeV3 {
 
   private handleFrameResult(result: WorkbookPaneFrameResultV3): void {
     const signature = this.frameProofSignature
-    if (!result.submitted || !signature) {
+    if (!result.submitted || !signature || !result.visualFrame) {
       return
     }
+    this.setPresentedVisualFrame(result.visualFrame)
     this.setPresentedFrameProofSignature(signature)
     this.setHasPresentedFrame(true)
     this.setFrameProofStatus('presented')
+  }
+
+  private handleInputSignal(): void {
+    if (this.disposed || !this.frameProofSignature || this.surfaceBackendStatus !== 'ready') {
+      return
+    }
+    this.setHasPresentedFrame(false)
+    this.setFrameProofStatus('pending')
   }
 
   private setFrameProofStatus(status: WorkbookPaneFrameProofStatusV3): void {
@@ -221,6 +235,14 @@ export class WorkbookPaneRendererHostRuntimeV3 {
     this.emitFrameProofStatus()
   }
 
+  private setPresentedVisualFrame(frame: WorkbookPanePresentedVisualFrameV3 | null): void {
+    if (this.presentedVisualFrame === frame) {
+      return
+    }
+    this.presentedVisualFrame = frame
+    this.emitFrameProofStatus()
+  }
+
   private syncFrameProofSignature(props: WorkbookPaneRendererHostPropsV3): void {
     const signature = resolveWorkbookPaneFrameProofSignatureV3({
       ...props,
@@ -232,6 +254,7 @@ export class WorkbookPaneRendererHostRuntimeV3 {
     this.frameProofSignature = signature
     if (!signature) {
       this.setPresentedFrameProofSignature('')
+      this.setPresentedVisualFrame(null)
       this.setHasPresentedFrame(false)
       this.setFrameProofStatus('idle')
       return

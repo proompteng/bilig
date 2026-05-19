@@ -10,6 +10,7 @@ import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResize
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS, workbookFontPointSizeToCssPx } from './workbookTheme.js'
+import type { GridSelection, Item } from './gridTypes.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 export { hasSelectionTargetChanged } from './workbookGridViewport.js'
 export type {
@@ -20,6 +21,36 @@ export type {
   WorkbookGridPreviewRange,
   WorkbookGridSurfaceProps,
 } from './workbookGridSurfaceTypes.js'
+
+export function resolveWorkbookGridSurfaceDisplaySelection(input: {
+  readonly activeHeaderDrag: unknown
+  readonly committedCellSelection: GridSelection
+  readonly isEditingCell: boolean
+  readonly isFillHandleDragging: boolean
+  readonly isRangeMoveDragging: boolean
+  readonly renderGridSelection: GridSelection
+  readonly renderSelectionRange?: { readonly width: number; readonly height: number } | null | undefined
+  readonly selectedCell: Item
+}): GridSelection {
+  if (input.isEditingCell) {
+    return input.committedCellSelection
+  }
+  if (input.isFillHandleDragging || input.isRangeMoveDragging || input.activeHeaderDrag) {
+    return input.renderGridSelection
+  }
+  const hasAxisSelection = input.renderGridSelection.columns.length > 0 || input.renderGridSelection.rows.length > 0
+  const currentCell = input.renderGridSelection.current?.cell ?? null
+  const currentCellMatchesSelected = currentCell?.[0] === input.selectedCell[0] && currentCell[1] === input.selectedCell[1]
+  if (!hasAxisSelection && !currentCellMatchesSelected) {
+    return input.committedCellSelection
+  }
+  const renderSelectionIsSingleCell =
+    input.renderGridSelection.columns.length === 0 &&
+    input.renderGridSelection.rows.length === 0 &&
+    input.renderSelectionRange?.width === 1 &&
+    input.renderSelectionRange.height === 1
+  return renderSelectionIsSingleCell ? input.committedCellSelection : input.renderGridSelection
+}
 
 export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   const renderState = useWorkbookGridRenderState({
@@ -124,18 +155,16 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     () => createGridSelection(displaySelectionCol, displaySelectionRow),
     [displaySelectionCol, displaySelectionRow],
   )
-  const renderSelectionIsSingleCell =
-    renderState.gridSelection.columns.length === 0 &&
-    renderState.gridSelection.rows.length === 0 &&
-    renderState.selectionRange?.width === 1 &&
-    renderState.selectionRange.height === 1
-  const displayGridSelection = props.isEditingCell
-    ? committedCellSelection
-    : renderState.isFillHandleDragging || renderState.isRangeMoveDragging || renderState.activeHeaderDrag
-      ? renderState.gridSelection
-      : renderSelectionIsSingleCell
-        ? committedCellSelection
-        : renderState.gridSelection
+  const displayGridSelection = resolveWorkbookGridSurfaceDisplaySelection({
+    activeHeaderDrag: renderState.activeHeaderDrag,
+    committedCellSelection,
+    isEditingCell: props.isEditingCell,
+    isFillHandleDragging: renderState.isFillHandleDragging,
+    isRangeMoveDragging: renderState.isRangeMoveDragging,
+    renderGridSelection: renderState.gridSelection,
+    renderSelectionRange: renderState.selectionRange,
+    selectedCell: [displaySelectionCol, displaySelectionRow],
+  })
   const displaySelectionRange = displayGridSelection.current?.range ?? null
   const renderHostElement = renderState.hostElement
   const getLiveGeometrySnapshot = renderState.getLiveGeometrySnapshot
