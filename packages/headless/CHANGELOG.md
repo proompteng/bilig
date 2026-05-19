@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.24.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.23.4
+- Manual override: no
+
+## Features
+- feat(mcp): add remote workpaper endpoint (a2349d8e)
+
 ## 0.23.4
 
 - Release type: patch
