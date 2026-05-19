@@ -208,7 +208,10 @@ export function applyOptimisticFillRange(
   }
   const targetCellCount = (targetBounds.endRow - targetBounds.startRow + 1) * (targetBounds.endCol - targetBounds.startCol + 1)
   if (targetCellCount > MAX_MATERIALIZED_OPTIMISTIC_RANGE_CELLS) {
-    return applyVisibleOptimisticFillRange(viewportStore, source, target, sourceBounds, targetBounds)
+    return (
+      applyOptimisticFillRangeOverlay(viewportStore, source, target, sourceBounds, targetBounds) ??
+      applyVisibleOptimisticFillRange(viewportStore, source, target, sourceBounds, targetBounds)
+    )
   }
 
   const sourceCells: CellSnapshot[][] = []
@@ -440,6 +443,66 @@ function applyVisibleOptimisticFillRange(
     stagedSnapshots.set(optimisticSnapshotKey(targetSnapshot.sheetName, targetSnapshot.address), next)
     return next
   })
+}
+
+function applyOptimisticFillRangeOverlay(
+  viewportStore: OptimisticViewportStore,
+  source: CellRangeRef,
+  target: CellRangeRef,
+  sourceBounds: ReturnType<typeof normalizeCellRange>,
+  targetBounds: ReturnType<typeof normalizeCellRange>,
+): (() => void) | null {
+  if (!viewportStore.beginOptimisticRangeOverlay) {
+    return null
+  }
+  const sourceSnapshots = collectCompleteVisibleSourceSnapshots(viewportStore, source, sourceBounds)
+  if (!sourceSnapshots) {
+    return null
+  }
+  const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1
+  const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1
+  return viewportStore.beginOptimisticRangeOverlay(target, (targetSnapshot) => {
+    const targetPosition = parseCellAddress(targetSnapshot.address, targetSnapshot.sheetName)
+    const sourceRowOffset = (targetPosition.row - targetBounds.startRow) % sourceHeight
+    const sourceColOffset = (targetPosition.col - targetBounds.startCol) % sourceWidth
+    const sourceAddress = formatAddress(sourceBounds.startRow + sourceRowOffset, sourceBounds.startCol + sourceColOffset)
+    const sourceSnapshot = sourceSnapshots.get(optimisticSnapshotKey(source.sheetName, sourceAddress))
+    if (!sourceSnapshot) {
+      return targetSnapshot
+    }
+    return createCopiedOptimisticSnapshot(viewportStore, sourceSnapshot, sourceAddress, targetSnapshot, new Map())
+  })
+}
+
+function collectCompleteVisibleSourceSnapshots(
+  viewportStore: OptimisticViewportStore,
+  source: CellRangeRef,
+  sourceBounds: ReturnType<typeof normalizeCellRange>,
+): Map<string, CellSnapshot> | null {
+  const sourceCellCount = (sourceBounds.endRow - sourceBounds.startRow + 1) * (sourceBounds.endCol - sourceBounds.startCol + 1)
+  if (sourceCellCount > MAX_MATERIALIZED_OPTIMISTIC_RANGE_CELLS) {
+    return null
+  }
+  const snapshots = new Map<string, CellSnapshot>()
+  if (viewportStore.forEachCachedOrVisibleCellSnapshotInRange) {
+    viewportStore.forEachCachedOrVisibleCellSnapshotInRange(source, (snapshot) => {
+      snapshots.set(optimisticSnapshotKey(snapshot.sheetName, snapshot.address), snapshot)
+    })
+  }
+  for (let row = sourceBounds.startRow; row <= sourceBounds.endRow; row += 1) {
+    for (let col = sourceBounds.startCol; col <= sourceBounds.endCol; col += 1) {
+      const address = formatAddress(row, col)
+      const key = optimisticSnapshotKey(source.sheetName, address)
+      if (!snapshots.has(key)) {
+        const snapshot = viewportStore.peekCell?.(source.sheetName, address)
+        if (!snapshot) {
+          return null
+        }
+        snapshots.set(key, snapshot)
+      }
+    }
+  }
+  return snapshots
 }
 
 function applyVisibleOptimisticTargetRange(

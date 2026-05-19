@@ -710,6 +710,66 @@ describe('use workbook selection action helpers', () => {
     })
   })
 
+  it('uses a range overlay for huge fill targets so future viewports inherit source presentation', () => {
+    const cells = new Map<string, CellSnapshot>([
+      [
+        'Sheet1:B1',
+        {
+          ...emptyCell('Sheet1', 'B1'),
+          input: 7,
+          format: '0.00',
+          numberFormatId: 'fmt-source',
+          styleId: 'style-source',
+          value: { tag: ValueTag.Number, value: 7 },
+          version: 3,
+        },
+      ],
+    ])
+    let overlayApply: ((snapshot: CellSnapshot) => CellSnapshot) | null = null
+    let rollbackCalled = false
+    const viewportStore = {
+      beginOptimisticRangeOverlay(range: CellRangeRef, apply: (snapshot: CellSnapshot) => CellSnapshot) {
+        expect(range).toMatchObject({ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' })
+        overlayApply = apply
+        return () => {
+          rollbackCalled = true
+        }
+      },
+      forEachCachedOrVisibleCellSnapshotInRange(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void) {
+        expect(range).toMatchObject({ sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B1' })
+        listener(cells.get('Sheet1:B1') ?? emptyCell('Sheet1', 'B1'))
+      },
+      peekCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`)
+      },
+      getCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`) ?? emptyCell(sheetName, address)
+      },
+      setCellSnapshot(snapshot: CellSnapshot) {
+        cells.set(`${snapshot.sheetName}:${snapshot.address}`, snapshot)
+      },
+    }
+
+    const rollback = applyOptimisticFillRange(
+      viewportStore,
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B1' },
+      { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' },
+    )
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(overlayApply).toEqual(expect.any(Function))
+    const futureTarget = overlayApply?.(emptyCell('Sheet1', 'D15000'))
+    expect(futureTarget).toMatchObject({
+      input: 7,
+      format: '0.00',
+      numberFormatId: 'fmt-source',
+      styleId: 'style-source',
+      value: { tag: ValueTag.Number, value: 7 },
+    })
+    rollback?.()
+    expect(rollbackCalled).toBe(true)
+  })
+
   it('does not ghost empty source presentation into huge fill targets when the mapped source is offscreen', () => {
     const cells = new Map<string, CellSnapshot>([
       [

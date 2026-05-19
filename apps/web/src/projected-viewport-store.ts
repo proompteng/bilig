@@ -267,6 +267,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     return this.rangeOverlayStore.register(range, createIdempotentContentClearedSnapshot)
   }
 
+  beginOptimisticRangeOverlay(range: CellRangeRef, apply: (snapshot: CellSnapshot) => CellSnapshot): (() => void) | null {
+    return this.rangeOverlayStore.register(range, apply)
+  }
+
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
     assertValidProjectedAxisMutation('column', columnIndex, width)
     const previousWidth = this.axisStore.getColumnWidths(sheetName)[columnIndex]
