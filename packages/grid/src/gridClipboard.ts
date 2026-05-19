@@ -86,13 +86,25 @@ function decodeHtmlEntity(entity: string): string {
       return ' '
     default:
       if (entity.startsWith('#x')) {
-        return String.fromCodePoint(Number.parseInt(entity.slice(2), 16))
+        return decodeNumericHtmlEntity(entity, entity.slice(2), 16)
       }
       if (entity.startsWith('#')) {
-        return String.fromCodePoint(Number.parseInt(entity.slice(1), 10))
+        return decodeNumericHtmlEntity(entity, entity.slice(1), 10)
       }
       return `&${entity};`
   }
+}
+
+function decodeNumericHtmlEntity(entity: string, rawCodePoint: string, radix: 10 | 16): string {
+  const codePoint = Number.parseInt(rawCodePoint, radix)
+  const isWellFormed =
+    rawCodePoint.length > 0 &&
+    Number.isInteger(codePoint) &&
+    codePoint >= 0 &&
+    codePoint <= 0x10ffff &&
+    (codePoint < 0xd800 || codePoint > 0xdfff) &&
+    codePoint.toString(radix) === rawCodePoint.toLowerCase()
+  return isWellFormed ? String.fromCodePoint(codePoint) : `&${entity};`
 }
 
 function decodeHtmlEntities(value: string): string {

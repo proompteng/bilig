@@ -95,7 +95,7 @@ export function computeWorkPaperTrackedCellChangesFromEvents(
     return null
   }
 
-  const nextVisibility = input.beforeVisibility
+  const nextVisibility = updateVisibility ? cloneVisibilitySnapshot(input.beforeVisibility) : input.beforeVisibility
   const sheetOrders = new Map<number, number>()
   const sheetOrderFor = (sheetId: number): number => {
     const existing = sheetOrders.get(sheetId)
@@ -358,6 +358,19 @@ function applyTrackedChangeToVisibility(sheet: SheetStateSnapshot, change: WorkP
   } else {
     sheet.cells.set(cellKey, change.newValue)
   }
+}
+
+function cloneVisibilitySnapshot(snapshot: VisibilitySnapshot): VisibilitySnapshot {
+  const next: VisibilitySnapshot = new Map()
+  for (const [sheetId, sheet] of snapshot.entries()) {
+    next.set(sheetId, {
+      sheetId: sheet.sheetId,
+      sheetName: sheet.sheetName,
+      order: sheet.order,
+      cells: new Map(sheet.cells),
+    })
+  }
+  return next
 }
 
 function toPublicCellChange(change: WorkPaperCellChange): WorkPaperCellChange {

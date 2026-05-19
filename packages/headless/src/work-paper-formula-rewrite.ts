@@ -87,6 +87,12 @@ function rewriteNameRefForPublic(
   if (exact) {
     return { ...node, name: exact.publicName }
   }
+  const workbookScoped = [...namedExpressions.values()].find(
+    (expression) => expression.internalName === node.name && expression.scope === undefined,
+  )
+  if (workbookScoped) {
+    return { ...node, name: workbookScoped.publicName }
+  }
   return node
 }
 
