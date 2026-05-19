@@ -12,13 +12,13 @@ import type {
   WorkbookSortSnapshot,
 } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
-import { EngineMutationError } from '../engine/errors.js'
 import {
   applyCoreAction,
   clearFormatActionArbitrary,
   clearStyleActionArbitrary,
   coreReplicaActionArbitrary,
   engineFuzzSheetName,
+  isExpectedEngineMutationRejection,
   normalizeSnapshotForSemanticComparison,
   rangeArbitrary,
   styleActionArbitrary,
@@ -356,7 +356,7 @@ export function applyEngineSemanticActionAndCaptureResult(
       after,
     }
   } catch (error) {
-    if (!(error instanceof EngineMutationError)) {
+    if (!isExpectedEngineMutationRejection(error)) {
       throw error
     }
     const after = engine.exportSnapshot()
