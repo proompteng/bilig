@@ -22,7 +22,7 @@ Cursor, VS Code, Codex, or another stdio MCP client.
 ## Canonical Package
 
 ```sh
-npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.25.0 -- bilig-workpaper-mcp
 ```
 
 Package metadata:
@@ -86,7 +86,7 @@ crawlers that probe those well-known variants.
 
 | Directory                       | Status                                                                | Link                                                                                                            |
 | ------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Official MCP Registry           | Live through `0.24.5` in public search when requesting enough results | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper&limit=100> |
+| Official MCP Registry           | Live through `0.25.0` in public search when requesting enough results | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper&limit=100> |
 | Hosted Streamable HTTP endpoint | App runtime endpoint for JSON-only stateless MCP smoke tests          | <https://bilig.proompteng.ai/mcp>                                                                               |
 | Static MCP server card          | Live                                                                  | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                           |
 | Static MCP discovery aliases    | Live                                                                  | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                                       |
@@ -185,8 +185,8 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 19, 2026: npm latest is `@bilig/headless@0.24.5`.
-Official Registry search returns Bilig WorkPaper version `0.24.5` when the
+Latest checked result on May 19, 2026: npm latest is `@bilig/headless@0.25.0`.
+Official Registry search returns Bilig WorkPaper version `0.25.0` when the
 query asks for enough results, for example with `limit=100`. The API also
 returns historical entries, so consumers should follow pagination, request a
 sufficient limit, select the latest-marked entry when available, or prefer the
@@ -230,7 +230,7 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' |
-  npm exec --package @bilig/headless@0.24.5 -- \
+  npm exec --package @bilig/headless@0.25.0 -- \
     bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
@@ -258,5 +258,5 @@ verify readback, and persist WorkPaper JSON through the published
 `@bilig/headless` package.
 
 ```sh
-npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.25.0 -- bilig-workpaper-mcp
 ```
