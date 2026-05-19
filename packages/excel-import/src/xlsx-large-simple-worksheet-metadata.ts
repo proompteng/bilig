@@ -6,6 +6,7 @@ import type {
   WorkbookSheetFormatPrSnapshot,
 } from '@bilig/protocol'
 import type { LargeSimpleHyperlinkRef } from './xlsx-large-simple-hyperlinks.js'
+import type { PrintPageSetupSnapshot } from './xlsx-large-simple-printer-settings.js'
 
 const maxExpandedAxisMetadataEntries = 2_048
 
@@ -26,6 +27,7 @@ export interface LargeSimpleWorksheetScannedMetadata {
   readonly hyperlinks?: readonly LargeSimpleHyperlinkRef[]
   readonly rows?: LargeSimpleWorksheetAxisMetadata
   readonly merges?: readonly LargeSimpleWorksheetMergeRef[]
+  readonly printPageSetup?: PrintPageSetupSnapshot
   readonly sheetFormatPr?: WorkbookSheetFormatPrSnapshot
 }
 

@@ -17,7 +17,7 @@ import { readImportedWorkbookDrawingArtifactsFromWorksheetRelationships } from '
 import { readImportedSheetAutoFilters } from './xlsx-filters.js'
 import { readLargeSimpleSheetHyperlinks, resolveLargeSimpleSheetHyperlinks } from './xlsx-large-simple-hyperlinks.js'
 import { LargeSimpleXlsxImportPhaseRecorder, type LargeSimpleXlsxImportPhaseTelemetry } from './xlsx-large-simple-import-telemetry.js'
-import { readLargeSimpleSheetPrintMetadata } from './xlsx-large-simple-printer-settings.js'
+import { readLargeSimpleSheetPrintMetadata, readLargeSimpleSheetPrintPageSetup } from './xlsx-large-simple-printer-settings.js'
 import { readAllLargeSimpleSharedStrings, readReferencedLargeSimpleSharedStrings } from './xlsx-large-simple-referenced-shared-strings.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import { shouldUseSharedStringlessFastPathBytes } from './xlsx-large-simple-shared-stringless-fast-path.js'
@@ -314,10 +314,6 @@ export function tryImportLargeSimpleXlsx(
         if (hyperlinks === null) {
           return null
         }
-        const printMetadata = readLargeSimpleSheetPrintMetadata(zip, entry.path, worksheetXml)
-        if (printMetadata === null) {
-          return null
-        }
         const filters = streamedMetadataScan?.filters ? [] : readImportedSheetAutoFilters(entry.name, worksheetXml)
         const conditionalFormatArtifacts = hasConditionalFormats
           ? readImportedSheetConditionalFormatArtifactsFromWorksheetXml(worksheetXml)
@@ -327,11 +323,19 @@ export function tryImportLargeSimpleXlsx(
           ...(filters.length > 0 ? { filters } : {}),
           ...(conditionalFormats ? { conditionalFormats } : {}),
           ...(conditionalFormatArtifacts ? { conditionalFormatArtifacts } : {}),
-          ...printMetadata,
         }
       } else {
         metadataInput = conditionalFormats ? { conditionalFormats } : {}
       }
+    }
+    if (materializeCells) {
+      const printPageSetup =
+        streamedMetadataScan?.printPageSetup ?? (worksheetXml ? readLargeSimpleSheetPrintPageSetup(worksheetXml) : undefined)
+      const printMetadata = readLargeSimpleSheetPrintMetadata(zip, entry.path, printPageSetup)
+      if (printMetadata === null) {
+        return null
+      }
+      metadataInput = { ...metadataInput, ...printMetadata }
     }
     const streamedHyperlinks =
       materializeCells && streamedMetadataScan?.hyperlinks

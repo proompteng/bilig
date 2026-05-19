@@ -1,8 +1,6 @@
 import { strFromU8 } from 'fflate'
 
 import type { LiteralInput, WorkbookAxisEntrySnapshot, WorkbookAxisMetadataSnapshot, WorkbookRichTextCellSnapshot } from '@bilig/protocol'
-import { toLiteralInput } from './workbook-import-helpers.js'
-import { decodeExcelEscapedText } from './xlsx-escaped-text.js'
 import { readImportedSheetAutoFiltersFromElementXml } from './xlsx-filters.js'
 import {
   LargeSimpleFormulaRecords,
@@ -10,9 +8,11 @@ import {
   readLargeSimpleFormulaTypeCode,
 } from './xlsx-large-simple-formula-records.js'
 import { readLargeSimpleSheetHyperlinkRefs } from './xlsx-large-simple-hyperlinks.js'
+import { appendLargeSimplePrintPageSetupElement, isLargeSimplePrintPageSetupElementName } from './xlsx-large-simple-printer-settings.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
+import { decodeXmlText, normalizeWorksheetText, stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 import {
   metadataWorksheetTagNames,
@@ -102,6 +102,7 @@ class LargeSimpleWorksheetChunkScanner {
   private rowEntries: WorkbookAxisEntrySnapshot[] | undefined
   private rowMetadata: WorkbookAxisMetadataSnapshot[] | undefined
   private mergeRefs: LargeSimpleWorksheetMergeRef[] | undefined
+  private printPageSetup: LargeSimpleWorksheetScannedMetadata['printPageSetup']
   private sheetFormatPr: LargeSimpleWorksheetScannedMetadata['sheetFormatPr']
   private readonly metadataSnippets: string[] = []
   private readonly hasSharedStrings: boolean
@@ -222,6 +223,7 @@ class LargeSimpleWorksheetChunkScanner {
       ...(this.hyperlinks && this.hyperlinks.length > 0 ? { hyperlinks: this.hyperlinks } : {}),
       ...(rows ? { rows } : {}),
       ...(this.mergeRefs && this.mergeRefs.length > 0 ? { merges: this.mergeRefs } : {}),
+      ...(this.printPageSetup ? { printPageSetup: this.printPageSetup } : {}),
       ...(this.sheetFormatPr ? { sheetFormatPr: this.sheetFormatPr } : {}),
     }
     return Object.keys(metadata).length > 0 ? metadata : undefined
@@ -483,6 +485,11 @@ class LargeSimpleWorksheetChunkScanner {
         return false
       }
       this.hyperlinks = [...(this.hyperlinks ?? []), ...refs]
+      return true
+    }
+    if (isLargeSimplePrintPageSetupElementName(localName)) {
+      this.printPageSetup ??= {}
+      appendLargeSimplePrintPageSetupElement(this.printPageSetup, localName, decodeBytes(this.buffer, startIndex, endIndex))
       return true
     }
     return false
@@ -861,49 +868,6 @@ function skipAsciiWhitespace(bytes: Uint8Array, startIndex: number, endIndex: nu
   return index
 }
 
-function decodeXmlText(value: string): string {
-  if (!value.includes('&')) {
-    return value
-  }
-  return value.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/gu, (_match, entity: string) => {
-    if (entity.startsWith('#x')) {
-      const codePoint = Number.parseInt(entity.slice(2), 16)
-      return isValidXmlCodePoint(codePoint) ? String.fromCodePoint(codePoint) : ''
-    }
-    if (entity.startsWith('#')) {
-      const codePoint = Number.parseInt(entity.slice(1), 10)
-      return isValidXmlCodePoint(codePoint) ? String.fromCodePoint(codePoint) : ''
-    }
-    switch (entity) {
-      case 'amp':
-        return '&'
-      case 'lt':
-        return '<'
-      case 'gt':
-        return '>'
-      case 'quot':
-        return '"'
-      case 'apos':
-        return "'"
-      default:
-        return ''
-    }
-  })
-}
-
-function stringItemText(xml: string): string {
-  return normalizeWorksheetText(
-    [...xml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?t\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?t>/gu)]
-      .map((match) => decodeXmlText(match[1] ?? ''))
-      .join(''),
-  )
-}
-
-function normalizeWorksheetText(value: string): string {
-  const literal = toLiteralInput(decodeExcelEscapedText(value))
-  return typeof literal === 'string' ? literal : value
-}
-
 function decodeCellAddress(address: string): { readonly row: number; readonly column: number } | null {
   const match = /^([A-Z]{1,3})([1-9][0-9]*)$/iu.exec(address.replaceAll('$', ''))
   if (!match) {
@@ -992,8 +956,4 @@ function isXmlNameByte(byte: number): boolean {
     byte === 58 ||
     byte === 95
   )
-}
-
-function isValidXmlCodePoint(value: number): boolean {
-  return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
 }

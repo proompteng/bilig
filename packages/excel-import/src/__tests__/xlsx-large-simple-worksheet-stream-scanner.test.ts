@@ -86,6 +86,14 @@ describe('large simple worksheet stream scanners', () => {
         ],
       },
       merges: [{ startAddress: 'A1', endAddress: 'B1' }],
+      printPageSetup: {
+        printOptionsXml: '<printOptions horizontalCentered="1"/>',
+        pageMarginsXml: '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75"/>',
+        pageSetupXml: '<pageSetup orientation="landscape" r:id="rIdPrinterSettings1"/>',
+        headerFooterXml: '<headerFooter><oddFooter>Page &amp;P</oddFooter></headerFooter>',
+        rowBreaksXml: '<rowBreaks count="1"><brk id="10" max="16383" man="1"/></rowBreaks>',
+        colBreaksXml: '<colBreaks count="1"><brk id="2" max="1048575" man="1"/></colBreaks>',
+      },
       sheetFormatPr: { defaultRowHeight: 15, outlineLevelRow: 1 },
     })
   })
@@ -164,6 +172,12 @@ function metadataWorksheetXml(): string {
     '<autoFilter ref="A1:B2"><filterColumn colId="0"><filters><filter val="Open"/></filters></filterColumn></autoFilter>',
     '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
     '<hyperlinks><hyperlink ref="A1:B1" location="Summary!A1" tooltip="Jump" display="Summary"/></hyperlinks>',
+    '<printOptions horizontalCentered="1"/>',
+    '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75"/>',
+    '<pageSetup orientation="landscape" r:id="rIdPrinterSettings1"/>',
+    '<headerFooter><oddFooter>Page &amp;P</oddFooter></headerFooter>',
+    '<rowBreaks count="1"><brk id="10" max="16383" man="1"/></rowBreaks>',
+    '<colBreaks count="1"><brk id="2" max="1048575" man="1"/></colBreaks>',
     '<drawing r:id="rIdDrawing1"/>',
     '</worksheet>',
   ].join('')

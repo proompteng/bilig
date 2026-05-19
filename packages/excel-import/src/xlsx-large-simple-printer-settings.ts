@@ -2,7 +2,7 @@ import type { SheetMetadataSnapshot, WorkbookPrinterSettingsSnapshot } from '@bi
 import { getZipText, normalizeZipPath, type XlsxZipEntries } from './xlsx-zip.js'
 import { parseRelationships, resolveTargetPath } from './xlsx-pivot-artifacts.js'
 
-type PrintPageSetupSnapshot = NonNullable<SheetMetadataSnapshot['printPageSetup']>
+export type PrintPageSetupSnapshot = NonNullable<SheetMetadataSnapshot['printPageSetup']>
 
 const binaryChunkSize = 0x8000
 const printerSettingsRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings'
@@ -14,23 +14,74 @@ type PrintPageSetupElementName = (typeof printPageSetupElementNames)[number]
 export function readLargeSimpleSheetPrintMetadata(
   zip: XlsxZipEntries,
   worksheetPath: string,
-  worksheetXml: string,
+  printPageSetup: PrintPageSetupSnapshot | undefined,
 ): Pick<SheetMetadataSnapshot, 'printerSettings' | 'printPageSetup'> | null {
-  const printerSettings = readLargeSimpleSheetPrinterSettings(zip, worksheetPath, worksheetXml)
+  const printerSettings = readLargeSimpleSheetPrinterSettings(zip, worksheetPath, printPageSetup)
   if (printerSettings === null) {
     return null
   }
-  const printPageSetup = readLargeSimpleSheetPrintPageSetup(worksheetXml)
   return {
     ...(printerSettings ? { printerSettings } : {}),
     ...(printPageSetup ? { printPageSetup } : {}),
   }
 }
 
+export function readLargeSimpleSheetPrintPageSetup(worksheetXml: string): PrintPageSetupSnapshot | undefined {
+  const printPageSetup: PrintPageSetupSnapshot = {}
+  for (const elementName of printPageSetupElementNames) {
+    const xml = readElementXml(worksheetXml, elementName)
+    if (xml) {
+      appendLargeSimplePrintPageSetupElement(printPageSetup, elementName, xml)
+    }
+  }
+  return Object.keys(printPageSetup).length > 0 ? printPageSetup : undefined
+}
+
+export function isLargeSimplePrintPageSetupElementName(value: string): value is PrintPageSetupElementName {
+  switch (value) {
+    case 'printOptions':
+    case 'pageMargins':
+    case 'pageSetup':
+    case 'headerFooter':
+    case 'rowBreaks':
+    case 'colBreaks':
+      return true
+    default:
+      return false
+  }
+}
+
+export function appendLargeSimplePrintPageSetupElement(
+  printPageSetup: PrintPageSetupSnapshot,
+  elementName: PrintPageSetupElementName,
+  xml: string,
+): void {
+  switch (elementName) {
+    case 'printOptions':
+      printPageSetup.printOptionsXml = xml
+      break
+    case 'pageMargins':
+      printPageSetup.pageMarginsXml = xml
+      break
+    case 'pageSetup':
+      printPageSetup.pageSetupXml = xml
+      break
+    case 'headerFooter':
+      printPageSetup.headerFooterXml = xml
+      break
+    case 'rowBreaks':
+      printPageSetup.rowBreaksXml = xml
+      break
+    case 'colBreaks':
+      printPageSetup.colBreaksXml = xml
+      break
+  }
+}
+
 function readLargeSimpleSheetPrinterSettings(
   zip: XlsxZipEntries,
   worksheetPath: string,
-  worksheetXml: string,
+  printPageSetup: PrintPageSetupSnapshot | undefined,
 ): WorkbookPrinterSettingsSnapshot[] | null | undefined {
   const relationships = parseRelationships(getZipText(zip, worksheetRelationshipsPath(worksheetPath))).filter(
     (relationship) => relationship.type === printerSettingsRelationshipType || relationship.type.endsWith('/printerSettings'),
@@ -49,7 +100,7 @@ function readLargeSimpleSheetPrinterSettings(
     if (!bytes) {
       return null
     }
-    const pageSetupXml = readPageSetupXml(worksheetXml, relationship.id)
+    const pageSetupXml = readPageSetupXml(printPageSetup?.pageSetupXml, relationship.id)
     settings.push({
       relationshipTarget: relationship.target,
       storage: 'base64',
@@ -61,39 +112,7 @@ function readLargeSimpleSheetPrinterSettings(
   return settings.length > 0 ? settings : undefined
 }
 
-function readLargeSimpleSheetPrintPageSetup(worksheetXml: string): PrintPageSetupSnapshot | undefined {
-  const printPageSetup: PrintPageSetupSnapshot = {}
-  for (const elementName of printPageSetupElementNames) {
-    const xml = readElementXml(worksheetXml, elementName)
-    if (!xml) {
-      continue
-    }
-    switch (elementName) {
-      case 'printOptions':
-        printPageSetup.printOptionsXml = xml
-        break
-      case 'pageMargins':
-        printPageSetup.pageMarginsXml = xml
-        break
-      case 'pageSetup':
-        printPageSetup.pageSetupXml = xml
-        break
-      case 'headerFooter':
-        printPageSetup.headerFooterXml = xml
-        break
-      case 'rowBreaks':
-        printPageSetup.rowBreaksXml = xml
-        break
-      case 'colBreaks':
-        printPageSetup.colBreaksXml = xml
-        break
-    }
-  }
-  return Object.keys(printPageSetup).length > 0 ? printPageSetup : undefined
-}
-
-function readPageSetupXml(sheetXml: string, relationshipId: string): string | undefined {
-  const pageSetupXml = readElementXml(sheetXml, 'pageSetup')
+function readPageSetupXml(pageSetupXml: string | undefined, relationshipId: string): string | undefined {
   if (!pageSetupXml) {
     return undefined
   }
