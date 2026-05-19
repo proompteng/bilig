@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.25.6
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.25.5
+- Manual override: no
+
+## Fixes
+- fix(formula): preserve cached formula parity (0fd14b37)
+
+## Internal runtime changes
+- docs(mcp): add Smithery install surface (aeddfc39)
+
 ## 0.25.5
 
 - Release type: patch
