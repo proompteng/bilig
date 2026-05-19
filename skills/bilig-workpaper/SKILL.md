@@ -42,7 +42,7 @@ Before wiring a client, an agent can prove the direct WorkPaper loop with:
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.25.2", "--", "bilig-agent-challenge"]
+  "args": ["exec", "--package", "@bilig/headless@0.25.3", "--", "bilig-agent-challenge"]
 }
 ```
 
@@ -52,7 +52,7 @@ Before wiring a client, an agent can prove the direct WorkPaper loop with:
   "args": [
     "exec",
     "--package",
-    "@bilig/headless@0.25.2",
+    "@bilig/headless@0.25.3",
     "--",
     "bilig-workpaper-mcp",
     "--workpaper",
@@ -126,7 +126,7 @@ When the user has a reduced XLSX formula/import bug, generate a local report thr
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.25.2", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
+  "args": ["exec", "--package", "@bilig/headless@0.25.3", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
 }
 ```
 

@@ -36,7 +36,7 @@
     "args": [
       "exec",
       "--package",
-      "@bilig/headless@0.25.2",
+      "@bilig/headless@0.25.3",
       "--",
       "bilig-workpaper-mcp",
       "--workpaper",
@@ -88,7 +88,7 @@
     {
       "name": "formula-clinic",
       "type": "local-cli",
-      "command": "npm exec --package @bilig/headless@0.25.2 -- bilig-formula-clinic ./reduced.xlsx --cells \"Summary!B7,Inputs!B2\"",
+      "command": "npm exec --package @bilig/headless@0.25.3 -- bilig-formula-clinic ./reduced.xlsx --cells \"Summary!B7,Inputs!B2\"",
       "docs": "https://proompteng.github.io/bilig/formula-bug-clinic.html"
     }
   ],

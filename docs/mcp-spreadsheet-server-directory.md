@@ -22,7 +22,7 @@ Cursor, VS Code, Codex, or another stdio MCP client.
 ## Canonical Package
 
 ```sh
-npm exec --package @bilig/headless@0.25.2 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.25.3 -- bilig-workpaper-mcp
 ```
 
 Package metadata:
@@ -185,7 +185,7 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 19, 2026: npm latest is `@bilig/headless@0.25.2`.
+Latest checked result on May 19, 2026: npm latest is `@bilig/headless@0.25.3`.
 Official Registry search returns Bilig WorkPaper entries, but the latest-marked entry can lag npm.
 The API also returns historical entries, so consumers should follow pagination,
 request a sufficient limit, select the latest-marked entry when available, or
@@ -230,7 +230,7 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' |
-  npm exec --package @bilig/headless@0.25.2 -- \
+  npm exec --package @bilig/headless@0.25.3 -- \
     bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
@@ -258,5 +258,5 @@ verify readback, and persist WorkPaper JSON through the published
 `@bilig/headless` package.
 
 ```sh
-npm exec --package @bilig/headless@0.25.2 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.25.3 -- bilig-workpaper-mcp
 ```
