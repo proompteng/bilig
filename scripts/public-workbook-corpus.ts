@@ -22,6 +22,7 @@ import {
   defaultRecentComplexGithubRepositoryQueries,
   discoverRecentComplexGithubQueries,
 } from './public-workbook-corpus-github.ts'
+import { defaultRecentComplexFigshareQueries, discoverRecentComplexFigshareQueries } from './public-workbook-corpus-figshare.ts'
 import { defaultRecentComplexZenodoQueries, discoverRecentComplexZenodoQueries } from './public-workbook-corpus-zenodo.ts'
 import {
   defaultDownloadTimeoutMs,
@@ -410,6 +411,27 @@ async function main(): Promise<void> {
         queries: queries.length > 0 ? queries : defaultRecentComplexZenodoQueries,
         limit: readNumberArg('--limit', targetWorkbookCount),
         perPage: readNumberArg('--per-page', 50),
+        maxPagesPerQuery: readNumberArg('--max-pages-per-query', 2),
+        onQueryDiscovered: (partialManifest) => {
+          writeJson(manifestPath, partialManifest, 'public-workbook-corpus-manifest')
+        },
+      })
+      writeJson(manifestPath, manifest, 'public-workbook-corpus-manifest')
+    })
+    return
+  }
+  if (command === 'discover-recent-complex-figshare') {
+    const queries = readRepeatedStringArg('--query')
+    assertPublicCorpusRunNotStopped({
+      commandName: 'public-workbook-corpus discover-recent-complex-figshare',
+      stopMarkerPath: corpusRunStopMarkerPath,
+    })
+    await withPublicWorkbookCorpusCacheLock(cacheDir, 'discover-recent-complex-figshare', async () => {
+      const manifest = await discoverRecentComplexFigshareQueries({
+        manifest: readOrCreateManifest(manifestPath, targetWorkbookCount),
+        queries: queries.length > 0 ? queries : defaultRecentComplexFigshareQueries,
+        limit: readNumberArg('--limit', targetWorkbookCount),
+        pageSize: readNumberArg('--page-size', 50),
         maxPagesPerQuery: readNumberArg('--max-pages-per-query', 2),
         onQueryDiscovered: (partialManifest) => {
           writeJson(manifestPath, partialManifest, 'public-workbook-corpus-manifest')

@@ -49,6 +49,7 @@ export interface PublicWorkbookCorpusRecentComplexSummary {
     readonly discoverHdx: string
     readonly discoverGithub: string
     readonly discoverZenodo: string
+    readonly discoverFigshare: string
     readonly fetch: string
     readonly publicVerify: string
     readonly headlessVerify: string
@@ -504,6 +505,18 @@ function recentComplexCommands(
       '--limit',
       String(discoverySourceLimit),
       '--per-page',
+      '100',
+      '--max-pages-per-query',
+      '20',
+    ]),
+    discoverFigshare: formatShellCommand([
+      'bun',
+      'scripts/public-workbook-corpus.ts',
+      'discover-recent-complex-figshare',
+      ...sharedArgs,
+      '--limit',
+      String(discoverySourceLimit),
+      '--page-size',
       '100',
       '--max-pages-per-query',
       '20',

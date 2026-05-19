@@ -263,6 +263,7 @@ describe('public workbook recent complex headless corpus gate', () => {
     expect(scripts['public-workbook-corpus:discover-recent-complex-hdx']).toContain('https://data.humdata.org/api/3/action')
     expect(scripts['public-workbook-corpus:discover-recent-complex-github']).toContain('discover-recent-complex-github')
     expect(scripts['public-workbook-corpus:discover-recent-complex-zenodo']).toContain('discover-recent-complex-zenodo')
+    expect(scripts['public-workbook-corpus:discover-recent-complex-figshare']).toContain('discover-recent-complex-figshare')
     expect(scripts['public-workbook-corpus:fetch-recent-complex']).toContain('--fetch-batch-size 2')
     expect(scripts['public-workbook-corpus:fetch-recent-complex']).toContain('--limit 5000')
     expect(scripts['public-workbook-corpus:headless-recent-complex']).toContain('public-workbook-corpus-recent-complex.ts headless')
@@ -352,6 +353,8 @@ describe('public workbook recent complex headless corpus gate', () => {
     expect(summary.commands.discoverGithub).toContain('--max-repository-pages-per-query 3')
     expect(summary.commands.discoverZenodo).toContain('discover-recent-complex-zenodo')
     expect(summary.commands.discoverZenodo).toContain('--max-pages-per-query 20')
+    expect(summary.commands.discoverFigshare).toContain('discover-recent-complex-figshare')
+    expect(summary.commands.discoverFigshare).toContain('--max-pages-per-query 20')
     expect(validatePublicWorkbookCorpusRecentComplexSummary(summary)).toContain(
       'manifest target workbook count is below the recent complex target',
     )
@@ -441,6 +444,7 @@ describe('public workbook recent complex headless corpus gate', () => {
     expect(summary.commands.discoverHdx).toContain('--limit 11')
     expect(summary.commands.discoverGithub).toContain('--limit 11')
     expect(summary.commands.discoverZenodo).toContain('--limit 11')
+    expect(summary.commands.discoverFigshare).toContain('--limit 11')
   })
 })
 
