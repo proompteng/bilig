@@ -120,7 +120,7 @@ export function buildWorkerRenderTileDeltaBatch(input: {
 
   return {
     magic: 'bilig.render.tile.delta',
-    version: 3,
+    version: 4,
     sheetId: subscription.sheetId,
     sheetOrdinal: resolveSubscriptionSheetOrdinal(subscription),
     batchId,
@@ -577,6 +577,7 @@ function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTileReplace
     bounds: tile.bounds,
     rectInstances: tile.rectInstances,
     rectCount: tile.rectCount,
+    rectSignature: tile.rectSignature,
     textMetrics: tile.textMetrics,
     glyphRefs: new Uint32Array(0),
     textRuns: tile.textRuns.map((run) => ({
@@ -601,6 +602,7 @@ function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTileReplace
       y: run.y,
     })),
     textCount: tile.textCount,
+    textSignature: tile.textSignature,
     dirty: resolveGridRenderTileDirtySpansV3(tile),
     dirtyLocalCols: tile.dirtyLocalCols,
     dirtyLocalRows: tile.dirtyLocalRows,

@@ -14,7 +14,7 @@ function createBatch(): RenderTileDeltaBatch {
   }
   return {
     magic: 'bilig.render.tile.delta',
-    version: 3,
+    version: 4,
     sheetId: 7,
     sheetOrdinal: 1,
     batchId: 11,
@@ -40,6 +40,7 @@ function createBatch(): RenderTileDeltaBatch {
         },
         rectInstances: Float32Array.from([1, 2, 3, 4]),
         rectCount: 1,
+        rectSignature: 'rect-signature-v4',
         textMetrics: Float32Array.from([5, 6, 7, 8]),
         glyphRefs: Uint32Array.from([10, 11, 12]),
         textRuns: [
@@ -65,6 +66,7 @@ function createBatch(): RenderTileDeltaBatch {
           },
         ],
         textCount: 1,
+        textSignature: 'text-signature-v4',
         dirty: {
           rectSpans: [{ offset: 0, length: 4 }],
           textSpans: [{ offset: 0, length: 4 }],
@@ -119,5 +121,27 @@ describe('render tile delta codec', () => {
 
     expect(bytes[0]).not.toBe('{'.charCodeAt(0))
     expect(decoded).toEqual(batch)
+  })
+
+  it('decodes v3 batches with explicit sheet ordinals during rolling upgrades', () => {
+    const batch: RenderTileDeltaBatch = {
+      magic: 'bilig.render.tile.delta',
+      version: 4,
+      sheetId: 99,
+      sheetOrdinal: 2,
+      batchId: 11,
+      cameraSeq: 13,
+      mutations: [],
+    }
+    const bytes = encodeRenderTileDeltaBatch(batch)
+    bytes[4] = 3
+    bytes[5] = 0
+    bytes[6] = 0
+    bytes[7] = 0
+
+    expect(decodeRenderTileDeltaBatch(bytes)).toEqual({
+      ...batch,
+      version: 4,
+    })
   })
 })

@@ -1,13 +1,15 @@
 import { formatAddress } from '@bilig/formula'
-import type { CellStyleRecord, Viewport } from '@bilig/protocol'
+import { ValueTag, type CellStyleRecord, type Viewport } from '@bilig/protocol'
 
 import type { GridEngineLike } from '../grid-engine.js'
 import { snapshotToRenderCell } from '../gridCells.js'
+import { buildGridGpuScene } from '../gridGpuScene.js'
 import type { GridMetrics } from '../gridMetrics.js'
 import { parseGpuColor, type GridGpuColor } from '../gridGpuPrimitives.js'
-import type { Rectangle } from '../gridTypes.js'
-import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
-import { createTileCellBoundsResolverV3 } from '../renderer-v3/grid-tile-materializer.js'
+import { CompactSelection, type GridSelection, type Item, type Rectangle } from '../gridTypes.js'
+import { collectViewportItems } from '../gridViewportItems.js'
+import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3, packGridRectBufferV3 } from '../renderer-v3/rect-instance-buffer.js'
+import { createTileCellBoundsResolverV3, resolveTileSurfaceSizeV3 } from '../renderer-v3/grid-tile-materializer.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 
 interface VisibleTextRefreshCacheInput {
@@ -25,6 +27,7 @@ interface VisibleTextRefreshCacheInput {
 interface VisibleCellFillExpectation {
   readonly bounds: Rectangle
   readonly colorKey: string | null
+  readonly allowsPartialFill: boolean
 }
 
 interface TileFillRect {
@@ -36,6 +39,12 @@ interface TileFillRect {
 }
 
 const CELL_FILL_COVERAGE_EPSILON = 0.5
+const STATIC_TILE_SELECTED_CELL: Item = Object.freeze([-1, -1] as const)
+const STATIC_TILE_GRID_SELECTION: GridSelection = Object.freeze({
+  columns: CompactSelection.empty(),
+  current: undefined,
+  rows: CompactSelection.empty(),
+})
 
 interface VisibleTextRefreshCacheEntry extends VisibleTextRefreshCacheInput {
   readonly needsLocalRefresh: boolean
@@ -178,6 +187,7 @@ function tileVisibleTextNeedsLocalRefresh(
         return true
       }
       expectedVisibleFills.push({
+        allowsPartialFill: snapshot.value.tag === ValueTag.Boolean,
         bounds,
         colorKey: style?.fill?.backgroundColor ? gpuColorKey(parseGpuColor(style.fill.backgroundColor)) : null,
       })
@@ -192,7 +202,7 @@ function tileVisibleTextNeedsLocalRefresh(
       needsCurrentStyleProof = needsCurrentStyleProof || (tileStyleRevisionIsBehind && styleAffectsVisibleGridPaint(style))
     }
   }
-  if (!tileMatchesExpectedVisibleFillCoverage(tile, expectedVisibleFills)) {
+  if (!tileMatchesExpectedVisibleRectScene(tile, input, expectedVisibleFills)) {
     return true
   }
   return needsCurrentStyleProof
@@ -234,15 +244,74 @@ function tileHasAuthoredPaintRects(tile: GridRenderTile): boolean {
   return tile.rectCount > expectedBaseGridLineRectCount(tile)
 }
 
+function tileMatchesExpectedVisibleRectScene(
+  tile: GridRenderTile,
+  input: Pick<
+    VisibleTextRefreshCacheInput,
+    'columnWidths' | 'engine' | 'gridMetrics' | 'rowHeights' | 'sheetName' | 'sortedColumnWidthOverrides' | 'sortedRowHeightOverrides'
+  >,
+  expectedVisibleFills: readonly VisibleCellFillExpectation[],
+): boolean {
+  if (!tile.rectSignature) {
+    return tileMatchesExpectedVisibleFillCoverage(tile, expectedVisibleFills)
+  }
+  const getCellBounds = createTileCellBoundsResolverV3({
+    columnWidths: input.columnWidths,
+    gridMetrics: input.gridMetrics,
+    rowHeights: input.rowHeights,
+    sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
+    sortedRowHeightOverrides: input.sortedRowHeightOverrides,
+    viewport: tile.bounds,
+  })
+  const visibleItems = collectViewportItems(tile.bounds)
+  const expectedRectBuffer = packGridRectBufferV3(
+    buildGridGpuScene({
+      activeHeaderDrag: null,
+      columnWidths: input.columnWidths,
+      contentMode: 'data',
+      engine: input.engine,
+      getCellBounds,
+      gridMetrics: input.gridMetrics,
+      gridSelection: STATIC_TILE_GRID_SELECTION,
+      hostBounds: { left: 0, top: 0 },
+      hoveredCell: null,
+      hoveredHeader: null,
+      includeLeadingGridLines: false,
+      resizeGuideColumn: null,
+      resizeGuideRow: null,
+      rowHeights: input.rowHeights,
+      selectedCell: STATIC_TILE_SELECTED_CELL,
+      selectionRange: null,
+      sheetName: input.sheetName,
+      visibleItems,
+      visibleRegion: {
+        range: {
+          height: tile.bounds.rowEnd - tile.bounds.rowStart + 1,
+          width: tile.bounds.colEnd - tile.bounds.colStart + 1,
+          x: tile.bounds.colStart,
+          y: tile.bounds.rowStart,
+        },
+        freezeCols: 0,
+        freezeRows: 0,
+        tx: 0,
+        ty: 0,
+      },
+    }),
+    resolveTileSurfaceSizeV3(tile.bounds, input),
+  )
+  return tile.rectSignature === expectedRectBuffer.rectSignature
+}
+
 function tileMatchesExpectedVisibleFillCoverage(
   tile: GridRenderTile,
   expectedVisibleFills: readonly VisibleCellFillExpectation[],
 ): boolean {
   const tileFillRects = collectTileFillRects(tile)
   for (const expectation of expectedVisibleFills) {
+    const intersectingRects = tileFillRects.filter((rect) => fillRectIntersectsCell(rect, expectation.bounds))
     const coveringRects = tileFillRects.filter((rect) => fillRectCoversCell(rect, expectation.bounds))
     if (!expectation.colorKey) {
-      if (coveringRects.length > 0) {
+      if ((expectation.allowsPartialFill ? coveringRects : intersectingRects).length > 0) {
         return false
       }
       continue
@@ -251,6 +320,9 @@ function tileMatchesExpectedVisibleFillCoverage(
       return false
     }
     if (coveringRects.some((rect) => rect.colorKey !== expectation.colorKey)) {
+      return false
+    }
+    if (!expectation.allowsPartialFill && intersectingRects.some((rect) => rect.colorKey !== expectation.colorKey)) {
       return false
     }
   }
@@ -289,6 +361,15 @@ function fillRectCoversCell(rect: TileFillRect, bounds: Rectangle): boolean {
     rect.y <= bounds.y + CELL_FILL_COVERAGE_EPSILON &&
     rect.x + rect.width >= bounds.x + bounds.width - CELL_FILL_COVERAGE_EPSILON &&
     rect.y + rect.height >= bounds.y + bounds.height - CELL_FILL_COVERAGE_EPSILON
+  )
+}
+
+function fillRectIntersectsCell(rect: TileFillRect, bounds: Rectangle): boolean {
+  return (
+    rect.x < bounds.x + bounds.width - CELL_FILL_COVERAGE_EPSILON &&
+    rect.x + rect.width > bounds.x + CELL_FILL_COVERAGE_EPSILON &&
+    rect.y < bounds.y + bounds.height - CELL_FILL_COVERAGE_EPSILON &&
+    rect.y + rect.height > bounds.y + CELL_FILL_COVERAGE_EPSILON
   )
 }
 

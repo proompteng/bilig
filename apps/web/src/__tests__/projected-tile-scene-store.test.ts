@@ -37,10 +37,12 @@ function createTileReplace(tileId: number, valuesVersion: number, sheetOrdinal =
     bounds: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 63 },
     rectInstances: new Float32Array([1, 2, 3, 4]),
     rectCount: 1,
+    rectSignature: `rect:${sheetId}:${sheetOrdinal}:${tileId}:${valuesVersion}`,
     textMetrics: new Float32Array([5, 6]),
     glyphRefs: new Uint32Array([9]),
     textRuns: [],
     textCount: 0,
+    textSignature: `text:${sheetId}:${sheetOrdinal}:${tileId}:${valuesVersion}`,
     dirty: {
       rectSpans: [{ offset: 0, length: 1 }],
       textSpans: [],
@@ -55,7 +57,7 @@ function createTileReplace(tileId: number, valuesVersion: number, sheetOrdinal =
 function createBatch(batchId: number, mutations: RenderTileDeltaBatch['mutations']): RenderTileDeltaBatch {
   return {
     magic: 'bilig.render.tile.delta',
-    version: 3,
+    version: 4,
     sheetId: 7,
     sheetOrdinal: 7,
     batchId,
@@ -77,6 +79,8 @@ describe('ProjectedTileSceneStore', () => {
       structural: false,
     })
     expect(store.peekTile(101)).toMatchObject({ tileId: 101, rectCount: 1, lastBatchId: 2 })
+    expect(store.peekTile(101)?.rectSignature).toBe('rect:7:7:101:2')
+    expect(store.peekTile(101)?.textSignature).toBe('text:7:7:101:2')
     expect(store.peekTile(101)?.dirtyLocalRows).toEqual(new Uint32Array([0, 0]))
     expect(store.peekTile(101)?.dirtyLocalCols).toEqual(new Uint32Array([1, 1]))
     expect(store.peekTile(101)?.dirtyMasks).toEqual(new Uint32Array([5]))
@@ -225,7 +229,7 @@ describe('ProjectedTileSceneStore', () => {
         listener(
           encodeRenderTileDeltaBatch({
             magic: 'bilig.render.tile.delta',
-            version: 3,
+            version: 4,
             sheetId: 99,
             sheetOrdinal: 2,
             batchId: 4,
@@ -261,7 +265,7 @@ describe('ProjectedTileSceneStore', () => {
         listener(
           encodeRenderTileDeltaBatch({
             magic: 'bilig.render.tile.delta',
-            version: 3,
+            version: 4,
             sheetId: 99,
             sheetOrdinal: 2,
             batchId: 4,
@@ -272,7 +276,7 @@ describe('ProjectedTileSceneStore', () => {
         listener(
           encodeRenderTileDeltaBatch({
             magic: 'bilig.render.tile.delta',
-            version: 3,
+            version: 4,
             sheetId: 7,
             sheetOrdinal: 2,
             batchId: 5,

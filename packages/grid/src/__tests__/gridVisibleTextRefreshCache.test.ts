@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ValueTag, type CellSnapshot, type CellStyleRecord } from '@bilig/protocol'
 import type { GridEngineLike } from '../grid-engine.js'
 import { getGridMetrics } from '../gridMetrics.js'
+import { materializeGridRenderTileV3 } from '../renderer-v3/grid-tile-materializer.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import { GridVisibleTextRefreshCache } from '../runtime/gridVisibleTextRefreshCache.js'
@@ -206,6 +207,30 @@ describe('GridVisibleTextRefreshCache', () => {
     expect(cache.needsLocalRefresh(tile.tileId, tile, createInput({ engine: createEngine({}, {}, 7) }))).toBe(true)
   })
 
+  it('rejects current-revision partial stale fill slivers when projected tiles have no rect signature', () => {
+    const cache = new GridVisibleTextRefreshCache()
+    const tile = createTile({
+      lastBatchId: 7,
+      rectCount: 1,
+      rectInstances: createFillRectInstances([
+        {
+          height: TEST_GRID_METRICS.rowHeight,
+          width: 12,
+        },
+      ]),
+      version: {
+        axisX: 7,
+        axisY: 7,
+        freeze: 7,
+        styles: 7,
+        text: 7,
+        values: 7,
+      },
+    })
+
+    expect(cache.needsLocalRefresh(tile.tileId, tile, createInput({ engine: createEngine({}, {}, 7) }))).toBe(true)
+  })
+
   it('rejects current-revision same-color extra fill covering a now-unfilled visible cell', () => {
     const cache = new GridVisibleTextRefreshCache()
     const tile = createTile({
@@ -324,6 +349,69 @@ describe('GridVisibleTextRefreshCache', () => {
     ).toBe(false)
   })
 
+  it('accepts a materialized current rect signature for visible fills, borders, and gridlines', () => {
+    const cache = new GridVisibleTextRefreshCache()
+    const engine = createEngine(
+      {
+        A1: { styleId: 'style-green-border', value: 'A1' },
+      },
+      {
+        'style-green-border': {
+          borders: { bottom: { color: '#ff0000', style: 'solid' } },
+          fill: { backgroundColor: '#00ff00' },
+          id: 'style-green-border',
+        },
+      },
+      7,
+    )
+    const tile = createMaterializedTile(engine, 7)
+
+    expect(cache.needsLocalRefresh(tile.tileId, tile, createInput({ engine }))).toBe(false)
+  })
+
+  it('rejects current-revision stale border or checkbox rect payload signatures', () => {
+    const cache = new GridVisibleTextRefreshCache()
+    const engine = createEngine(
+      {
+        A1: { styleId: 'style-border', value: 'A1' },
+      },
+      {
+        'style-border': {
+          borders: { bottom: { color: '#ff0000', style: 'solid' } },
+          id: 'style-border',
+        },
+      },
+      7,
+    )
+    const tile = createMaterializedTile(engine, 7)
+    const staleTile = {
+      ...tile,
+      rectSignature: 'stale-border-signature',
+    }
+
+    expect(cache.needsLocalRefresh(staleTile.tileId, staleTile, createInput({ engine }))).toBe(true)
+  })
+
+  it('accepts merged-fill rect signatures instead of permanently localizing merged ranges', () => {
+    const cache = new GridVisibleTextRefreshCache()
+    const engine = createEngine(
+      {
+        A1: { styleId: 'style-green', value: 'merged title' },
+      },
+      {
+        'style-green': { id: 'style-green', fill: { backgroundColor: '#00ff00' } },
+      },
+      7,
+      {
+        A1: { endAddress: 'B1', sheetName: 'Sheet1', startAddress: 'A1' },
+        B1: { endAddress: 'B1', sheetName: 'Sheet1', startAddress: 'A1' },
+      },
+    )
+    const tile = createMaterializedTile(engine, 7)
+
+    expect(cache.needsLocalRefresh(tile.tileId, tile, createInput({ engine }))).toBe(false)
+  })
+
   it('rejects stale authored border rects after visible cell borders are cleared', () => {
     const cache = new GridVisibleTextRefreshCache()
     const staleBorderRectCount = 32 + 128 + 1
@@ -369,10 +457,12 @@ function createEngine(
   values: Record<string, EngineCellFixture> = {},
   styles: Record<string, CellStyleRecord> = {},
   projectedRevision = 1,
+  mergedRanges: Record<string, { sheetName: string; startAddress: string; endAddress: string }> = {},
 ): GridEngineLike {
   return {
     getCell: (_sheetName, address) => createCellSnapshot(address, values[address] ?? ''),
     getCellStyle: (styleId) => (styleId ? styles[styleId] : undefined),
+    getMergeRange: (_sheetName, address) => mergedRanges[address],
     getRenderRevisionSnapshot: () => ({
       authoritativeRevision: projectedRevision,
       localRevision: projectedRevision,
@@ -385,6 +475,33 @@ function createEngine(
       getSheet: () => undefined,
     },
   }
+}
+
+function createMaterializedTile(engine: GridEngineLike, projectedRevision: number): GridRenderTile {
+  return materializeGridRenderTileV3({
+    axisSeqX: projectedRevision,
+    axisSeqY: projectedRevision,
+    cameraSeq: projectedRevision,
+    columnWidths: {},
+    dirtyMasks: undefined,
+    dprBucket: 1,
+    engine,
+    freezeSeq: projectedRevision,
+    gridMetrics: TEST_GRID_METRICS,
+    materializedAtSeq: projectedRevision,
+    packetSeq: projectedRevision,
+    rectSeq: projectedRevision,
+    rowHeights: {},
+    sheetId: 1,
+    sheetName: 'Sheet1',
+    sheetOrdinal: 1,
+    sortedColumnWidthOverrides: [],
+    sortedRowHeightOverrides: [],
+    styleSeq: projectedRevision,
+    textSeq: projectedRevision,
+    valueSeq: projectedRevision,
+    viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+  })
 }
 
 function createCellSnapshot(address: string, fixture: EngineCellFixture): CellSnapshot {

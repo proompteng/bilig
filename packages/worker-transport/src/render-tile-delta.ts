@@ -85,10 +85,12 @@ export interface RenderTileReplaceMutation {
   readonly bounds: Viewport
   readonly rectInstances: Float32Array
   readonly rectCount: number
+  readonly rectSignature?: string | undefined
   readonly textMetrics: Float32Array
   readonly glyphRefs: Uint32Array
   readonly textRuns: readonly RenderTileTextRun[]
   readonly textCount: number
+  readonly textSignature?: string | undefined
   readonly dirty: RenderTileDirtySpans
   readonly dirtyLocalRows?: Uint32Array | undefined
   readonly dirtyLocalCols?: Uint32Array | undefined
@@ -141,7 +143,7 @@ export type RenderTileMutation =
 
 export interface RenderTileDeltaBatch {
   readonly magic: 'bilig.render.tile.delta'
-  readonly version: 3
+  readonly version: 3 | 4
   readonly sheetId: number
   readonly sheetOrdinal: number
   readonly batchId: number
@@ -150,7 +152,8 @@ export interface RenderTileDeltaBatch {
 }
 
 const RENDER_TILE_DELTA_MAGIC = 0x52544431
-const RENDER_TILE_DELTA_VERSION = 3
+const RENDER_TILE_DELTA_VERSION = 4
+const PREVIOUS_RENDER_TILE_DELTA_VERSION = 3
 const LEGACY_RENDER_TILE_DELTA_VERSION = 2
 
 const PANE_KIND_TAGS: Record<RenderTilePaneKind, number> = {
@@ -195,14 +198,18 @@ export function decodeRenderTileDeltaBatch(bytes: Uint8Array): RenderTileDeltaBa
     throw new BinaryProtocolError('Invalid render tile delta magic')
   }
   const version = reader.u32()
-  if (version !== RENDER_TILE_DELTA_VERSION && version !== LEGACY_RENDER_TILE_DELTA_VERSION) {
+  if (
+    version !== RENDER_TILE_DELTA_VERSION &&
+    version !== PREVIOUS_RENDER_TILE_DELTA_VERSION &&
+    version !== LEGACY_RENDER_TILE_DELTA_VERSION
+  ) {
     throw new BinaryProtocolError(`Unsupported render tile delta version ${version}`)
   }
   const sheetId = reader.u32()
-  const sheetOrdinal = version >= RENDER_TILE_DELTA_VERSION ? reader.u32() : sheetId
+  const sheetOrdinal = version >= PREVIOUS_RENDER_TILE_DELTA_VERSION ? reader.u32() : sheetId
   const batch: RenderTileDeltaBatch = {
     magic: 'bilig.render.tile.delta',
-    version: 3,
+    version: 4,
     sheetId,
     sheetOrdinal,
     batchId: reader.u32(),
@@ -233,6 +240,8 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
       encodeUint32Array(writer, mutation.dirtyLocalRows ?? new Uint32Array())
       encodeUint32Array(writer, mutation.dirtyLocalCols ?? new Uint32Array())
       encodeUint32Array(writer, mutation.dirtyMasks ?? new Uint32Array())
+      writer.string(mutation.rectSignature ?? '')
+      writer.string(mutation.textSignature ?? '')
       return
     case 'cellRuns':
       encodeTileKey(writer, mutation.tileId)
@@ -260,7 +269,7 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
 function decodeMutation(reader: BinaryReader, version = RENDER_TILE_DELTA_VERSION): RenderTileMutation {
   switch (reader.u8()) {
     case 1:
-      return withOptionalDirtyLocalArrays({
+      const mutation = withOptionalDirtyLocalArrays({
         kind: 'tileReplace',
         tileId: decodeTileKey(reader),
         coord: decodeTileCoord(reader, version),
@@ -277,6 +286,16 @@ function decodeMutation(reader: BinaryReader, version = RENDER_TILE_DELTA_VERSIO
         dirtyLocalCols: decodeUint32Array(reader),
         dirtyMasks: decodeUint32Array(reader),
       })
+      if (version < RENDER_TILE_DELTA_VERSION) {
+        return mutation
+      }
+      const rectSignature = reader.string()
+      const textSignature = reader.string()
+      return {
+        ...mutation,
+        ...(rectSignature ? { rectSignature } : {}),
+        ...(textSignature ? { textSignature } : {}),
+      }
     case 2:
       return {
         kind: 'cellRuns',

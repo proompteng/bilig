@@ -138,8 +138,10 @@ describe('worker-runtime-render-tile-delta', () => {
 
     const replacements = batch.mutations.filter((mutation) => mutation.kind === 'tileReplace')
 
-    expect(batch).toMatchObject({ batchId: 3, cameraSeq: 17, sheetId: 7 })
+    expect(batch).toMatchObject({ batchId: 3, cameraSeq: 17, sheetId: 7, version: 4 })
     expect(replacements).toHaveLength(4)
+    expect(replacements.every((mutation) => typeof mutation.rectSignature === 'string' && mutation.rectSignature.length > 0)).toBe(true)
+    expect(replacements.every((mutation) => typeof mutation.textSignature === 'string' && mutation.textSignature.length > 0)).toBe(true)
     expect(replacements.map((mutation) => mutation.coord)).toEqual([
       expect.objectContaining({ paneKind: 'body', rowTile: 0, colTile: 0 }),
       expect.objectContaining({ paneKind: 'body', rowTile: 0, colTile: 1 }),

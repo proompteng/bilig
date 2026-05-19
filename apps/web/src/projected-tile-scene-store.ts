@@ -21,10 +21,12 @@ export interface ProjectedRenderTile {
   readonly bounds: Viewport
   readonly rectInstances: Float32Array
   readonly rectCount: number
+  readonly rectSignature?: string | undefined
   readonly textMetrics: Float32Array
   readonly glyphRefs: Uint32Array
   readonly textRuns: readonly RenderTileTextRun[]
   readonly textCount: number
+  readonly textSignature?: string | undefined
   readonly dirty: RenderTileDirtySpans
   readonly dirtyLocalRows?: Uint32Array | undefined
   readonly dirtyLocalCols?: Uint32Array | undefined
@@ -102,10 +104,12 @@ export class ProjectedTileSceneStore {
             bounds: mutation.bounds,
             rectInstances: mutation.rectInstances,
             rectCount: mutation.rectCount,
+            rectSignature: mutation.rectSignature,
             textMetrics: mutation.textMetrics,
             glyphRefs: mutation.glyphRefs,
             textRuns: mutation.textRuns,
             textCount: mutation.textCount,
+            textSignature: mutation.textSignature,
             dirty: mutation.dirty,
             dirtyLocalCols: mutation.dirtyLocalCols,
             dirtyLocalRows: mutation.dirtyLocalRows,
