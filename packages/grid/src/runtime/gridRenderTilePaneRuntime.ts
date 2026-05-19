@@ -809,9 +809,14 @@ export class GridRenderTilePaneRuntime {
       const shouldLocalizeVisibleText =
         visibleTileKeys.has(tileKey) &&
         this.visibleTextRefreshCache.needsLocalRefresh(tileKey, tile, {
+          columnWidths: input.columnWidths,
           engine: input.engine,
+          gridMetrics: input.gridMetrics,
+          rowHeights: input.rowHeights,
           sceneRevision: input.sceneRevision,
           sheetName: input.sheetName,
+          sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
+          sortedRowHeightOverrides: input.sortedRowHeightOverrides,
           visibleViewport: input.residentViewport,
         })
       const shouldLocalizeEditingCellText = editingCellTileKey === tileKey

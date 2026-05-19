@@ -3,16 +3,39 @@ import type { CellStyleRecord, Viewport } from '@bilig/protocol'
 
 import type { GridEngineLike } from '../grid-engine.js'
 import { snapshotToRenderCell } from '../gridCells.js'
+import type { GridMetrics } from '../gridMetrics.js'
 import { parseGpuColor, type GridGpuColor } from '../gridGpuPrimitives.js'
+import type { Rectangle } from '../gridTypes.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
+import { createTileCellBoundsResolverV3 } from '../renderer-v3/grid-tile-materializer.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 
 interface VisibleTextRefreshCacheInput {
+  readonly columnWidths: Readonly<Record<number, number>>
   readonly engine: GridEngineLike
+  readonly gridMetrics: GridMetrics
+  readonly rowHeights: Readonly<Record<number, number>>
   readonly sceneRevision: number
   readonly sheetName: string
+  readonly sortedColumnWidthOverrides: readonly (readonly [number, number])[]
+  readonly sortedRowHeightOverrides: readonly (readonly [number, number])[]
   readonly visibleViewport: Viewport
 }
+
+interface VisibleCellFillExpectation {
+  readonly bounds: Rectangle
+  readonly colorKey: string | null
+}
+
+interface TileFillRect {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly colorKey: string
+}
+
+const CELL_FILL_COVERAGE_EPSILON = 0.5
 
 interface VisibleTextRefreshCacheEntry extends VisibleTextRefreshCacheInput {
   readonly needsLocalRefresh: boolean
@@ -46,10 +69,15 @@ export class GridVisibleTextRefreshCache {
     if (
       cached &&
       cached.tile === tile &&
+      cached.columnWidths === input.columnWidths &&
       cached.engine === input.engine &&
+      cached.gridMetrics === input.gridMetrics &&
+      cached.rowHeights === input.rowHeights &&
       cached.sheetName === input.sheetName &&
       cached.sceneRevision === input.sceneRevision &&
       cached.renderRevisionKey === renderRevisionKey &&
+      cached.sortedColumnWidthOverrides === input.sortedColumnWidthOverrides &&
+      cached.sortedRowHeightOverrides === input.sortedRowHeightOverrides &&
       cached.visibleRowStart === visibleRowStart &&
       cached.visibleRowEnd === visibleRowEnd &&
       cached.visibleColStart === visibleColStart &&
@@ -80,7 +108,10 @@ export class GridVisibleTextRefreshCache {
 
 function tileVisibleTextNeedsLocalRefresh(
   tile: GridRenderTile,
-  input: Pick<VisibleTextRefreshCacheInput, 'engine' | 'sheetName'>,
+  input: Pick<
+    VisibleTextRefreshCacheInput,
+    'columnWidths' | 'engine' | 'gridMetrics' | 'rowHeights' | 'sheetName' | 'sortedColumnWidthOverrides' | 'sortedRowHeightOverrides'
+  >,
   visibleBounds: {
     readonly visibleColEnd: number
     readonly visibleColStart: number
@@ -128,15 +159,28 @@ function tileVisibleTextNeedsLocalRefresh(
   const projectedRevision = resolveProjectedRevision(input.engine)
   const tileStyleRevisionIsBehind = projectedRevision !== null && tile.version.styles < projectedRevision
   let needsCurrentStyleProof = tileStyleRevisionIsBehind && tileHasAuthoredPaintRects(tile)
-  const expectedVisibleFillColorKeys = new Set<string>()
+  const expectedVisibleFills: VisibleCellFillExpectation[] = []
+  const getCellBounds = createTileCellBoundsResolverV3({
+    columnWidths: input.columnWidths,
+    gridMetrics: input.gridMetrics,
+    rowHeights: input.rowHeights,
+    sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
+    sortedRowHeightOverrides: input.sortedRowHeightOverrides,
+    viewport: tile.bounds,
+  })
 
   for (let row = visibleBounds.visibleRowStart; row <= visibleBounds.visibleRowEnd; row += 1) {
     for (let col = visibleBounds.visibleColStart; col <= visibleBounds.visibleColEnd; col += 1) {
       const snapshot = input.engine.getCell(input.sheetName, formatAddress(row, col))
       const style = input.engine.getCellStyle(snapshot.styleId)
-      if (style?.fill?.backgroundColor) {
-        expectedVisibleFillColorKeys.add(gpuColorKey(parseGpuColor(style.fill.backgroundColor)))
+      const bounds = getCellBounds(col, row)
+      if (!bounds) {
+        return true
       }
+      expectedVisibleFills.push({
+        bounds,
+        colorKey: style?.fill?.backgroundColor ? gpuColorKey(parseGpuColor(style.fill.backgroundColor)) : null,
+      })
       const renderCell = snapshotToRenderCell(snapshot, style)
       const visibleTileRun = textRunsByCell.get(`${row}:${col}`) ?? null
       if ((visibleTileRun?.text ?? '') !== renderCell.displayText) {
@@ -148,7 +192,7 @@ function tileVisibleTextNeedsLocalRefresh(
       needsCurrentStyleProof = needsCurrentStyleProof || (tileStyleRevisionIsBehind && styleAffectsVisibleGridPaint(style))
     }
   }
-  if (!tileContainsExpectedVisibleFillColors(tile, expectedVisibleFillColorKeys)) {
+  if (!tileMatchesExpectedVisibleFillCoverage(tile, expectedVisibleFills)) {
     return true
   }
   return needsCurrentStyleProof
@@ -190,22 +234,32 @@ function tileHasAuthoredPaintRects(tile: GridRenderTile): boolean {
   return tile.rectCount > expectedBaseGridLineRectCount(tile)
 }
 
-function tileContainsExpectedVisibleFillColors(tile: GridRenderTile, expectedFillColorKeys: ReadonlySet<string>): boolean {
-  const tileFillColorKeys = collectTileFillColorKeys(tile)
-  if (tileFillColorKeys.size !== expectedFillColorKeys.size) {
-    return false
-  }
-  for (const expectedKey of expectedFillColorKeys) {
-    if (!tileFillColorKeys.has(expectedKey)) {
+function tileMatchesExpectedVisibleFillCoverage(
+  tile: GridRenderTile,
+  expectedVisibleFills: readonly VisibleCellFillExpectation[],
+): boolean {
+  const tileFillRects = collectTileFillRects(tile)
+  for (const expectation of expectedVisibleFills) {
+    const coveringRects = tileFillRects.filter((rect) => fillRectCoversCell(rect, expectation.bounds))
+    if (!expectation.colorKey) {
+      if (coveringRects.length > 0) {
+        return false
+      }
+      continue
+    }
+    if (!coveringRects.some((rect) => rect.colorKey === expectation.colorKey)) {
+      return false
+    }
+    if (coveringRects.some((rect) => rect.colorKey !== expectation.colorKey)) {
       return false
     }
   }
   return true
 }
 
-function collectTileFillColorKeys(tile: GridRenderTile): Set<string> {
+function collectTileFillRects(tile: GridRenderTile): TileFillRect[] {
   const readableRectCount = Math.min(tile.rectCount, Math.floor(tile.rectInstances.length / GRID_RECT_INSTANCE_FLOAT_COUNT_V3))
-  const keys = new Set<string>()
+  const rects: TileFillRect[] = []
   for (let index = 0; index < readableRectCount; index += 1) {
     const offset = index * GRID_RECT_INSTANCE_FLOAT_COUNT_V3
     const instanceKind = tile.rectInstances[offset + 13] ?? -1
@@ -213,16 +267,29 @@ function collectTileFillColorKeys(tile: GridRenderTile): Set<string> {
     if (instanceKind !== 0 || fillAlpha <= 0.01) {
       continue
     }
-    keys.add(
-      gpuColorKey({
+    rects.push({
+      colorKey: gpuColorKey({
         a: fillAlpha,
         b: tile.rectInstances[offset + 6] ?? 0,
         g: tile.rectInstances[offset + 5] ?? 0,
         r: tile.rectInstances[offset + 4] ?? 0,
       }),
-    )
+      height: tile.rectInstances[offset + 3] ?? 0,
+      width: tile.rectInstances[offset + 2] ?? 0,
+      x: tile.rectInstances[offset + 0] ?? 0,
+      y: tile.rectInstances[offset + 1] ?? 0,
+    })
   }
-  return keys
+  return rects
+}
+
+function fillRectCoversCell(rect: TileFillRect, bounds: Rectangle): boolean {
+  return (
+    rect.x <= bounds.x + CELL_FILL_COVERAGE_EPSILON &&
+    rect.y <= bounds.y + CELL_FILL_COVERAGE_EPSILON &&
+    rect.x + rect.width >= bounds.x + bounds.width - CELL_FILL_COVERAGE_EPSILON &&
+    rect.y + rect.height >= bounds.y + bounds.height - CELL_FILL_COVERAGE_EPSILON
+  )
 }
 
 function gpuColorKey(color: GridGpuColor): string {

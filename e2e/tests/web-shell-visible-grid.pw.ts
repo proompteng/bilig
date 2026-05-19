@@ -536,6 +536,74 @@ test('@browser-ci web app copies presentation and clears stale target fills in v
     .toBeLessThan(12)
 })
 
+test('@browser-ci web app moves background fill presentation without source or target ghosts', async ({ page, context }) => {
+  const documentId = createTestDocumentId('playwright-move-fill-presentation')
+  const movedText = 'move-fill-source'
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.setViewportSize({ width: 1166, height: 820 })
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  const grid = page.getByTestId('sheet-grid')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 1, 1)
+  await formulaInput.fill(movedText)
+  await formulaInput.press('Enter')
+  await pickToolbarPresetColor(page, 'Fill color', 'green')
+  await expect
+    .poll(() => countGreenFillPixelsInCell(page, 1, 1), {
+      message: 'test setup should visibly paint green fill on the move source',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(120)
+
+  await clickProductCell(page, 3, 3)
+  await formulaInput.fill('stale-target')
+  await formulaInput.press('Enter')
+  await pickToolbarPresetColor(page, 'Fill color', 'blue')
+  await expect
+    .poll(() => countBlueFillPixelsInCell(page, 3, 3), {
+      message: 'test setup should visibly paint stale blue fill before the move overwrites it',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(120)
+
+  await clickProductCell(page, 1, 1)
+  await grid.press(`${PRIMARY_MODIFIER}+X`)
+  await clickProductCell(page, 3, 3)
+  await grid.press(`${PRIMARY_MODIFIER}+V`)
+  await clickProductCell(page, 5, 5)
+
+  await expect
+    .poll(() => nativeTextRunTextAt(page, 1, 1), {
+      message: 'move must clear source text from the native text layer',
+      timeout: 5_000,
+    })
+    .toBe('')
+  await expect
+    .poll(() => nativeTextRunTextAt(page, 3, 3), {
+      message: 'move must render moved text at the target cell',
+      timeout: 5_000,
+    })
+    .toBe(movedText)
+
+  expect(
+    Math.max(...(await sampleGreenFillPixelsAcrossFrames(page, 1, 1, 4))),
+    'move must clear source fill instead of leaving a stale green tile',
+  ).toBeLessThan(12)
+  expect(
+    Math.min(...(await sampleFillPixelsAcrossFrames(page, 3, 3, 'green', 4))),
+    'move must paint the target with the moved green fill',
+  ).toBeGreaterThan(120)
+  await expect
+    .poll(() => countBlueFillPixelsInCell(page, 3, 3), {
+      message: 'move must clear stale target blue fill instead of blending or retaining old tile color',
+      timeout: 5_000,
+    })
+    .toBeLessThan(12)
+})
+
 function createDenseAccountingGridClipboardText(): string {
   return Array.from({ length: 48 }, (_, rowIndex) => {
     const rowNumber = rowIndex + 1

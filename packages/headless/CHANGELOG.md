@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: yes
 
 ## Features
+
 - feat(package): add unscoped bilig npm entrypoint (c43c5b69)
 
 ## Internal runtime changes
+
 - docs(discovery): sync runtime package 0.28.2 (26662b3c)
 
 ## 0.28.2
