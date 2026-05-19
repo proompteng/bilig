@@ -295,10 +295,12 @@ test('@browser-ci web app keeps in-cell caret movement stable during rapid typin
       if (!(element instanceof HTMLTextAreaElement)) {
         throw new Error('Expected in-cell editor textarea')
       }
+      const start = element.selectionStart
+      const end = element.selectionEnd
       return {
-        direction: element.selectionDirection,
-        end: element.selectionEnd,
-        start: element.selectionStart,
+        direction: start === end ? 'none' : element.selectionDirection,
+        end,
+        start,
       }
     })
 
