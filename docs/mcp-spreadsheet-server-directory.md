@@ -22,7 +22,7 @@ Cursor, VS Code, Codex, or another stdio MCP client.
 ## Canonical Package
 
 ```sh
-npm exec --package @bilig/headless@0.26.0 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.26.1 -- bilig-workpaper-mcp
 ```
 
 Package metadata:
@@ -88,7 +88,7 @@ crawlers that probe those well-known variants.
 
 | Directory                       | Status                                                                        | Link                                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Official MCP Registry           | Live; `0.26.0` is latest-marked and matches npm                               | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper&limit=100> |
+| Official MCP Registry           | Live; `0.26.1` is latest-marked and matches npm                               | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper&limit=100> |
 | Hosted Streamable HTTP endpoint | App runtime endpoint for JSON-only stateless MCP smoke tests                  | <https://bilig.proompteng.ai/mcp>                                                                               |
 | Static MCP server card          | Live                                                                          | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                           |
 | Static MCP discovery aliases    | Live                                                                          | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                                       |
@@ -119,7 +119,7 @@ verification pass and should stay closed unless the live listing regresses.
 The Docker MCP Registry pull request was refreshed on May 19, 2026 by updating
 the existing PR body, not by opening a duplicate submission. Docker still points
 at Bilig source commit `a1ecdd52cda3d54e0254afce129a9012c5027826`; the PR body
-now points reviewers at `@bilig/headless@0.26.0` and `libraries-v0.26.0`.
+now points reviewers at `@bilig/headless@0.26.1` and `libraries-v0.26.1`.
 
 The Goose MCP catalog pull request was closed on May 19, 2026 because Goose is
 paused on adding new MCP servers while it works on a more scalable extensions
@@ -213,10 +213,10 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 19, 2026: npm latest is `@bilig/headless@0.26.0`,
+Latest checked result on May 19, 2026: npm latest is `@bilig/headless@0.26.1`,
 and the official Registry latest-marked entry is
-`io.github.proompteng/bilig-workpaper@0.26.0` with package
-`@bilig/headless@0.26.0` and remote `https://bilig.proompteng.ai/mcp`.
+`io.github.proompteng/bilig-workpaper@0.26.1` with package
+`@bilig/headless@0.26.1` and remote `https://bilig.proompteng.ai/mcp`.
 The API also returns historical entries, so consumers should follow pagination,
 request a sufficient limit, and select the latest-marked entry when they need a
 single freshest install coordinate.
@@ -259,7 +259,7 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' |
-  npm exec --package @bilig/headless@0.26.0 -- \
+  npm exec --package @bilig/headless@0.26.1 -- \
     bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
@@ -287,5 +287,5 @@ verify readback, and persist WorkPaper JSON through the published
 `@bilig/headless` package.
 
 ```sh
-npm exec --package @bilig/headless@0.26.0 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.26.1 -- bilig-workpaper-mcp
 ```
