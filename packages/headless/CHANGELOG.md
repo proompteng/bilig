@@ -4,6 +4,16 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.32.6
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.32.5
+- Manual override: no
+
+## Fixes
+- perf(formula): write native scalar init into kernel store (c08356c1)
+- fix(docs): sync 0.32.5 public agent links (a80d2c7d)
+
 ## 0.32.5
 
 - Release type: patch

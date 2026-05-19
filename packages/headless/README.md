@@ -111,7 +111,7 @@ configs, `mcp/bilig-workpaper.mcp.json`, `npm run agent:verify`, and
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.32.5`:
+Current checked npm footprint for `@bilig/headless@0.32.6`:
 
 - Pack dry run: `497 kB` tarball, `2.99 MB` unpacked, `489` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX

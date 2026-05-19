@@ -50,16 +50,16 @@ Do not claim success from a write call alone. The proof is computed readback plu
 ## Fast Commands
 
 ```sh
-npm exec --package @bilig/headless@0.32.5 -- bilig-agent-challenge
-npm exec --package @bilig/headless@0.32.5 -- bilig-mcp-challenge
-npm exec --package @bilig/headless@0.32.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
-npm exec --package @bilig/headless@0.32.5 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.32.6 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.32.6 -- bilig-mcp-challenge
+npm exec --package @bilig/headless@0.32.6 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.32.6 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 Claude Desktop users can install the released MCPB bundle from:
 
-- https://github.com/proompteng/bilig/releases/download/libraries-v0.32.5/bilig-workpaper.mcpb
-- https://github.com/proompteng/bilig/releases/download/libraries-v0.32.5/bilig-workpaper.mcpb.sha256
+- https://github.com/proompteng/bilig/releases/download/libraries-v0.32.6/bilig-workpaper.mcpb
+- https://github.com/proompteng/bilig/releases/download/libraries-v0.32.6/bilig-workpaper.mcpb.sha256
 
 ## Direct TypeScript
 
@@ -114,7 +114,7 @@ Before wiring a client, an agent can prove the direct WorkPaper loop with:
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.32.5", "--", "bilig-agent-challenge"]
+  "args": ["exec", "--package", "@bilig/headless@0.32.6", "--", "bilig-agent-challenge"]
 }
 ```
 
@@ -123,7 +123,7 @@ For the actual file-backed MCP path, run the package-owned challenge first:
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.32.5", "--", "bilig-mcp-challenge"]
+  "args": ["exec", "--package", "@bilig/headless@0.32.6", "--", "bilig-mcp-challenge"]
 }
 ```
 
@@ -133,7 +133,7 @@ For the actual file-backed MCP path, run the package-owned challenge first:
   "args": [
     "exec",
     "--package",
-    "@bilig/headless@0.32.5",
+    "@bilig/headless@0.32.6",
     "--",
     "bilig-workpaper-mcp",
     "--workpaper",
@@ -207,7 +207,7 @@ When the user has a reduced XLSX formula/import bug, generate a local report thr
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.32.5", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
+  "args": ["exec", "--package", "@bilig/headless@0.32.6", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
 }
 ```
 
@@ -1757,8 +1757,8 @@ logic that can run through @bilig/headless. If it is, use WorkPaper state as the
 source of truth.
 
 For MCP, start with:
-npm exec --package @bilig/headless@0.32.5 -- bilig-mcp-challenge
-npm exec --package @bilig/headless@0.32.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.32.6 -- bilig-mcp-challenge
+npm exec --package @bilig/headless@0.32.6 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 
 For Node or TypeScript, import @bilig/headless directly. Prove the edit by
 reading the relevant range, writing one small input or formula, reading the
@@ -1788,7 +1788,7 @@ Do not report success from a write call alone.
 For MCP clients, use the published stdio server:
 
 ```sh
-npm exec --package @bilig/headless@0.32.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.32.6 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 Expected file-backed tools:
@@ -1809,8 +1809,8 @@ file.
 Claude Desktop users can skip manual JSON config by installing the released
 MCPB bundle:
 
-- https://github.com/proompteng/bilig/releases/download/libraries-v0.32.5/bilig-workpaper.mcpb
-- https://github.com/proompteng/bilig/releases/download/libraries-v0.32.5/bilig-workpaper.mcpb.sha256
+- https://github.com/proompteng/bilig/releases/download/libraries-v0.32.6/bilig-workpaper.mcpb
+- https://github.com/proompteng/bilig/releases/download/libraries-v0.32.6/bilig-workpaper.mcpb.sha256
 
 ## Direct TypeScript entrypoint
 
@@ -1851,8 +1851,8 @@ console.log({ revenue, savedBytes: saved.length })
 From a clean project, run the package-owned challenge:
 
 ```sh
-npm exec --package @bilig/headless@0.32.5 -- bilig-agent-challenge
-npm exec --package @bilig/headless@0.32.5 -- bilig-mcp-challenge
+npm exec --package @bilig/headless@0.32.6 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.32.6 -- bilig-mcp-challenge
 ```
 
 `bilig-agent-challenge` proves the direct WorkPaper API loop.
