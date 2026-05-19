@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef, EngineExistingNumericCellMutationResult } from '@bilig/core'
+import type { EngineCellMutationRef, EngineExistingNumericCellMutationResult } from '@bilig/core/headless-runtime'
 import { ValueTag, type CellValue, type LiteralInput } from '@bilig/protocol'
 import type { WorkPaperDetailedEvent } from './work-paper-emitter.js'
 import type { WorkPaperCellAddress, WorkPaperCellChange, WorkPaperChange } from './work-paper-types.js'

@@ -5,7 +5,7 @@ import {
   type EngineFormulaSourceRefs,
   type EngineFormulaSourceRefTable,
   type SpreadsheetEngine,
-} from '@bilig/core'
+} from '@bilig/core/headless-runtime'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import { loadInitialLiteralSheet, prepareInitialMixedSheetLoad } from './initial-sheet-load.js'
 import { normalizeConfiguredWorkPaperCalculationSettings } from './work-paper-config.js'

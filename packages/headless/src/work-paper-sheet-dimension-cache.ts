@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef } from '@bilig/core'
+import type { EngineCellMutationRef } from '@bilig/core/headless-runtime'
 import { workPaperFormulaMayResizeDynamically } from './work-paper-sheet-inspection.js'
 import type { WorkPaperSheetDimensions } from './work-paper-types.js'
 import type { WorkPaperAxisIntervalEditMode, WorkPaperAxisKind } from './work-paper-axis-helpers.js'

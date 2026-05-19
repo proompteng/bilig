@@ -1,4 +1,9 @@
-import { CellFlags, type EngineExistingNumericCellMutationResult, type SheetRecord, type SpreadsheetEngine } from '@bilig/core'
+import {
+  CellFlags,
+  type EngineExistingNumericCellMutationResult,
+  type SheetRecord,
+  type SpreadsheetEngine,
+} from '@bilig/core/headless-runtime'
 import { MAX_COLS, MAX_ROWS, ValueTag, type CellValue, type LiteralInput } from '@bilig/protocol'
 import { WORKPAPER_PUBLIC_ERROR_NAMES } from './work-paper-config.js'
 import { WorkPaperOperationError } from './work-paper-errors.js'

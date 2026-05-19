@@ -1,4 +1,9 @@
-import type { EngineCellMutationRef, EngineExistingNumericCellMutationResult, SheetRecord, SpreadsheetEngine } from '@bilig/core'
+import type {
+  EngineCellMutationRef,
+  EngineExistingNumericCellMutationResult,
+  SheetRecord,
+  SpreadsheetEngine,
+} from '@bilig/core/headless-runtime'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { WorkPaperOperationError } from './work-paper-errors.js'
 import { assertRowAndColumn, isBlankRawCellContent, isFormulaContent, isWorkPaperSheetMatrix } from './work-paper-runtime-helpers.js'

@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef } from '@bilig/core'
+import type { EngineCellMutationRef } from '@bilig/core/headless-runtime'
 import { canSkipDimensionUpdateAfterLiteralMutation, countPotentialNewTrackedCellMutations } from './work-paper-tracked-event-helpers.js'
 
 export interface WorkPaperCellMutationApplyOptions {

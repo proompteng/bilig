@@ -1,4 +1,4 @@
-import { CellFlags, type EngineCellMutationRef, type SheetRecord } from '@bilig/core'
+import { CellFlags, type EngineCellMutationRef, type SheetRecord } from '@bilig/core/headless-runtime'
 import type { CellRangeRef, CellValue, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
 import { formatAddress } from '@bilig/formula'
 import { assertRange, valuesEqual } from './work-paper-runtime-helpers.js'

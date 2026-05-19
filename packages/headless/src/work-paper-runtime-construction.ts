@@ -1,4 +1,4 @@
-import { SpreadsheetEngine } from '@bilig/core'
+import { SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import { WorkPaperEvaluationTimeoutError } from './work-paper-errors.js'
 import { normalizeConfiguredWorkPaperCalculationSettings } from './work-paper-config.js'
 import type { WorkPaperClipboardPayload } from './work-paper-clipboard.js'

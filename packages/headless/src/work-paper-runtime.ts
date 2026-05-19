@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef, SheetRecord, SpreadsheetEngine } from '@bilig/core'
+import type { EngineCellMutationRef, SheetRecord, SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import { MAX_COLS, MAX_ROWS, type CellSnapshot, type CellValue, type WorkbookSnapshot } from '@bilig/protocol'
 import {
   WorkPaperInvalidArgumentsError,

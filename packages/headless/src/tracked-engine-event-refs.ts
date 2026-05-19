@@ -1,5 +1,5 @@
 import type { CellValue, EngineEvent } from '@bilig/protocol'
-import type { EnginePatch } from '@bilig/core'
+import type { EnginePatch } from '@bilig/core/headless-runtime'
 
 const TRACKED_RANGE_INVALIDATION_PATCH_KIND = 'range-invalidation' as const
 const TRACKED_ROW_INVALIDATION_PATCH_KIND = 'row-invalidation' as const

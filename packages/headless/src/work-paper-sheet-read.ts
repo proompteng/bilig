@@ -1,4 +1,4 @@
-import { attachRuntimeSnapshot } from '@bilig/core'
+import { attachRuntimeSnapshot } from '@bilig/core/headless-runtime'
 import type { CellValue, WorkbookSnapshot } from '@bilig/protocol'
 import { assertRange } from './work-paper-runtime-helpers.js'
 import type { RawCellContent, WorkPaperCellAddress, WorkPaperCellRange, WorkPaperSheetDimensions } from './work-paper-types.js'

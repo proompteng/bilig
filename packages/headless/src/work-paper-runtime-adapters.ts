@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef, SheetRecord, SpreadsheetEngine } from '@bilig/core'
+import type { EngineCellMutationRef, SheetRecord, SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import type { CellRangeRef, CellSnapshot } from '@bilig/protocol'
 import { orderWorkPaperCellChanges } from './change-order.js'
 import { isWorkPaperAxisOrderPossible, isWorkPaperAxisSwapPossible, isWorkPaperMoveAxisPossible } from './work-paper-capability-checks.js'

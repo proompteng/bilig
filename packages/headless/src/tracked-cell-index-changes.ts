@@ -1,5 +1,5 @@
 import { indexToColumn } from '@bilig/formula'
-import { makeCellKey, type SpreadsheetEngine } from '@bilig/core'
+import { makeCellKey, type SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import {
   compareTrackedPhysicalCellIndices,
   copyOrderedTrackedCellIndices,

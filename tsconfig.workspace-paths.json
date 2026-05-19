@@ -10,6 +10,7 @@
       "@bilig/binary-protocol": ["./packages/binary-protocol/src/index.ts"],
       "@bilig/contracts": ["./packages/contracts/src/index.ts"],
       "@bilig/core": ["./packages/core/src/index.ts"],
+      "@bilig/core/headless-runtime": ["./packages/core/src/headless-runtime.ts"],
       "@bilig/excel-fixtures": ["./packages/excel-fixtures/src/index.ts"],
       "@bilig/excel-import": ["./packages/excel-import/src/index.ts"],
       "@bilig/formula": ["./packages/formula/src/index.ts"],

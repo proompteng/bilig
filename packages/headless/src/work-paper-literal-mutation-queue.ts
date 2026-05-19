@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef } from '@bilig/core'
+import type { EngineCellMutationRef } from '@bilig/core/headless-runtime'
 import type { LiteralInput } from '@bilig/protocol'
 import { isBlankRawCellContent, isDeferredBatchLiteralContent, isFormulaContent, stripLeadingEquals } from './work-paper-runtime-helpers.js'
 import type { RawCellContent } from './work-paper-types.js'

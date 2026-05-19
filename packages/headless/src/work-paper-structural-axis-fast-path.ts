@@ -1,4 +1,4 @@
-import type { SheetRecord } from '@bilig/core'
+import type { SheetRecord } from '@bilig/core/headless-runtime'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { WORKPAPER_PUBLIC_ERROR_NAMES } from './work-paper-config.js'
 import { WorkPaperOperationError } from './work-paper-errors.js'

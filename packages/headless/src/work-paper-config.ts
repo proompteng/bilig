@@ -1,5 +1,5 @@
 import { MAX_COLS, MAX_ROWS, type WorkbookCalculationSettingsSnapshot } from '@bilig/protocol'
-import { normalizeWorkbookCalculationSettings } from '@bilig/core'
+import { normalizeWorkbookCalculationSettings } from '@bilig/core/headless-runtime'
 import {
   WorkPaperConfigValueTooBigError,
   WorkPaperConfigValueTooSmallError,

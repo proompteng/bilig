@@ -1,4 +1,4 @@
-import { makeCellKey } from '@bilig/core'
+import { makeCellKey } from '@bilig/core/headless-runtime'
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import { orderWorkPaperCellChanges } from './change-order.js'
 import type { TrackedEngineEvent, TrackedPatch } from './tracked-engine-event-refs.js'

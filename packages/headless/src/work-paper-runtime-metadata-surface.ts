@@ -1,4 +1,4 @@
-import type { SheetRecord } from '@bilig/core'
+import type { SheetRecord } from '@bilig/core/headless-runtime'
 import { formatAddress } from '@bilig/formula'
 import { WorkPaperNoOperationToRedoError, WorkPaperNoOperationToUndoError, WorkPaperOperationError } from './work-paper-errors.js'
 import { sourceRangeRef } from './work-paper-address-format.js'

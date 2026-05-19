@@ -1,4 +1,4 @@
-import type { SheetRecord, SpreadsheetEngine } from '@bilig/core'
+import type { SheetRecord, SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { parseFormula } from '@bilig/formula'
 import { readFastRangeValueBlock, readFastRangeValues } from './fast-range-read.js'

@@ -1,4 +1,4 @@
-import type { SpreadsheetEngine } from '@bilig/core'
+import type { SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import { detachTrackedIndexChanges, hasDeferredTrackedIndexChanges } from './tracked-cell-index-changes.js'
 import { captureTrackedEngineEvent, type CoreTrackedEngineEvent, type TrackedEngineEvent } from './tracked-engine-event-refs.js'
 import { WorkPaperOperationError } from './work-paper-errors.js'

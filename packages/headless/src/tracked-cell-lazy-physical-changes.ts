@@ -1,6 +1,6 @@
 import { indexToColumn } from '@bilig/formula'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
-import type { SpreadsheetEngine } from '@bilig/core'
+import type { SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import {
   readDetachedPhysicalTrackedIndexChange,
   readTrackedCellValue,

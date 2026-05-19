@@ -7,7 +7,7 @@ import {
   type LiteralSheetLoadInspection,
   type SheetRecord,
   type SpreadsheetEngine,
-} from '@bilig/core'
+} from '@bilig/core/headless-runtime'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import { isBlankRawCellContent } from './work-paper-runtime-helpers.js'
 import type { RawCellContent, WorkPaperSheet } from './work-paper-types.js'

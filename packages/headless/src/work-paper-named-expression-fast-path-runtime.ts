@@ -1,4 +1,4 @@
-import type { SpreadsheetEngine, SheetRecord } from '@bilig/core'
+import type { SpreadsheetEngine, SheetRecord } from '@bilig/core/headless-runtime'
 import { ValueTag, type WorkbookDefinedNameValueSnapshot } from '@bilig/protocol'
 import { orderWorkPaperCellChanges } from './change-order.js'
 import { WorkPaperOperationError } from './work-paper-errors.js'

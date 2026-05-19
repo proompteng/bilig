@@ -31,6 +31,10 @@
     "packageDir": "packages/core",
     "sourceEntry": "packages/core/src/index.ts"
   },
+  "@bilig/core/headless-runtime": {
+    "packageDir": "packages/core",
+    "sourceEntry": "packages/core/src/headless-runtime.ts"
+  },
   "@bilig/excel-fixtures": {
     "packageDir": "packages/excel-fixtures",
     "sourceEntry": "packages/excel-fixtures/src/index.ts"

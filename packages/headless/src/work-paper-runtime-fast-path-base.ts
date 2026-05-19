@@ -1,4 +1,9 @@
-import { CellFlags, type EngineExistingNumericCellMutationResult, type SheetRecord, type SpreadsheetEngine } from '@bilig/core'
+import {
+  CellFlags,
+  type EngineExistingNumericCellMutationResult,
+  type SheetRecord,
+  type SpreadsheetEngine,
+} from '@bilig/core/headless-runtime'
 import { MAX_COLS, MAX_ROWS, ValueTag, type CellSnapshot, type CellValue, type WorkbookDefinedNameValueSnapshot } from '@bilig/protocol'
 import type { InternalFunctionBinding } from './work-paper-function-registry.js'
 import { createWorkPaperRuntimeAdapters, type WorkPaperRuntimeAdapters } from './work-paper-runtime-adapters.js'

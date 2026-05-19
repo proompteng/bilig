@@ -1,4 +1,4 @@
-import type { SpreadsheetEngine, SheetRecord } from '@bilig/core'
+import type { SpreadsheetEngine, SheetRecord } from '@bilig/core/headless-runtime'
 import { ValueTag, type CellRangeRef, type CellSnapshot, type CellValue } from '@bilig/protocol'
 import {
   collectSerializedWorkPaperSheets,

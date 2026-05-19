@@ -1,4 +1,4 @@
-import type { SpreadsheetEngine } from '@bilig/core'
+import type { SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import { formatCellDisplayValue } from '@bilig/protocol'
 import type { CellValue, WorkbookCalculationSettingsSnapshot } from '@bilig/protocol'
 import { checkWorkPaperLicenseKeyValidity, cloneConfig, DEFAULT_CONFIG } from './work-paper-config.js'

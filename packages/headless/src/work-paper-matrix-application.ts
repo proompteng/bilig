@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef } from '@bilig/core'
+import type { EngineCellMutationRef } from '@bilig/core/headless-runtime'
 import { translateFormulaReferences } from '@bilig/formula'
 import { buildMatrixMutationPlan, type MatrixMutationDimensionImpact } from './matrix-mutation-plan.js'
 import { workPaperFormulaMayResizeDynamically } from './work-paper-sheet-inspection.js'

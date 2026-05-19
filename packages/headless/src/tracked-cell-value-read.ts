@@ -1,4 +1,4 @@
-import type { SpreadsheetEngine } from '@bilig/core'
+import type { SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { WorkPaperCellChange } from './work-paper-types.js'
 

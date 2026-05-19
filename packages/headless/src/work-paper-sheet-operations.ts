@@ -1,4 +1,4 @@
-import type { SheetRecord } from '@bilig/core'
+import type { SheetRecord } from '@bilig/core/headless-runtime'
 import { formatAddress } from '@bilig/formula'
 import type { WorkPaperNamedExpressionValueSnapshot } from './work-paper-named-expression-helpers.js'
 import type { VisibilitySnapshot } from './work-paper-visibility-snapshot.js'

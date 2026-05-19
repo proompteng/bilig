@@ -5,7 +5,7 @@ import {
   type EngineExistingNumericCellMutationResult,
   type SheetRecord,
   type SpreadsheetEngine,
-} from '@bilig/core'
+} from '@bilig/core/headless-runtime'
 import { ValueTag, type LiteralInput } from '@bilig/protocol'
 import { WORKPAPER_PUBLIC_ERROR_NAMES } from './work-paper-config.js'
 import { WorkPaperOperationError } from './work-paper-errors.js'

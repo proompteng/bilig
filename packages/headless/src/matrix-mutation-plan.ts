@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef } from '@bilig/core'
+import type { EngineCellMutationRef } from '@bilig/core/headless-runtime'
 import { isBlankRawCellContent } from './work-paper-runtime-helpers.js'
 import { workPaperFormulaMayResizeDynamically } from './work-paper-sheet-inspection.js'
 import type { WorkPaperCellAddress, WorkPaperSheet, RawCellContent } from './work-paper-types.js'

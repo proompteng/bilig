@@ -8,7 +8,7 @@ import type {
   WorkbookDateSystem,
 } from '@bilig/protocol'
 import type { EvaluationResult } from '@bilig/formula'
-import type { EngineCounters } from '@bilig/core'
+import type { EngineCounters } from '@bilig/core/headless-runtime'
 
 export type RawCellContent = LiteralInput | string
 

@@ -1,4 +1,4 @@
-import type { EngineCellMutationRef } from '@bilig/core'
+import type { EngineCellMutationRef } from '@bilig/core/headless-runtime'
 import { applyQueuedWorkPaperCellMutationRefs, type WorkPaperCellMutationApplyOptions } from './work-paper-cell-mutation-refs.js'
 import { tryEnqueueWorkPaperLiteralMutation } from './work-paper-literal-mutation-queue.js'
 import type { RawCellContent } from './work-paper-types.js'

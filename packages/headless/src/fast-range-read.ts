@@ -1,4 +1,4 @@
-import { BLOCK_COLS, BLOCK_ROWS, type SheetRecord, type SpreadsheetEngine } from '@bilig/core'
+import { BLOCK_COLS, BLOCK_ROWS, type SheetRecord, type SpreadsheetEngine } from '@bilig/core/headless-runtime'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { WorkPaperCellRange, WorkPaperRangeValueBlock } from './work-paper-types.js'
 
