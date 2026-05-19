@@ -9,6 +9,7 @@ import {
 } from './xlsx-large-simple-formula-records.js'
 import { readLargeSimpleSheetHyperlinkRefs } from './xlsx-large-simple-hyperlinks.js'
 import { appendLargeSimplePrintPageSetupElement, isLargeSimplePrintPageSetupElementName } from './xlsx-large-simple-printer-settings.js'
+import { rowTagHasMetadataAttribute } from './xlsx-large-simple-row-metadata-scan.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
@@ -18,7 +19,6 @@ import { readWorksheetTableRelationshipIds } from './xlsx-tables.js'
 import {
   metadataWorksheetTagNames,
   richTextRunPattern,
-  rowMetadataAttributePattern,
   unsupportedWorksheetTagNames,
 } from './xlsx-large-simple-worksheet-scan-constants.js'
 import {
@@ -268,7 +268,7 @@ class LargeSimpleWorksheetChunkScanner {
       }
       if (tag.localName === 'row') {
         if (this.retainMetadataXml) {
-          this.collectRowMetadata(tagEnd)
+          this.collectRowMetadata(tag.endIndex, tagEnd)
         }
         this.index = tagEnd + 1
         continue
@@ -312,13 +312,14 @@ class LargeSimpleWorksheetChunkScanner {
     this.columnCount = Math.max(this.columnCount, start.column + 1, end.column + 1)
   }
 
-  private collectRowMetadata(tagEnd: number): void {
-    const openingTag = decodeBytes(this.buffer, this.index, tagEnd + 1)
-    if (rowMetadataAttributePattern.test(openingTag)) {
-      this.rowEntries ??= []
-      this.rowMetadata ??= []
-      appendLargeSimpleRowMetadataTag(this.rowEntries, this.rowMetadata, openingTag)
+  private collectRowMetadata(nameEnd: number, tagEnd: number): void {
+    if (!rowTagHasMetadataAttribute(this.buffer, nameEnd, tagEnd)) {
+      return
     }
+    const openingTag = decodeBytes(this.buffer, this.index, tagEnd + 1)
+    this.rowEntries ??= []
+    this.rowMetadata ??= []
+    appendLargeSimpleRowMetadataTag(this.rowEntries, this.rowMetadata, openingTag)
   }
 
   private readCell(nameEnd: number, tagEnd: number, final: boolean): boolean {
