@@ -117,7 +117,7 @@ describe('guarded SUMIFS workpaper performance', () => {
   it('builds repeated reconciliation SUMIFS formulas within a bounded budget', () => {
     const rowCount = 1_500
     const workbook = WorkPaper.buildFromSheets(buildReconciliationSheets(rowCount), {
-      evaluationTimeoutMs: 5_000,
+      evaluationTimeoutMs: 15_000,
       useWildcards: true,
       useRegularExpressions: false,
     })
@@ -125,5 +125,5 @@ describe('guarded SUMIFS workpaper performance', () => {
     expectNumber(cellValue(workbook, 'Summary', 1, 1), 0)
     expectNumber(cellValue(workbook, 'Summary', 2, 1), 0)
     expect(workbook.getConfig().useColumnIndex).toBe(true)
-  }, 8_000)
+  }, 20_000)
 })

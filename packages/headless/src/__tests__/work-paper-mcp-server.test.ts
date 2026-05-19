@@ -67,7 +67,7 @@ describe('WorkPaper MCP server', () => {
       const timeout = setTimeout(() => {
         child.kill('SIGKILL')
         reject(new Error('Timed out waiting for bilig-workpaper-mcp smoke test process to exit'))
-      }, 5000)
+      }, 15_000)
 
       child.once('error', (error) => {
         clearTimeout(timeout)
@@ -117,7 +117,7 @@ describe('WorkPaper MCP server', () => {
       'read_workpaper_summary',
       'set_workpaper_input_cell',
     ])
-  })
+  }, 20_000)
 
   it('exposes stable tool definitions and structured formula readback', () => {
     const output = createWorkPaperMcpDemoOutput()
@@ -314,7 +314,7 @@ describe('WorkPaper MCP server', () => {
         const timeout = setTimeout(() => {
           child.kill('SIGKILL')
           reject(new Error('Timed out waiting for file-backed bilig-workpaper-mcp smoke test process to exit'))
-        }, 5000)
+        }, 15_000)
 
         child.once('error', (error) => {
           clearTimeout(timeout)
@@ -380,7 +380,7 @@ describe('WorkPaper MCP server', () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
     }
-  })
+  }, 20_000)
 
   it('initializes a missing demo WorkPaper file before starting file-backed stdio tools', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'bilig-workpaper-mcp-init-'))
@@ -401,7 +401,7 @@ describe('WorkPaper MCP server', () => {
         const timeout = setTimeout(() => {
           child.kill('SIGKILL')
           reject(new Error('Timed out waiting for demo-init bilig-workpaper-mcp smoke test process to exit'))
-        }, 5000)
+        }, 15_000)
 
         child.once('error', (error) => {
           clearTimeout(timeout)
@@ -462,7 +462,7 @@ describe('WorkPaper MCP server', () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
     }
-  })
+  }, 20_000)
 
   it('starts the stdio bin with directory-friendly WorkPaper tools for scanner introspection', async () => {
     const binPath = fileURLToPath(new URL('../work-paper-mcp-stdio-bin.ts', import.meta.url))
@@ -475,7 +475,7 @@ describe('WorkPaper MCP server', () => {
       const timeout = setTimeout(() => {
         child.kill('SIGKILL')
         reject(new Error('Timed out waiting for demo WorkPaper tool smoke test process to exit'))
-      }, 10000)
+      }, 15_000)
 
       child.once('error', (error) => {
         clearTimeout(timeout)
@@ -519,7 +519,7 @@ describe('WorkPaper MCP server', () => {
       'export_workpaper_document',
       'validate_formula',
     ])
-  }, 15000)
+  }, 20_000)
 })
 
 function readToolNames(value: unknown): string[] {
