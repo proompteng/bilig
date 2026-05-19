@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.32.5
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.32.4
+- Manual override: no
+
+## Fixes
+- fix(release): sync agent discovery docs (26007971)
+
 ## 0.32.4
 
 - Release type: patch
