@@ -12,12 +12,21 @@ export interface LargeSimpleXlsxImportPhaseTelemetry {
   readonly elapsedMs: number
   readonly rssBytes?: number
   readonly heapUsedBytes?: number
+  readonly zipSourceBytesBeforeRelease?: number
+  readonly zipSourceBytesAfterRelease?: number
 }
 
 interface PhaseAccumulator {
   elapsedMs: number
   rssBytes?: number
   heapUsedBytes?: number
+  zipSourceBytesBeforeRelease?: number
+  zipSourceBytesAfterRelease?: number
+}
+
+export interface LargeSimpleXlsxImportPhaseEvidence {
+  readonly zipSourceBytesBeforeRelease?: number
+  readonly zipSourceBytesAfterRelease?: number
 }
 
 export class LargeSimpleXlsxImportPhaseRecorder {
@@ -28,7 +37,7 @@ export class LargeSimpleXlsxImportPhaseRecorder {
     return nowMs()
   }
 
-  finish(phase: LargeSimpleXlsxImportPhase, startedAtMs: number): void {
+  finish(phase: LargeSimpleXlsxImportPhase, startedAtMs: number, evidence: LargeSimpleXlsxImportPhaseEvidence = {}): void {
     const elapsedMs = Math.max(0, Math.round(nowMs() - startedAtMs))
     let accumulator = this.phases.get(phase)
     if (!accumulator) {
@@ -44,6 +53,12 @@ export class LargeSimpleXlsxImportPhaseRecorder {
     if (memory?.heapUsedBytes !== undefined) {
       accumulator.heapUsedBytes = Math.max(accumulator.heapUsedBytes ?? 0, memory.heapUsedBytes)
     }
+    if (evidence.zipSourceBytesBeforeRelease !== undefined) {
+      accumulator.zipSourceBytesBeforeRelease = evidence.zipSourceBytesBeforeRelease
+    }
+    if (evidence.zipSourceBytesAfterRelease !== undefined) {
+      accumulator.zipSourceBytesAfterRelease = evidence.zipSourceBytesAfterRelease
+    }
   }
 
   entries(): LargeSimpleXlsxImportPhaseTelemetry[] {
@@ -54,6 +69,8 @@ export class LargeSimpleXlsxImportPhaseRecorder {
         elapsedMs: entry.elapsedMs,
         ...(entry.rssBytes !== undefined ? { rssBytes: entry.rssBytes } : {}),
         ...(entry.heapUsedBytes !== undefined ? { heapUsedBytes: entry.heapUsedBytes } : {}),
+        ...(entry.zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesBeforeRelease: entry.zipSourceBytesBeforeRelease } : {}),
+        ...(entry.zipSourceBytesAfterRelease !== undefined ? { zipSourceBytesAfterRelease: entry.zipSourceBytesAfterRelease } : {}),
       }
     })
   }

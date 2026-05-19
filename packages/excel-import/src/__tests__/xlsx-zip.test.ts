@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   forEachInflatedXlsxZipEntryChunk,
   getZipText,
+  readLazyXlsxZipSourceByteLength,
   readXlsxZipEntries,
   readXlsxZipEntriesLazy,
   releaseLazyXlsxZipSource,
@@ -33,10 +34,12 @@ describe('XLSX ZIP reader', () => {
   it('releases lazy central-directory source bytes after streamed consumers finish', () => {
     const zip = readXlsxZipEntriesLazy(buildStreamedZip('xl/workbook.xml', '<workbook><sheets/></workbook>'))
     const chunks: Uint8Array[] = []
+    expect(readLazyXlsxZipSourceByteLength(zip)).toBeGreaterThan(0)
 
     expect(forEachInflatedXlsxZipEntryChunk(zip, 'xl/workbook.xml', (chunk) => chunks.push(chunk))).toBe(true)
     expect(Buffer.concat(chunks).toString()).toBe('<workbook><sheets/></workbook>')
     expect(releaseLazyXlsxZipSource(zip)).toBe(true)
+    expect(readLazyXlsxZipSourceByteLength(zip)).toBe(0)
     expect(releaseLazyXlsxZipSource(zip)).toBe(false)
     expect(forEachInflatedXlsxZipEntryChunk(zip, 'xl/workbook.xml', () => undefined)).toBe(false)
     expect(() => getZipText(zip, 'xl/workbook.xml')).toThrow(/released/u)

@@ -6,6 +6,7 @@ import {
   forEachInflatedXlsxZipEntryChunk,
   getZipText,
   normalizeZipPath,
+  readLazyXlsxZipSourceByteLength,
   releaseLazyXlsxZipSource,
   type XlsxZipEntries,
 } from './xlsx-zip.js'
@@ -121,8 +122,12 @@ export function tryInspectLargeSimpleXlsxHeadless(
   delete zip[sharedStringsPath]
   if (options.releaseZipSource === true) {
     const zipSourceReleaseStart = phaseRecorder.start()
+    const zipSourceBytesBeforeRelease = readLazyXlsxZipSourceByteLength(zip)
     releaseLazyXlsxZipSource(zip)
-    phaseRecorder.finish('zip-source-release', zipSourceReleaseStart)
+    phaseRecorder.finish('zip-source-release', zipSourceReleaseStart, {
+      ...(zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesBeforeRelease } : {}),
+      ...(zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesAfterRelease: readLazyXlsxZipSourceByteLength(zip) ?? 0 } : {}),
+    })
   }
   return {
     workbookName: normalizeWorkbookName(fileName),

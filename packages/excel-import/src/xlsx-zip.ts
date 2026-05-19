@@ -68,6 +68,11 @@ export function releaseLazyXlsxZipSource(zip: XlsxZipEntries): boolean {
   return true
 }
 
+export function readLazyXlsxZipSourceByteLength(zip: XlsxZipEntries): number | undefined {
+  const metadata = (zip as XlsxZipEntriesWithCentralDirectorySource)[xlsxZipCentralDirectorySourceSymbol]
+  return metadata ? (metadata.source?.byteLength ?? 0) : undefined
+}
+
 const localFileHeaderSignature = 0x04034b50
 const centralDirectoryFileHeaderSignature = 0x02014b50
 const endOfCentralDirectorySignature = 0x06054b50
