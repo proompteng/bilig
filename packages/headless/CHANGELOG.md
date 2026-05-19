@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.24.4
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.24.3
+- Manual override: no
+
+## Fixes
+- fix(workbook): stabilize grid typography and focus ownership (96abe1e7)
+
+## Internal runtime changes
+- chore(ci): update github action pins (b33db000)
+
 ## 0.24.3
 
 - Release type: patch
