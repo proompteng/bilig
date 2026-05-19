@@ -1,4 +1,4 @@
-import { formatAddress } from '@bilig/formula'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type {
   CellNumberFormatRecord,
   CellStyleRecord,
@@ -25,6 +25,16 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+function firstString(record: Record<string, unknown>, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const value = asString(record[key])
+    if (value !== undefined) {
+      return value
+    }
+  }
+  return undefined
+}
+
 function asNonNegativeNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
@@ -37,6 +47,16 @@ function asSafePositiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined
 }
 
+function firstSafeNonNegativeInteger(record: Record<string, unknown>, keys: readonly string[]): number | undefined {
+  for (const key of keys) {
+    const value = asSafeNonNegativeInteger(record[key])
+    if (value !== undefined) {
+      return value
+    }
+  }
+  return undefined
+}
+
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined
 }
@@ -47,6 +67,16 @@ function asArray(value: unknown): unknown[] {
 
 function hasOwn(record: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key)
+}
+
+function firstRecord(record: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> | undefined {
+  for (const key of keys) {
+    const value = record[key]
+    if (isRecord(value)) {
+      return value
+    }
+  }
+  return undefined
 }
 
 interface ArrayProjectionField<T> {
@@ -222,9 +252,9 @@ function parseStyleRecords(entries: unknown[]): CellStyleRecord[] {
       if (!isRecord(entry)) {
         return null
       }
-      const id = asString(entry['id'])
-      const recordJSON = entry['recordJSON']
-      if (!id || !isRecord(recordJSON)) {
+      const id = firstString(entry, ['id', 'styleId'])
+      const recordJSON = firstRecord(entry, ['recordJSON', 'styleJson'])
+      if (!id || !recordJSON) {
         return null
       }
       return sanitizeCellStyleRecord(id, recordJSON)
@@ -238,7 +268,7 @@ function parseNumberFormats(entries: unknown[]): CellNumberFormatRecord[] {
       if (!isRecord(entry)) {
         return null
       }
-      const id = asString(entry['id'])
+      const id = firstString(entry, ['id', 'formatId'])
       const code = asString(entry['code'])
       const kind = asString(entry['kind'])
       if (!id || !code || !isCellNumberFormatKind(kind)) {
@@ -378,6 +408,106 @@ function parseFormatRanges(entries: unknown[]): SheetFormatRangeSnapshot[] {
     .filter((entry): entry is SheetFormatRangeSnapshot => entry !== null)
 }
 
+function parseCellCoordinates(
+  cellEntry: Record<string, unknown>,
+  sheetName: string,
+): { address: string; rowNum: number | undefined; colNum: number | undefined } | null {
+  const rowNum = asSafeNonNegativeInteger(cellEntry['rowNum'])
+  const colNum = asSafeNonNegativeInteger(cellEntry['colNum'])
+  const address =
+    asString(cellEntry['address']) ?? (rowNum !== undefined && colNum !== undefined ? formatAddress(rowNum, colNum) : undefined)
+  if (!address) {
+    return null
+  }
+  if (rowNum !== undefined && colNum !== undefined) {
+    return { address, rowNum, colNum }
+  }
+  try {
+    const parsed = parseCellAddress(address, sheetName)
+    return { address, rowNum: parsed.row, colNum: parsed.col }
+  } catch {
+    return { address, rowNum: undefined, colNum: undefined }
+  }
+}
+
+function singleCellStyleRange(
+  rowNum: number | undefined,
+  colNum: number | undefined,
+  styleId: string | undefined,
+): SheetStyleRangeSnapshot | null {
+  if (rowNum === undefined || colNum === undefined || !styleId) {
+    return null
+  }
+  const address = formatAddress(rowNum, colNum)
+  return {
+    range: {
+      sheetName: '',
+      startAddress: address,
+      endAddress: address,
+    },
+    styleId,
+  }
+}
+
+function singleCellFormatRange(
+  rowNum: number | undefined,
+  colNum: number | undefined,
+  formatId: string | undefined,
+): SheetFormatRangeSnapshot | null {
+  if (rowNum === undefined || colNum === undefined || !formatId) {
+    return null
+  }
+  const address = formatAddress(rowNum, colNum)
+  return {
+    range: {
+      sheetName: '',
+      startAddress: address,
+      endAddress: address,
+    },
+    formatId,
+  }
+}
+
+function dedupeProjectionRanges<T>(entries: readonly T[], keyOf: (entry: T) => string): readonly T[] {
+  const byKey = new Map<string, T>()
+  for (const entry of entries) {
+    byKey.set(keyOf(entry), entry)
+  }
+  return [...byKey.values()]
+}
+
+function mergeDerivedStyleRanges(
+  projected: ArrayProjectionField<SheetStyleRangeSnapshot>,
+  derived: readonly SheetStyleRangeSnapshot[],
+  cellsPresent: boolean,
+): ArrayProjectionField<SheetStyleRangeSnapshot> {
+  if (projected.present || cellsPresent) {
+    return {
+      present: true,
+      values: dedupeProjectionRanges([...projected.values, ...derived], (entry) =>
+        [entry.styleId, entry.range.startAddress, entry.range.endAddress].join('\u0000'),
+      ),
+    }
+  }
+  return projected
+}
+
+function mergeDerivedFormatRanges(
+  projected: ArrayProjectionField<SheetFormatRangeSnapshot>,
+  derived: readonly SheetFormatRangeSnapshot[],
+  cellsPresent: boolean,
+): ArrayProjectionField<SheetFormatRangeSnapshot> {
+  if (projected.present || cellsPresent) {
+    return {
+      present: true,
+      values: dedupeProjectionRanges([...projected.values, ...derived], (entry) =>
+        [entry.formatId, entry.range.startAddress, entry.range.endAddress].join('\u0000'),
+      ),
+    }
+  }
+  return projected
+}
+
 function withSheetMetadataFallback(
   sheetName: string,
   rowEntries: ArrayProjectionField<WorkbookAxisMetadataSnapshot>,
@@ -478,20 +608,21 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
 
       const fallbackSheet = fallbackSheets.get(sheetName)
       const cellsPresent = hasOwn(sheetEntry, 'cells')
+      const derivedStyleRanges: SheetStyleRangeSnapshot[] = []
+      const derivedFormatRanges: SheetFormatRangeSnapshot[] = []
       const cells = cellsPresent
         ? asArray(sheetEntry['cells'])
             .map((cellEntry) => {
               if (!isRecord(cellEntry)) {
                 return null
               }
-              const explicitFormatId = asString(cellEntry['explicitFormatId'])
-              const rowNum = asSafeNonNegativeInteger(cellEntry['rowNum'])
-              const colNum = asSafeNonNegativeInteger(cellEntry['colNum'])
-              const address =
-                asString(cellEntry['address']) ?? (rowNum !== undefined && colNum !== undefined ? formatAddress(rowNum, colNum) : undefined)
-              if (!address) {
+              const coordinates = parseCellCoordinates(cellEntry, sheetName)
+              if (!coordinates) {
                 return null
               }
+              const { address, rowNum, colNum } = coordinates
+              const styleId = asString(cellEntry['styleId'])
+              const explicitFormatId = firstString(cellEntry, ['explicitFormatId', 'formatId'])
               const inputValue = cellEntry['inputValue']
               const formula = asString(cellEntry['formula'])
               const format = asString(cellEntry['format']) ?? (explicitFormatId ? numberFormatCodeById.get(explicitFormatId) : undefined)
@@ -504,6 +635,14 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
               if (format) {
                 nextCell.format = format
               }
+              const styleRange = singleCellStyleRange(rowNum, colNum, styleId)
+              if (styleRange) {
+                derivedStyleRanges.push(styleRange)
+              }
+              const formatRange = singleCellFormatRange(rowNum, colNum, explicitFormatId)
+              if (formatRange) {
+                derivedFormatRanges.push(formatRange)
+              }
               return nextCell
             })
             .filter((entry): entry is WorkbookSnapshot['sheets'][number]['cells'][number] => entry !== null)
@@ -512,13 +651,19 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
         sheetName,
         parseArrayProjectionField(sheetEntry, 'rowMetadata', parseAxisMetadata),
         parseArrayProjectionField(sheetEntry, 'columnMetadata', parseAxisMetadata),
-        parseArrayProjectionField(sheetEntry, 'styleRanges', parseStyleRanges),
-        parseArrayProjectionField(sheetEntry, 'formatRanges', parseFormatRanges),
+        mergeDerivedStyleRanges(parseArrayProjectionField(sheetEntry, 'styleRanges', parseStyleRanges), derivedStyleRanges, cellsPresent),
+        mergeDerivedFormatRanges(
+          parseArrayProjectionField(sheetEntry, 'formatRanges', parseFormatRanges),
+          derivedFormatRanges,
+          cellsPresent,
+        ),
         parseFreezePane(sheetEntry, fallbackSheet?.metadata?.freezePane),
         fallbackSheet?.metadata,
       )
 
-      const id = asSafeNonNegativeInteger(sheetEntry['id']) ?? (!hasOwn(sheetEntry, 'id') ? fallbackSheet?.id : undefined)
+      const id =
+        firstSafeNonNegativeInteger(sheetEntry, ['id', 'sheetId']) ??
+        (!hasOwn(sheetEntry, 'id') && !hasOwn(sheetEntry, 'sheetId') ? fallbackSheet?.id : undefined)
       const nextSheet: WorkbookSnapshot['sheets'][number] = metadata
         ? { name: sheetName, order: sortOrder, metadata, cells }
         : { name: sheetName, order: sortOrder, cells }

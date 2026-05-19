@@ -164,6 +164,125 @@ describe('projectWorkbookToSnapshot', () => {
     ])
   })
 
+  it('reconstructs workbook snapshots from Zero schema client row names', () => {
+    const projected = projectWorkbookToSnapshot(
+      {
+        id: 'doc-1',
+        name: 'Zero Query Book',
+        calcMode: 'manual',
+        compatibilityMode: 'odf-1.4',
+        recalcEpoch: 11,
+        styles: [
+          {
+            styleId: 'style-1',
+            styleJson: {
+              fill: { backgroundColor: '#ffee00' },
+              font: { bold: true },
+            },
+          },
+        ],
+        numberFormats: [
+          {
+            formatId: 'fmt-1',
+            code: '$#,##0.00',
+            kind: 'currency',
+          },
+        ],
+        sheets: [
+          {
+            sheetId: 12,
+            name: 'Forecast',
+            sortOrder: 0,
+            freezeRows: 1,
+            freezeCols: 0,
+            cells: [
+              {
+                address: 'A1',
+                rowNum: 0,
+                colNum: 0,
+                inputValue: 1250,
+                styleId: 'style-1',
+                explicitFormatId: 'fmt-1',
+              },
+              {
+                rowNum: 1,
+                colNum: 1,
+                formula: 'A1*2',
+                formatId: 'fmt-1',
+              },
+            ],
+            rowMetadata: [{ startIndex: 0, count: 1, size: 28 }],
+            columnMetadata: [{ startIndex: 0, count: 1, size: 144 }],
+          },
+        ],
+      },
+      'doc-1',
+    )
+
+    expect(projected).toEqual({
+      version: 1,
+      workbook: {
+        name: 'Zero Query Book',
+        metadata: {
+          styles: [
+            {
+              id: 'style-1',
+              fill: { backgroundColor: '#ffee00' },
+              font: { bold: true },
+            },
+          ],
+          formats: [{ id: 'fmt-1', code: '$#,##0.00', kind: 'currency' }],
+          calculationSettings: { mode: 'manual', compatibilityMode: 'odf-1.4' },
+          volatileContext: { recalcEpoch: 11 },
+        },
+      },
+      sheets: [
+        {
+          id: 12,
+          name: 'Forecast',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 1250, format: '$#,##0.00' },
+            { address: 'B2', formula: 'A1*2', format: '$#,##0.00' },
+          ],
+          metadata: {
+            rowMetadata: [{ start: 0, count: 1, size: 28 }],
+            columnMetadata: [{ start: 0, count: 1, size: 144 }],
+            styleRanges: [
+              {
+                range: {
+                  sheetName: 'Forecast',
+                  startAddress: 'A1',
+                  endAddress: 'A1',
+                },
+                styleId: 'style-1',
+              },
+            ],
+            formatRanges: [
+              {
+                range: {
+                  sheetName: 'Forecast',
+                  startAddress: 'A1',
+                  endAddress: 'A1',
+                },
+                formatId: 'fmt-1',
+              },
+              {
+                range: {
+                  sheetName: 'Forecast',
+                  startAddress: 'B2',
+                  endAddress: 'B2',
+                },
+                formatId: 'fmt-1',
+              },
+            ],
+            freezePane: { rows: 1, cols: 0 },
+          },
+        },
+      ],
+    })
+  })
+
   it('preserves fallback axis style metadata when normalized rows omit it', () => {
     const projected = projectWorkbookToSnapshot(
       {
