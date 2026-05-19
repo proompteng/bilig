@@ -70,11 +70,14 @@ Handing a spreadsheet task to another coding agent?
 
 ```sh
 npm exec --package @bilig/headless@0.25.7 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.25.7 -- bilig-mcp-challenge
 ```
 
-That prints the package-owned write, formula readback, WorkPaper JSON export,
-restore, and `verified: true` proof object without cloning the repository or
-downloading a TypeScript file.
+The first command proves the direct WorkPaper API. The second command proves
+the file-backed MCP path by initializing JSON-RPC, listing
+tools/resources/prompts, editing `Inputs!B3`, reading recalculated `Summary!B3`,
+exporting WorkPaper JSON, restarting from disk, and returning `verified: true`.
+Both run without cloning the repository or downloading a TypeScript file.
 
 ## Install
 
@@ -190,6 +193,7 @@ checking that the dependent formula still reads back correctly.
 
 ```sh
 npm exec --package @bilig/headless@0.25.7 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.25.7 -- bilig-mcp-challenge
 ```
 
 Expected output:

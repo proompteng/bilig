@@ -264,6 +264,11 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
   requireIncludes(rootPackageJson, '"workpaper:smoke:external": "bun scripts/workpaper-external-smoke.ts"', 'package.json')
   requireIncludes(
     mcpWorkPaperToolServerDoc,
+    `npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge`,
+    'docs/mcp-workpaper-tool-server.md',
+  )
+  requireIncludes(
+    mcpWorkPaperToolServerDoc,
     `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp`,
     'docs/mcp-workpaper-tool-server.md',
   )

@@ -74,7 +74,8 @@
       "name": "file-backed-workpaper-mcp",
       "type": "mcp-stdio-server",
       "docs": "https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html",
-      "server_card": "https://proompteng.github.io/bilig/.well-known/mcp/server-card.json"
+      "server_card": "https://proompteng.github.io/bilig/.well-known/mcp/server-card.json",
+      "challenge_command": "npm exec --package @bilig/headless@0.25.7 -- bilig-mcp-challenge"
     },
     {
       "name": "claude-desktop-mcpb",

@@ -74,11 +74,18 @@ a TypeScript file, or require a spreadsheet UI:
 
 ```sh
 npm exec --package @bilig/headless@0.25.7 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.25.7 -- bilig-mcp-challenge
 ```
 
 A passing run prints `verified: true`.
 Use `--markdown` when you want a paste-ready report for an issue, PR, or agent
 eval transcript.
+
+Use `bilig-agent-challenge` for the direct WorkPaper API loop. Use
+`bilig-mcp-challenge` when the evaluator cares about the actual MCP path:
+JSON-RPC initialize, tool/resource/prompt discovery, `set_cell_contents`,
+dependent formula readback, WorkPaper JSON export, and restart readback from the
+same persisted file.
 
 ## MCP Path
 

@@ -46,6 +46,15 @@ Before wiring a client, an agent can prove the direct WorkPaper loop with:
 }
 ```
 
+For the actual file-backed MCP path, run the package-owned challenge first:
+
+```json
+{
+  "command": "npm",
+  "args": ["exec", "--package", "@bilig/headless@0.25.7", "--", "bilig-mcp-challenge"]
+}
+```
+
 ```json
 {
   "command": "npm",

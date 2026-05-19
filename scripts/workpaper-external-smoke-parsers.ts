@@ -301,6 +301,89 @@ export function parseNodeRangeReadbackOutput(output: string): {
   }
 }
 
+export function parseNodeMcpChallengeOutput(output: string): {
+  editedCell: string
+  dependentCell: string
+  before: number
+  after: number
+  afterRestart: number
+  displayValue: string
+  toolNames: string[]
+  resourceUris: string[]
+  promptNames: string[]
+  persistence: {
+    persisted: boolean
+    serializedBytes: number
+  }
+  verified: boolean
+} {
+  const parsed = parseJsonRecord(output, 'node MCP challenge output')
+  const checks = parseRecordValue(parsed.checks, 'node MCP challenge checks')
+  const persistence = parseRecordValue(parsed.persistence, 'node MCP challenge persistence')
+  const toolNames = parsed.tools
+  const resourceUris = parsed.resources
+  const promptNames = parsed.prompts
+
+  if (
+    parsed.verified !== true ||
+    parsed.editedCell !== 'Inputs!B3' ||
+    parsed.dependentCell !== 'Summary!B3' ||
+    parsed.before !== 60000 ||
+    parsed.after !== 96000 ||
+    parsed.afterRestart !== 96000 ||
+    parsed.displayValue !== '96000' ||
+    !isStringArray(toolNames) ||
+    !sameJson(toolNames, [
+      'list_sheets',
+      'read_range',
+      'read_cell',
+      'set_cell_contents',
+      'get_cell_display_value',
+      'export_workpaper_document',
+      'validate_formula',
+    ]) ||
+    !isStringArray(resourceUris) ||
+    !sameJson(resourceUris, [
+      'bilig://workpaper/manifest',
+      'bilig://workpaper/agent-handoff',
+      'bilig://workpaper/sheets',
+      'bilig://workpaper/current-document',
+    ]) ||
+    !isStringArray(promptNames) ||
+    !sameJson(promptNames, ['edit_and_verify_workpaper', 'debug_workpaper_formula']) ||
+    persistence.persisted !== true ||
+    typeof persistence.serializedBytes !== 'number' ||
+    persistence.serializedBytes <= 0 ||
+    checks.listedFileBackedTools !== true ||
+    checks.listedResourcesAndPrompts !== true ||
+    checks.formulaValidationPassed !== true ||
+    checks.dependentCellChanged !== true ||
+    checks.persistedToDisk !== true ||
+    checks.exportContainsWorkPaperDocument !== true ||
+    checks.restartReadbackMatchesAfter !== true ||
+    checks.displayValueRead !== true
+  ) {
+    throw new Error(`Unexpected node MCP challenge output: ${output}`)
+  }
+
+  return {
+    editedCell: parsed.editedCell,
+    dependentCell: parsed.dependentCell,
+    before: parsed.before,
+    after: parsed.after,
+    afterRestart: parsed.afterRestart,
+    displayValue: parsed.displayValue,
+    toolNames,
+    resourceUris,
+    promptNames,
+    persistence: {
+      persisted: persistence.persisted,
+      serializedBytes: persistence.serializedBytes,
+    },
+    verified: parsed.verified,
+  }
+}
+
 export function parseNodeSheetInspectionOutput(output: string): {
   lookup: {
     dimensions: {

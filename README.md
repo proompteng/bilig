@@ -61,6 +61,7 @@ TypeScript file:
 
 ```sh
 npm exec --package @bilig/headless@0.25.7 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.25.7 -- bilig-mcp-challenge
 ```
 
 Agent tools that support skill manifests can start from
@@ -364,6 +365,7 @@ The package also ships the MCP stdio binary:
 ```sh
 npm exec --package @bilig/headless@0.25.7 -- bilig-agent-challenge
 npm exec --package @bilig/headless@0.25.7 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.25.7 -- bilig-mcp-challenge
 npm exec --package @bilig/headless@0.25.7 -- bilig-workpaper-mcp
 npm exec --package @bilig/headless@0.25.7 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
@@ -372,6 +374,11 @@ docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
 `bilig-agent-challenge` prints the same edit, formula readback, WorkPaper JSON
 export, restore, and `verified: true` proof object used by the agent workbook
 challenge page.
+
+`bilig-mcp-challenge` proves the file-backed MCP path end to end: initialize
+JSON-RPC, list tools/resources/prompts, edit `Inputs!B3`, read recalculated
+`Summary!B3`, export the WorkPaper JSON, restart from disk, and return
+`verified: true`.
 
 `bilig-formula-clinic` imports a reduced XLSX locally, samples formulas, reads
 requested cells through WorkPaper, and prints a Markdown issue body. It does not

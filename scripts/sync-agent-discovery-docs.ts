@@ -75,6 +75,7 @@ Do not claim success from a write call alone. The proof is computed readback plu
 
 \`\`\`sh
 npm exec --package ${headlessPackageSpec} -- bilig-agent-challenge
+npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge
 npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 npm exec --package ${headlessPackageSpec} -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 \`\`\`
@@ -121,6 +122,7 @@ logic that can run through @bilig/headless. If it is, use WorkPaper state as the
 source of truth.
 
 For MCP, start with:
+npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge
 npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 
 For Node or TypeScript, import @bilig/headless directly. Prove the edit by
@@ -215,9 +217,12 @@ From a clean project, run the package-owned challenge:
 
 \`\`\`sh
 npm exec --package ${headlessPackageSpec} -- bilig-agent-challenge
+npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge
 \`\`\`
 
-A good run prints \`verified: true\`.
+\`bilig-agent-challenge\` proves the direct WorkPaper API loop.
+\`bilig-mcp-challenge\` proves the file-backed MCP JSON-RPC loop. A good run
+prints \`verified: true\`.
 
 Deeper docs:
 
@@ -271,6 +276,15 @@ Before wiring a client, an agent can prove the direct WorkPaper loop with:
 {
   "command": "npm",
   "args": ["exec", "--package", "${headlessPackageSpec}", "--", "bilig-agent-challenge"]
+}
+\`\`\`
+
+For the actual file-backed MCP path, run the package-owned challenge first:
+
+\`\`\`json
+{
+  "command": "npm",
+  "args": ["exec", "--package", "${headlessPackageSpec}", "--", "bilig-mcp-challenge"]
 }
 \`\`\`
 
@@ -552,6 +566,7 @@ function agentJsonManifest(): string {
           type: 'mcp-stdio-server',
           docs: `${siteRoot}/mcp-workpaper-tool-server.html`,
           server_card: `${siteRoot}/.well-known/mcp/server-card.json`,
+          challenge_command: `npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge`,
         },
         {
           name: 'claude-desktop-mcpb',

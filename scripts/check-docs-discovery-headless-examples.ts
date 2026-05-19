@@ -120,6 +120,7 @@ export async function requireHeadlessExampleDiscovery({
   })
   requireIncludes(headlessPackageManifest, '"mcpName": "io.github.proompteng/bilig-workpaper"', 'packages/headless/package.json')
   requireIncludes(headlessPackageManifest, '"bilig-formula-clinic": "./dist/formula-clinic-bin.js"', 'packages/headless/package.json')
+  requireIncludes(headlessPackageManifest, '"bilig-mcp-challenge": "./dist/mcp-challenge-bin.js"', 'packages/headless/package.json')
   requireIncludes(headlessPackageManifest, '"bilig-workpaper-mcp": "./dist/work-paper-mcp-stdio-bin.js"', 'packages/headless/package.json')
   requireIncludes(
     headlessReadme,
@@ -155,6 +156,7 @@ export async function requireHeadlessExampleDiscovery({
   for (const required of [
     '## Clean npm Sanity Check',
     `npm exec --package ${headlessPackageSpec} -- bilig-agent-challenge`,
+    `npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge`,
     'https://proompteng.github.io/bilig/npm-eval.ts',
     'examples/headless-workpaper/npm-eval.ts',
     'afterRestore',

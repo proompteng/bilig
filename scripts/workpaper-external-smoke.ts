@@ -13,6 +13,7 @@ import {
   parseNodeAgentVerificationOutput,
   parseNodeJsonFileOutput,
   parseNodeMarkdownReportOutput,
+  parseNodeMcpChallengeOutput,
   parseNodeMcpStdioOutput,
   parseNodeMcpTranscriptOutput,
   parseNodePersistenceOutput,
@@ -242,6 +243,22 @@ function runNodeSmoke(
       serializedBytes: number
     }
   }
+  mcpChallenge: {
+    editedCell: string
+    dependentCell: string
+    before: number
+    after: number
+    afterRestart: number
+    displayValue: string
+    toolNames: string[]
+    resourceUris: string[]
+    promptNames: string[]
+    persistence: {
+      persisted: boolean
+      serializedBytes: number
+    }
+    verified: boolean
+  }
   mcpStdioErrors: {
     invalidJson: {
       code: number
@@ -435,6 +452,7 @@ function runNodeSmoke(
     ),
     { expectedServerName: 'bilig-headless-workpaper' },
   )
+  const mcpChallenge = parseNodeMcpChallengeOutput(runTextCommand('./node_modules/.bin/bilig-mcp-challenge', [], { cwd: projectDir }))
   const mcpTranscript = parseNodeMcpTranscriptOutput(
     runTextCommand('npm', ['run', '--silent', 'agent:mcp-transcript'], { cwd: projectDir }),
   )
@@ -479,6 +497,7 @@ function runNodeSmoke(
     mcpStdio,
     mcpStdioErrors,
     mcpTranscript,
+    mcpChallenge,
     packageMcpStdio,
     persistence,
     projectDir,

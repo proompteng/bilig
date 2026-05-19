@@ -275,6 +275,7 @@ requireIncludes(headlessPackageJson, '"AGENTS.md"', 'packages/headless/package.j
 requireIncludes(headlessPackageJson, '"SKILL.md"', 'packages/headless/package.json')
 requireIncludes(headlessAgentNotes, '## Handoff prompt', 'packages/headless/AGENTS.md')
 requireIncludes(headlessAgentNotes, 'Do not claim success from a write call alone.', 'packages/headless/AGENTS.md')
+requireIncludes(headlessAgentNotes, `npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge`, 'packages/headless/AGENTS.md')
 requireIncludes(
   headlessAgentNotes,
   `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable`,
@@ -419,6 +420,7 @@ requireIncludes(
 )
 requireIncludes(llmsFull, '## Generated Skill Manifest', 'docs/llms-full.txt')
 requireIncludes(llmsFull, '## Headless WorkPaper Agent Handbook', 'docs/llms-full.txt')
+requireIncludes(llmsFull, `npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge`, 'docs/llms-full.txt')
 requireIncludes(llmsFull, `npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp`, 'docs/llms-full.txt')
 requireIncludes(headlessReadme, '## Stay Connected', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '## More Guides', 'packages/headless/README.md')

@@ -165,8 +165,14 @@ For a real agent workflow, point the same binary at a persisted WorkPaper JSON
 document:
 
 ```sh
+npm exec --package @bilig/headless@0.25.7 -- bilig-mcp-challenge
 npm exec --package @bilig/headless@0.25.7 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
+
+`bilig-mcp-challenge` is the one-command evaluator path. It initializes the
+file-backed MCP server, lists tools/resources/prompts, edits `Inputs!B3`, reads
+recalculated `Summary!B3`, exports WorkPaper JSON, restarts from disk, and
+prints `verified: true`.
 
 File-backed mode loads `./pricing.workpaper.json`, exposes `list_sheets`,
 `read_range`, `read_cell`, `set_cell_contents`, `get_cell_display_value`,
