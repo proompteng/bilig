@@ -36,6 +36,10 @@ function naError(): EvaluationResult {
   return { tag: ValueTag.Error, code: ErrorCode.NA }
 }
 
+function div0Error(): EvaluationResult {
+  return { tag: ValueTag.Error, code: ErrorCode.Div0 }
+}
+
 export function createStatisticalBuiltins({
   toNumber,
   coerceBoolean,
@@ -77,7 +81,7 @@ export function createStatisticalBuiltins({
         return error
       }
       const numbers = collectStatNumericArgs(args)
-      return numbers.length < 2 ? valueError() : numericResultOrError(sampleStandardDeviation(numbers))
+      return numbers.length < 2 ? div0Error() : numericResultOrError(sampleStandardDeviation(numbers))
     },
     'STDEV.S': (...args) => builtins['STDEV']!(...args),
     STDEVP: (...args) => {
@@ -86,7 +90,7 @@ export function createStatisticalBuiltins({
         return error
       }
       const numbers = collectStatNumericArgs(args)
-      return numbers.length === 0 ? valueError() : numericResultOrError(populationStandardDeviation(numbers))
+      return numbers.length === 0 ? div0Error() : numericResultOrError(populationStandardDeviation(numbers))
     },
     'STDEV.P': (...args) => builtins['STDEVP']!(...args),
     STDEVA: (...args) => {
@@ -95,7 +99,7 @@ export function createStatisticalBuiltins({
         return error
       }
       const numbers = collectAStyleNumericArgs(args)
-      return numbers.length < 2 ? valueError() : numericResultOrError(sampleStandardDeviation(numbers))
+      return numbers.length < 2 ? div0Error() : numericResultOrError(sampleStandardDeviation(numbers))
     },
     STDEVPA: (...args) => {
       const error = firstError(args)
@@ -103,7 +107,7 @@ export function createStatisticalBuiltins({
         return error
       }
       const numbers = collectAStyleNumericArgs(args)
-      return numbers.length === 0 ? valueError() : numericResultOrError(populationStandardDeviation(numbers))
+      return numbers.length === 0 ? div0Error() : numericResultOrError(populationStandardDeviation(numbers))
     },
     VAR: (...args) => {
       const error = firstError(args)
@@ -111,7 +115,7 @@ export function createStatisticalBuiltins({
         return error
       }
       const numbers = collectStatNumericArgs(args)
-      return numbers.length < 2 ? valueError() : numberResult(sampleVariance(numbers))
+      return numbers.length < 2 ? div0Error() : numberResult(sampleVariance(numbers))
     },
     'VAR.S': (...args) => builtins['VAR']!(...args),
     VARP: (...args) => {
@@ -120,7 +124,7 @@ export function createStatisticalBuiltins({
         return error
       }
       const numbers = collectStatNumericArgs(args)
-      return numbers.length === 0 ? valueError() : numberResult(populationVariance(numbers))
+      return numbers.length === 0 ? div0Error() : numberResult(populationVariance(numbers))
     },
     'VAR.P': (...args) => builtins['VARP']!(...args),
     VARA: (...args) => {
@@ -129,7 +133,7 @@ export function createStatisticalBuiltins({
         return error
       }
       const numbers = collectAStyleNumericArgs(args)
-      return numbers.length < 2 ? valueError() : numberResult(sampleVariance(numbers))
+      return numbers.length < 2 ? div0Error() : numberResult(sampleVariance(numbers))
     },
     VARPA: (...args) => {
       const error = firstError(args)
@@ -137,7 +141,7 @@ export function createStatisticalBuiltins({
         return error
       }
       const numbers = collectAStyleNumericArgs(args)
-      return numbers.length === 0 ? valueError() : numberResult(populationVariance(numbers))
+      return numbers.length === 0 ? div0Error() : numberResult(populationVariance(numbers))
     },
     SKEW: (...args) => {
       const error = firstError(args)

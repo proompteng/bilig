@@ -119,6 +119,11 @@ function expectNumberCell(kernel: Awaited<ReturnType<typeof createKernel>>, inde
   expect(kernel.readNumbers()[index]).toBeCloseTo(expected, digits)
 }
 
+function expectErrorCell(kernel: Awaited<ReturnType<typeof createKernel>>, index: number, expected: ErrorCode): void {
+  expect(kernel.readTags()[index]).toBe(ValueTag.Error)
+  expect(kernel.readErrors()[index]).toBe(expected)
+}
+
 describe('wasm kernel ordered statistics dispatch slab', () => {
   it('keeps rank, percentiles, trimmean, and probability stable across refactors', async () => {
     const kernel = await createKernel()
@@ -225,5 +230,44 @@ describe('wasm kernel ordered statistics dispatch slab', () => {
       { tag: ValueTag.Number, value: 3 },
       { tag: ValueTag.Number, value: 0 },
     ])
+  })
+
+  it('returns Excel-compatible division errors for insufficient variance samples', async () => {
+    const kernel = await createKernel()
+    const width = 8
+    kernel.init(32, 5, 0, 2, 4)
+
+    const cellTags = new Uint8Array(32)
+    const cellNumbers = new Float64Array(32)
+    cellTags[0] = ValueTag.Number
+    cellNumbers[0] = 42
+    kernel.writeCells(cellTags, cellNumbers, new Uint32Array(32), new Uint16Array(32))
+    kernel.uploadRangeMembers(Uint32Array.from([0, 1]), Uint32Array.from([0, 1]), Uint32Array.from([1, 1]))
+    kernel.uploadRangeShapes(Uint32Array.from([1, 1]), Uint32Array.from([1, 1]))
+
+    const packed = packPrograms([
+      [encodePushRange(0), encodeCall(BuiltinId.StdevS, 1), encodeRet()],
+      [encodePushRange(0), encodeCall(BuiltinId.VarS, 1), encodeRet()],
+      [encodePushRange(1), encodeCall(BuiltinId.StdevP, 1), encodeRet()],
+      [encodePushRange(1), encodeCall(BuiltinId.VarP, 1), encodeRet()],
+      [encodePushRange(0), encodeCall(BuiltinId.StdevP, 1), encodeRet()],
+    ])
+    const constants = packConstants([[], [], [], [], []])
+    const targets = Uint32Array.from([
+      cellIndex(2, 0, width),
+      cellIndex(2, 1, width),
+      cellIndex(2, 2, width),
+      cellIndex(2, 3, width),
+      cellIndex(2, 4, width),
+    ])
+    kernel.uploadPrograms(packed.programs, packed.offsets, packed.lengths, targets)
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+    kernel.evalBatch(targets)
+
+    expectErrorCell(kernel, cellIndex(2, 0, width), ErrorCode.Div0)
+    expectErrorCell(kernel, cellIndex(2, 1, width), ErrorCode.Div0)
+    expectErrorCell(kernel, cellIndex(2, 2, width), ErrorCode.Div0)
+    expectErrorCell(kernel, cellIndex(2, 3, width), ErrorCode.Div0)
+    expectNumberCell(kernel, cellIndex(2, 4, width), 0)
   })
 })

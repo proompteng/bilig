@@ -476,6 +476,14 @@ describe('formula builtins', () => {
       tag: ValueTag.Number,
       value: 3.4,
     })
+    expect(getBuiltin('ABS')?.({ tag: ValueTag.Error, code: ErrorCode.Div0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    })
+    expect(getBuiltin('ABS')?.({ tag: ValueTag.String, value: 'bad', stringId: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
     expect(getBuiltin('INT')?.({ tag: ValueTag.Number, value: -3.1 })).toEqual({
       tag: ValueTag.Number,
       value: -4,
@@ -2289,6 +2297,18 @@ describe('formula builtins', () => {
       tag: ValueTag.Error,
       code: ErrorCode.NA,
     })
+    expect(STDEV({ tag: ValueTag.Number, value: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    })
+    expect(STDEV_S({ tag: ValueTag.Empty })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    })
+    expect(STDEVP({ tag: ValueTag.Empty })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    })
 
     expect(
       VAR(
@@ -2363,6 +2383,18 @@ describe('formula builtins', () => {
     expect(VARPA({ tag: ValueTag.Error, code: ErrorCode.NA })).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.NA,
+    })
+    expect(VAR({ tag: ValueTag.Number, value: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    })
+    expect(VAR_S({ tag: ValueTag.Empty })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    })
+    expect(VARP({ tag: ValueTag.Empty })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
     })
 
     expect(

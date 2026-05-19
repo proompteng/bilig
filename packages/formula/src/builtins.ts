@@ -461,7 +461,13 @@ const scalarBuiltins: Record<string, Builtin> = {
     }
     return numberResult(blanks)
   },
-  ABS: (value) => numberResult(Math.abs(toNumber(value) ?? 0)),
+  ABS: (value) => {
+    if (value.tag === ValueTag.Error) {
+      return value
+    }
+    const numeric = toNumber(value)
+    return numeric === undefined ? valueError() : numberResult(Math.abs(numeric))
+  },
   ADDRESS: (
     rowArg,
     columnArg,

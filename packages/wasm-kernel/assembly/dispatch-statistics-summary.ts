@@ -115,6 +115,24 @@ export function tryApplyStatisticsSummaryBuiltin(
       )
     }
 
+    const sampleBuiltin =
+      builtinId == BuiltinId.Stdev ||
+      builtinId == BuiltinId.StdevS ||
+      builtinId == BuiltinId.Stdeva ||
+      builtinId == BuiltinId.Var ||
+      builtinId == BuiltinId.VarS ||
+      builtinId == BuiltinId.Vara
+    const populationBuiltin =
+      builtinId == BuiltinId.StdevP ||
+      builtinId == BuiltinId.Stdevp ||
+      builtinId == BuiltinId.Stdevpa ||
+      builtinId == BuiltinId.VarP ||
+      builtinId == BuiltinId.Varp ||
+      builtinId == BuiltinId.Varpa
+    if ((sampleBuiltin && values.length < 2) || (populationBuiltin && values.length == 0)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
+    }
+
     let result = NaN
     if (builtinId == BuiltinId.Stdev || builtinId == BuiltinId.StdevS || builtinId == BuiltinId.Stdeva) {
       result = Math.sqrt(sampleVarianceOf(values))

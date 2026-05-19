@@ -2079,6 +2079,19 @@ describe('SpreadsheetEngine', () => {
     expect(engine.explainCell('Sheet1', 'E4').mode).toBe(FormulaMode.WasmFastPath)
   })
 
+  it('keeps JS fallback ABS from swallowing arithmetic errors before wasm is ready', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'js-fallback-error-propagation' })
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'J12', 100)
+    engine.setCellValue('Sheet1', 'M12', 78)
+    engine.setCellFormula('Sheet1', 'Q12', 'SQRT(ABS((1/J12)+(1/K12)+(1/M12)+(1/N12)))')
+
+    expect(engine.getCellValue('Sheet1', 'Q12')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    })
+  })
+
   it('routes gamma inverse functions and aliases through the wasm path', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'spec' })
     await engine.ready()
