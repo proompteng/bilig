@@ -14,6 +14,7 @@ import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-st
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { decodeXmlText, normalizeWorksheetText, stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
+import { readWorksheetTableRelationshipIds } from './xlsx-tables.js'
 import {
   metadataWorksheetTagNames,
   richTextRunPattern,
@@ -104,6 +105,7 @@ class LargeSimpleWorksheetChunkScanner {
   private mergeRefs: LargeSimpleWorksheetMergeRef[] | undefined
   private printPageSetup: LargeSimpleWorksheetScannedMetadata['printPageSetup']
   private sheetFormatPr: LargeSimpleWorksheetScannedMetadata['sheetFormatPr']
+  private tableRelationshipIds: string[] | undefined
   private readonly metadataSnippets: string[] = []
   private readonly hasSharedStrings: boolean
   private readonly retainCells: boolean
@@ -225,6 +227,7 @@ class LargeSimpleWorksheetChunkScanner {
       ...(this.mergeRefs && this.mergeRefs.length > 0 ? { merges: this.mergeRefs } : {}),
       ...(this.printPageSetup ? { printPageSetup: this.printPageSetup } : {}),
       ...(this.sheetFormatPr ? { sheetFormatPr: this.sheetFormatPr } : {}),
+      ...(this.tableRelationshipIds && this.tableRelationshipIds.length > 0 ? { tableRelationshipIds: this.tableRelationshipIds } : {}),
     }
     return Object.keys(metadata).length > 0 ? metadata : undefined
   }
@@ -490,6 +493,15 @@ class LargeSimpleWorksheetChunkScanner {
     if (isLargeSimplePrintPageSetupElementName(localName)) {
       this.printPageSetup ??= {}
       appendLargeSimplePrintPageSetupElement(this.printPageSetup, localName, decodeBytes(this.buffer, startIndex, endIndex))
+      return true
+    }
+    if (localName === 'tableParts') {
+      const relationshipIds = readWorksheetTableRelationshipIds(decodeBytes(this.buffer, startIndex, endIndex))
+      this.tableCount += relationshipIds.length
+      if (relationshipIds.length > 0) {
+        this.tableRelationshipIds ??= []
+        this.tableRelationshipIds.push(...relationshipIds)
+      }
       return true
     }
     return false

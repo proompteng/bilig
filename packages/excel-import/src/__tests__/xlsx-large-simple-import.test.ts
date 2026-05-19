@@ -619,7 +619,16 @@ describe('large simple XLSX import fast path', () => {
       },
     })
 
-    const imported = tryImportLargeSimpleXlsx(bytes, 'table.xlsx', unzipSync(bytes), { minByteLength: 0 })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('table metadata should use streamed relationship ids instead of inflating worksheet XML')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'table.xlsx', zip, { minByteLength: 0 })
 
     expect(imported?.snapshot.workbook.metadata?.tables).toEqual([
       {

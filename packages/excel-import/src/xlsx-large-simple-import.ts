@@ -44,7 +44,7 @@ import {
   readLargeSimpleSheetFormatPr,
   type LargeSimpleWorksheetScannedMetadata,
 } from './xlsx-large-simple-worksheet-metadata.js'
-import { readImportedSheetTablesFromWorksheetXml } from './xlsx-tables.js'
+import { readImportedSheetTablesFromRelationshipIds, readImportedSheetTablesFromWorksheetXml } from './xlsx-tables.js'
 import {
   forEachInflatedXlsxZipEntryChunk,
   getZipText,
@@ -297,9 +297,11 @@ export function tryImportLargeSimpleXlsx(
       if (!worksheetXml) {
         return null
       }
-      const sheetTables = /<(?:[A-Za-z_][\w.-]*:)?tableParts\b/u.test(worksheetXml)
-        ? readImportedSheetTablesFromWorksheetXml(zip, entry.name, entry.path, worksheetXml)
-        : undefined
+      const sheetTables = streamedMetadataScan?.tableRelationshipIds
+        ? undefined
+        : /<(?:[A-Za-z_][\w.-]*:)?tableParts\b/u.test(worksheetXml)
+          ? readImportedSheetTablesFromWorksheetXml(zip, entry.name, entry.path, worksheetXml)
+          : undefined
       if (sheetTables) {
         importedTables.push(...sheetTables)
       }
@@ -326,6 +328,12 @@ export function tryImportLargeSimpleXlsx(
         }
       } else {
         metadataInput = conditionalFormats ? { conditionalFormats } : {}
+      }
+    }
+    if (materializeMetadata && streamedMetadataScan?.tableRelationshipIds && streamedMetadataScan.tableRelationshipIds.length > 0) {
+      const sheetTables = readImportedSheetTablesFromRelationshipIds(zip, entry.name, entry.path, streamedMetadataScan.tableRelationshipIds)
+      if (sheetTables) {
+        importedTables.push(...sheetTables)
       }
     }
     if (materializeCells) {

@@ -29,6 +29,7 @@ export interface LargeSimpleWorksheetScannedMetadata {
   readonly merges?: readonly LargeSimpleWorksheetMergeRef[]
   readonly printPageSetup?: PrintPageSetupSnapshot
   readonly sheetFormatPr?: WorkbookSheetFormatPrSnapshot
+  readonly tableRelationshipIds?: readonly string[]
 }
 
 export function readLargeSimpleMergeRanges(sheetName: string, worksheetXml: string): WorkbookMergeRangeSnapshot[] {

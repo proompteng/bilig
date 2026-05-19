@@ -95,6 +95,7 @@ describe('large simple worksheet stream scanners', () => {
         colBreaksXml: '<colBreaks count="1"><brk id="2" max="1048575" man="1"/></colBreaks>',
       },
       sheetFormatPr: { defaultRowHeight: 15, outlineLevelRow: 1 },
+      tableRelationshipIds: ['rIdTable1'],
     })
   })
 
@@ -179,6 +180,7 @@ function metadataWorksheetXml(): string {
     '<rowBreaks count="1"><brk id="10" max="16383" man="1"/></rowBreaks>',
     '<colBreaks count="1"><brk id="2" max="1048575" man="1"/></colBreaks>',
     '<drawing r:id="rIdDrawing1"/>',
+    '<tableParts count="1"><tablePart r:id="rIdTable1"/></tableParts>',
     '</worksheet>',
   ].join('')
 }

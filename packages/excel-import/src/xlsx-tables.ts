@@ -444,9 +444,21 @@ export function readImportedSheetTablesFromWorksheetXml(
   if (!/<(?:[A-Za-z_][\w.-]*:)?tableParts\b/u.test(sheetXml)) {
     return undefined
   }
+  return readImportedSheetTablesFromRelationshipIds(source, sheetName, sheetPath, readWorksheetTableRelationshipIds(sheetXml))
+}
+
+export function readImportedSheetTablesFromRelationshipIds(
+  source: XlsxZipSource,
+  sheetName: string,
+  sheetPath: string,
+  relationshipIds: readonly string[],
+): WorkbookTableSnapshot[] | undefined {
+  if (relationshipIds.length === 0) {
+    return undefined
+  }
   const zip = readXlsxZipEntries(source)
   const sheetRelationships = parseRelationships(getZipText(zip, worksheetRelationshipsPath(sheetPath)))
-  const tables = readWorksheetTableRelationshipIds(sheetXml).flatMap((relationshipId) => {
+  const tables = relationshipIds.flatMap((relationshipId) => {
     const relationship = sheetRelationships.find(
       (candidate) => candidate.id === relationshipId && (candidate.type === tableRelationshipType || candidate.type.endsWith('/table')),
     )
@@ -459,7 +471,7 @@ export function readImportedSheetTablesFromWorksheetXml(
   return tables.length > 0 ? tables.toSorted((left, right) => left.name.localeCompare(right.name)) : undefined
 }
 
-function readWorksheetTableRelationshipIds(sheetXml: string): string[] {
+export function readWorksheetTableRelationshipIds(sheetXml: string): string[] {
   const tablePartsXml =
     /<(?:[A-Za-z_][\w.-]*:)?tableParts\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?tableParts)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/u.exec(
       sheetXml,
