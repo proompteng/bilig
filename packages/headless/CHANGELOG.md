@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.27.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.26.1
+- Manual override: no
+
+## Features
+- feat(create-workpaper): add agent starter (87fb5c74)
+
+## Internal runtime changes
+- docs(discovery): sync runtime package 0.26.1 (9c2eefa0)
+
 ## 0.26.1
 
 - Release type: patch
