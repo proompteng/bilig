@@ -183,14 +183,14 @@ export const fuzzStructuralAxisEditArbitrary: fc.Arbitrary<FuzzStructuralAxisEdi
 })
 
 export const fuzzJsonValueArbitrary: fc.Arbitrary<FuzzJsonValue> = fc.letrec<{ value: FuzzJsonValue }>((tie) => ({
-  value: fc.oneof<FuzzJsonValue>(
+  value: fc.oneof(
     fc.constant(null),
     fc.boolean(),
     fc.double({ noNaN: true, noDefaultInfinity: true, min: -10_000, max: 10_000 }),
     safeText,
     fc.array(tie('value'), { minLength: 0, maxLength: 4 }),
     fc.dictionary(fc.string({ minLength: 1, maxLength: 12 }), tie('value'), { maxKeys: 4 }),
-  ),
+  ) as fc.Arbitrary<FuzzJsonValue>,
 })).value
 
 export function corruptRecord(record: Record<string, unknown>, key: string, value: unknown = Symbol('corrupt')): Record<string, unknown> {
