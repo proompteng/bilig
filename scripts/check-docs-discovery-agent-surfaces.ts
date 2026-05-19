@@ -111,6 +111,9 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
       throw new Error(`docs/.well-known/mcp/server-card.json is missing ${requiredTool}`)
     }
   }
+  for (const tool of mcpServerCardTools) {
+    requireMcpToolDiscoveryContract(tool)
+  }
   const mcpServerCardCapabilities = Reflect.get(parsedMcpServerCard, 'capabilities')
   if (
     typeof mcpServerCardCapabilities !== 'object' ||
@@ -594,4 +597,58 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     agentToolCallingDoc,
     aiSdkLangChainDoc,
   })
+}
+
+function requireMcpToolDiscoveryContract(tool: unknown): void {
+  if (typeof tool !== 'object' || tool === null || Array.isArray(tool)) {
+    throw new Error('docs/.well-known/mcp/server-card.json tools must be JSON objects')
+  }
+
+  const name = Reflect.get(tool, 'name')
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new Error('docs/.well-known/mcp/server-card.json tools must have names')
+  }
+  if (typeof Reflect.get(tool, 'description') !== 'string' || Reflect.get(tool, 'description').length === 0) {
+    throw new Error(`docs/.well-known/mcp/server-card.json tool ${name} must have a description`)
+  }
+
+  const inputSchema = Reflect.get(tool, 'inputSchema')
+  if (typeof inputSchema !== 'object' || inputSchema === null || Array.isArray(inputSchema)) {
+    throw new Error(`docs/.well-known/mcp/server-card.json tool ${name} must have an inputSchema`)
+  }
+  requireInputSchemaParameterDescriptions(name, inputSchema)
+
+  const outputSchema = Reflect.get(tool, 'outputSchema')
+  if (typeof outputSchema !== 'object' || outputSchema === null || Array.isArray(outputSchema)) {
+    throw new Error(`docs/.well-known/mcp/server-card.json tool ${name} must have an outputSchema`)
+  }
+
+  const annotations = Reflect.get(tool, 'annotations')
+  if (typeof annotations !== 'object' || annotations === null || Array.isArray(annotations)) {
+    throw new Error(`docs/.well-known/mcp/server-card.json tool ${name} must have annotations`)
+  }
+  for (const requiredAnnotation of ['title', 'readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint'] as const) {
+    if (!Reflect.has(annotations, requiredAnnotation)) {
+      throw new Error(`docs/.well-known/mcp/server-card.json tool ${name} annotations must include ${requiredAnnotation}`)
+    }
+  }
+}
+
+function requireInputSchemaParameterDescriptions(toolName: string, inputSchema: object): void {
+  const properties = Reflect.get(inputSchema, 'properties')
+  if (properties === undefined) {
+    return
+  }
+  if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
+    throw new Error(`docs/.well-known/mcp/server-card.json tool ${toolName} inputSchema.properties must be an object`)
+  }
+
+  for (const [propertyName, propertySchema] of Object.entries(properties)) {
+    if (typeof propertySchema !== 'object' || propertySchema === null || Array.isArray(propertySchema)) {
+      throw new Error(`docs/.well-known/mcp/server-card.json tool ${toolName} parameter ${propertyName} must be a JSON schema object`)
+    }
+    if (typeof Reflect.get(propertySchema, 'description') !== 'string' || Reflect.get(propertySchema, 'description').length === 0) {
+      throw new Error(`docs/.well-known/mcp/server-card.json tool ${toolName} parameter ${propertyName} must have a description`)
+    }
+  }
 }

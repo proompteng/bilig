@@ -4,7 +4,7 @@
   "protocolVersion": "2025-11-25",
   "serverInfo": {
     "name": "Bilig WorkPaper",
-    "version": "0.24.4",
+    "version": "0.24.5",
     "description": "Formula-backed WorkPaper MCP tools for workbook reads, input edits, recalculation, formula validation, and JSON persistence."
   },
   "repository": {
@@ -20,7 +20,7 @@
   "transport": {
     "type": "stdio",
     "command": "npm",
-    "args": ["exec", "--package", "@bilig/headless@0.24.4", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
+    "args": ["exec", "--package", "@bilig/headless@0.24.5", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
   },
   "transports": [
     {
@@ -32,7 +32,7 @@
     {
       "type": "stdio",
       "command": "npm",
-      "args": ["exec", "--package", "@bilig/headless@0.24.4", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
+      "args": ["exec", "--package", "@bilig/headless@0.24.5", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
     }
   ],
   "capabilities": {
@@ -47,6 +47,35 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["writable", "sheets"],
+        "properties": {
+          "sourcePath": {
+            "type": "string",
+            "description": "Absolute JSON file path when the server was started with --workpaper."
+          },
+          "writable": {
+            "type": "boolean",
+            "description": "Whether set_cell_contents persists edits back to the source JSON file."
+          },
+          "sheets": {
+            "type": "array",
+            "description": "Sheet names, ids, and current used dimensions.",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "List WorkPaper Sheets",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
       }
     },
     {
@@ -66,6 +95,32 @@
           }
         },
         "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["range", "values", "serialized"],
+        "properties": {
+          "range": {
+            "type": "string",
+            "description": "Canonical A1 range including the sheet name."
+          },
+          "values": {
+            "type": "array",
+            "description": "Two-dimensional array of evaluated cell values."
+          },
+          "serialized": {
+            "type": "array",
+            "description": "Two-dimensional array of raw serialized cell contents, including formulas."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Read WorkPaper Range",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
       }
     },
     {
@@ -76,13 +131,47 @@
         "required": ["sheetName", "address"],
         "properties": {
           "sheetName": {
-            "type": "string"
+            "type": "string",
+            "description": "Existing sheet name, for example Inputs."
           },
           "address": {
-            "type": "string"
+            "type": "string",
+            "description": "Single A1 cell address such as B3. Ranges are not accepted."
           }
         },
         "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["address", "value", "serialized", "formula", "displayValue"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Canonical sheet-qualified A1 address."
+          },
+          "value": {
+            "description": "Evaluated WorkPaper cell value."
+          },
+          "serialized": {
+            "description": "Raw serialized cell content, preserving formulas."
+          },
+          "formula": {
+            "type": ["string", "null"],
+            "description": "Formula text when the cell contains a formula."
+          },
+          "displayValue": {
+            "type": "string",
+            "description": "Formatted value string suitable for human readback."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Read WorkPaper Cell",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
       }
     },
     {
@@ -93,10 +182,12 @@
         "required": ["sheetName", "address", "value"],
         "properties": {
           "sheetName": {
-            "type": "string"
+            "type": "string",
+            "description": "Existing sheet name, for example Inputs."
           },
           "address": {
-            "type": "string"
+            "type": "string",
+            "description": "Single A1 cell address such as B3. Ranges are not accepted."
           },
           "value": {
             "type": ["string", "number", "boolean", "null"],
@@ -104,6 +195,44 @@
           }
         },
         "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["editedCell", "before", "after", "restored", "persistence", "checks"],
+        "properties": {
+          "editedCell": {
+            "type": "string",
+            "description": "Canonical sheet-qualified address that was edited."
+          },
+          "before": {
+            "type": "object",
+            "description": "Cell readback before the edit."
+          },
+          "after": {
+            "type": "object",
+            "description": "Cell readback after recalculation."
+          },
+          "restored": {
+            "type": "object",
+            "description": "Cell readback after exporting and restoring WorkPaper JSON."
+          },
+          "persistence": {
+            "type": "object",
+            "description": "Persistence result for the WorkPaper JSON document."
+          },
+          "checks": {
+            "type": "object",
+            "description": "Boolean receipt for persisted state and restored readback."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Set WorkPaper Cell Contents",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
       }
     },
     {
@@ -114,13 +243,37 @@
         "required": ["sheetName", "address"],
         "properties": {
           "sheetName": {
-            "type": "string"
+            "type": "string",
+            "description": "Existing sheet name, for example Summary."
           },
           "address": {
-            "type": "string"
+            "type": "string",
+            "description": "Single A1 cell address such as B2. Ranges are not accepted."
           }
         },
         "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["address", "displayValue"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Canonical sheet-qualified A1 address."
+          },
+          "displayValue": {
+            "type": "string",
+            "description": "Formatted value string suitable for human readback."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Get WorkPaper Cell Display Value",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
       }
     },
     {
@@ -131,10 +284,37 @@
         "properties": {
           "includeConfig": {
             "type": "boolean",
-            "default": true
+            "default": true,
+            "description": "Include workbook configuration metadata in the exported JSON. Defaults to true."
           }
         },
         "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["document", "serializedBytes"],
+        "properties": {
+          "sourcePath": {
+            "type": "string",
+            "description": "Absolute JSON file path when the server was started with --workpaper."
+          },
+          "document": {
+            "type": "object",
+            "description": "Persisted WorkPaper JSON document."
+          },
+          "serializedBytes": {
+            "type": "number",
+            "description": "UTF-8 byte length of the serialized WorkPaper document."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Export WorkPaper Document",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
       }
     },
     {
@@ -150,6 +330,28 @@
           }
         },
         "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["formula", "valid"],
+        "properties": {
+          "formula": {
+            "type": "string",
+            "description": "Formula string that was validated."
+          },
+          "valid": {
+            "type": "boolean",
+            "description": "True when the WorkPaper formula parser accepts the formula syntax."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Validate WorkPaper Formula",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
       }
     }
   ],

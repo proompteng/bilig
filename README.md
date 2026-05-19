@@ -50,12 +50,19 @@ Reduced workbook already in hand? Generate the paste-ready fixture report in
 one command:
 
 ```sh
-npm exec --package @bilig/headless@0.24.4 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.24.5 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
 
 Handing a spreadsheet task to another coding agent? Start with the
 [agent handoff prompt](docs/headless-workpaper-agent-handbook.md#copy-paste-prompt-for-another-agent)
 before opening Excel, LibreOffice, Google Sheets, or a screenshot UI.
+To prove the package-owned agent loop without cloning the repo or downloading a
+TypeScript file:
+
+```sh
+npm exec --package @bilig/headless@0.24.5 -- bilig-agent-challenge
+```
+
 Agent tools that support skill manifests can start from
 [`skill.md`](docs/skill.md) or the well-known index at
 [`docs/.well-known/agent-skills/index.json`](docs/.well-known/agent-skills/index.json).
@@ -181,7 +188,7 @@ matters.
 
 Current checked npm footprint for `@bilig/headless@0.24.5`:
 
-- Pack dry run: `486 kB` tarball, `2.94 MB` unpacked, `474` package entries.
+- Pack dry run: `490 kB` tarball, `2.95 MB` unpacked, `483` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the
@@ -284,7 +291,7 @@ and [serverless quote approval](examples/serverless-workpaper-api). Run
 `npm run quote-approval-api`, `npm run agent:framework-adapters`,
 `npm run agent:mcp-tools`, `npm run agent:mcp-transcript`,
 `npm run agent:mcp-file-transcript`, `npm run agent:mcp-stdio`, or
-`npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp` when that is the
+`npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp` when that is the
 path you are evaluating.
 
 The serverless example also includes `npm run next-route-handler`,
@@ -353,11 +360,16 @@ The agent framework guide is
 The package also ships the MCP stdio binary:
 
 ```sh
-npm exec --package @bilig/headless@0.24.4 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
-npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp
-npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.24.5 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.24.5 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
 ```
+
+`bilig-agent-challenge` prints the same edit, formula readback, WorkPaper JSON
+export, restore, and `verified: true` proof object used by the agent workbook
+challenge page.
 
 `bilig-formula-clinic` imports a reduced XLSX locally, samples formulas, reads
 requested cells through WorkPaper, and prints a Markdown issue body. It does not

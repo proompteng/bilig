@@ -63,8 +63,18 @@ around the same WorkPaper model.
 Reduced workbook already in hand?
 
 ```sh
-npm exec --package @bilig/headless@0.24.4 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.24.5 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 ```
+
+Handing a spreadsheet task to another coding agent?
+
+```sh
+npm exec --package @bilig/headless@0.24.5 -- bilig-agent-challenge
+```
+
+That prints the package-owned write, formula readback, WorkPaper JSON export,
+restore, and `verified: true` proof object without cloning the repository or
+downloading a TypeScript file.
 
 ## Install
 
@@ -96,7 +106,7 @@ That command is published through `@bilig/create-workpaper`. The publish gate is
 
 Current checked npm footprint for `@bilig/headless@0.24.5`:
 
-- Pack dry run: `486 kB` tarball, `2.94 MB` unpacked, `474` package entries.
+- Pack dry run: `490 kB` tarball, `2.95 MB` unpacked, `483` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the
@@ -179,34 +189,42 @@ building a workbook, changing an input, saving the document, restoring it, and
 checking that the dependent formula still reads back correctly.
 
 ```sh
-mkdir bilig-headless-sanity
-cd bilig-headless-sanity
-npm init -y
-npm pkg set type=module
-npm install @bilig/headless
-npm install -D tsx typescript @types/node
-curl -fsSLo sanity.ts https://proompteng.github.io/bilig/npm-eval.ts
-npx tsx sanity.ts
+npm exec --package @bilig/headless@0.24.5 -- bilig-agent-challenge
 ```
 
 Expected output:
 
 ```json
 {
+  "editedCell": "Inputs!B2",
+  "dependentCell": "Summary!B2",
   "before": 24000,
   "after": 38400,
   "afterRestore": 38400,
+  "persistedDocumentBytes": 999,
   "sheets": ["Inputs", "Summary"],
-  "bytes": 1000,
+  "checks": {
+    "formulaReadbackChanged": true,
+    "exportedWorkPaperDocument": true,
+    "restoredMatchesAfter": true
+  },
   "verified": true,
+  "limitations": [
+    "This challenge proves the WorkPaper write/read/persist loop, not full Excel desktop compatibility.",
+    "For XLSX-specific behavior, run bilig-formula-clinic or the XLSX recalculation example with a real workbook fixture."
+  ],
   "nextStep": "If this proof matches your service or agent workflow, star or bookmark Bilig: https://github.com/proompteng/bilig/stargazers"
 }
 ```
 
-The downloaded file is the maintained TypeScript example at
-[`examples/headless-workpaper/npm-eval.ts`](https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/npm-eval.ts).
-The exact byte count can change between package versions; `verified: true` and
-matching `after`/`afterRestore` values are the check.
+For teams that want to inspect the TypeScript source before running it, the
+older curl-based quickstart remains at
+<https://proompteng.github.io/bilig/try-bilig-headless-in-node.html> and uses
+the maintained file at <https://proompteng.github.io/bilig/npm-eval.ts>
+([`examples/headless-workpaper/npm-eval.ts`](https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/npm-eval.ts)). The
+exact byte count can change between package versions; `verified: true`,
+`checks.restoredMatchesAfter`, and matching `after`/`afterRestore` values are
+the check.
 
 Inside this monorepo:
 
@@ -370,9 +388,9 @@ MCP examples:
 - The package ships npm-executable binaries:
 
 ```sh
-npm exec --package @bilig/headless@0.24.4 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
-npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp
-npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.24.5 -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 docker build --target bilig-workpaper-mcp -t bilig-workpaper-mcp:local .
 ```
 

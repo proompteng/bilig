@@ -154,11 +154,12 @@ export async function requireHeadlessExampleDiscovery({
 
   for (const required of [
     '## Clean npm Sanity Check',
-    'mkdir bilig-headless-sanity',
-    'npx tsx sanity.ts',
-    'curl -fsSLo sanity.ts https://proompteng.github.io/bilig/npm-eval.ts',
+    `npm exec --package ${headlessPackageSpec} -- bilig-agent-challenge`,
+    'https://proompteng.github.io/bilig/npm-eval.ts',
+    'examples/headless-workpaper/npm-eval.ts',
     'afterRestore',
-    'matching `after`/`afterRestore` values are the check.',
+    '`checks.restoredMatchesAfter`',
+    'matching `after`/`afterRestore` values are',
   ]) {
     requireIncludes(headlessReadme, required, 'packages/headless/README.md')
   }

@@ -27,7 +27,7 @@ logic that can run through @bilig/headless. If it is, use WorkPaper state as the
 source of truth.
 
 If you have an MCP client, start with:
-npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 
 If you are writing Node or TypeScript, import @bilig/headless directly. Your
 minimum proof is: read the relevant range, write one small input or formula,
@@ -81,7 +81,7 @@ File-backed mode is the useful production shape because it gives the agent real
 state instead of the built-in demo workbook:
 
 ```sh
-npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 Expose the same command from an MCP client config:
@@ -94,7 +94,7 @@ Expose the same command from an MCP client config:
       "args": [
         "exec",
         "--package",
-        "@bilig/headless@0.24.4",
+        "@bilig/headless@0.24.5",
         "--",
         "bilig-workpaper-mcp",
         "--workpaper",
@@ -155,18 +155,11 @@ screenshots only for human visual review, not as the source of formula truth.
 
 ## Direct TypeScript Smoke
 
-Use the published package from a blank directory when the agent needs to prove
-the runtime before adopting it:
+Use the package-owned challenge when the agent needs to prove the runtime before
+adopting it:
 
 ```sh
-mkdir bilig-headless-agent-check
-cd bilig-headless-agent-check
-npm init -y
-npm pkg set type=module
-npm install @bilig/headless
-npm install -D tsx typescript @types/node
-curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts
-npx tsx quickstart.ts
+npm exec --package @bilig/headless@0.24.5 -- bilig-agent-challenge
 ```
 
 A good run prints `verified: true`. That means one input changed, a dependent

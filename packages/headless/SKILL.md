@@ -37,13 +37,22 @@ Do not build shell commands by concatenating user text. Treat the commands below
 Use MCP when the host can run a stdio server or call a Streamable HTTP server.
 Configure stdio as an argument array, not a shell-concatenated string:
 
+Before wiring a client, an agent can prove the direct WorkPaper loop with:
+
+```json
+{
+  "command": "npm",
+  "args": ["exec", "--package", "@bilig/headless@0.24.5", "--", "bilig-agent-challenge"]
+}
+```
+
 ```json
 {
   "command": "npm",
   "args": [
     "exec",
     "--package",
-    "@bilig/headless@0.24.4",
+    "@bilig/headless@0.24.5",
     "--",
     "bilig-workpaper-mcp",
     "--workpaper",
@@ -117,7 +126,7 @@ When the user has a reduced XLSX formula/import bug, generate a local report thr
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.24.4", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
+  "args": ["exec", "--package", "@bilig/headless@0.24.5", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
 }
 ```
 

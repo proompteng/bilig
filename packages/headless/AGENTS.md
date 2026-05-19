@@ -26,7 +26,7 @@ logic that can run through @bilig/headless. If it is, use WorkPaper state as the
 source of truth.
 
 For MCP, start with:
-npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 
 For Node or TypeScript, import @bilig/headless directly. Prove the edit by
 reading the relevant range, writing one small input or formula, reading the
@@ -56,7 +56,7 @@ Do not report success from a write call alone.
 For MCP clients, use the published stdio server:
 
 ```sh
-npm exec --package @bilig/headless@0.24.4 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.24.5 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 Expected file-backed tools:
@@ -110,17 +110,10 @@ console.log({ revenue, savedBytes: saved.length })
 
 ## Verification shortcuts
 
-From a clean project, run the published package smoke:
+From a clean project, run the package-owned challenge:
 
 ```sh
-mkdir bilig-headless-agent-check
-cd bilig-headless-agent-check
-npm init -y
-npm pkg set type=module
-npm install @bilig/headless
-npm install -D tsx typescript @types/node
-curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts
-npx tsx quickstart.ts
+npm exec --package @bilig/headless@0.24.5 -- bilig-agent-challenge
 ```
 
 A good run prints `verified: true`.
