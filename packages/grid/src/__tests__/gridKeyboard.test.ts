@@ -12,6 +12,7 @@ import {
   isPrintableKey,
   isScrollActiveCellShortcut,
   isSheetSelectionShortcut,
+  isStructuralDeleteShortcut,
   normalizeKeyboardKey,
 } from '../gridKeyboard.js'
 
@@ -40,6 +41,9 @@ describe('gridKeyboard', () => {
     expect(isScrollActiveCellShortcut({ altKey: false, ctrlKey: true, key: 'Backspace', metaKey: false })).toBe(true)
     expect(isScrollActiveCellShortcut({ altKey: false, ctrlKey: false, key: 'Backspace', metaKey: true })).toBe(true)
     expect(isScrollActiveCellShortcut({ altKey: false, ctrlKey: true, key: 'Delete', metaKey: false })).toBe(false)
+    expect(isStructuralDeleteShortcut({ altKey: true, ctrlKey: true, key: '-', metaKey: false })).toBe(true)
+    expect(isStructuralDeleteShortcut({ altKey: true, ctrlKey: false, key: '-', metaKey: true })).toBe(true)
+    expect(isStructuralDeleteShortcut({ altKey: false, ctrlKey: true, key: '-', metaKey: false })).toBe(false)
     expect(isSheetSelectionShortcut({ altKey: false, ctrlKey: false, key: ' ', metaKey: false, shiftKey: true })).toBe(true)
     expect(isSheetSelectionShortcut({ altKey: false, ctrlKey: true, key: ' ', metaKey: false, shiftKey: false })).toBe(true)
     expect(isSheetSelectionShortcut({ altKey: false, ctrlKey: true, key: ' ', metaKey: false, shiftKey: true })).toBe(true)
@@ -91,6 +95,15 @@ describe('gridKeyboard', () => {
         altKey: false,
         ctrlKey: true,
         key: 'Enter',
+        metaKey: false,
+        shiftKey: false,
+      }),
+    ).toBe(true)
+    expect(
+      isHandledGridKey({
+        altKey: true,
+        ctrlKey: true,
+        key: '-',
         metaKey: false,
         shiftKey: false,
       }),

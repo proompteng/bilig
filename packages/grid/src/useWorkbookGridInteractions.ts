@@ -316,6 +316,8 @@ export function useWorkbookGridInteractions(
     onCancelEdit,
     onClearCell,
     onCommitEdit,
+    onDeleteColumns,
+    onDeleteRows,
     onEditorChange,
     onFillRange,
     onSelectionChange: emitSelectionChange,

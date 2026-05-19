@@ -6,6 +6,7 @@ import {
   isFillSelectionShortcut,
   isFillShortcut,
   isScrollActiveCellShortcut,
+  isStructuralDeleteShortcut,
 } from './gridKeyboard.js'
 import type { GridKeyNavigationResolver, GridNavigationDirection } from './gridNavigation.js'
 import type { Item, Rectangle } from './gridTypes.js'
@@ -39,6 +40,8 @@ export type GridKeyAction =
   | { kind: 'clipboard-cut' }
   | { kind: 'clipboard-paste'; target: Item; valuesOnly: boolean }
   | { kind: 'fill-range'; source: Rectangle; target: Rectangle }
+  | { kind: 'delete-selected-rows'; ranges: readonly GridAxisDeleteRange[] }
+  | { kind: 'delete-selected-columns'; ranges: readonly GridAxisDeleteRange[] }
   | { kind: 'scroll-active-cell' }
   | { kind: 'handled' }
   | { kind: 'select-row'; row: number; col: number }
@@ -47,6 +50,11 @@ export type GridKeyAction =
   | { kind: 'select-all' }
 
 const PAGE_JUMP_ROWS = 20
+
+export interface GridAxisDeleteRange {
+  readonly start: number
+  readonly count: number
+}
 
 function moveSelectionToEdge(cell: Item, direction: 'up' | 'down' | 'left' | 'right'): Item {
   switch (direction) {
@@ -124,6 +132,8 @@ interface ResolveGridKeyActionOptions {
   currentSelectionCell: Item | null
   currentRangeAnchor: Item | null
   currentSelectionRange?: Rectangle | null
+  selectedColumnRanges?: readonly GridAxisDeleteRange[] | null | undefined
+  selectedRowRanges?: readonly GridAxisDeleteRange[] | null | undefined
   navigation?: GridKeyNavigationResolver | null | undefined
   pageJumpRows?: number | null | undefined
 }
@@ -150,6 +160,8 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
     currentSelectionCell,
     currentRangeAnchor,
     currentSelectionRange,
+    selectedColumnRanges,
+    selectedRowRanges,
     navigation,
     pageJumpRows,
   } = options
@@ -312,6 +324,16 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
 
   if (isScrollActiveCellShortcut(event)) {
     return { kind: 'scroll-active-cell' }
+  }
+
+  if (isStructuralDeleteShortcut(event)) {
+    if (selectedRowRanges && selectedRowRanges.length > 0 && (!selectedColumnRanges || selectedColumnRanges.length === 0)) {
+      return { kind: 'delete-selected-rows', ranges: selectedRowRanges }
+    }
+    if (selectedColumnRanges && selectedColumnRanges.length > 0 && (!selectedRowRanges || selectedRowRanges.length === 0)) {
+      return { kind: 'delete-selected-columns', ranges: selectedColumnRanges }
+    }
+    return { kind: 'handled' }
   }
 
   if (isFillSelectionShortcut(event)) {

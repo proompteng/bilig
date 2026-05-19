@@ -174,6 +174,31 @@ describe('GridVisibleTextRefreshCache', () => {
     expect(cache.needsLocalRefresh(tile.tileId, tile, createInput({ engine: createEngine({}, {}, 7) }))).toBe(true)
   })
 
+  it('rejects current-revision stale fill rects after visible cell fills are cleared', () => {
+    const cache = new GridVisibleTextRefreshCache()
+    const fillRects = new Float32Array(GRID_RECT_INSTANCE_FLOAT_COUNT_V3)
+    fillRects[2] = 100
+    fillRects[3] = 20
+    fillRects[5] = 1
+    fillRects[7] = 1
+    fillRects[13] = 0
+    const tile = createTile({
+      lastBatchId: 7,
+      rectCount: 1,
+      rectInstances: fillRects,
+      version: {
+        axisX: 7,
+        axisY: 7,
+        freeze: 7,
+        styles: 7,
+        text: 7,
+        values: 7,
+      },
+    })
+
+    expect(cache.needsLocalRefresh(tile.tileId, tile, createInput({ engine: createEngine({}, {}, 7) }))).toBe(true)
+  })
+
   it('rejects stale authored border rects after visible cell borders are cleared', () => {
     const cache = new GridVisibleTextRefreshCache()
     const staleBorderRectCount = 32 + 128 + 1

@@ -370,6 +370,51 @@ describe('gridKeyActions', () => {
     ).toEqual({ kind: 'handled' })
   })
 
+  test('routes Google Sheets structural delete shortcut for selected rows and columns', () => {
+    expect(
+      resolveGridKeyAction({
+        event: { key: '-', ctrlKey: true, metaKey: false, altKey: true },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 3],
+        currentSelectionCell: [1, 3],
+        currentRangeAnchor: [1, 3],
+        selectedRowRanges: [{ start: 3, count: 2 }],
+      }),
+    ).toEqual({ kind: 'delete-selected-rows', ranges: [{ start: 3, count: 2 }] })
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: '-', ctrlKey: false, metaKey: true, altKey: true },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [2, 1],
+        currentSelectionCell: [2, 1],
+        currentRangeAnchor: [2, 1],
+        selectedColumnRanges: [{ start: 2, count: 3 }],
+      }),
+    ).toEqual({ kind: 'delete-selected-columns', ranges: [{ start: 2, count: 3 }] })
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: '-', ctrlKey: true, metaKey: false, altKey: true },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [2, 1],
+        currentSelectionCell: [2, 1],
+        currentRangeAnchor: [2, 1],
+        selectedRowRanges: [{ start: 0, count: 10 }],
+        selectedColumnRanges: [{ start: 0, count: 10 }],
+      }),
+    ).toEqual({ kind: 'handled' })
+  })
+
   test('moves PageUp and PageDown by the caller-provided visible viewport height', () => {
     expect(
       resolveGridKeyAction({

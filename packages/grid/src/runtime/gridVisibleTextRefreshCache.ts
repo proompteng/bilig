@@ -191,10 +191,10 @@ function tileHasAuthoredPaintRects(tile: GridRenderTile): boolean {
 }
 
 function tileContainsExpectedVisibleFillColors(tile: GridRenderTile, expectedFillColorKeys: ReadonlySet<string>): boolean {
-  if (expectedFillColorKeys.size === 0) {
-    return true
-  }
   const tileFillColorKeys = collectTileFillColorKeys(tile)
+  if (tileFillColorKeys.size !== expectedFillColorKeys.size) {
+    return false
+  }
   for (const expectedKey of expectedFillColorKeys) {
     if (!tileFillColorKeys.has(expectedKey)) {
       return false

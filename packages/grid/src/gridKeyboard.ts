@@ -107,6 +107,14 @@ export function isScrollActiveCellShortcut(
   return event.key === 'Backspace' && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey
 }
 
+export function isStructuralDeleteShortcut(
+  event: GridKeyboardModifierState & {
+    shiftKey?: boolean
+  },
+): boolean {
+  return event.key === '-' && (event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey
+}
+
 export function isHandledGridKey(
   event: GridKeyboardModifierState & {
     shiftKey?: boolean
@@ -119,6 +127,7 @@ export function isHandledGridKey(
     isFillShortcut(event) ||
     isFillSelectionShortcut(event) ||
     isScrollActiveCellShortcut(event) ||
+    isStructuralDeleteShortcut(event) ||
     isNavigationShortcut(event) ||
     isCurrentRegionSelectionShortcut(event) ||
     (hasPrimaryModifier && !event.altKey && event.key.toLowerCase() === 'a') ||

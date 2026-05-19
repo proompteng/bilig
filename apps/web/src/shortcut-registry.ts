@@ -201,6 +201,14 @@ const WORKBOOK_SHORTCUTS: readonly WorkbookShortcutEntry[] = [
     keywords: ['right click', 'row menu', 'column menu'],
   },
   {
+    id: 'delete-selected-structure',
+    label: 'Delete selected rows or columns',
+    category: 'Structure',
+    mac: '⌘⌥-',
+    windows: 'Ctrl+Alt+-',
+    keywords: ['delete row', 'delete column', 'remove rows', 'remove columns'],
+  },
+  {
     id: 'move-selection',
     label: 'Move selection',
     category: 'Navigation',

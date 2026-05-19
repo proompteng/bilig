@@ -136,6 +136,8 @@ export function useWorkbookGridKeyboardHandler(input: {
   onCancelEdit: () => void
   onClearCell: (selection?: GridSelectionSnapshot) => void
   onCommitEdit: (movement?: readonly [-1 | 0 | 1, -1 | 0 | 1], valueOverride?: string) => void
+  onDeleteColumns?: ((startCol: number, count: number) => void | Promise<void>) | undefined
+  onDeleteRows?: ((startRow: number, count: number) => void | Promise<void>) | undefined
   onEditorChange: (next: string) => void
   onFillRange: (sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string) => void
   onSelectionChange: (selection: GridSelection) => void
@@ -210,6 +212,8 @@ export function useWorkbookGridKeyboardHandler(input: {
         onCancelEdit: input.onCancelEdit,
         onClearCell: input.onClearCell,
         onCommitEdit: input.onCommitEdit,
+        onDeleteColumns: input.onDeleteColumns,
+        onDeleteRows: input.onDeleteRows,
         onEditorChange: input.onEditorChange,
         onFillRange: input.onFillRange,
         onSelectionChange: input.onSelectionChange,

@@ -118,6 +118,27 @@ test('web app opens the selected row context menu with the keyboard shortcut', a
   await expect(page.getByTestId('grid-context-action-delete-row')).toBeVisible()
 })
 
+test('web app deletes selected rows with the structural delete keyboard shortcut', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-keyboard-delete-selected-rows')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  await writeCellValue(page, 'A2', 'row-2')
+  await writeCellValue(page, 'A3', 'row-3')
+  await writeCellValue(page, 'A4', 'row-4')
+
+  await dragProductHeaderSelection(page, 'row', 1, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!2:3')
+
+  await pressStructuralDeleteShortcut(page)
+
+  await selectAddress(page, 'A2')
+  await expect.poll(() => readFormulaValue(page)).toBe('row-4')
+
+  await selectAddress(page, 'A3')
+  await expect.poll(() => readFormulaValue(page)).toBe('')
+})
+
 test('web app deletes the selected column range from the header context menu', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-delete-selected-columns')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
@@ -133,6 +154,27 @@ test('web app deletes the selected column range from the header context menu', a
   await rightClickProductColumnHeader(page, 2)
   await page.getByTestId('grid-context-action-delete-column').click()
   await expect(page.getByTestId('grid-context-menu')).toBeHidden({ timeout: 30_000 })
+
+  await selectAddress(page, 'B1')
+  await expect.poll(() => readFormulaValue(page)).toBe('col-d')
+
+  await selectAddress(page, 'C1')
+  await expect.poll(() => readFormulaValue(page)).toBe('')
+})
+
+test('web app deletes selected columns with the structural delete keyboard shortcut', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-keyboard-delete-selected-columns')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  await writeCellValue(page, 'B1', 'col-b')
+  await writeCellValue(page, 'C1', 'col-c')
+  await writeCellValue(page, 'D1', 'col-d')
+
+  await dragProductHeaderSelection(page, 'column', 1, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B:C')
+
+  await pressStructuralDeleteShortcut(page)
 
   await selectAddress(page, 'B1')
   await expect.poll(() => readFormulaValue(page)).toBe('col-d')
@@ -623,4 +665,12 @@ async function selectAddress(page: Page, address: string): Promise<void> {
 async function readFormulaValue(page: Page): Promise<string> {
   const formulaInput = page.getByTestId('formula-input')
   return await formulaInput.inputValue()
+}
+
+async function pressStructuralDeleteShortcut(page: Page): Promise<void> {
+  await page.keyboard.down(PRIMARY_MODIFIER)
+  await page.keyboard.down('Alt')
+  await page.keyboard.press('Minus')
+  await page.keyboard.up('Alt')
+  await page.keyboard.up(PRIMARY_MODIFIER)
 }
