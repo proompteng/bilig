@@ -36,6 +36,45 @@ test('@browser-ci web app keeps an in-cell Delete clear committed after clicking
   await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
 })
 
+test('@browser-ci web app keeps active in-cell undo and redo local to the draft editor', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-editor-local-undo-redo')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=B2`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+  const cellEditor = page.getByTestId('cell-editor-input')
+
+  await clickProductCell(page, 1, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await page.keyboard.press('a')
+  await expect(cellEditor).toBeVisible()
+  await expect(cellEditor).toHaveValue('a')
+  await cellEditor.press('b')
+  await expect(cellEditor).toHaveValue('ab')
+  await cellEditor.press('c')
+  await expect(cellEditor).toHaveValue('abc')
+
+  await cellEditor.press('Control+Z')
+  await expect(cellEditor).toHaveValue('ab')
+  await expect(formulaInput).toHaveValue('ab')
+
+  await cellEditor.press('Control+Z')
+  await expect(cellEditor).toHaveValue('a')
+  await expect(formulaInput).toHaveValue('a')
+
+  await cellEditor.press('Control+Y')
+  await expect(cellEditor).toHaveValue('ab')
+  await expect(formulaInput).toHaveValue('ab')
+
+  await page.keyboard.press('Enter')
+  await expect(cellEditor).toHaveCount(0)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B3')
+  await expect.poll(() => nativeTextRunsInclude(page, 'abc')).toBe(false)
+  await expect.poll(() => nativeTextRunsInclude(page, 'ab')).toBe(true)
+  await clickProductCell(page, 1, 1)
+  await expect(formulaInput).toHaveValue('ab')
+})
+
 async function nativeTextRunsInclude(page: Page, text: string): Promise<boolean> {
   return await page.evaluate(
     (needle) => Array.from(document.querySelectorAll('[data-native-text-run]')).some((run) => run.textContent?.includes(needle) ?? false),
