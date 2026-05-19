@@ -1,12 +1,8 @@
 import type {
   CellStyleRecord,
   SheetMetadataSnapshot,
-  WorkbookAxisEntrySnapshot,
-  WorkbookAxisMetadataSnapshot,
   WorkbookDefinedNameSnapshot,
   WorkbookDefinedNameValueSnapshot,
-  WorkbookMergeRangeSnapshot,
-  WorkbookSheetFormatPrSnapshot,
   WorkbookSnapshot,
   WorkbookTableSnapshot,
 } from '@bilig/protocol'
@@ -27,7 +23,11 @@ import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-st
 import { shouldUseSharedStringlessFastPathBytes } from './xlsx-large-simple-shared-stringless-fast-path.js'
 import { buildLargeSimpleStyleRanges } from './xlsx-large-simple-style-ranges.js'
 import { readLargeSimpleWorkbookStylesFromChunks } from './xlsx-large-simple-styles.js'
-import type { ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import {
+  parseHeadlessLargeSimpleWorksheetFromChunks,
+  type HeadlessLargeSimpleWorksheetScan,
+} from './xlsx-large-simple-headless-worksheet-scanner.js'
 import {
   hasUnsupportedLargeSimpleWorksheetTags,
   needsLargeSimpleWorksheetMetadataXml,
@@ -35,6 +35,13 @@ import {
   parseLargeSimpleWorksheetCells,
 } from './xlsx-large-simple-worksheet-scanner.js'
 import { parseLargeSimpleWorksheetCellsFromChunks } from './xlsx-large-simple-worksheet-stream-scanner.js'
+import {
+  readLargeSimpleColumnMetadata,
+  readLargeSimpleMergeRanges,
+  readLargeSimpleRowMetadata,
+  readLargeSimpleSheetFormatPr,
+  type LargeSimpleWorksheetScannedMetadata,
+} from './xlsx-large-simple-worksheet-metadata.js'
 import { readImportedSheetTablesFromWorksheetXml } from './xlsx-tables.js'
 import {
   forEachInflatedXlsxZipEntryChunk,
@@ -113,6 +120,7 @@ interface ScannedWorksheet {
   readonly order: number
   readonly cellScan: ImportedWorksheetCellScan
   readonly worksheetXml: string | undefined
+  readonly metadataScan: LargeSimpleWorksheetScannedMetadata | undefined
   readonly metadataInput: Pick<
     SheetMetadataSnapshot,
     | 'conditionalFormatArtifacts'
@@ -135,9 +143,6 @@ const definedNameElementPattern =
   /<(?:[A-Za-z_][\w.-]*:)?definedName\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?definedName)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/gu
 const unsupportedPackagePathPattern =
   /^xl\/(?:charts|chartSheets|comments|ctrlProps|externalLinks|model|pivotCache|pivotTables|threadedComments|vbaProject\.bin)/u
-const rowMetadataAttributePattern =
-  /<(?:[A-Za-z_][\w.-]*:)?row\b(?=[^>]*\b(?:ht|hidden|customHeight|s|customFormat|outlineLevel|collapsed|thickTop|thickBottom)=)/u
-const maxExpandedAxisMetadataEntries = 2_048
 const maxPreservedBlankStyleCellCount = 100_000
 
 export function tryImportLargeSimpleXlsx(
@@ -211,22 +216,36 @@ export function tryImportLargeSimpleXlsx(
   for (const [order, entry] of worksheetEntries.entries()) {
     const worksheetScanStart = phaseRecorder.start()
     let streamedWorksheetXml: string | undefined
+    let streamedMetadataScan: LargeSimpleWorksheetScannedMetadata | undefined
     let cellScan: ImportedWorksheetCellScan | null = null
-    const streamed = parseLargeSimpleWorksheetCellsFromChunks(
-      (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
-      order,
-      {
-        hasSharedStrings,
-        retainCells: materializeCells,
-        sharedStrings: fallbackSharedStrings ?? [],
-        deferSharedStrings: materializeCells && hasSharedStrings,
-        retainMetadataXml: materializeMetadata,
-      },
-    )
-    if (streamed && (hasSharedStrings || streamed.cellScan.valueCellCount > 0)) {
-      cellScan = streamed.cellScan
-      streamedWorksheetXml = streamed.metadataXml
-      delete zip[entry.path]
+    if (!materializeCells && !materializeMetadata) {
+      const headless = parseHeadlessLargeSimpleWorksheetFromChunks(
+        (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
+        order,
+        { hasSharedStrings },
+      )
+      if (headless && (hasSharedStrings || headless.valueCellCount > 0)) {
+        cellScan = importedWorksheetCellScanFromHeadless(headless)
+        delete zip[entry.path]
+      }
+    } else {
+      const streamed = parseLargeSimpleWorksheetCellsFromChunks(
+        (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
+        order,
+        {
+          hasSharedStrings,
+          retainCells: materializeCells,
+          sharedStrings: fallbackSharedStrings ?? [],
+          deferSharedStrings: materializeCells && hasSharedStrings,
+          retainMetadataXml: materializeMetadata,
+        },
+      )
+      if (streamed && (hasSharedStrings || streamed.cellScan.valueCellCount > 0)) {
+        cellScan = streamed.cellScan
+        streamedWorksheetXml = streamed.metadataXml
+        streamedMetadataScan = streamed.metadata
+        delete zip[entry.path]
+      }
     }
     let worksheetBytes: Uint8Array | undefined
     if (!cellScan) {
@@ -321,6 +340,7 @@ export function tryImportLargeSimpleXlsx(
       order,
       cellScan,
       worksheetXml,
+      metadataScan: streamedMetadataScan,
       metadataInput,
     })
     phaseRecorder.finish('metadata-parsing', metadataParsingStart)
@@ -369,12 +389,20 @@ export function tryImportLargeSimpleXlsx(
   }
   for (const scanned of scannedWorksheets) {
     const snapshotMaterializationStart = phaseRecorder.start()
-    const parsed = buildParsedWorksheet(scanned.name, scanned.order, scanned.cellScan, scanned.worksheetXml, scanned.metadataInput, {
-      materializeCells,
-      releaseArenaAfterMaterialization: options.releaseArenaAfterMaterialization !== false,
-      styleCatalog,
-      stylesByIndex,
-    })
+    const parsed = buildParsedWorksheet(
+      scanned.name,
+      scanned.order,
+      scanned.cellScan,
+      scanned.worksheetXml,
+      scanned.metadataScan,
+      scanned.metadataInput,
+      {
+        materializeCells,
+        releaseArenaAfterMaterialization: options.releaseArenaAfterMaterialization !== false,
+        styleCatalog,
+        stylesByIndex,
+      },
+    )
     sheets.push(parsed.sheet)
     previewSheets.push(parsed.preview)
     sheetStats.push(parsed.stats)
@@ -434,6 +462,7 @@ function buildParsedWorksheet(
   order: number,
   cellScan: ImportedWorksheetCellScan,
   worksheetXml: string | undefined,
+  metadataScan: LargeSimpleWorksheetScannedMetadata | undefined,
   input: Pick<
     SheetMetadataSnapshot,
     | 'conditionalFormatArtifacts'
@@ -451,12 +480,13 @@ function buildParsedWorksheet(
     readonly stylesByIndex?: ReadonlyMap<number, Omit<CellStyleRecord, 'id'>>
   } = { materializeCells: true },
 ): ParsedWorksheet {
-  const merges = worksheetXml ? readMergeRanges(sheetName, worksheetXml) : []
+  const merges =
+    metadataScan?.merges?.map((range) => ({ sheetName, ...range })) ??
+    (worksheetXml ? readLargeSimpleMergeRanges(sheetName, worksheetXml) : [])
   const mergeCount = worksheetXml ? merges.length : (cellScan.mergeCount ?? 0)
-  const columns = worksheetXml ? readColumnMetadata(worksheetXml) : { entries: [], metadata: [] }
-  const rows =
-    worksheetXml && rowMetadataAttributePattern.test(worksheetXml) ? readRowMetadata(worksheetXml) : { entries: [], metadata: [] }
-  const sheetFormatPr = worksheetXml ? readSheetFormatPr(worksheetXml) : undefined
+  const columns = metadataScan?.columns ?? (worksheetXml ? readLargeSimpleColumnMetadata(worksheetXml) : { entries: [], metadata: [] })
+  const rows = metadataScan?.rows ?? (worksheetXml ? readLargeSimpleRowMetadata(worksheetXml) : { entries: [], metadata: [] })
+  const sheetFormatPr = metadataScan?.sheetFormatPr ?? (worksheetXml ? readLargeSimpleSheetFormatPr(worksheetXml) : undefined)
   const conditionalFormatCount =
     input.conditionalFormats?.length ??
     (worksheetXml ? readConditionalFormattingBlockCount(worksheetXml) : (cellScan.conditionalFormatCount ?? 0))
@@ -523,6 +553,25 @@ function buildParsedWorksheet(
 
 function readConditionalFormattingBlockCount(worksheetXml: string): number {
   return [...worksheetXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?conditionalFormatting\b/gu)].length
+}
+
+function importedWorksheetCellScanFromHeadless(scan: HeadlessLargeSimpleWorksheetScan): ImportedWorksheetCellScan {
+  return {
+    arena: new ImportedWorkbookArena(),
+    sheetIndex: scan.sheetIndex,
+    richTextCells: [],
+    styleIndexes: new ImportedWorksheetStyleIndexArena(),
+    blankStyleCellCount: 0,
+    cellCount: scan.cellCount,
+    valueCellCount: scan.valueCellCount,
+    formulaCellCount: scan.formulaCellCount,
+    mergeCount: scan.mergeCount,
+    conditionalFormatCount: scan.conditionalFormatCount,
+    tableCount: scan.tableCount,
+    rowCount: scan.rowCount,
+    columnCount: scan.columnCount,
+    usedRange: scan.usedRange,
+  }
 }
 
 function readWorkbookSheets(workbookXml: string): WorkbookSheetEntry[] {
@@ -715,179 +764,6 @@ function definedNameKey(name: string, scopeSheetName: string | undefined): strin
   return `${scopeSheetName ?? '<workbook>'}\u0000${name.toUpperCase()}`
 }
 
-function readMergeRanges(sheetName: string, worksheetXml: string): WorkbookMergeRangeSnapshot[] {
-  const mergeCellsXml =
-    /<(?:[A-Za-z_][\w.-]*:)?mergeCells\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?mergeCells)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/u.exec(
-      worksheetXml,
-    )?.[0] ?? ''
-  return [...mergeCellsXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?mergeCell\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gu)].flatMap((match) => {
-    const ref = readXmlAttribute(match[0], 'ref')
-    if (!ref) {
-      return []
-    }
-    const [startAddress, endAddress] = ref.split(':')
-    if (!startAddress || !endAddress || startAddress === endAddress) {
-      return []
-    }
-    return [{ sheetName, startAddress, endAddress }]
-  })
-}
-
-function readColumnMetadata(worksheetXml: string): {
-  readonly entries: WorkbookAxisEntrySnapshot[]
-  readonly metadata: WorkbookAxisMetadataSnapshot[]
-} {
-  const entries: WorkbookAxisEntrySnapshot[] = []
-  const metadata: WorkbookAxisMetadataSnapshot[] = []
-  const columnsXml =
-    /<(?:[A-Za-z_][\w.-]*:)?cols\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?cols)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/u.exec(
-      worksheetXml,
-    )?.[0] ?? ''
-  for (const match of columnsXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?col\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gu)) {
-    const tag = match[0]
-    const min = readPositiveIntegerAttribute(tag, 'min')
-    const max = readPositiveIntegerAttribute(tag, 'max') ?? min
-    if (min === null || max === null || max < min) {
-      continue
-    }
-    const width = readNumberAttribute(tag, 'width')
-    const size = width !== null && width > 0 ? Math.round(width * 6) : null
-    const start = min - 1
-    const count = max - min + 1
-    const styleIndex = readNonNegativeIntegerAttribute(tag, 'style')
-    const hidden = readOptionalBooleanAttribute(tag, 'hidden')
-    const customWidth = readOptionalBooleanAttribute(tag, 'customWidth')
-    const customFormat = readOptionalBooleanAttribute(tag, 'customFormat')
-    const bestFit = readOptionalBooleanAttribute(tag, 'bestFit')
-    const outlineLevel = readNonNegativeIntegerAttribute(tag, 'outlineLevel')
-    const collapsed = readOptionalBooleanAttribute(tag, 'collapsed')
-    if (
-      size === null &&
-      width === null &&
-      styleIndex === null &&
-      hidden === null &&
-      customWidth === null &&
-      customFormat === null &&
-      bestFit === null &&
-      outlineLevel === null &&
-      collapsed === null
-    ) {
-      continue
-    }
-    metadata.push({
-      start,
-      count,
-      ...(size !== null ? { size } : {}),
-      ...(width !== null ? { xlsxWidth: width } : {}),
-      ...(styleIndex !== null ? { styleIndex } : {}),
-      ...(hidden !== null ? { hidden } : {}),
-      ...(customWidth !== null ? { customWidth } : {}),
-      ...(customFormat !== null ? { customFormat } : {}),
-      ...(bestFit !== null ? { bestFit } : {}),
-      ...(outlineLevel !== null ? { outlineLevel } : {}),
-      ...(collapsed !== null ? { collapsed } : {}),
-    })
-    if ((size !== null || hidden === true) && entries.length + count <= maxExpandedAxisMetadataEntries) {
-      for (let column = start; column < start + count; column += 1) {
-        entries.push({
-          id: `col:${String(column)}`,
-          index: column,
-          ...(size !== null ? { size } : {}),
-          ...(hidden === true ? { hidden: true } : {}),
-        })
-      }
-    }
-  }
-  return { entries, metadata }
-}
-
-function readRowMetadata(worksheetXml: string): {
-  readonly entries: WorkbookAxisEntrySnapshot[]
-  readonly metadata: WorkbookAxisMetadataSnapshot[]
-} {
-  const entries: WorkbookAxisEntrySnapshot[] = []
-  const metadata: WorkbookAxisMetadataSnapshot[] = []
-  for (const match of worksheetXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?row\b(?:[^>"']|"[^"]*"|'[^']*')*(?:\/>|>)/gu)) {
-    const tag = match[0]
-    const row = readPositiveIntegerAttribute(tag, 'r')
-    if (row === null) {
-      continue
-    }
-    const index = row - 1
-    const height = readNumberAttribute(tag, 'ht')
-    const size = height !== null && height > 0 ? Math.round((height * 96) / 72) : null
-    const styleIndex = readNonNegativeIntegerAttribute(tag, 's')
-    const hidden = readOptionalBooleanAttribute(tag, 'hidden')
-    const customFormat = readOptionalBooleanAttribute(tag, 'customFormat')
-    const customHeight = readOptionalBooleanAttribute(tag, 'customHeight')
-    const outlineLevel = readNonNegativeIntegerAttribute(tag, 'outlineLevel')
-    const collapsed = readOptionalBooleanAttribute(tag, 'collapsed')
-    const thickTop = readOptionalBooleanAttribute(tag, 'thickTop')
-    const thickBottom = readOptionalBooleanAttribute(tag, 'thickBottom')
-    if (
-      size === null &&
-      height === null &&
-      styleIndex === null &&
-      hidden === null &&
-      customFormat === null &&
-      customHeight === null &&
-      outlineLevel === null &&
-      collapsed === null &&
-      thickTop === null &&
-      thickBottom === null
-    ) {
-      continue
-    }
-    metadata.push({
-      start: index,
-      count: 1,
-      ...(size !== null ? { size } : {}),
-      ...(height !== null ? { xlsxHeight: height } : {}),
-      ...(styleIndex !== null ? { styleIndex } : {}),
-      ...(hidden !== null ? { hidden } : {}),
-      ...(customFormat !== null ? { customFormat } : {}),
-      ...(customHeight !== null ? { customHeight } : {}),
-      ...(outlineLevel !== null ? { outlineLevel } : {}),
-      ...(collapsed !== null ? { collapsed } : {}),
-      ...(thickTop !== null ? { thickTop } : {}),
-      ...(thickBottom !== null ? { thickBottom } : {}),
-    })
-    if ((size !== null || hidden === true) && entries.length < maxExpandedAxisMetadataEntries) {
-      entries.push({
-        id: `row:${String(index)}`,
-        index,
-        ...(size !== null ? { size } : {}),
-        ...(hidden === true ? { hidden: true } : {}),
-      })
-    }
-  }
-  return { entries, metadata }
-}
-
-function readSheetFormatPr(worksheetXml: string): WorkbookSheetFormatPrSnapshot | undefined {
-  const tag = /<(?:[A-Za-z_][\w.-]*:)?sheetFormatPr\b(?:[^>"']|"[^"]*"|'[^']*')*(?:\/>|>)/u.exec(worksheetXml)?.[0]
-  if (!tag) {
-    return undefined
-  }
-  const output: WorkbookSheetFormatPrSnapshot = {
-    ...(readNumberAttribute(tag, 'baseColWidth') !== null ? { baseColWidth: readNumberAttribute(tag, 'baseColWidth') } : {}),
-    ...(readNumberAttribute(tag, 'defaultColWidth') !== null ? { defaultColWidth: readNumberAttribute(tag, 'defaultColWidth') } : {}),
-    ...(readNumberAttribute(tag, 'defaultRowHeight') !== null ? { defaultRowHeight: readNumberAttribute(tag, 'defaultRowHeight') } : {}),
-    ...(readOptionalBooleanAttribute(tag, 'customHeight') !== null
-      ? { customHeight: readOptionalBooleanAttribute(tag, 'customHeight') }
-      : {}),
-    ...(readNonNegativeIntegerAttribute(tag, 'outlineLevelRow') !== null
-      ? { outlineLevelRow: readNonNegativeIntegerAttribute(tag, 'outlineLevelRow') }
-      : {}),
-    ...(readNonNegativeIntegerAttribute(tag, 'outlineLevelCol') !== null
-      ? { outlineLevelCol: readNonNegativeIntegerAttribute(tag, 'outlineLevelCol') }
-      : {}),
-    ...(readOptionalBooleanAttribute(tag, 'thickTop') !== null ? { thickTop: readOptionalBooleanAttribute(tag, 'thickTop') } : {}),
-    ...(readOptionalBooleanAttribute(tag, 'thickBottom') !== null ? { thickBottom: readOptionalBooleanAttribute(tag, 'thickBottom') } : {}),
-  }
-  return Object.keys(output).length > 0 ? output : undefined
-}
-
 function readXmlAttribute(xml: string, attributeName: string): string | null {
   return new RegExp(`\\s${attributeName}=("|')([\\s\\S]*?)\\1`, 'u').exec(xml)?.[2] ?? null
 }
@@ -901,28 +777,9 @@ function readNumberAttribute(xml: string, attributeName: string): number | null 
   return Number.isFinite(value) ? value : null
 }
 
-function readPositiveIntegerAttribute(xml: string, attributeName: string): number | null {
-  const value = readNumberAttribute(xml, attributeName)
-  return Number.isInteger(value) && value !== null && value > 0 ? value : null
-}
-
 function readNonNegativeIntegerAttribute(xml: string, attributeName: string): number | null {
   const value = readNumberAttribute(xml, attributeName)
   return Number.isInteger(value) && value !== null && value >= 0 ? value : null
-}
-
-function readOptionalBooleanAttribute(xml: string, attributeName: string): boolean | null {
-  const raw = readXmlAttribute(xml, attributeName)
-  if (raw === null) {
-    return null
-  }
-  if (raw === '1' || raw === 'true') {
-    return true
-  }
-  if (raw === '0' || raw === 'false') {
-    return false
-  }
-  return null
 }
 
 function decodeXmlText(value: string): string {

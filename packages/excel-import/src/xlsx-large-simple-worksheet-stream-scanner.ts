@@ -1,6 +1,6 @@
 import { strFromU8 } from 'fflate'
 
-import type { LiteralInput, WorkbookRichTextCellSnapshot } from '@bilig/protocol'
+import type { LiteralInput, WorkbookAxisEntrySnapshot, WorkbookAxisMetadataSnapshot, WorkbookRichTextCellSnapshot } from '@bilig/protocol'
 import { toLiteralInput } from './workbook-import-helpers.js'
 import { decodeExcelEscapedText } from './xlsx-escaped-text.js'
 import {
@@ -11,6 +11,14 @@ import {
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
+import {
+  appendLargeSimpleRowMetadataTag,
+  readLargeSimpleColumnMetadata,
+  readLargeSimpleMergeRefs,
+  readLargeSimpleSheetFormatPrTag,
+  type LargeSimpleWorksheetMergeRef,
+  type LargeSimpleWorksheetScannedMetadata,
+} from './xlsx-large-simple-worksheet-metadata.js'
 
 const lessThan = 60
 const slash = 47
@@ -42,6 +50,7 @@ const richTextRunPattern = /<(?:[A-Za-z_][\w.-]*:)?r\b/u
 export interface LargeSimpleWorksheetStreamScan {
   readonly cellScan: ImportedWorksheetCellScan
   readonly metadataXml: string | undefined
+  readonly metadata: LargeSimpleWorksheetScannedMetadata | undefined
   readonly sharedStringIndexes: ReadonlySet<number>
 }
 
@@ -94,6 +103,12 @@ class LargeSimpleWorksheetChunkScanner {
   private minColumn = Number.POSITIVE_INFINITY
   private maxRow = -1
   private maxColumn = -1
+  private columnEntries: WorkbookAxisEntrySnapshot[] | undefined
+  private columnMetadata: WorkbookAxisMetadataSnapshot[] | undefined
+  private rowEntries: WorkbookAxisEntrySnapshot[] | undefined
+  private rowMetadata: WorkbookAxisMetadataSnapshot[] | undefined
+  private mergeRefs: LargeSimpleWorksheetMergeRef[] | undefined
+  private sheetFormatPr: LargeSimpleWorksheetScannedMetadata['sheetFormatPr']
   private readonly metadataSnippets: string[] = []
   private readonly hasSharedStrings: boolean
   private readonly retainCells: boolean
@@ -169,6 +184,7 @@ class LargeSimpleWorksheetChunkScanner {
             : null,
       },
       metadataXml: this.metadataSnippets.length > 0 ? `<worksheet>${this.metadataSnippets.join('')}</worksheet>` : undefined,
+      metadata: this.buildMetadataScan(),
       sharedStringIndexes: this.sharedStringIndexes,
     }
   }
@@ -198,6 +214,24 @@ class LargeSimpleWorksheetChunkScanner {
     }
     this.buffer = new Uint8Array(this.buffer.subarray(this.index))
     this.index = 0
+  }
+
+  private buildMetadataScan(): LargeSimpleWorksheetScannedMetadata | undefined {
+    const columns =
+      (this.columnEntries?.length ?? 0) > 0 || (this.columnMetadata?.length ?? 0) > 0
+        ? { entries: this.columnEntries ?? [], metadata: this.columnMetadata ?? [] }
+        : undefined
+    const rows =
+      (this.rowEntries?.length ?? 0) > 0 || (this.rowMetadata?.length ?? 0) > 0
+        ? { entries: this.rowEntries ?? [], metadata: this.rowMetadata ?? [] }
+        : undefined
+    const metadata: LargeSimpleWorksheetScannedMetadata = {
+      ...(columns ? { columns } : {}),
+      ...(rows ? { rows } : {}),
+      ...(this.mergeRefs && this.mergeRefs.length > 0 ? { merges: this.mergeRefs } : {}),
+      ...(this.sheetFormatPr ? { sheetFormatPr: this.sheetFormatPr } : {}),
+    }
+    return Object.keys(metadata).length > 0 ? metadata : undefined
   }
 
   private process(final: boolean): void {
@@ -279,7 +313,9 @@ class LargeSimpleWorksheetChunkScanner {
   private collectRowMetadata(tagEnd: number): void {
     const openingTag = decodeBytes(this.buffer, this.index, tagEnd + 1)
     if (rowMetadataAttributePattern.test(openingTag)) {
-      this.metadataSnippets.push(openingTag.endsWith('/>') ? openingTag : openingTag.replace(/>$/u, '/>'))
+      this.rowEntries ??= []
+      this.rowMetadata ??= []
+      appendLargeSimpleRowMetadataTag(this.rowEntries, this.rowMetadata, openingTag)
     }
   }
 
@@ -390,8 +426,11 @@ class LargeSimpleWorksheetChunkScanner {
 
   private collectMetadataElement(localName: string, tagEnd: number, final: boolean): boolean {
     if (isSelfClosingTag(this.buffer, tagEnd)) {
-      this.countMetadataElement(localName, tagEnd + 1, tagEnd + 1)
-      if (this.retainMetadataXml) {
+      const handled = this.retainMetadataXml && this.collectTypedMetadataElement(localName, this.index, tagEnd + 1)
+      if (!handled) {
+        this.countMetadataElement(localName, tagEnd + 1, tagEnd + 1)
+      }
+      if (this.retainMetadataXml && !handled) {
         this.metadataSnippets.push(decodeBytes(this.buffer, this.index, tagEnd + 1))
       }
       this.index = tagEnd + 1
@@ -404,12 +443,42 @@ class LargeSimpleWorksheetChunkScanner {
       }
       return false
     }
-    this.countMetadataElement(localName, tagEnd + 1, closing.start)
-    if (this.retainMetadataXml) {
+    const handled = this.retainMetadataXml && this.collectTypedMetadataElement(localName, this.index, closing.end)
+    if (!handled) {
+      this.countMetadataElement(localName, tagEnd + 1, closing.start)
+    }
+    if (this.retainMetadataXml && !handled) {
       this.metadataSnippets.push(decodeBytes(this.buffer, this.index, closing.end))
     }
     this.index = closing.end
     return true
+  }
+
+  private collectTypedMetadataElement(localName: string, startIndex: number, endIndex: number): boolean {
+    if (localName === 'mergeCells') {
+      const refs = readLargeSimpleMergeRefs(decodeBytes(this.buffer, startIndex, endIndex))
+      this.mergeCount += refs.length
+      if (refs.length > 0) {
+        this.mergeRefs ??= []
+        this.mergeRefs.push(...refs)
+      }
+      return true
+    }
+    if (localName === 'cols') {
+      const columns = readLargeSimpleColumnMetadata(decodeBytes(this.buffer, startIndex, endIndex))
+      if (columns.entries.length > 0 || columns.metadata.length > 0) {
+        this.columnEntries ??= []
+        this.columnMetadata ??= []
+        this.columnEntries.push(...columns.entries)
+        this.columnMetadata.push(...columns.metadata)
+      }
+      return true
+    }
+    if (localName === 'sheetFormatPr') {
+      this.sheetFormatPr = readLargeSimpleSheetFormatPrTag(decodeBytes(this.buffer, startIndex, endIndex)) ?? this.sheetFormatPr
+      return true
+    }
+    return false
   }
 
   private countMetadataElement(localName: string, contentStart: number, contentEnd: number): void {

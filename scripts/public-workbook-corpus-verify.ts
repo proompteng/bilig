@@ -321,15 +321,17 @@ export async function verifyCachedWorkbookArtifact(
       ],
     })
     const roundTripSkipEvidence = roundTripValidationSkipEvidence(imported.warnings)
-    const structuralSmokeSnapshot = imported.snapshot
     const externalWorkbookReferences = summarizeExternalWorkbookReferences(imported.snapshot)
+    const unsupportedWorkbookEvidence = unsupportedWorkbookMetadataEvidence(imported.snapshot, formulaOracleValidation)
+    let structuralSmokeSnapshot = runStructuralSmoke && !structuralSmokeResourceLimit ? imported.snapshot : undefined
     const roundTripPassed = await timeVerificationPhase(runtimeMetrics, workerOptions, 'round-trip', () =>
       roundTripSkipEvidence || roundTripResourceLimit ? true : roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported)),
     )
     collectGarbage()
     const structuralSmokePassed = await timeVerificationPhase(runtimeMetrics, workerOptions, 'structural-smoke', () =>
-      runStructuralSmoke ? (structuralSmokeResourceLimit ? null : runStructuralSmokeOps(structuralSmokeSnapshot)) : null,
+      structuralSmokeSnapshot ? runStructuralSmokeOps(structuralSmokeSnapshot) : runStructuralSmoke ? null : null,
     )
+    structuralSmokeSnapshot = undefined
     collectGarbage()
     const formulaOraclePassed =
       unsupportedFormulaOracleWarning ||
@@ -372,7 +374,7 @@ export async function verifyCachedWorkbookArtifact(
         `cells=${String(featureCounts.cellCount)}`,
         `formulas=${String(featureCounts.formulaCellCount)}`,
         ...(featureCounts.pivotCount > 0 ? [`pivots=${String(featureCounts.pivotCount)}`] : []),
-        ...unsupportedWorkbookMetadataEvidence(imported.snapshot, formulaOracleValidation),
+        ...unsupportedWorkbookEvidence,
         ...(hasImportWarningUnsupportedClassifications(unsupportedFeatureClassifications)
           ? [publicWorkbookImportWarningClassifierEvidence]
           : []),
@@ -422,6 +424,7 @@ async function verifyLargeSimpleWorkbookCompact(
   const imported = await timeVerificationPhase(runtimeMetrics, workerOptions, 'import-xlsx', () =>
     tryImportLargeSimpleXlsx(bytes, artifact.fileName, readXlsxZipEntriesLazy(bytes), {
       materializeCells: false,
+      materializeMetadata: false,
       minByteLength: 0,
       releaseArenaAfterMaterialization: true,
       releaseZipSource: true,
