@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
+import { CELL_TEXT_PADDING_X } from '../text/gridTextPacket.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS, workbookFontPointSizeToCssPx } from '../workbookTheme.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
@@ -110,7 +111,8 @@ export function drawTextRuns(context: CanvasTextRunContext, textRuns: readonly T
       : `400 ${run.fontSize ?? workbookFontPointSizeToCssPx(WORKBOOK_DEFAULT_FONT_SIZE)}px ${WORKBOOK_FONT_SANS}`
     context.textBaseline = 'middle'
     context.textAlign = run.align ?? 'left'
-    const textX = run.align === 'right' ? run.x + width - 6 : run.align === 'center' ? run.x + width / 2 : run.x + 6
+    const textX =
+      run.align === 'right' ? run.x + width - CELL_TEXT_PADDING_X : run.align === 'center' ? run.x + width / 2 : run.x + CELL_TEXT_PADDING_X
     const textY = run.y + height / 2
     context.fillText(run.text, textX, textY)
     if (run.underline || run.strike) {
@@ -224,6 +226,14 @@ export const WorkbookPaneCanvasFallbackV3 = memo(function WorkbookPaneCanvasFall
     }
     if (canvas.height !== pixelHeight) {
       canvas.height = pixelHeight
+    }
+    const cssWidth = `${width}px`
+    const cssHeight = `${height}px`
+    if (canvas.style.width !== cssWidth) {
+      canvas.style.width = cssWidth
+    }
+    if (canvas.style.height !== cssHeight) {
+      canvas.style.height = cssHeight
     }
     const context = canvas.getContext('2d')
     if (!context) {

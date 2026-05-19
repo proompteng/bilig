@@ -173,6 +173,58 @@ describe('WorkbookToolbar', () => {
     })
   })
 
+  it('drops optimistic color swatches when workbook history takes ownership', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    let resolveMutation: (() => void) | undefined
+    const invokeMutation = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMutation = resolve
+        }),
+    )
+    const onUndo = vi.fn()
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'B2',
+        endAddress: 'B2',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness invokeMutation={invokeMutation} onUndo={onUndo} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    await act(async () => {
+      host.querySelector("[aria-label='Fill color']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const greenSwatch = document.querySelector("[aria-label='Fill color green']")
+    expect(greenSwatch).not.toBeNull()
+
+    await act(async () => {
+      greenSwatch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(host.querySelector("[aria-label='Fill color']")?.getAttribute('data-current-color')).toBe('#00ff00')
+
+    await act(async () => {
+      dispatchWorkbookShortcut({ key: 'z', metaKey: true })
+      await flushToolbarMutationQueue()
+    })
+
+    expect(onUndo).toHaveBeenCalledTimes(1)
+    expect(host.querySelector("[aria-label='Fill color']")?.getAttribute('data-current-color')).toBe('#ffffff')
+
+    await act(async () => {
+      resolveMutation?.()
+      root.unmount()
+    })
+  })
+
   it('routes supported workbook toolbar shortcuts to the active selection', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

@@ -70,13 +70,29 @@ function createPane(
 }
 
 describe('WorkbookPaneNativeTextLayerV3', () => {
-  test('snaps text layer placement to device pixels while preserving run clipping', () => {
+  test('snaps text clip bounds while preserving fractional glyph origin inside the clip', () => {
+    const visibleClip = resolveNativeTextRunVisibleClipV3({
+      dpr: 2,
+      pane: createPane(),
+      run: createRun({ clipX: 8.2, clipY: 4.3 }),
+      scrollSnapshot: { renderTx: 1.1, renderTy: 2.2, tx: 1.1, ty: 2.2 },
+    })
+
+    expect(visibleClip).toMatchObject({
+      outerHeight: 18,
+      outerLeft: 53,
+      outerTop: 26,
+      outerWidth: 90,
+    })
+    expect(visibleClip?.innerLeft).toBeCloseTo(-8.1)
+    expect(visibleClip?.innerTop).toBeCloseTo(-4.2)
     expect(
       resolveNativeTextRunOuterStyleV3({
         dpr: 2,
         pane: createPane(),
         run: createRun({ clipX: 8.2, clipY: 4.3 }),
         scrollSnapshot: { renderTx: 1.1, renderTy: 2.2, tx: 1.1, ty: 2.2 },
+        visibleClip,
       }),
     ).toMatchObject({
       height: 18,
@@ -103,14 +119,14 @@ describe('WorkbookPaneNativeTextLayerV3', () => {
       height: 17.5,
       letterSpacing: 0,
       lineHeight: '17.5px',
+      MozOsxFontSmoothing: 'grayscale',
       textDecorationLine: 'underline',
       textAlign: 'right',
       textRendering: 'optimizeLegibility',
       top: -1.5,
+      WebkitFontSmoothing: 'antialiased',
       whiteSpace: 'pre',
     })
-    expect(style).not.toHaveProperty('WebkitFontSmoothing')
-    expect(style).not.toHaveProperty('MozOsxFontSmoothing')
   })
 
   test('keeps wrapped text top-aligned while non-wrapped text uses a snapped line box', () => {

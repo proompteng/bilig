@@ -187,7 +187,7 @@ describe('WorkbookPaneCanvasFallbackV3', () => {
       },
     ])
 
-    expect(fillText).toHaveBeenCalledWith('Amortization schedule note that must clip instead of squeezing into one cell', 16, 31)
+    expect(fillText).toHaveBeenCalledWith('Amortization schedule note that must clip instead of squeezing into one cell', 18, 31)
     expect(fillText.mock.calls[0]).toHaveLength(3)
   })
 
@@ -214,7 +214,7 @@ describe('WorkbookPaneCanvasFallbackV3', () => {
       },
     ])
 
-    expect(lineTo).toHaveBeenCalledWith(96, 38)
+    expect(lineTo).toHaveBeenCalledWith(98, 38)
   })
 
   test('uses the workbook font stack when a V3 text run does not carry a font', () => {
@@ -351,7 +351,9 @@ describe('WorkbookPaneCanvasFallbackV3', () => {
     })
 
     expect(clearRect).toHaveBeenCalled()
-    expect(fillText).toHaveBeenCalledWith('stale canvas text', 110, 36)
+    expect(host.querySelector('canvas')?.style.width).toBe('480px')
+    expect(host.querySelector('canvas')?.style.height).toBe('240px')
+    expect(fillText).toHaveBeenCalledWith('stale canvas text', 112, 36)
     fillText.mockClear()
     clearRect.mockClear()
 

@@ -2,6 +2,7 @@ import { memo, useMemo, useSyncExternalStore, type CSSProperties } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
+import { CELL_TEXT_PADDING_X } from '../text/gridTextPacket.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS, workbookFontPointSizeToCssPx } from '../workbookTheme.js'
 import { workbookNativeTextQualityStyle } from '../workbookTextQuality.js'
@@ -291,10 +292,10 @@ export function resolveNativeTextRunVisibleClipV3(input: {
   const innerBottom = Math.min(contentTop + height, visibleBottom)
 
   return {
-    innerHeight: Math.max(0, snapCssPixel(innerBottom - contentTop, dpr)),
-    innerLeft: snapCssPixel(contentLeft - visibleLeft, dpr),
-    innerTop: snapCssPixel(contentTop - visibleTop, dpr),
-    innerWidth: Math.max(0, snapCssPixel(innerRight - contentLeft, dpr)),
+    innerHeight: Math.max(0, innerBottom - contentTop),
+    innerLeft: contentLeft - outerLeft,
+    innerTop: contentTop - outerTop,
+    innerWidth: Math.max(0, innerRight - contentLeft),
     outerHeight: Math.max(0, outerBottom - outerTop),
     outerLeft,
     outerTop,
@@ -336,8 +337,8 @@ export function resolveNativeTextRunInnerStyleV3(input: {
   const visibleClip = input.visibleClip ?? null
   const fontStyle = resolveNativeTextRunFontStyleV3(input.run)
   const lineBox = resolveNativeTextLineBoxV3({ dpr, run: input.run })
-  const baseTop = visibleClip?.innerTop ?? snapCssPixel(input.run.y - clipY, dpr)
-  const textTop = input.run.wrap ? baseTop : snapCssPixel(baseTop + lineBox.topInset, dpr)
+  const baseTop = visibleClip?.innerTop ?? input.run.y - clipY
+  const textTop = input.run.wrap ? baseTop : baseTop + lineBox.topInset
   return {
     ...workbookNativeTextQualityStyle,
     boxSizing: 'border-box',
@@ -351,11 +352,11 @@ export function resolveNativeTextRunInnerStyleV3(input: {
     fontWeight: fontStyle.fontWeight,
     height: input.run.wrap ? (visibleClip?.innerHeight ?? height) : lineBox.height,
     letterSpacing: 0,
-    left: visibleClip?.innerLeft ?? snapCssPixel(input.run.x - clipX, dpr),
+    left: visibleClip?.innerLeft ?? input.run.x - clipX,
     lineHeight: `${lineBox.height}px`,
     overflow: 'hidden',
-    paddingLeft: 6,
-    paddingRight: 6,
+    paddingLeft: CELL_TEXT_PADDING_X,
+    paddingRight: CELL_TEXT_PADDING_X,
     position: 'absolute',
     textAlign: input.run.align ?? 'left',
     textDecorationLine: input.run.underline ? 'underline' : input.run.strike ? 'line-through' : undefined,

@@ -3,10 +3,13 @@ import {
   clickProductCell,
   countGreenFillPixelsInCell,
   createTestDocumentId,
+  expectToolbarColor,
   getProductColumnLeft,
   getProductColumnWidth,
   getProductRowHeight,
   getProductRowTop,
+  getToolbarButton,
+  PRIMARY_MODIFIER,
   PRODUCT_HEADER_HEIGHT,
   pickToolbarPresetColor,
   waitForWorkbookReady,
@@ -124,6 +127,46 @@ test('@browser-ci web app applies fill color after moving text into an empty til
   await expect(formulaInput).toHaveValue('')
   await expect.poll(() => nativeTextRunsInclude(page, text)).toBe(false)
   await expect.poll(() => countGreenFillPixelsInCell(page, 3, 4)).toBeGreaterThan(120)
+})
+
+test('@browser-ci web app keeps fill undo and redo visually stable from grid keyboard ownership', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-fill-undo-redo-stability')
+  const redoShortcut = PRIMARY_MODIFIER === 'Meta' ? 'Meta+Shift+Z' : 'Control+Y'
+  await page.setViewportSize({ width: 1166, height: 820 })
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  const grid = page.getByTestId('sheet-grid')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 1, 1)
+  await pickToolbarPresetColor(page, 'Fill color', 'green')
+  await expectToolbarColor(getToolbarButton(page, 'Fill color'), '#00ff00')
+  expect(
+    Math.min(...(await sampleGreenFillPixelsAcrossFrames(page, 1, 1, 4))),
+    'setup should paint B2 green before undoing the style mutation',
+  ).toBeGreaterThan(120)
+
+  await expect
+    .poll(async () => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null), {
+      message: 'toolbar style command must return keyboard ownership to the grid before undo',
+    })
+    .toBe('sheet-grid-focus-target')
+
+  await grid.press(`${PRIMARY_MODIFIER}+Z`)
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => countGreenFillPixelsInCell(page, 1, 1)).toBe(0)
+  await expectToolbarColor(getToolbarButton(page, 'Fill color'), '#ffffff')
+  await expect(page.getByTestId('name-box')).toHaveValue('B2')
+
+  await grid.press(redoShortcut)
+  await expect(formulaInput).toHaveValue('')
+  await expectToolbarColor(getToolbarButton(page, 'Fill color'), '#00ff00')
+  expect(
+    Math.min(...(await sampleGreenFillPixelsAcrossFrames(page, 1, 1, 4))),
+    'redo should restore the green fill without flashing through default grid paint',
+  ).toBeGreaterThan(120)
+  await expect(page.getByTestId('name-box')).toHaveValue('B2')
 })
 
 async function nativeTextRunsInclude(page: Page, text: string): Promise<boolean> {
