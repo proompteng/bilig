@@ -697,9 +697,11 @@ jobs:
             --notes-file build/runtime-release-notes.md
 
           bun scripts/sync-public-evidence.ts
+          bun scripts/sync-agent-discovery-docs.ts
 
           release_paths=(
             .release-please-manifest.json
+            docs
             docs/headless-package-footprint.json
             docs/public-evidence.json
             README.md
@@ -714,12 +716,15 @@ jobs:
             packages/xlsx-formula-recalc/package.json
             packages/exceljs-formula-recalc/package.json
             packages/create-workpaper/package.json
+            packages/headless/AGENTS.md
             packages/headless/server.json
+            packages/headless/SKILL.md
             packages/headless/README.md
             packages/bilig/README.md
             packages/xlsx-formula-recalc/README.md
             packages/exceljs-formula-recalc/README.md
             packages/headless/CHANGELOG.md
+            skills/bilig-workpaper/SKILL.md
           )
 
           if [[ "${DRY_RUN}" == "true" ]]; then
