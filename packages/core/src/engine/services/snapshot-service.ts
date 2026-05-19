@@ -312,6 +312,8 @@ export function createEngineSnapshotService(args: {
                 hydrateTemplateBank: args.hydrateTemplateBank,
                 initializeCellFormulasAt: args.initializeCellFormulasAt,
                 ...(args.resolveTemplateById ? { resolveTemplateById: args.resolveTemplateById } : {}),
+                ...(args.initializeFormulaSourcesAt ? { initializeFormulaSourcesAt: args.initializeFormulaSourcesAt } : {}),
+                ...(args.resolveTemplateForCell ? { resolveTemplateForCell: args.resolveTemplateForCell } : {}),
                 ...(args.initializePreparedCellFormulasAt
                   ? { initializePreparedCellFormulasAt: args.initializePreparedCellFormulasAt }
                   : {}),

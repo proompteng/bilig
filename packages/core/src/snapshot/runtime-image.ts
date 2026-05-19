@@ -62,6 +62,8 @@ export interface RuntimeImageRestoreArgs {
   readonly hydrateTemplateBank: (templates: readonly FormulaTemplateSnapshot[]) => void
   readonly resolveTemplateById?: (templateId: number, source: string, row: number, col: number) => FormulaTemplateResolution | undefined
   readonly initializeCellFormulasAt: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
+  readonly initializeFormulaSourcesAt?: (refs: EngineFormulaSourceRefs, potentialNewCells?: number) => void
+  readonly resolveTemplateForCell?: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly initializePreparedCellFormulasAt?: (refs: readonly PreparedRuntimeFormulaRef[], potentialNewCells?: number) => void
   readonly initializeHydratedPreparedCellFormulasAt?: (
     refs: InitialFormulaEntryRefSource<HydratedPreparedRuntimeFormulaRef>,
@@ -704,11 +706,13 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
   }
 
   const formulaRefs: EngineCellMutationRef[] = []
+  const formulaSourceRefs = args.initializeFormulaSourcesAt ? new RestoredFormulaSourceRefTable(totalCellCount) : undefined
   const preparedFormulaRefs: PreparedRuntimeFormulaRef[] = []
-  const hydratedPreparedFormulaRefs = new RestoredHydratedPreparedFormulaRefTable(
-    args.runtimeImage.formulaInstances.length,
-    args.runtimeImage.formulaInstances,
-  )
+  const hydratedPreparedFormulaRefs = new RestoredHydratedPreparedFormulaRefTable(totalCellCount, args.runtimeImage.formulaInstances)
+  const canHydrateCachedSnapshotFormulaValues = args.initializeHydratedPreparedCellFormulasAt && args.resolveTemplateForCell
+  const shouldHydrateIterativeFormulaValues = args.snapshot.workbook.metadata?.calculationSettings?.iterate === true
+  const definedFormulaNames =
+    shouldHydrateIterativeFormulaValues || !canHydrateCachedSnapshotFormulaValues ? undefined : collectDefinedFormulaNames(args.snapshot)
   const previousOnSetValue = args.workbook.cellStore.onSetValue
   args.workbook.cellStore.onSetValue = null
   args.workbook.withBatchedColumnVersionUpdates(() => {
@@ -795,27 +799,68 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
               })
               return
             }
-            formulaRefs.push({
-              sheetId,
-              cellIndex,
-              mutation: {
-                kind: 'setCellFormula',
-                row,
-                col,
-                formula: restoredFormula.source,
-              },
-            })
+            if (formulaSourceRefs) {
+              formulaSourceRefs.push(sheetId, cellIndex, row, col, restoredFormula.source)
+            } else {
+              formulaRefs.push({
+                sheetId,
+                cellIndex,
+                mutation: {
+                  kind: 'setCellFormula',
+                  row,
+                  col,
+                  formula: restoredFormula.source,
+                },
+              })
+            }
           } else if (cell.formula !== undefined) {
-            formulaRefs.push({
-              sheetId,
-              cellIndex,
-              mutation: {
-                kind: 'setCellFormula',
-                row,
-                col,
-                formula: cell.formula,
-              },
-            })
+            let hydratedCachedFormula = false
+            const shouldPreserveCachedUnsupportedValue =
+              canHydrateCachedSnapshotFormulaValues &&
+              cell.value !== undefined &&
+              !shouldHydrateIterativeFormulaValues &&
+              formulaShouldPreserveCachedUnsupportedFunctionValueOnFullRecalc(cell.formula, definedFormulaNames!)
+            if (
+              canHydrateCachedSnapshotFormulaValues &&
+              cell.value !== undefined &&
+              (shouldHydrateIterativeFormulaValues || shouldPreserveCachedUnsupportedValue)
+            ) {
+              try {
+                const template = args.resolveTemplateForCell(cell.formula, row, col)
+                if (!template.compiled.volatile && !template.compiled.producesSpill) {
+                  hydratedPreparedFormulaRefs.push(
+                    sheetId,
+                    cellIndex,
+                    row,
+                    col,
+                    cell.formula,
+                    template.compiled,
+                    template.templateId,
+                    literalToValue(cell.value, args.strings),
+                    cellIndex,
+                  )
+                  hydratedCachedFormula = true
+                }
+              } catch {
+                hydratedCachedFormula = false
+              }
+            }
+            if (!hydratedCachedFormula) {
+              if (formulaSourceRefs) {
+                formulaSourceRefs.push(sheetId, cellIndex, row, col, cell.formula)
+              } else {
+                formulaRefs.push({
+                  sheetId,
+                  cellIndex,
+                  mutation: {
+                    kind: 'setCellFormula',
+                    row,
+                    col,
+                    formula: cell.formula,
+                  },
+                })
+              }
+            }
           }
         }
 
@@ -887,6 +932,10 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
     args.checkEvaluationBudget?.()
     args.initializePreparedCellFormulasAt(preparedFormulaRefs, preparedFormulaRefs.length)
   }
+  if (formulaSourceRefs && formulaSourceRefs.length > 0) {
+    args.checkEvaluationBudget?.()
+    args.initializeFormulaSourcesAt!(formulaSourceRefs, totalCellCount)
+  }
   if (formulaRefs.length > 0) {
     args.checkEvaluationBudget?.()
     args.initializeCellFormulasAt(formulaRefs, formulaRefs.length)
@@ -898,6 +947,6 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
     workbookMetadata: args.snapshot.workbook.metadata,
   })
   return {
-    formulaCount: hydratedPreparedFormulaRefs.length + preparedFormulaRefs.length + formulaRefs.length,
+    formulaCount: hydratedPreparedFormulaRefs.length + preparedFormulaRefs.length + (formulaSourceRefs?.length ?? 0) + formulaRefs.length,
   }
 }

@@ -203,6 +203,158 @@ describe('restoreWorkbookFromRuntimeImage', () => {
     ])
   })
 
+  it('uses flat formula source refs for runtime-image snapshot fallback formulas when available', () => {
+    const workbook = new WorkbookStore('runtime-image-snapshot-formula-sources')
+    const sourceCalls: Array<{ cellIndex?: number; col: number; row: number; sheetId: number; source: string }> = []
+    const mutationCalls: unknown[] = []
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'runtime-image-snapshot-formula-sources' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            { address: '__ignored_literal__', value: 1 },
+            { address: '__ignored_formula__', formula: 'A1+1' },
+          ],
+        },
+      ],
+    }
+
+    restoreWorkbookFromRuntimeImage({
+      snapshot,
+      runtimeImage: {
+        version: 1,
+        templateBank: [],
+        formulaInstances: [],
+        formulaValues: [],
+        sheetCells: [
+          {
+            sheetName: 'Sheet1',
+            coords: [
+              { row: 0, col: 0 },
+              { row: 0, col: 1 },
+            ],
+          },
+        ],
+      },
+      workbook,
+      strings: new StringPool(),
+      resetWorkbook: () => {},
+      hydrateTemplateBank: () => {},
+      initializeCellFormulasAt: (refs) => {
+        mutationCalls.push(...refs)
+      },
+      initializeFormulaSourcesAt: (refs) => {
+        sourceCalls.push(...collectFormulaSourceRefs(refs))
+      },
+    })
+
+    const formulaCellIndex = workbook.getCellIndex('Sheet1', 'B1')
+    expect(formulaCellIndex).toBeDefined()
+    expect(mutationCalls).toEqual([])
+    expect(sourceCalls).toEqual([
+      {
+        sheetId: 1,
+        cellIndex: formulaCellIndex,
+        row: 0,
+        col: 1,
+        source: 'A1+1',
+      },
+    ])
+  })
+
+  it('hydrates cached iterative formula values for runtime-image snapshot fallback formulas', () => {
+    const workbook = new WorkbookStore('runtime-image-snapshot-cached-formulas')
+    const hydratedCalls: HydratedPreparedRuntimeFormulaRef[] = []
+    const mutationCalls: unknown[] = []
+    const sourceCalls: unknown[] = []
+    const compiled = compileFormulaAst('A1+1', parseFormula('A1+1'))
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'runtime-image-snapshot-cached-formulas',
+        metadata: {
+          calculationSettings: {
+            mode: 'automatic',
+            compatibilityMode: 'excel-modern',
+            iterate: true,
+          },
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            { address: 'A1', row: 0, col: 0, value: 1 },
+            { address: 'B1', row: 0, col: 1, formula: 'A1+1', value: 2 },
+          ],
+        },
+      ],
+    }
+
+    restoreWorkbookFromRuntimeImage({
+      snapshot,
+      runtimeImage: {
+        version: 1,
+        templateBank: [],
+        formulaInstances: [],
+        formulaValues: [],
+        sheetCells: [
+          {
+            sheetName: 'Sheet1',
+            coords: [
+              { row: 0, col: 0 },
+              { row: 0, col: 1 },
+            ],
+          },
+        ],
+      },
+      workbook,
+      strings: new StringPool(),
+      resetWorkbook: () => {},
+      hydrateTemplateBank: () => {},
+      resolveTemplateForCell: (source, row, col) => ({
+        templateId: 9,
+        templateKey: 'template:A1+1',
+        baseSource: source,
+        compiled,
+        translated: false,
+        rowDelta: row,
+        colDelta: col,
+      }),
+      initializeHydratedPreparedCellFormulasAt: (refs) => {
+        hydratedCalls.push(...collectHydratedPreparedRefs(refs))
+      },
+      initializeFormulaSourcesAt: (refs) => {
+        sourceCalls.push(...collectFormulaSourceRefs(refs))
+      },
+      initializeCellFormulasAt: (refs) => {
+        mutationCalls.push(...refs)
+      },
+    })
+
+    const formulaCellIndex = workbook.getCellIndex('Sheet1', 'B1')
+    expect(formulaCellIndex).toBeDefined()
+    expect(mutationCalls).toEqual([])
+    expect(sourceCalls).toEqual([])
+    expect(hydratedCalls).toEqual([
+      expect.objectContaining({
+        sheetId: 1,
+        cellIndex: formulaCellIndex,
+        row: 0,
+        col: 1,
+        source: 'A1+1',
+        templateId: 9,
+        value: { tag: ValueTag.Number, value: 2 },
+      }),
+    ])
+  })
+
   it('bulk-allocates dense row-major runtime-image sheets during restore', () => {
     const workbook = new WorkbookStore('runtime-image-dense-restore')
     const allocateDenseRowMajorAtReserved = vi.spyOn(workbook.cellStore, 'allocateDenseRowMajorAtReserved')

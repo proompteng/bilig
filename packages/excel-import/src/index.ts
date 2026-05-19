@@ -820,7 +820,7 @@ function importSheetJsWorkbook(
   }
 
   return {
-    snapshot: formulaCellSeen ? snapshot : attachImportedRuntimeCoordinates(snapshot, runtimeSheetCells),
+    snapshot: attachImportedRuntimeCoordinates(snapshot, runtimeSheetCells),
     workbookName,
     sheetNames: workbook.SheetNames,
     warnings,
@@ -867,7 +867,6 @@ export function importCsv(text: string, fileName: string, options: CsvImportOpti
   const runtimeCellCoords: ImportedRuntimeCellCoordinate[] = []
   let nonEmptyCellCount = 0
   let hasRaggedRows = false
-  let hasFormulaCells = false
   const columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0)
 
   rows.forEach((row, rowIndex) => {
@@ -883,7 +882,6 @@ export function importCsv(text: string, fileName: string, options: CsvImportOpti
       nonEmptyCellCount += 1
       const address = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex })
       if (parsed.formula !== undefined) {
-        hasFormulaCells = true
         pushImportedSnapshotCell(cells, runtimeCellCoords, { address, formula: parsed.formula }, rowIndex, colIndex)
         return
       }
@@ -926,7 +924,7 @@ export function importCsv(text: string, fileName: string, options: CsvImportOpti
   ]
 
   return {
-    snapshot: hasFormulaCells ? snapshot : attachImportedRuntimeCoordinates(snapshot, runtimeSheetCells),
+    snapshot: attachImportedRuntimeCoordinates(snapshot, runtimeSheetCells),
     workbookName,
     sheetNames: [sheetName],
     warnings,

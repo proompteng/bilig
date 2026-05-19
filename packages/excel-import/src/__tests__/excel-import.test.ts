@@ -933,7 +933,7 @@ describe('excel import', () => {
     )
   })
 
-  it('imports csv files into a single-sheet workbook preview', () => {
+  it('imports csv files into a single-sheet workbook preview', async () => {
     const imported = importCsv('Name,Value\nalpha,12\nbeta,=A2', 'metrics.csv')
 
     expect(imported.workbookName).toBe('metrics')
@@ -949,7 +949,26 @@ describe('excel import', () => {
         { address: 'B3', formula: 'A2' },
       ],
     })
-    expect(readRuntimeImage(imported.snapshot)).toBeUndefined()
+    expect(readRuntimeImage(imported.snapshot)?.sheetCells).toEqual([
+      {
+        sheetName: 'metrics',
+        coords: [
+          { row: 0, col: 0 },
+          { row: 0, col: 1 },
+          { row: 1, col: 0 },
+          { row: 1, col: 1 },
+          { row: 2, col: 0 },
+          { row: 2, col: 1 },
+        ],
+        coordinateOrder: 'dense-row-major',
+        dimensions: { width: 2, height: 3 },
+        cellCount: 6,
+      },
+    ])
+    const engine = new SpreadsheetEngine({ workbookName: imported.workbookName, replicaId: 'csv-formula-runtime-image-restore' })
+    await engine.ready()
+    engine.importSnapshot(imported.snapshot)
+    expect(engine.getCellValue('metrics', 'B3')).toEqual({ tag: ValueTag.String, value: 'alpha', stringId: expect.any(Number) })
     expect(imported.preview).toMatchObject({
       workbookName: 'metrics',
       sheetCount: 1,
