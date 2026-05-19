@@ -2,6 +2,7 @@ import { ValueTag, type CellSnapshot, type CellStyleRecord, type EngineEvent, ty
 import { encodeViewportPatch, type ViewportPatch, type ViewportPatchSubscription } from '@bilig/worker-transport'
 import {
   normalizeViewport,
+  styleSignature,
   viewportPatchMayBeImpacted,
   type SheetViewportImpact,
   type ViewportSubscriptionState,
@@ -124,7 +125,13 @@ export class WorkerViewportPatchPublisher {
         continue
       }
       const patch = this.options.buildPatch(subscription, input.event, metrics, this.options.getAuthoritativeRevision(), sheetImpact)
-      if (patch.cells.length === 0 && patch.columns.length === 0 && patch.rows.length === 0 && patch.merges === undefined) {
+      if (
+        patch.styles.length === 0 &&
+        patch.cells.length === 0 &&
+        patch.columns.length === 0 &&
+        patch.rows.length === 0 &&
+        patch.merges === undefined
+      ) {
         continue
       }
       if (patch.full) {
@@ -169,12 +176,12 @@ export class WorkerViewportPatchPublisher {
   }
 
   private getStyleRecord(styleId: string): CellStyleRecord {
-    const existing = this.styles.get(styleId)
-    if (existing) {
-      return existing
-    }
     const resolved = this.options.getProjectionEngine().getCellStyle(styleId) ?? {
       id: DEFAULT_STYLE_ID,
+    }
+    const existing = this.styles.get(styleId)
+    if (existing && existing.id === resolved.id && styleSignature(existing) === styleSignature(resolved)) {
+      return existing
     }
     this.styles.set(resolved.id, resolved)
     return resolved

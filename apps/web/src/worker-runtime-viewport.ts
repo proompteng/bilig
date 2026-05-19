@@ -100,7 +100,8 @@ function appendPatchedCell(context: PatchedCellContext, row: number, col: number
   const style = context.getStyleRecord(snapshot.styleId ?? DEFAULT_STYLE_ID)
   const nextStyleSignature = styleSignature(style)
   const previousStyleSignature = context.state.lastStyleSignatures.get(style.id)
-  if (force || previousStyleSignature !== nextStyleSignature || !context.state.knownStyleIds.has(style.id)) {
+  const styleChanged = previousStyleSignature !== nextStyleSignature || !context.state.knownStyleIds.has(style.id)
+  if (force || styleChanged) {
     context.state.knownStyleIds.add(style.id)
     context.state.lastStyleSignatures.set(style.id, nextStyleSignature)
     context.styles.push(style)
@@ -109,7 +110,7 @@ function appendPatchedCell(context: PatchedCellContext, row: number, col: number
   const displayText = toDisplayText(snapshot)
   const copyText = snapshot.formula ? editorText : displayText
   const signature = buildPatchedCellSignature(snapshot, displayText, copyText, editorText, formatId, style.id)
-  if (force || context.state.lastCellSignatures.get(key) !== signature) {
+  if (force || styleChanged || context.state.lastCellSignatures.get(key) !== signature) {
     context.cells.push({
       row,
       col,
