@@ -904,3 +904,31 @@ jobs:
         run: |
           set -euo pipefail
           bun scripts/publish-runtime-package-set.ts
+
+      - name: Upload WorkPaper MCPB release asset
+        if: steps.npm_provisioning.outputs.publish_allowed == 'true' && needs.plan_release.outputs.dry_run != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.plan_release.outputs.tag_name }}
+          TARGET_VERSION: ${{ needs.plan_release.outputs.target_version }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 30); do
+            if npm view "@bilig/headless@${TARGET_VERSION}" version >/dev/null 2>&1; then
+              break
+            fi
+            if [[ "${attempt}" == "30" ]]; then
+              echo "@bilig/headless@${TARGET_VERSION} was not visible on npm after ${attempt} attempts." >&2
+              exit 1
+            fi
+            echo "Waiting for @bilig/headless@${TARGET_VERSION} to become visible on npm; attempt ${attempt}/30"
+            sleep 10
+          done
+
+          pnpm mcpb:workpaper:build -- --package-version "${TARGET_VERSION}"
+          (cd build/mcpb && shasum -a 256 bilig-workpaper.mcpb > bilig-workpaper.mcpb.sha256)
+          gh release upload "${TAG_NAME}" \
+            build/mcpb/bilig-workpaper.mcpb \
+            build/mcpb/bilig-workpaper.mcpb.sha256 \
+            --clobber
