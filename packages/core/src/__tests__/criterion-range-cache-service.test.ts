@@ -110,6 +110,127 @@ describe('createCriterionRangeCacheService', () => {
     expect([...third.rows]).toEqual([0, 1, 2, 4])
   })
 
+  it('uses the equality row index for uncached exact criteria values', () => {
+    const workbook = new WorkbookStore('criteria-cache-equality-index')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    ;['A', 'B', 'A', 'B', 'A', 'B'].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, {
+        tag: ValueTag.String,
+        value,
+      })
+    })
+
+    const realRuntimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+    let readTagCalls = 0
+    const runtimeColumnStore = {
+      ...realRuntimeColumnStore,
+      getColumnView(request: Parameters<typeof realRuntimeColumnStore.getColumnView>[0]) {
+        const view = realRuntimeColumnStore.getColumnView(request)
+        return {
+          ...view,
+          readTagAt(offset: number) {
+            readTagCalls += 1
+            return view.readTagAt(offset)
+          },
+        }
+      },
+    }
+    const criterionCache = createCriterionRangeCacheService({
+      runtimeColumnStore,
+      regionGraph: createRegionGraph({ workbook }),
+      depPatternStore: createDepPatternStore(),
+    })
+
+    const first = criterionCache.getOrBuildMatchingRows({
+      criteriaPairs: [
+        {
+          range: { sheetName: 'Sheet1', rowStart: 0, rowEnd: 5, col: 0, length: 6 },
+          criteria: { tag: ValueTag.String, value: 'A', stringId: strings.intern('A') },
+        },
+      ],
+    })
+    if (isErrorValue(first)) {
+      throw new Error(`unexpected criteria cache error: ${first.code}`)
+    }
+    expect([...first.rows]).toEqual([0, 2, 4])
+
+    readTagCalls = 0
+    const second = criterionCache.getOrBuildMatchingRows({
+      criteriaPairs: [
+        {
+          range: { sheetName: 'Sheet1', rowStart: 0, rowEnd: 5, col: 0, length: 6 },
+          criteria: { tag: ValueTag.String, value: 'B', stringId: strings.intern('B') },
+        },
+      ],
+    })
+    if (isErrorValue(second)) {
+      throw new Error(`unexpected criteria cache error: ${second.code}`)
+    }
+    expect([...second.rows]).toEqual([1, 3, 5])
+    expect(readTagCalls).toBe(3)
+  })
+
+  it('computes exact criteria count and sum aggregates from a grouped column pass', () => {
+    const workbook = new WorkbookStore('criteria-cache-exact-aggregate')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    ;['A', 'B', 'A', 'B', 'A', 'B'].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, {
+        tag: ValueTag.String,
+        value,
+      })
+      setStoredCellValue(workbook, strings, 'Sheet1', `B${index + 1}`, {
+        tag: ValueTag.Number,
+        value: index + 1,
+      })
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+    const criterionCache = createCriterionRangeCacheService({
+      runtimeColumnStore,
+      regionGraph: createRegionGraph({ workbook }),
+      depPatternStore: createDepPatternStore(),
+    })
+    const criteriaPair = {
+      range: { sheetName: 'Sheet1', rowStart: 0, rowEnd: 5, col: 0, length: 6 },
+      criteria: { tag: ValueTag.String, value: 'B', stringId: strings.intern('B') },
+    } as const
+
+    expect(
+      criterionCache.getOrBuildExactAggregate({
+        criteriaPair,
+        aggregateKind: 'count',
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(
+      criterionCache.getOrBuildExactAggregate({
+        criteriaPair,
+        aggregateRange: { sheetName: 'Sheet1', rowStart: 0, rowEnd: 5, col: 1, length: 6 },
+        aggregateKind: 'sum',
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 12 })
+
+    setStoredCellValue(workbook, strings, 'Sheet1', 'A2', {
+      tag: ValueTag.String,
+      value: 'A',
+    })
+
+    expect(
+      criterionCache.getOrBuildExactAggregate({
+        criteriaPair,
+        aggregateRange: { sheetName: 'Sheet1', rowStart: 0, rowEnd: 5, col: 1, length: 6 },
+        aggregateKind: 'sum',
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 10 })
+  })
+
   it('supports compiled operator criteria and validates matching range lengths', () => {
     const workbook = new WorkbookStore('criteria-cache-operators')
     const strings = new StringPool()

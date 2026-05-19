@@ -386,6 +386,21 @@ export function createEngineFormulaEvaluationService(args: {
     if (directIndexExactMatchResult !== undefined) {
       return applyDirectCriteriaResultTransforms(readCellValueByIndex, formula, directIndexExactMatchResult)
     }
+    const exactAggregateResult =
+      resolvedPairs.length === 1 && (directCriteria.aggregateKind === 'count' || directCriteria.aggregateKind === 'sum')
+        ? args.criterionCache.getOrBuildExactAggregate({
+            criteriaPair: resolvedPairs[0]!,
+            ...(aggregateRange === undefined ? {} : { aggregateRange }),
+            aggregateKind: directCriteria.aggregateKind,
+          })
+        : undefined
+    if (exactAggregateResult !== undefined) {
+      const cachedResult =
+        aggregateCacheKey === undefined
+          ? exactAggregateResult
+          : rememberDirectCriteriaResult(directCriteriaAggregateCache, aggregateCacheKey, exactAggregateResult)
+      return applyDirectCriteriaResultTransforms(readCellValueByIndex, formula, cachedResult)
+    }
 
     const cachedMatches = directCriteriaMatchCache.get(criteriaVersionKey)
     if (cachedMatches !== undefined) {
