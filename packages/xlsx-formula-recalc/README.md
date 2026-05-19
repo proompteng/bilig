@@ -32,18 +32,18 @@ The CLI writes a recalculated workbook and prints readback values. Cell targets 
 ## API
 
 ```ts
-import { recalculateXlsx } from "xlsx-formula-recalc";
+import { recalculateXlsx } from 'xlsx-formula-recalc'
 
-const result = recalculateXlsx(await fs.promises.readFile("pricing.xlsx"), {
+const result = recalculateXlsx(await fs.promises.readFile('pricing.xlsx'), {
   edits: [
-    { target: "Inputs!B2", value: 48 },
-    { target: "Inputs!B3", value: 1500 },
+    { target: 'Inputs!B2', value: 48 },
+    { target: 'Inputs!B3', value: 1500 },
   ],
-  reads: ["Summary!B7"],
-});
+  reads: ['Summary!B7'],
+})
 
-await fs.promises.writeFile("pricing.recalculated.xlsx", result.xlsx);
-console.log(result.reads["Summary!B7"]);
+await fs.promises.writeFile('pricing.recalculated.xlsx', result.xlsx)
+console.log(result.reads['Summary!B7'])
 ```
 
 For the full workbook API, import `WorkPaper`, `importXlsx`, and `exportXlsx` from this package.
@@ -51,4 +51,3 @@ For the full workbook API, import `WorkPaper`, `importXlsx`, and `exportXlsx` fr
 ## Scope
 
 Use this when a Node service needs deterministic formula readback after it changes XLSX inputs. It is not a full Excel clone: unsupported Excel functions, external workbook links, macros, and volatile functions may need review. Import warnings are returned in `result.warnings`.
-
