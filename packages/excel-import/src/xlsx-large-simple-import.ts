@@ -209,7 +209,7 @@ export function tryImportLargeSimpleXlsx(
   const previewSheets: ParsedWorksheet['preview'][] = []
   const sheetStats: ParsedWorksheet['stats'][] = []
   const styleCatalog = new Map<string, CellStyleRecord>()
-  const scannedWorksheets: ScannedWorksheet[] = []
+  const scannedWorksheets: (ScannedWorksheet | undefined)[] = []
   const referencedSharedStringIndexes = new Set<number>()
   const materializeSheetsImmediately = materializeCells && !hasSharedStrings && !hasStyles && !hasDrawingParts
   const emptyStylesByIndex = new Map<number, Omit<CellStyleRecord, 'id'>>()
@@ -421,22 +421,15 @@ export function tryImportLargeSimpleXlsx(
     sharedStrings = referencedSharedStrings
   }
   delete zip[sharedStringsPath]
-  for (const scanned of scannedWorksheets) {
-    const resolvedRichTextCells = materializeCells && hasSharedStrings ? scanned.cellScan.arena.resolveSharedStrings(sharedStrings) : []
-    if (resolvedRichTextCells === null) {
-      return null
-    }
-    if (resolvedRichTextCells.length > 0) {
-      scanned.cellScan.richTextCells.push(...resolvedRichTextCells)
-    }
-  }
   referencedSharedStringIndexes.clear()
   fallbackSharedStrings = null
-  sharedStrings = []
   phaseRecorder.finish('shared-string-resolution', sharedStringResolutionStart)
   const styleParsingStart = phaseRecorder.start()
   const requiredStyleIndexes = new Set<number>()
   for (const scanned of scannedWorksheets) {
+    if (!scanned) {
+      continue
+    }
     scanned.cellScan.styleIndexes.collectRequiredStyleIndexes(requiredStyleIndexes)
   }
   const stylesByIndex =
@@ -456,13 +449,18 @@ export function tryImportLargeSimpleXlsx(
     materializeCells && hasDrawingParts
       ? readImportedWorkbookDrawingArtifactsFromWorksheetRelationships(
           zip,
-          scannedWorksheets.map((scanned) => {
-            const drawingRelationshipId = drawingRelationshipIdForScannedWorksheet(scanned)
-            return {
-              name: scanned.name,
-              path: worksheetEntries[scanned.order]?.path ?? '',
-              ...(drawingRelationshipId ? { drawingRelationshipId } : {}),
+          scannedWorksheets.flatMap((scanned) => {
+            if (!scanned) {
+              return []
             }
+            const drawingRelationshipId = drawingRelationshipIdForScannedWorksheet(scanned)
+            return [
+              {
+                name: scanned.name,
+                path: worksheetEntries[scanned.order]?.path ?? '',
+                ...(drawingRelationshipId ? { drawingRelationshipId } : {}),
+              },
+            ]
           }),
         )
       : null
@@ -475,8 +473,18 @@ export function tryImportLargeSimpleXlsx(
       ...(zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesAfterRelease: readLazyXlsxZipSourceByteLength(zip) ?? 0 } : {}),
     })
   }
-  for (const scanned of scannedWorksheets) {
+  for (const [index, scanned] of scannedWorksheets.entries()) {
+    if (!scanned) {
+      continue
+    }
     const snapshotMaterializationStart = phaseRecorder.start()
+    const resolvedRichTextCells = materializeCells && hasSharedStrings ? scanned.cellScan.arena.resolveSharedStrings(sharedStrings) : []
+    if (resolvedRichTextCells === null) {
+      return null
+    }
+    if (resolvedRichTextCells.length > 0) {
+      scanned.cellScan.richTextCells.push(...resolvedRichTextCells)
+    }
     const drawingArtifacts = importedDrawingArtifacts?.sheetArtifactsByName.get(scanned.name)
     const parsed = buildParsedWorksheet(
       scanned.name,
@@ -496,8 +504,10 @@ export function tryImportLargeSimpleXlsx(
       },
     )
     appendParsedWorksheet(parsed)
+    scannedWorksheets[index] = undefined
     phaseRecorder.finish('public-snapshot-materialization', snapshotMaterializationStart)
   }
+  sharedStrings = []
   stringPool.release()
   const sortedImportedTables =
     importedTables.length > 0 ? importedTables.toSorted((left, right) => left.name.localeCompare(right.name)) : undefined
