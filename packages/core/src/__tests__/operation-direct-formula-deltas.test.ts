@@ -207,6 +207,50 @@ describe('createOperationDirectFormulaDeltas', () => {
     expect(counters.directScalarDeltaApplications).toBe(2)
   })
 
+  it('should apply clean validated direct scalar deltas without slot cleanup work', () => {
+    // Arrange
+    const { counters, sheet, workbook, helpers } = createHarness({
+      canSkipDirectFormulaColumnVersion: () => false,
+    })
+    const first = createCell(workbook, sheet.id, {
+      row: 0,
+      col: 0,
+      value: 2,
+      version: 1,
+    })
+    const second = createCell(workbook, sheet.id, {
+      row: 1,
+      col: 1,
+      value: 8,
+      version: 6,
+    })
+
+    const collection = new DirectFormulaIndexCollection()
+    const directScalarCells = Uint32Array.of(first, second)
+    collection.appendConstantDelta(directScalarCells, 4, 'scalar')
+    collection.markScalarDeltaCellsValidated()
+    collection.markScalarDeltaCellsCleanNumber()
+
+    // Act
+    const changed = helpers.tryApplyDirectScalarDeltas(collection)
+
+    // Assert
+    expect(changed).toBe(directScalarCells)
+    expect(workbook.cellStore.numbers[first]).toBe(6)
+    expect(workbook.cellStore.numbers[second]).toBe(12)
+    expect(workbook.cellStore.stringIds[first]).toBe(0)
+    expect(workbook.cellStore.stringIds[second]).toBe(0)
+    expect(workbook.cellStore.errors[first]).toBe(ErrorCode.None)
+    expect(workbook.cellStore.errors[second]).toBe(ErrorCode.None)
+    expect(workbook.cellStore.flags[first]).toBe(CellFlags.Materialized)
+    expect(workbook.cellStore.flags[second]).toBe(CellFlags.Materialized)
+    expect(workbook.cellStore.versions[first]).toBe(2)
+    expect(workbook.cellStore.versions[second]).toBe(7)
+    expect(sheet.columnVersions[0] ?? 0).toBe(0)
+    expect(sheet.columnVersions[1] ?? 0).toBe(0)
+    expect(counters.directScalarDeltaApplications).toBe(2)
+  })
+
   it('should return undefined when a direct formula delta targets a cycle cell', () => {
     // Arrange
     const { counters, helpers, sheet, workbook } = createHarness()

@@ -1,4 +1,4 @@
-import { ValueTag, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { CellFlags } from '../../cell-store.js'
 import { makeCellEntity } from '../../entity-ids.js'
 import type { RuntimeDirectLookupDescriptor, RuntimeDirectScalarDescriptor } from '../runtime-state.js'
@@ -23,6 +23,8 @@ export interface OperationDirectPostRecalcMarkerState {
     readonly cellStore: {
       readonly flags: ArrayLike<number | undefined>
       readonly tags: ArrayLike<ValueTag | undefined>
+      readonly stringIds: ArrayLike<number | undefined>
+      readonly errors: ArrayLike<ErrorCode | undefined>
       readonly getValue: (cellIndex: number, readString: (stringId: number) => string) => CellValue
     }
   }
@@ -389,11 +391,15 @@ export function createOperationDirectPostRecalcMarkers(args: {
     let deltas: number[] | undefined
     let commonDelta: number | undefined
     let canUseValidatedTerminalWrites = true
+    let canUseCleanTerminalWrites = true
     const canSkipAllDirectFormulaColumnVersions = args.canSkipAllDirectFormulaColumnVersions?.() === true
     const cellStore = args.state.workbook.cellStore
     const formulas = args.state.formulas
     const flags = cellStore.flags
     const tags = cellStore.tags
+    const stringIds = cellStore.stringIds
+    const errors = cellStore.errors
+    const formulaOutputFlags = CellFlags.SpillChild | CellFlags.PivotOutput
     const directScalarCellNumericValue = args.directScalarCellNumericValue
     const canSkipDirectFormulaColumnVersion = args.canSkipDirectFormulaColumnVersion
     for (;;) {
@@ -488,6 +494,15 @@ export function createOperationDirectPostRecalcMarkers(args: {
       if (canUseValidatedTerminalWrites && !canSkipAllDirectFormulaColumnVersions && !canSkipDirectFormulaColumnVersion(formulaCellIndex)) {
         canUseValidatedTerminalWrites = false
       }
+      if (
+        canUseCleanTerminalWrites &&
+        (tags[formulaCellIndex] !== ValueTag.Number ||
+          (stringIds[formulaCellIndex] ?? 0) !== 0 ||
+          (errors[formulaCellIndex] ?? ErrorCode.None) !== ErrorCode.None ||
+          ((flags[formulaCellIndex] ?? 0) & formulaOutputFlags) !== 0)
+      ) {
+        canUseCleanTerminalWrites = false
+      }
       if (commonDelta === undefined) {
         commonDelta = formulaDelta
       } else if (!Object.is(commonDelta, formulaDelta) && deltas === undefined) {
@@ -521,6 +536,9 @@ export function createOperationDirectPostRecalcMarkers(args: {
     }
     if (canUseValidatedTerminalWrites) {
       postRecalcDirectFormulaIndices.markScalarDeltaCellsValidated()
+      if (canUseCleanTerminalWrites) {
+        postRecalcDirectFormulaIndices.markScalarDeltaCellsCleanNumber()
+      }
     }
     return true
   }
