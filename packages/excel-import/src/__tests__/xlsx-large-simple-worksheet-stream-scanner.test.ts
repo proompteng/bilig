@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { parseHeadlessLargeSimpleWorksheetFromChunks } from '../xlsx-large-simple-headless-worksheet-scanner.js'
+import { ImportedWorkbookStringPool } from '../xlsx-large-simple-string-pool.js'
 import { parseLargeSimpleWorksheetCellsFromChunks } from '../xlsx-large-simple-worksheet-stream-scanner.js'
 
 const encoder = new TextEncoder()
@@ -71,6 +72,28 @@ describe('large simple worksheet stream scanners', () => {
       sheetFormatPr: { defaultRowHeight: 15, outlineLevelRow: 1 },
     })
   })
+
+  it('shares repeated inline strings and formulas through the import string pool', () => {
+    const pool = new ImportedWorkbookStringPool()
+    const first = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(repeatedStringFormulaWorksheetXml()), 0, {
+      hasSharedStrings: false,
+      stringPool: pool,
+    })
+    const second = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(repeatedStringFormulaWorksheetXml()), 1, {
+      hasSharedStrings: false,
+      stringPool: pool,
+    })
+
+    expect(first?.cellScan.arena.materializeSheetCells(0)).toEqual([
+      { address: 'A1', value: 'Repeated label' },
+      { address: 'B1', value: 1, formula: 'A1&"!"' },
+    ])
+    expect(second?.cellScan.arena.materializeSheetCells(1)).toEqual([
+      { address: 'A1', value: 'Repeated label' },
+      { address: 'B1', value: 1, formula: 'A1&"!"' },
+    ])
+    expect(pool.count).toBe(2)
+  })
 })
 
 function splitAfterTagOpen(xml: string): (onChunk: (chunk: Uint8Array) => void) => boolean {
@@ -114,6 +137,18 @@ function metadataWorksheetXml(): string {
     '</sheetData>',
     '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
     '<drawing r:id="rIdDrawing1"/>',
+    '</worksheet>',
+  ].join('')
+}
+
+function repeatedStringFormulaWorksheetXml(): string {
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1:B1"/>',
+    '<sheetData><row r="1">',
+    '<c r="A1" t="inlineStr"><is><t>Repeated label</t></is></c>',
+    '<c r="B1"><f>A1&amp;&quot;!&quot;</f><v>1</v></c>',
+    '</row></sheetData>',
     '</worksheet>',
   ].join('')
 }

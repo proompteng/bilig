@@ -32,6 +32,8 @@ const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const mib = 1024 * 1024
 const publicWorkbookMaxRssBytes = 112 * mib
 const synthetic750kMaxRssBytes = 112 * mib
+const syntheticRepeatedStringMaxRssBytes = 112 * mib
+const syntheticFormulaHeavyMaxRssBytes = 112 * mib
 const hardMaxRssBytes = 192 * mib
 const defaultCacheDir = join(rootDir, '.cache', 'public-workbook-corpus')
 const defaultManifestPath = join(defaultCacheDir, 'manifest.json')
@@ -57,6 +59,8 @@ async function main(): Promise<void> {
     results.push(...(await runPublicWorkbookGates({ cacheDir, manifestPath, requirePublic })))
   }
   results.push(await runSynthetic750kGate(syntheticCacheDir))
+  results.push(await runSyntheticRepeatedStringGate(syntheticCacheDir))
+  results.push(await runSyntheticFormulaHeavyGate(syntheticCacheDir))
 
   const failed = results.filter((result) => result.status === 'failed')
   process.stdout.write(
@@ -66,6 +70,8 @@ async function main(): Promise<void> {
         targets: {
           publicWorkbookMaxRssBytes,
           synthetic750kMaxRssBytes,
+          syntheticRepeatedStringMaxRssBytes,
+          syntheticFormulaHeavyMaxRssBytes,
           hardMaxRssBytes,
         },
         results,
@@ -123,6 +129,34 @@ async function runSynthetic750kGate(cacheDir: string): Promise<MemoryGateResult>
   )
 }
 
+async function runSyntheticRepeatedStringGate(cacheDir: string): Promise<MemoryGateResult> {
+  const artifact = writeSyntheticRepeatedStringWorkbook(cacheDir)
+  return runGateTarget(
+    {
+      artifactId: artifact.id,
+      label: artifact.fileName,
+      maxRssBytes: syntheticRepeatedStringMaxRssBytes,
+    },
+    artifact,
+    cacheDir,
+    join(cacheDir, 'manifest.json'),
+  )
+}
+
+async function runSyntheticFormulaHeavyGate(cacheDir: string): Promise<MemoryGateResult> {
+  const artifact = writeSyntheticFormulaHeavyWorkbook(cacheDir)
+  return runGateTarget(
+    {
+      artifactId: artifact.id,
+      label: artifact.fileName,
+      maxRssBytes: syntheticFormulaHeavyMaxRssBytes,
+    },
+    artifact,
+    cacheDir,
+    join(cacheDir, 'manifest.json'),
+  )
+}
+
 async function runGateTarget(
   target: MemoryGateTarget,
   artifact: PublicWorkbookArtifact,
@@ -156,7 +190,18 @@ function memoryGateResult(target: MemoryGateTarget, verified: PublicWorkbookCorp
       reason: `verification did not pass; status=${verified.status}`,
     }
   }
-  if (peakRssBytes !== null && peakRssBytes > maxRssBytes) {
+  if (peakRssBytes === null) {
+    return {
+      id: target.artifactId,
+      label: target.label,
+      status: 'failed',
+      maxRssBytes,
+      peakRssBytes,
+      cells: verified.featureCounts?.cellCount,
+      reason: 'peak RSS was not sampled',
+    }
+  }
+  if (peakRssBytes > maxRssBytes) {
     return {
       id: target.artifactId,
       label: target.label,
@@ -196,8 +241,6 @@ function failedMissingPublicResult(target: MemoryGateTarget, reason: string): Me
 }
 
 function writeSynthetic750kWorkbook(cacheDir: string): PublicWorkbookArtifact {
-  const filesDir = join(cacheDir, 'files')
-  mkdirSync(filesDir, { recursive: true })
   const rowCount = 150_000
   const columnCount = 5
   const rows: string[] = []
@@ -209,13 +252,83 @@ function writeSynthetic750kWorkbook(cacheDir: string): PublicWorkbookArtifact {
     }
     rows.push(`<row r="${String(row)}">${cells.join('')}</row>`)
   }
-  const worksheetXml = [
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-    `<dimension ref="A1:E${String(rowCount)}"/>`,
-    `<sheetData>${rows.join('')}</sheetData>`,
-    '</worksheet>',
-  ].join('')
+  return writeSyntheticWorkbookArtifact(cacheDir, {
+    id: 'synthetic-750k-memory-v2',
+    fileName: 'synthetic-750k-memory-v2.xlsx',
+    sourceId: 'synthetic-memory-v2',
+    worksheetXml: [
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+      `<dimension ref="A1:E${String(rowCount)}"/>`,
+      `<sheetData>${rows.join('')}</sheetData>`,
+      '</worksheet>',
+    ].join(''),
+  })
+}
+
+function writeSyntheticRepeatedStringWorkbook(cacheDir: string): PublicWorkbookArtifact {
+  const rowCount = 25_000
+  const columnCount = 5
+  const rows: string[] = []
+  for (let row = 1; row <= rowCount; row += 1) {
+    const cells: string[] = []
+    for (let column = 0; column < columnCount; column += 1) {
+      const address = `${String.fromCharCode(65 + column)}${String(row)}`
+      cells.push(`<c r="${address}" t="inlineStr"><is><t>Repeated vendor label</t></is></c>`)
+    }
+    rows.push(`<row r="${String(row)}">${cells.join('')}</row>`)
+  }
+  return writeSyntheticWorkbookArtifact(cacheDir, {
+    id: 'synthetic-repeated-string-memory-v4',
+    fileName: 'synthetic-repeated-string-memory-v4.xlsx',
+    sourceId: 'synthetic-repeated-string-memory-v4',
+    worksheetXml: [
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+      `<dimension ref="A1:E${String(rowCount)}"/>`,
+      `<sheetData>${rows.join('')}</sheetData>`,
+      '</worksheet>',
+    ].join(''),
+  })
+}
+
+function writeSyntheticFormulaHeavyWorkbook(cacheDir: string): PublicWorkbookArtifact {
+  const rowCount = 25_000
+  const columnCount = 5
+  const rows: string[] = []
+  for (let row = 1; row <= rowCount; row += 1) {
+    const cells: string[] = []
+    for (let column = 0; column < columnCount; column += 1) {
+      const address = `${String.fromCharCode(65 + column)}${String(row)}`
+      cells.push(`<c r="${address}"><f>1+1</f><v>2</v></c>`)
+    }
+    rows.push(`<row r="${String(row)}">${cells.join('')}</row>`)
+  }
+  return writeSyntheticWorkbookArtifact(cacheDir, {
+    id: 'synthetic-formula-heavy-memory-v4',
+    fileName: 'synthetic-formula-heavy-memory-v4.xlsx',
+    sourceId: 'synthetic-formula-heavy-memory-v4',
+    worksheetXml: [
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+      `<dimension ref="A1:E${String(rowCount)}"/>`,
+      `<sheetData>${rows.join('')}</sheetData>`,
+      '</worksheet>',
+    ].join(''),
+  })
+}
+
+function writeSyntheticWorkbookArtifact(
+  cacheDir: string,
+  input: {
+    readonly fileName: string
+    readonly id: string
+    readonly sourceId: string
+    readonly worksheetXml: string
+  },
+): PublicWorkbookArtifact {
+  const filesDir = join(cacheDir, 'files')
+  mkdirSync(filesDir, { recursive: true })
   const bytes = zipSync({
     'xl/workbook.xml': strToU8(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>',
@@ -223,17 +336,17 @@ function writeSynthetic750kWorkbook(cacheDir: string): PublicWorkbookArtifact {
     'xl/_rels/workbook.xml.rels': strToU8(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
     ),
-    'xl/worksheets/sheet1.xml': strToU8(worksheetXml),
+    'xl/worksheets/sheet1.xml': strToU8(input.worksheetXml),
   })
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   const cachePath = `files/${sha256}.xlsx`
   writeFileSync(join(cacheDir, cachePath), bytes)
   const artifact: PublicWorkbookArtifact = {
-    id: 'synthetic-750k-memory-v2',
-    sourceId: 'synthetic-memory-v2',
-    sourceUrl: 'https://example.invalid/synthetic-750k-memory-v2.xlsx',
-    downloadUrl: 'https://example.invalid/synthetic-750k-memory-v2.xlsx',
-    fileName: 'synthetic-750k-memory-v2.xlsx',
+    id: input.id,
+    sourceId: input.sourceId,
+    sourceUrl: `https://example.invalid/${input.fileName}`,
+    downloadUrl: `https://example.invalid/${input.fileName}`,
+    fileName: input.fileName,
     cachePath,
     sha256,
     byteSize: bytes.byteLength,
@@ -241,6 +354,11 @@ function writeSynthetic750kWorkbook(cacheDir: string): PublicWorkbookArtifact {
     fetchedAt: new Date(0).toISOString(),
     license: { title: 'Synthetic test fixture', url: 'https://example.invalid/license', spdx: 'LicenseRef-Synthetic' },
   }
+  writeSyntheticManifest(cacheDir, artifact)
+  return artifact
+}
+
+function writeSyntheticManifest(cacheDir: string, artifact: PublicWorkbookArtifact): void {
   writeFileSync(
     join(cacheDir, 'manifest.json'),
     JSON.stringify(
@@ -265,7 +383,6 @@ function writeSynthetic750kWorkbook(cacheDir: string): PublicWorkbookArtifact {
       2,
     ),
   )
-  return artifact
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

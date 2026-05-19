@@ -23,6 +23,7 @@ import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-st
 import { shouldUseSharedStringlessFastPathBytes } from './xlsx-large-simple-shared-stringless-fast-path.js'
 import { buildLargeSimpleStyleRanges } from './xlsx-large-simple-style-ranges.js'
 import { readLargeSimpleWorkbookStylesFromChunks } from './xlsx-large-simple-styles.js'
+import { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import {
   parseHeadlessLargeSimpleWorksheetFromChunks,
@@ -168,7 +169,8 @@ export function tryImportLargeSimpleXlsx(
     return null
   }
 
-  const workbookSheets = readWorkbookSheets(workbookXml)
+  const stringPool = new ImportedWorkbookStringPool()
+  const workbookSheets = readWorkbookSheets(workbookXml, stringPool)
   const worksheetPathsByRelationshipId = readWorksheetPathsByRelationshipId(workbookRelationshipsXml)
   if (workbookSheets.length === 0 || worksheetPathsByRelationshipId.size === 0) {
     return null
@@ -195,7 +197,7 @@ export function tryImportLargeSimpleXlsx(
   let fallbackSharedStrings: readonly LargeSimpleSharedStringEntry[] | null | undefined = hasSharedStrings ? undefined : []
   delete zip[workbookPath]
   delete zip[workbookRelationshipsPath]
-  const workbookName = normalizeWorkbookName(fileName)
+  const workbookName = stringPool.intern(normalizeWorkbookName(fileName))
   const warnings = workbookDefinedNames.ignoredCount > 0 ? ['Some defined names were ignored during XLSX import.'] : []
   const hasDrawingParts = packagePaths.some((path) => path.startsWith('xl/drawings/') || path.startsWith('xl/media/'))
   phaseRecorder.finish('zip-setup', zipSetupStart)
@@ -232,6 +234,7 @@ export function tryImportLargeSimpleXlsx(
           sharedStrings: fallbackSharedStrings ?? [],
           deferSharedStrings: materializeCells && hasSharedStrings,
           retainMetadataXml: materializeMetadata,
+          stringPool,
         },
       )
       if (streamed && (hasSharedStrings || streamed.cellScan.valueCellCount > 0)) {
@@ -260,7 +263,10 @@ export function tryImportLargeSimpleXlsx(
           return null
         }
       }
-      cellScan = parseLargeSimpleWorksheetCells(worksheetBytes, fallbackSharedStrings ?? [], order, { retainCells: materializeCells })
+      cellScan = parseLargeSimpleWorksheetCells(worksheetBytes, fallbackSharedStrings ?? [], order, {
+        retainCells: materializeCells,
+        stringPool,
+      })
     }
     if (!cellScan) {
       return null
@@ -420,6 +426,7 @@ export function tryImportLargeSimpleXlsx(
     sheetStats.push(parsed.stats)
     phaseRecorder.finish('public-snapshot-materialization', snapshotMaterializationStart)
   }
+  stringPool.release()
   const sortedImportedTables =
     importedTables.length > 0 ? importedTables.toSorted((left, right) => left.name.localeCompare(right.name)) : undefined
   const stats: LargeSimpleXlsxImportStats = {
@@ -593,12 +600,16 @@ function importedWorksheetCellScanFromHeadless(scan: HeadlessLargeSimpleWorkshee
   }
 }
 
-function readWorkbookSheets(workbookXml: string): WorkbookSheetEntry[] {
+function readWorkbookSheets(workbookXml: string, stringPool?: ImportedWorkbookStringPool): WorkbookSheetEntry[] {
   return [...workbookXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?sheet\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gu)].flatMap((match) => {
     const tag = match[0]
     const name = readXmlAttribute(tag, 'name')
     const relationshipId = readXmlAttribute(tag, 'r:id') ?? readXmlAttribute(tag, 'id')
-    return name && relationshipId ? [{ name: decodeXmlText(name), relationshipId }] : []
+    if (!name || !relationshipId) {
+      return []
+    }
+    const decodedName = decodeXmlText(name)
+    return [{ name: stringPool?.intern(decodedName) ?? decodedName, relationshipId }]
   })
 }
 

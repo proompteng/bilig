@@ -10,6 +10,7 @@ import {
 } from './xlsx-large-simple-formula-records.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 
 const lessThan = 60
 const slash = 47
@@ -39,9 +40,9 @@ export function parseLargeSimpleWorksheetCells(
   bytes: Uint8Array,
   sharedStrings: readonly LargeSimpleSharedStringEntry[],
   sheetIndex: number,
-  options: { readonly retainCells?: boolean } = {},
+  options: { readonly retainCells?: boolean; readonly stringPool?: ImportedWorkbookStringPool } = {},
 ): ImportedWorksheetCellScan | null {
-  const arena = new ImportedWorkbookArena()
+  const arena = new ImportedWorkbookArena(options.stringPool)
   const richTextCells: WorkbookRichTextCellSnapshot[] = []
   const styleIndexes = new ImportedWorksheetStyleIndexArena()
   const formulas = new LargeSimpleFormulaRecords()

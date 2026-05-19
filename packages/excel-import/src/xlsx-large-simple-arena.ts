@@ -1,6 +1,7 @@
 import type { LiteralInput, WorkbookRichTextCellSnapshot, WorkbookSnapshot } from '@bilig/protocol'
 import { toDisplayText } from './workbook-import-helpers.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 
 const initialCellCapacity = 1024
 const noPoolId = 0xffffffff
@@ -112,6 +113,8 @@ export class ImportedWorkbookArena {
   private readonly formulaIdsByValue = new Map<string, number>()
   private readonly previewValues = new Map<string, LiteralInput | string>()
 
+  constructor(private readonly stringPool?: ImportedWorkbookStringPool) {}
+
   get cellCount(): number {
     return this.length
   }
@@ -121,7 +124,10 @@ export class ImportedWorkbookArena {
     const index = this.appendCell(input.sheetIndex, input.row, input.column)
     this.addValue(index, input.value)
     if (input.row < 8 && input.column < 6 && input.value !== undefined) {
-      this.previewValues.set(previewKey(input.row, input.column), input.value)
+      const previewValue = this.materializeValue(index)
+      if (previewValue !== undefined) {
+        this.previewValues.set(previewKey(input.row, input.column), previewValue)
+      }
     }
     return index
   }
@@ -143,7 +149,7 @@ export class ImportedWorkbookArena {
     const row = this.rows[cellIndex]
     const column = this.columns[cellIndex]
     if (row !== undefined && column !== undefined && row < 8 && column < 6 && !this.previewValues.has(previewKey(row, column))) {
-      this.previewValues.set(previewKey(row, column), `=${formula}`)
+      this.previewValues.set(previewKey(row, column), `=${this.formulas[formulaId] ?? formula}`)
     }
   }
 
@@ -211,9 +217,10 @@ export class ImportedWorkbookArena {
         this.previewValues.set(previewKey(row, column), entry.text)
       }
       if (entry.rich) {
+        const text = this.strings[this.stringIds[index] ?? noPoolId] ?? entry.text
         richTextCells.push({
           address: encodeCellAddress(row, column),
-          text: entry.text,
+          text,
           storage: 'sharedString',
           xml: entry.xml ?? '',
         })
@@ -338,24 +345,26 @@ export class ImportedWorkbookArena {
   }
 
   private internString(value: string): number {
-    const existing = this.stringIdsByValue.get(value)
+    const interned = this.stringPool?.intern(value) ?? value
+    const existing = this.stringIdsByValue.get(interned)
     if (existing !== undefined) {
       return existing
     }
     const next = this.strings.length
-    this.strings.push(value)
-    this.stringIdsByValue.set(value, next)
+    this.strings.push(interned)
+    this.stringIdsByValue.set(interned, next)
     return next
   }
 
   private internFormula(value: string): number {
-    const existing = this.formulaIdsByValue.get(value)
+    const interned = this.stringPool?.intern(value) ?? value
+    const existing = this.formulaIdsByValue.get(interned)
     if (existing !== undefined) {
       return existing
     }
     const next = this.formulas.length
-    this.formulas.push(value)
-    this.formulaIdsByValue.set(value, next)
+    this.formulas.push(interned)
+    this.formulaIdsByValue.set(interned, next)
     return next
   }
 

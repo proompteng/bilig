@@ -42,7 +42,7 @@ export function startChildRssWatchdog(child: WatchableChildProcess, options: Chi
     return () => undefined
   }
 
-  const intervalMs = Math.max(100, Math.trunc(options.intervalMs ?? defaultRssCheckIntervalMs))
+  const intervalMs = Math.max(10, Math.trunc(options.intervalMs ?? defaultRssCheckIntervalMs))
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
   let checking = false

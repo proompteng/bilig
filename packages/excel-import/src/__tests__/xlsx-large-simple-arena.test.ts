@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena } from '../xlsx-large-simple-arena.js'
+import { ImportedWorkbookStringPool } from '../xlsx-large-simple-string-pool.js'
 
 describe('large simple XLSX import arena', () => {
   it('releases typed storage and pools after materialization', () => {
@@ -24,5 +25,20 @@ describe('large simple XLSX import arena', () => {
     expect(arena.cellCount).toBe(0)
     expect(arena.readPreviewText(0, 0)).toBe('')
     expect(styleIndexes.count).toBe(0)
+  })
+
+  it('canonicalizes repeated strings and formulas through a shared import pool', () => {
+    const pool = new ImportedWorkbookStringPool()
+    const firstArena = new ImportedWorkbookArena(pool)
+    const secondArena = new ImportedWorkbookArena(pool)
+
+    const firstCell = firstArena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 'Repeated label' })
+    const secondCell = secondArena.addCell({ sheetIndex: 1, row: 0, column: 0, value: 'Repeated label' })
+    firstArena.setFormula(firstCell, 'A1&"!"')
+    secondArena.setFormula(secondCell, 'A1&"!"')
+
+    expect(firstArena.materializeSheetCells(0)).toEqual([{ address: 'A1', value: 'Repeated label', formula: 'A1&"!"' }])
+    expect(secondArena.materializeSheetCells(1)).toEqual([{ address: 'A1', value: 'Repeated label', formula: 'A1&"!"' }])
+    expect(pool.count).toBe(2)
   })
 })

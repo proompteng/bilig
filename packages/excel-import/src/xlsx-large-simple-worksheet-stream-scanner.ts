@@ -10,6 +10,7 @@ import {
 } from './xlsx-large-simple-formula-records.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 import {
   appendLargeSimpleRowMetadataTag,
@@ -64,6 +65,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     readonly sharedStrings?: readonly LargeSimpleSharedStringEntry[]
     readonly deferSharedStrings?: boolean
     readonly retainMetadataXml?: boolean
+    readonly stringPool?: ImportedWorkbookStringPool
   },
 ): LargeSimpleWorksheetStreamScan | null {
   const scanner = new LargeSimpleWorksheetChunkScanner(sheetIndex, {
@@ -72,6 +74,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     sharedStrings: options.sharedStrings ?? [],
     deferSharedStrings: options.deferSharedStrings === true,
     retainMetadataXml: options.retainMetadataXml !== false,
+    stringPool: options.stringPool,
   })
   if (!readChunks((chunk) => scanner.push(chunk))) {
     return null
@@ -83,7 +86,7 @@ class LargeSimpleWorksheetChunkScanner {
   private buffer: Uint8Array = new Uint8Array()
   private index = 0
   private failed = false
-  private readonly arena = new ImportedWorkbookArena()
+  private readonly arena: ImportedWorkbookArena
   private readonly formulas = new LargeSimpleFormulaRecords()
   private readonly richTextCells: WorkbookRichTextCellSnapshot[] = []
   private readonly styleIndexes = new ImportedWorksheetStyleIndexArena()
@@ -123,8 +126,10 @@ class LargeSimpleWorksheetChunkScanner {
       readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
       readonly deferSharedStrings: boolean
       readonly retainMetadataXml: boolean
+      readonly stringPool: ImportedWorkbookStringPool | undefined
     },
   ) {
+    this.arena = new ImportedWorkbookArena(options.stringPool)
     this.hasSharedStrings = options.hasSharedStrings
     this.retainCells = options.retainCells
     this.sharedStrings = options.sharedStrings
