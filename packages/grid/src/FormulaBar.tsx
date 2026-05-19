@@ -7,6 +7,7 @@ import { formulaBarRootClass, formulaFieldAddonClass, formulaFieldShellClass, fo
 import { isGridKeyboardEditableTarget } from './gridClipboardKeyboardController.js'
 import { NameBox } from './NameBox.js'
 import { workbookTextControlProps } from './workbookTextControls.js'
+import type { EditMovement, EditTargetSelection } from './workbookGridSurfaceTypes.js'
 
 interface FormulaBarProps {
   sheetName: string
@@ -21,7 +22,7 @@ interface FormulaBarProps {
   onAddressCommitSuccess?: (() => void) | undefined
   onFormulaCommitSuccess?: (() => void) | undefined
   onChange(this: void, next: string): void
-  onCommit(this: void, valueOverride?: string): void
+  onCommit(this: void, valueOverride?: string, targetSelectionOverride?: EditTargetSelection, movement?: EditMovement): void
   onCancel(this: void): void
 }
 
@@ -44,6 +45,7 @@ export function FormulaBar({
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const nameBoxRef = useRef<HTMLInputElement | null>(null)
   const commitRequestedRef = useRef(false)
+  const editingTargetRef = useRef<EditTargetSelection>({ address, sheetName })
   const [isFormulaFocused, setIsFormulaFocused] = useState(false)
   const [formulaCaret, setFormulaCaret] = useState(value.length)
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0)
@@ -74,8 +76,9 @@ export function FormulaBar({
   useEffect(() => {
     if (!isEditing) {
       commitRequestedRef.current = false
+      editingTargetRef.current = { address, sheetName }
     }
-  }, [isEditing])
+  }, [address, isEditing, sheetName])
 
   useEffect(() => {
     const handleGoToShortcut = (event: KeyboardEvent) => {
@@ -117,7 +120,13 @@ export function FormulaBar({
     : null
   const selectionStatus = `${sheetName}!${selectionLabel ?? address}`
 
-  const requestCommit = (options?: { returnFocusToGrid?: boolean }) => {
+  const noteFormulaEditTarget = (): EditTargetSelection => {
+    const target = { address, sheetName }
+    editingTargetRef.current = target
+    return target
+  }
+
+  const requestCommit = (options?: { movement?: EditMovement; returnFocusToGrid?: boolean }) => {
     if (commitRequestedRef.current) {
       if (options?.returnFocusToGrid) {
         onFormulaCommitSuccess?.()
@@ -125,7 +134,7 @@ export function FormulaBar({
       return
     }
     commitRequestedRef.current = true
-    onCommit(inputRef.current?.value ?? value)
+    onCommit(inputRef.current?.value ?? value, editingTargetRef.current, options?.movement)
     if (options?.returnFocusToGrid) {
       inputRef.current?.blur()
       onFormulaCommitSuccess?.()
@@ -159,6 +168,7 @@ export function FormulaBar({
     const caretPosition = selectionStart + text.length
     commitRequestedRef.current = false
     if (!isEditing) {
+      noteFormulaEditTarget()
       onBeginEdit(nextValue)
     }
     pendingSelectionRef.current = { start: caretPosition, end: caretPosition }
@@ -215,6 +225,7 @@ export function FormulaBar({
                 const nextValue = event.target.value
                 commitRequestedRef.current = false
                 if (!isEditing) {
+                  noteFormulaEditTarget()
                   onBeginEdit(nextValue)
                 }
                 setFormulaCaret(event.target.selectionStart ?? nextValue.length)
@@ -228,6 +239,7 @@ export function FormulaBar({
                 commitRequestedRef.current = false
                 setFormulaCaret(event.currentTarget.selectionStart ?? event.currentTarget.value.length)
                 if (!isEditing) {
+                  noteFormulaEditTarget()
                   onBeginEdit(value)
                 }
               }}
@@ -261,13 +273,21 @@ export function FormulaBar({
                   requestCommit({ returnFocusToGrid: true })
                   return
                 }
+                if (event.key === 'Tab') {
+                  event.preventDefault()
+                  requestCommit({ movement: [event.shiftKey ? -1 : 1, 0], returnFocusToGrid: true })
+                  return
+                }
                 if (event.key === 'Escape') {
                   event.preventDefault()
                   if (showAutocomplete) {
                     setDismissedAutocompleteValue(value)
                     return
                   }
+                  commitRequestedRef.current = true
                   onCancel()
+                  inputRef.current?.blur()
+                  onFormulaCommitSuccess?.()
                 }
               }}
               onKeyUp={(event) => {

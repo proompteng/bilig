@@ -8,6 +8,7 @@ import {
   resolveGridRectTileRevisionKeyV3,
   resolveGridTextTileRevisionKeyV3,
   resolveMissingTextGlyphRunSpansV3,
+  shouldFullWriteTileRectPayloadV3,
   shouldSyncGridRectTileResourceV3,
   shouldSyncGridTextTileResourceV3,
   shouldAttemptAxisOnlyTileTextGeometryResourceSync,
@@ -156,6 +157,26 @@ describe('typegpu v3 resource cache revision keys', () => {
     })
 
     expect(areGridRectTileRevisionKeysEqualV3(rectRevisionKey(changedWithoutSequenceBump), rectRevisionKey(base))).toBe(false)
+  })
+
+  test('full-writes V3 rect payloads when same-count fills change without dirty spans', () => {
+    expect(
+      shouldFullWriteTileRectPayloadV3({
+        canWritePartialPayload: true,
+        contentRectCount: 1,
+        dirtySpans: [],
+        rectPayloadCount: 1,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldFullWriteTileRectPayloadV3({
+        canWritePartialPayload: true,
+        contentRectCount: 2,
+        dirtySpans: [{ length: 1, offset: 1 }],
+        rectPayloadCount: 2,
+      }),
+    ).toBe(false)
   })
 
   test('compares V3 text run counts separately from GPU quad counts', () => {

@@ -610,9 +610,12 @@ function writeTileRectPayload(input: {
 }): void {
   const dirtySpans = input.tile.dirty?.rectSpans ?? []
   if (
-    !input.canWritePartialPayload ||
-    input.content.rectCount !== input.rectPayload.count ||
-    dirtySpans.some((span) => isFullGridRenderTileDirtySpanV3(span, input.rectPayload.count))
+    shouldFullWriteTileRectPayloadV3({
+      canWritePartialPayload: input.canWritePartialPayload,
+      contentRectCount: input.content.rectCount,
+      dirtySpans,
+      rectPayloadCount: input.rectPayload.count,
+    })
   ) {
     writeTypeGpuVertexBuffer(input.handle.buffer, input.rectPayload.floats, input.label)
     return
@@ -642,6 +645,20 @@ function writeTileRectPayload(input: {
       startFloat: baseRectCount * RECT_INSTANCE_FLOAT_COUNT,
     })
   }
+}
+
+export function shouldFullWriteTileRectPayloadV3(input: {
+  readonly canWritePartialPayload: boolean
+  readonly contentRectCount: number
+  readonly dirtySpans: readonly { readonly offset: number; readonly length: number }[]
+  readonly rectPayloadCount: number
+}): boolean {
+  return (
+    !input.canWritePartialPayload ||
+    input.contentRectCount !== input.rectPayloadCount ||
+    input.dirtySpans.length === 0 ||
+    input.dirtySpans.some((span) => isFullGridRenderTileDirtySpanV3(span, input.rectPayloadCount))
+  )
 }
 
 function prepareRectBuffer(

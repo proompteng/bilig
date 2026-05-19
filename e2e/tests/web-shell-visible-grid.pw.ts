@@ -366,6 +366,38 @@ test('@browser-ci web app preserves visible fill while Delete clears only cell c
     .toBeGreaterThan(120)
 })
 
+test('@browser-ci web app repaints same-size TypeGPU fill color changes without stale tile colors', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-fill-color-repaint')
+  await page.setViewportSize({ width: 1166, height: 820 })
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  await clickProductCell(page, 1, 1)
+  await pickToolbarPresetColor(page, 'Fill color', 'green')
+  await expect
+    .poll(() => countGreenFillPixelsInCell(page, 1, 1), {
+      message: 'test setup should visibly paint B2 green before repainting the same rect buffer blue',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(120)
+
+  await pickToolbarPresetColor(page, 'Fill color', 'blue')
+  const blueSamples = await sampleFillPixelsAcrossFrames(page, 1, 1, 'blue', 4)
+  expect(
+    Math.min(...blueSamples),
+    'same-size fill color changes must upload new TypeGPU rect payloads instead of keeping stale green tiles',
+  ).toBeGreaterThan(120)
+  await expect.poll(() => countGreenFillPixelsInCell(page, 1, 1)).toBe(0)
+
+  await page.keyboard.press('Delete')
+  await expect(page.getByTestId('formula-input')).toHaveValue('')
+  const postDeleteBlueSamples = await sampleFillPixelsAcrossFrames(page, 1, 1, 'blue', 4)
+  expect(
+    Math.min(...postDeleteBlueSamples),
+    'Delete must clear content without flashing or removing the visible blue fill',
+  ).toBeGreaterThan(120)
+})
+
 test('@browser-ci web app repaints moved text cells when a background fill is applied', async ({ page, context }) => {
   const documentId = createTestDocumentId('playwright-moved-cell-fill-repaint')
   const movedText = 'moved-fill-proof'
@@ -802,12 +834,26 @@ async function sampleGreenFillPixelsAcrossFrames(
   remainingSamples: number,
   samples: readonly number[] = [],
 ): Promise<readonly number[]> {
+  return await sampleFillPixelsAcrossFrames(page, columnIndex, rowIndex, 'green', remainingSamples, samples)
+}
+
+async function sampleFillPixelsAcrossFrames(
+  page: Page,
+  columnIndex: number,
+  rowIndex: number,
+  color: 'blue' | 'green',
+  remainingSamples: number,
+  samples: readonly number[] = [],
+): Promise<readonly number[]> {
   if (remainingSamples <= 0) {
     return samples
   }
-  const pixels = await countGreenFillPixelsInCell(page, columnIndex, rowIndex)
+  const pixels =
+    color === 'green'
+      ? await countGreenFillPixelsInCell(page, columnIndex, rowIndex)
+      : await countBlueFillPixelsInCell(page, columnIndex, rowIndex)
   await page.waitForTimeout(50)
-  return await sampleGreenFillPixelsAcrossFrames(page, columnIndex, rowIndex, remainingSamples - 1, [...samples, pixels])
+  return await sampleFillPixelsAcrossFrames(page, columnIndex, rowIndex, color, remainingSamples - 1, [...samples, pixels])
 }
 
 async function countInitialShellNonBlankPixels(page: Page): Promise<number> {

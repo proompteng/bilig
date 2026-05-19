@@ -370,6 +370,103 @@ describe('FormulaBar', () => {
     })
   })
 
+  it('commits formula-bar Tab navigation with a stable target and returns focus to the grid', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const onCommit = vi.fn()
+    const onFormulaCommitSuccess = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <FormulaBar
+          address="B2"
+          isEditing={true}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onCancel={() => {}}
+          onChange={() => {}}
+          onCommit={onCommit}
+          onFormulaCommitSuccess={onFormulaCommitSuccess}
+          resolvedValue=""
+          sheetName="Sheet1"
+          value="draft"
+        />,
+      )
+    })
+
+    const formulaInput = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(formulaInput).not.toBeNull()
+    if (!formulaInput) {
+      throw new Error('Expected formula input')
+    }
+
+    formulaInput.focus()
+    await act(async () => {
+      formulaInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    })
+
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit).toHaveBeenCalledWith('draft', { address: 'B2', sheetName: 'Sheet1' }, [1, 0])
+    expect(onFormulaCommitSuccess).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).not.toBe(formulaInput)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('cancels formula-bar Escape and returns keyboard ownership to the grid', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const onCancel = vi.fn()
+    const onCommit = vi.fn()
+    const onFormulaCommitSuccess = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <FormulaBar
+          address="B2"
+          isEditing={true}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onCancel={onCancel}
+          onChange={() => {}}
+          onCommit={onCommit}
+          onFormulaCommitSuccess={onFormulaCommitSuccess}
+          resolvedValue=""
+          sheetName="Sheet1"
+          value="draft"
+        />,
+      )
+    })
+
+    const formulaInput = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(formulaInput).not.toBeNull()
+    if (!formulaInput) {
+      throw new Error('Expected formula input')
+    }
+
+    formulaInput.focus()
+    await act(async () => {
+      formulaInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    })
+
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(onCommit).not.toHaveBeenCalled()
+    expect(onFormulaCommitSuccess).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).not.toBe(formulaInput)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('preserves dirty name-box input during late selection refreshes', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -575,7 +672,7 @@ describe('FormulaBar', () => {
     })
 
     expect(onCommit).toHaveBeenCalledTimes(1)
-    expect(onCommit).toHaveBeenCalledWith('draft')
+    expect(onCommit).toHaveBeenCalledWith('draft', { address: 'B2', sheetName: 'Sheet1' }, undefined)
 
     await act(async () => {
       root.unmount()
@@ -621,11 +718,81 @@ describe('FormulaBar', () => {
     })
 
     expect(onCommit).toHaveBeenCalledTimes(1)
-    expect(onCommit).toHaveBeenCalledWith('=A1="HELLO"')
+    expect(onCommit).toHaveBeenCalledWith('=A1="HELLO"', { address: 'B2', sheetName: 'Sheet1' }, undefined)
 
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('keeps formula-bar blur commits pinned to the cell where editing started', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const outsideButton = document.createElement('button')
+    document.body.appendChild(outsideButton)
+    const root = createRoot(host)
+    const onCommit = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <FormulaBar
+          address="B2"
+          isEditing={true}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onCancel={() => {}}
+          onChange={() => {}}
+          onCommit={onCommit}
+          resolvedValue=""
+          sheetName="Sheet1"
+          value="draft"
+        />,
+      )
+    })
+
+    const input = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(input).not.toBeNull()
+    if (!input) {
+      throw new Error('Expected formula input')
+    }
+
+    input.focus()
+    await act(async () => {
+      root.render(
+        <FormulaBar
+          address="C3"
+          isEditing={true}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onCancel={() => {}}
+          onChange={() => {}}
+          onCommit={onCommit}
+          resolvedValue=""
+          sheetName="Sheet1"
+          value="draft"
+        />,
+      )
+    })
+
+    const updatedInput = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(updatedInput).not.toBeNull()
+    if (!updatedInput) {
+      throw new Error('Expected formula input')
+    }
+
+    await act(async () => {
+      updatedInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: outsideButton }))
+    })
+
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit).toHaveBeenCalledWith('draft', { address: 'B2', sheetName: 'Sheet1' }, undefined)
+
+    await act(async () => {
+      root.unmount()
+    })
+    outsideButton.remove()
   })
 
   it('keeps the name box and formula frame flat without raised shadow chrome', async () => {
