@@ -26,7 +26,10 @@ describe('large simple worksheet stream scanners', () => {
   })
 
   it('collects exact worksheet metadata records without retaining metadata XML', () => {
-    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(metadataWorksheetXml()), 0, { hasSharedStrings: false })
+    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(metadataWorksheetXml()), 0, {
+      hasSharedStrings: false,
+      sheetName: 'Data',
+    })
 
     expect(scan?.metadataXml).toBeUndefined()
     expect(scan?.cellScan.mergeCount).toBe(1)
@@ -51,6 +54,19 @@ describe('large simple worksheet stream scanners', () => {
         ],
       },
       drawingRelationshipId: 'rIdDrawing1',
+      filters: [
+        {
+          sheetName: 'Data',
+          startAddress: 'A1',
+          endAddress: 'B2',
+          criteria: [
+            {
+              colId: 0,
+              filters: { values: ['Open'] },
+            },
+          ],
+        },
+      ],
       hyperlinks: [{ ref: 'A1:B1', location: 'Summary!A1', tooltip: 'Jump', display: 'Summary' }],
       rows: {
         entries: [{ id: 'row:1', index: 1, size: 24, hidden: true }],
@@ -145,6 +161,7 @@ function metadataWorksheetXml(): string {
     '<c r="A2"><v>3</v></c>',
     '</row>',
     '</sheetData>',
+    '<autoFilter ref="A1:B2"><filterColumn colId="0"><filters><filter val="Open"/></filters></filterColumn></autoFilter>',
     '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
     '<hyperlinks><hyperlink ref="A1:B1" location="Summary!A1" tooltip="Jump" display="Summary"/></hyperlinks>',
     '<drawing r:id="rIdDrawing1"/>',

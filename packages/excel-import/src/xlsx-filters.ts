@@ -207,11 +207,23 @@ function parseAutoFilter(sheetName: string, entry: unknown): WorkbookAutoFilterS
 }
 
 export function readImportedSheetAutoFilters(sheetName: string, sheetXml: string): WorkbookAutoFilterSnapshot[] {
-  if (!/<autoFilter\b/u.test(sheetXml)) {
+  if (!/<(?:[A-Za-z_][\w.-]*:)?autoFilter\b/u.test(sheetXml)) {
     return []
   }
   const parsed: unknown = xmlParser.parse(sheetXml)
-  return asArray(recordChild(recordChild(parsed, 'worksheet'), 'autoFilter')).flatMap((entry) => {
+  return readParsedWorksheetAutoFilters(sheetName, recordChild(parsed, 'worksheet'))
+}
+
+export function readImportedSheetAutoFiltersFromElementXml(sheetName: string, elementXml: string): WorkbookAutoFilterSnapshot[] {
+  if (!/<(?:[A-Za-z_][\w.-]*:)?autoFilter\b/u.test(elementXml)) {
+    return []
+  }
+  const parsed: unknown = xmlParser.parse(`<worksheet>${elementXml}</worksheet>`)
+  return readParsedWorksheetAutoFilters(sheetName, recordChild(parsed, 'worksheet'))
+}
+
+function readParsedWorksheetAutoFilters(sheetName: string, worksheet: Record<string, unknown> | null): WorkbookAutoFilterSnapshot[] {
+  return asArray(worksheet?.['autoFilter']).flatMap((entry) => {
     const filter = parseAutoFilter(sheetName, entry)
     return filter ? [filter] : []
   })

@@ -561,7 +561,16 @@ describe('large simple XLSX import fast path', () => {
       ].join(''),
     })
 
-    const imported = tryImportLargeSimpleXlsx(bytes, 'auto-filter.xlsx', unzipSync(bytes), { minByteLength: 0 })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('auto filter metadata should use streamed typed records instead of inflating worksheet XML')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'auto-filter.xlsx', zip, { minByteLength: 0 })
 
     expect(imported?.snapshot.sheets[0]?.metadata?.filters).toEqual([
       {

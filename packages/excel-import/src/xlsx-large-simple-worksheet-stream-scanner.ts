@@ -3,6 +3,7 @@ import { strFromU8 } from 'fflate'
 import type { LiteralInput, WorkbookAxisEntrySnapshot, WorkbookAxisMetadataSnapshot, WorkbookRichTextCellSnapshot } from '@bilig/protocol'
 import { toLiteralInput } from './workbook-import-helpers.js'
 import { decodeExcelEscapedText } from './xlsx-escaped-text.js'
+import { readImportedSheetAutoFiltersFromElementXml } from './xlsx-filters.js'
 import {
   LargeSimpleFormulaRecords,
   parseLargeSimpleSharedFormulaIndex,
@@ -41,7 +42,6 @@ export interface LargeSimpleWorksheetStreamScan {
   readonly cellScan: ImportedWorksheetCellScan
   readonly metadataXml: string | undefined
   readonly metadata: LargeSimpleWorksheetScannedMetadata | undefined
-  readonly sharedStringIndexes: ReadonlySet<number>
 }
 
 export function parseLargeSimpleWorksheetCellsFromChunks(
@@ -53,6 +53,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     readonly sharedStrings?: readonly LargeSimpleSharedStringEntry[]
     readonly deferSharedStrings?: boolean
     readonly retainMetadataXml?: boolean
+    readonly sheetName?: string
     readonly stringPool?: ImportedWorkbookStringPool
   },
 ): LargeSimpleWorksheetStreamScan | null {
@@ -62,6 +63,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     sharedStrings: options.sharedStrings ?? [],
     deferSharedStrings: options.deferSharedStrings === true,
     retainMetadataXml: options.retainMetadataXml !== false,
+    sheetName: options.sheetName,
     stringPool: options.stringPool,
   })
   if (!readChunks((chunk) => scanner.push(chunk))) {
@@ -87,6 +89,7 @@ class LargeSimpleWorksheetChunkScanner {
   private mergeCount = 0
   private conditionalFormatCount = 0
   private tableCount = 0
+  private readonly sheetName: string | undefined
   private minRow = Number.POSITIVE_INFINITY
   private minColumn = Number.POSITIVE_INFINITY
   private maxRow = -1
@@ -94,6 +97,7 @@ class LargeSimpleWorksheetChunkScanner {
   private columnEntries: WorkbookAxisEntrySnapshot[] | undefined
   private columnMetadata: WorkbookAxisMetadataSnapshot[] | undefined
   private drawingRelationshipId: string | undefined
+  private filters: LargeSimpleWorksheetScannedMetadata['filters']
   private hyperlinks: LargeSimpleWorksheetScannedMetadata['hyperlinks']
   private rowEntries: WorkbookAxisEntrySnapshot[] | undefined
   private rowMetadata: WorkbookAxisMetadataSnapshot[] | undefined
@@ -105,7 +109,6 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
   private readonly deferSharedStrings: boolean
   private readonly retainMetadataXml: boolean
-  private readonly sharedStringIndexes = new Set<number>()
 
   constructor(
     private readonly sheetIndex: number,
@@ -115,6 +118,7 @@ class LargeSimpleWorksheetChunkScanner {
       readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
       readonly deferSharedStrings: boolean
       readonly retainMetadataXml: boolean
+      readonly sheetName: string | undefined
       readonly stringPool: ImportedWorkbookStringPool | undefined
     },
   ) {
@@ -124,6 +128,7 @@ class LargeSimpleWorksheetChunkScanner {
     this.sharedStrings = options.sharedStrings
     this.deferSharedStrings = options.deferSharedStrings
     this.retainMetadataXml = options.retainMetadataXml
+    this.sheetName = options.sheetName
   }
 
   push(chunk: Uint8Array): void {
@@ -171,7 +176,6 @@ class LargeSimpleWorksheetChunkScanner {
       },
       metadataXml: this.metadataSnippets.length > 0 ? `<worksheet>${this.metadataSnippets.join('')}</worksheet>` : undefined,
       metadata: this.buildMetadataScan(),
-      sharedStringIndexes: this.sharedStringIndexes,
     }
   }
 
@@ -214,6 +218,7 @@ class LargeSimpleWorksheetChunkScanner {
     const metadata: LargeSimpleWorksheetScannedMetadata = {
       ...(columns ? { columns } : {}),
       ...(this.drawingRelationshipId ? { drawingRelationshipId: this.drawingRelationshipId } : {}),
+      ...(this.filters && this.filters.length > 0 ? { filters: this.filters } : {}),
       ...(this.hyperlinks && this.hyperlinks.length > 0 ? { hyperlinks: this.hyperlinks } : {}),
       ...(rows ? { rows } : {}),
       ...(this.mergeRefs && this.mergeRefs.length > 0 ? { merges: this.mergeRefs } : {}),
@@ -337,9 +342,6 @@ class LargeSimpleWorksheetChunkScanner {
       if (sharedStringIndex === null) {
         this.failed = true
         return false
-      }
-      if (this.deferSharedStrings) {
-        this.sharedStringIndexes.add(sharedStringIndex)
       }
     }
     const deferSharedStringValue = this.retainCells && this.deferSharedStrings && cellType === 's' && sharedStringIndex !== null
@@ -465,6 +467,14 @@ class LargeSimpleWorksheetChunkScanner {
     }
     if (localName === 'drawing') {
       this.drawingRelationshipId = readLargeSimpleDrawingRelationshipIdTag(decodeBytes(this.buffer, startIndex, endIndex))
+      return true
+    }
+    if (localName === 'autoFilter') {
+      if (!this.sheetName) {
+        return false
+      }
+      const filters = readImportedSheetAutoFiltersFromElementXml(this.sheetName, decodeBytes(this.buffer, startIndex, endIndex))
+      this.filters = [...(this.filters ?? []), ...filters]
       return true
     }
     if (localName === 'hyperlinks') {

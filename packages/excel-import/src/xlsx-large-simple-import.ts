@@ -234,6 +234,7 @@ export function tryImportLargeSimpleXlsx(
           sharedStrings: fallbackSharedStrings ?? [],
           deferSharedStrings: materializeCells && hasSharedStrings,
           retainMetadataXml: materializeMetadata,
+          sheetName: entry.name,
           stringPool,
         },
       )
@@ -317,7 +318,7 @@ export function tryImportLargeSimpleXlsx(
         if (printMetadata === null) {
           return null
         }
-        const filters = readImportedSheetAutoFilters(entry.name, worksheetXml)
+        const filters = streamedMetadataScan?.filters ? [] : readImportedSheetAutoFilters(entry.name, worksheetXml)
         const conditionalFormatArtifacts = hasConditionalFormats
           ? readImportedSheetConditionalFormatArtifactsFromWorksheetXml(worksheetXml)
           : undefined
@@ -341,6 +342,9 @@ export function tryImportLargeSimpleXlsx(
     }
     if (streamedHyperlinks) {
       metadataInput = { ...metadataInput, hyperlinks: streamedHyperlinks }
+    }
+    if (materializeCells && streamedMetadataScan?.filters && streamedMetadataScan.filters.length > 0) {
+      metadataInput = { ...metadataInput, filters: [...streamedMetadataScan.filters] }
     }
     worksheetBytes = undefined
     scannedWorksheets.push({
