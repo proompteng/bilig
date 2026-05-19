@@ -1,7 +1,12 @@
 import { strFromU8 } from 'fflate'
 
-import type { LiteralInput, WorkbookAxisEntrySnapshot, WorkbookAxisMetadataSnapshot, WorkbookRichTextCellSnapshot } from '@bilig/protocol'
+import type { WorkbookAxisEntrySnapshot, WorkbookAxisMetadataSnapshot, WorkbookRichTextCellSnapshot } from '@bilig/protocol'
 import { readImportedSheetAutoFiltersFromElementXml } from './xlsx-filters.js'
+import {
+  readLargeSimpleCellValueFromTextRange,
+  readLargeSimpleSharedStringIndexFromTextRange,
+  type LargeSimpleXmlTextRange,
+} from './xlsx-large-simple-cell-value-scan.js'
 import {
   LargeSimpleFormulaRecords,
   parseLargeSimpleSharedFormulaIndex,
@@ -13,7 +18,7 @@ import { rowTagHasMetadataAttribute } from './xlsx-large-simple-row-metadata-sca
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
-import { decodeXmlText, normalizeWorksheetText, stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
+import { stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 import { readWorksheetTableRelationshipIds } from './xlsx-tables.js'
 import {
@@ -346,9 +351,10 @@ class LargeSimpleWorksheetChunkScanner {
     }
     const styleIndex = readCellStyleIndexFromTag(this.buffer, nameEnd, tagEnd)
     const shouldReadSharedStringIndex = cellType === 's' && (this.retainCells || this.deferSharedStrings)
-    const rawValue = this.retainCells || shouldReadSharedStringIndex ? readElementText(this.buffer, contentStart, closing.start, 'v') : null
-    const sharedStringIndex = shouldReadSharedStringIndex ? readSharedStringIndex(rawValue) : null
-    if (shouldReadSharedStringIndex && rawValue !== null) {
+    const rawValueRange =
+      this.retainCells || shouldReadSharedStringIndex ? readElementTextRange(this.buffer, contentStart, closing.start, 'v') : null
+    const sharedStringIndex = shouldReadSharedStringIndex ? readLargeSimpleSharedStringIndexFromTextRange(this.buffer, rawValueRange) : null
+    if (shouldReadSharedStringIndex && rawValueRange !== null) {
       if (sharedStringIndex === null) {
         this.failed = true
         return false
@@ -357,7 +363,9 @@ class LargeSimpleWorksheetChunkScanner {
     const deferSharedStringValue = this.retainCells && this.deferSharedStrings && cellType === 's' && sharedStringIndex !== null
     const value =
       this.retainCells && !deferSharedStringValue
-        ? readCellValue(this.buffer, contentStart, closing.start, cellType, rawValue, this.sharedStrings)
+        ? cellType === 'inlineStr'
+          ? readInlineStringCellValue(this.buffer, contentStart, closing.start)
+          : readLargeSimpleCellValueFromTextRange(this.buffer, rawValueRange, cellType, this.sharedStrings)
         : hasElement(this.buffer, contentStart, closing.start, 'v') || hasElement(this.buffer, contentStart, closing.start, 'is')
           ? null
           : undefined
@@ -409,7 +417,7 @@ class LargeSimpleWorksheetChunkScanner {
       }
       const richTextCell =
         this.retainCells && !deferSharedStringValue
-          ? readRichTextCellArtifact(this.buffer, contentStart, closing.start, row, column, cellType, rawValue, this.sharedStrings)
+          ? readRichTextCellArtifact(this.buffer, contentStart, closing.start, row, column, cellType, sharedStringIndex, this.sharedStrings)
           : undefined
       if (richTextCell) {
         this.richTextCells.push(richTextCell)
@@ -531,51 +539,9 @@ class LargeSimpleWorksheetChunkScanner {
   }
 }
 
-function readCellValue(
-  bytes: Uint8Array,
-  contentStart: number,
-  contentEnd: number,
-  type: string | null,
-  rawValue: string | null,
-  sharedStrings: readonly LargeSimpleSharedStringEntry[],
-): LiteralInput | undefined {
-  switch (type) {
-    case null:
-      break
-    case 's': {
-      const index = rawValue === null ? -1 : Number(decodeXmlText(rawValue.trim()))
-      return Number.isSafeInteger(index) && index >= 0 ? sharedStrings[index]?.text : undefined
-    }
-    case 'inlineStr': {
-      const inlineStringXml = readElementXml(bytes, contentStart, contentEnd, 'is')
-      return inlineStringXml ? stringItemText(inlineStringXml) : undefined
-    }
-    case 'str':
-      return rawValue === null ? undefined : normalizeWorksheetText(decodeXmlText(rawValue))
-    case 'b': {
-      const normalized = rawValue?.trim()
-      return normalized === '1' || normalized === 'true' ? true : normalized === '0' || normalized === 'false' ? false : undefined
-    }
-    case 'e':
-      return rawValue === null ? undefined : decodeXmlText(rawValue)
-    case 'd':
-      return undefined
-    default:
-      return undefined
-  }
-  if (rawValue === null) {
-    return undefined
-  }
-  const number = Number(decodeXmlText(rawValue).trim())
-  return Number.isFinite(number) ? number : undefined
-}
-
-function readSharedStringIndex(rawValue: string | null): number | null {
-  if (rawValue === null) {
-    return null
-  }
-  const index = Number(decodeXmlText(rawValue.trim()))
-  return Number.isSafeInteger(index) && index >= 0 ? index : null
+function readInlineStringCellValue(bytes: Uint8Array, contentStart: number, contentEnd: number): string | undefined {
+  const inlineStringXml = readElementXml(bytes, contentStart, contentEnd, 'is')
+  return inlineStringXml ? stringItemText(inlineStringXml) : undefined
 }
 
 function readFormulaSpec(
@@ -614,12 +580,11 @@ function readRichTextCellArtifact(
   row: number,
   column: number,
   type: string | null,
-  rawValue: string | null,
+  sharedStringIndex: number | null,
   sharedStrings: readonly LargeSimpleSharedStringEntry[],
 ): WorkbookRichTextCellSnapshot | undefined {
   if (type === 's') {
-    const index = rawValue === null ? -1 : Number(decodeXmlText(rawValue.trim()))
-    const entry = Number.isSafeInteger(index) && index >= 0 ? sharedStrings[index] : undefined
+    const entry = sharedStringIndex === null ? undefined : sharedStrings[sharedStringIndex]
     return entry?.rich
       ? {
           address: encodeCellAddress(row, column),
@@ -716,7 +681,12 @@ function isSelfClosingTag(bytes: Uint8Array, tagEnd: number): boolean {
   return bytes[index] === slash
 }
 
-function readElementText(bytes: Uint8Array, startIndex: number, endIndex: number, elementName: string): string | null {
+function readElementTextRange(
+  bytes: Uint8Array,
+  startIndex: number,
+  endIndex: number,
+  elementName: string,
+): LargeSimpleXmlTextRange | null {
   const tag = findNextOpeningTag(bytes, startIndex, elementName, endIndex)
   if (!tag) {
     return null
@@ -726,7 +696,7 @@ function readElementText(bytes: Uint8Array, startIndex: number, endIndex: number
     return null
   }
   const closing = findClosingTag(bytes, tagEnd + 1, elementName, endIndex)
-  return closing ? decodeBytes(bytes, tagEnd + 1, closing.start) : null
+  return closing ? { start: tagEnd + 1, end: closing.start } : null
 }
 
 function readElementXml(bytes: Uint8Array, startIndex: number, endIndex: number, elementName: string): string | null {

@@ -25,6 +25,24 @@ describe('large simple worksheet stream scanners', () => {
     ])
   })
 
+  it('preserves streamed scalar and shared-string values when parsing value byte ranges', () => {
+    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(scalarWorksheetXml()), 0, {
+      hasSharedStrings: true,
+      sharedStrings: [{ text: 'Shared label', rich: false }],
+    })
+
+    expect(scan?.cellScan.arena.materializeSheetCells(0)).toEqual([
+      { address: 'A1', value: 42 },
+      { address: 'B1', value: -7 },
+      { address: 'C1', value: Number('0.12345678901234568') },
+      { address: 'D1', value: Number('1.25E-7') },
+      { address: 'E1', value: true },
+      { address: 'F1', value: false },
+      { address: 'G1', value: '#DIV/0!' },
+      { address: 'H1', value: 'Shared label' },
+    ])
+  })
+
   it('collects exact worksheet metadata records without retaining metadata XML', () => {
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(metadataWorksheetXml()), 0, {
       hasSharedStrings: false,
@@ -157,6 +175,24 @@ function worksheetXml(): string {
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
     '<dimension ref="A1:B1"/>',
     '<sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row></sheetData>',
+    '</worksheet>',
+  ].join('')
+}
+
+function scalarWorksheetXml(): string {
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1:H1"/>',
+    '<sheetData><row r="1">',
+    '<c r="A1"><v>42</v></c>',
+    '<c r="B1"><v> -7 </v></c>',
+    '<c r="C1"><v>0.12345678901234568</v></c>',
+    '<c r="D1"><v>1.25E-7</v></c>',
+    '<c r="E1" t="b"><v>true</v></c>',
+    '<c r="F1" t="b"><v>0</v></c>',
+    '<c r="G1" t="e"><v>#DIV/0!</v></c>',
+    '<c r="H1" t="s"><v>0</v></c>',
+    '</row></sheetData>',
     '</worksheet>',
   ].join('')
 }
