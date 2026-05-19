@@ -13,7 +13,7 @@ import {
   readImportedSheetConditionalFormatArtifactsFromWorksheetXml,
   readImportedSheetConditionalFormatsFromWorksheetXml,
 } from './xlsx-conditional-formats.js'
-import { readImportedWorkbookDrawingArtifacts } from './xlsx-drawing-artifacts.js'
+import { readImportedWorkbookDrawingArtifactsFromWorksheetRelationships } from './xlsx-drawing-artifacts.js'
 import { readImportedSheetAutoFilters } from './xlsx-filters.js'
 import { readLargeSimpleSheetHyperlinks } from './xlsx-large-simple-hyperlinks.js'
 import { LargeSimpleXlsxImportPhaseRecorder, type LargeSimpleXlsxImportPhaseTelemetry } from './xlsx-large-simple-import-telemetry.js'
@@ -37,6 +37,7 @@ import {
 import { parseLargeSimpleWorksheetCellsFromChunks } from './xlsx-large-simple-worksheet-stream-scanner.js'
 import {
   readLargeSimpleColumnMetadata,
+  readLargeSimpleDrawingRelationshipId,
   readLargeSimpleMergeRanges,
   readLargeSimpleRowMetadata,
   readLargeSimpleSheetFormatPr,
@@ -197,13 +198,6 @@ export function tryImportLargeSimpleXlsx(
   const workbookName = normalizeWorkbookName(fileName)
   const warnings = workbookDefinedNames.ignoredCount > 0 ? ['Some defined names were ignored during XLSX import.'] : []
   const hasDrawingParts = packagePaths.some((path) => path.startsWith('xl/drawings/') || path.startsWith('xl/media/'))
-  const importedDrawingArtifacts =
-    materializeCells && hasDrawingParts
-      ? readImportedWorkbookDrawingArtifacts(
-          zip,
-          workbookSheets.map((entry) => entry.name),
-        )
-      : null
   phaseRecorder.finish('zip-setup', zipSetupStart)
   const importedTables: WorkbookTableSnapshot[] = []
   const sheets: WorkbookSnapshot['sheets'] = []
@@ -291,7 +285,6 @@ export function tryImportLargeSimpleXlsx(
     const needsWorksheetXml =
       materializeMetadata &&
       (streamedWorksheetXml !== undefined || (worksheetBytes ? needsLargeSimpleWorksheetMetadataXml(worksheetBytes) : false))
-    const drawingArtifacts = importedDrawingArtifacts?.sheetArtifactsByName.get(entry.name)
     if (needsWorksheetXml) {
       worksheetXml = streamedWorksheetXml ?? (worksheetBytes ? readLargeSimpleWorksheetMetadataXml(worksheetBytes) : undefined)
       if (!worksheetXml) {
@@ -321,7 +314,6 @@ export function tryImportLargeSimpleXlsx(
           ? readImportedSheetConditionalFormatArtifactsFromWorksheetXml(worksheetXml)
           : undefined
         metadataInput = {
-          ...(drawingArtifacts ? { drawingArtifacts } : {}),
           ...(hyperlinks ? { hyperlinks } : {}),
           ...(filters.length > 0 ? { filters } : {}),
           ...(conditionalFormats ? { conditionalFormats } : {}),
@@ -331,8 +323,6 @@ export function tryImportLargeSimpleXlsx(
       } else {
         metadataInput = conditionalFormats ? { conditionalFormats } : {}
       }
-    } else if (drawingArtifacts) {
-      metadataInput = { drawingArtifacts }
     }
     worksheetBytes = undefined
     scannedWorksheets.push({
@@ -364,6 +354,9 @@ export function tryImportLargeSimpleXlsx(
       scanned.cellScan.richTextCells.push(...resolvedRichTextCells)
     }
   }
+  referencedSharedStringIndexes.clear()
+  fallbackSharedStrings = null
+  sharedStrings = []
   phaseRecorder.finish('shared-string-resolution', sharedStringResolutionStart)
   const styleParsingStart = phaseRecorder.start()
   const requiredStyleIndexes = new Set<number>()
@@ -380,8 +373,23 @@ export function tryImportLargeSimpleXlsx(
   if (stylesByIndex === null) {
     return null
   }
+  requiredStyleIndexes.clear()
   delete zip[stylesPath]
   phaseRecorder.finish('style-parsing', styleParsingStart)
+  const importedDrawingArtifacts =
+    materializeCells && hasDrawingParts
+      ? readImportedWorkbookDrawingArtifactsFromWorksheetRelationships(
+          zip,
+          scannedWorksheets.map((scanned) => {
+            const drawingRelationshipId = drawingRelationshipIdForScannedWorksheet(scanned)
+            return {
+              name: scanned.name,
+              path: worksheetEntries[scanned.order]?.path ?? '',
+              ...(drawingRelationshipId ? { drawingRelationshipId } : {}),
+            }
+          }),
+        )
+      : null
   if (options.releaseZipSource === true) {
     const zipSourceReleaseStart = phaseRecorder.start()
     releaseLazyXlsxZipSource(zip)
@@ -389,13 +397,17 @@ export function tryImportLargeSimpleXlsx(
   }
   for (const scanned of scannedWorksheets) {
     const snapshotMaterializationStart = phaseRecorder.start()
+    const drawingArtifacts = importedDrawingArtifacts?.sheetArtifactsByName.get(scanned.name)
     const parsed = buildParsedWorksheet(
       scanned.name,
       scanned.order,
       scanned.cellScan,
       scanned.worksheetXml,
       scanned.metadataScan,
-      scanned.metadataInput,
+      {
+        ...scanned.metadataInput,
+        ...(drawingArtifacts ? { drawingArtifacts } : {}),
+      },
       {
         materializeCells,
         releaseArenaAfterMaterialization: options.releaseArenaAfterMaterialization !== false,
@@ -549,6 +561,13 @@ function buildParsedWorksheet(
     cellScan.styleIndexes.release()
   }
   return parsed
+}
+
+function drawingRelationshipIdForScannedWorksheet(scanned: ScannedWorksheet): string | undefined {
+  return (
+    scanned.metadataScan?.drawingRelationshipId ??
+    (scanned.worksheetXml ? readLargeSimpleDrawingRelationshipId(scanned.worksheetXml) : undefined)
+  )
 }
 
 function readConditionalFormattingBlockCount(worksheetXml: string): number {

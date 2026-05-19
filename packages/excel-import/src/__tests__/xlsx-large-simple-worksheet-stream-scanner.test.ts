@@ -49,6 +49,7 @@ describe('large simple worksheet stream scanners', () => {
           },
         ],
       },
+      drawingRelationshipId: 'rIdDrawing1',
       rows: {
         entries: [{ id: 'row:1', index: 1, size: 24, hidden: true }],
         metadata: [
@@ -112,6 +113,7 @@ function metadataWorksheetXml(): string {
     '</row>',
     '</sheetData>',
     '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
+    '<drawing r:id="rIdDrawing1"/>',
     '</worksheet>',
   ].join('')
 }

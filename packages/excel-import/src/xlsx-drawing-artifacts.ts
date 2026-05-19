@@ -385,16 +385,39 @@ export function readImportedWorkbookDrawingArtifacts(
   readonly sheetArtifactsByName: Map<string, WorkbookSheetDrawingArtifactsSnapshot>
 } {
   const zip = readXlsxZipEntries(source)
+  return readImportedWorkbookDrawingArtifactsFromWorksheetRelationships(
+    zip,
+    sheetNames.map((sheetName, sheetIndex) => {
+      const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
+      return {
+        name: sheetName,
+        path: sheetPath,
+        drawingRelationshipId: readWorksheetDrawingRelationshipId(getZipText(zip, sheetPath)),
+      }
+    }),
+  )
+}
+
+export function readImportedWorkbookDrawingArtifactsFromWorksheetRelationships(
+  source: XlsxZipSource,
+  worksheets: readonly {
+    readonly name: string
+    readonly path: string
+    readonly drawingRelationshipId?: string | null
+  }[],
+): {
+  readonly artifacts: WorkbookDrawingArtifactsSnapshot | undefined
+  readonly sheetArtifactsByName: Map<string, WorkbookSheetDrawingArtifactsSnapshot>
+} {
+  const zip = readXlsxZipEntries(source)
   const sheetArtifactsByName = new Map<string, WorkbookSheetDrawingArtifactsSnapshot>()
   const partPaths = new Set<string>()
 
-  sheetNames.forEach((sheetName, sheetIndex) => {
-    const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
-    const relationshipId = readWorksheetDrawingRelationshipId(getZipText(zip, sheetPath))
+  worksheets.forEach(({ name: sheetName, path: sheetPath, drawingRelationshipId: relationshipId }) => {
     if (!relationshipId) {
       return
     }
-    const sheetRelationships = parseRelationships(getZipText(zip, `xl/worksheets/_rels/sheet${String(sheetIndex + 1)}.xml.rels`))
+    const sheetRelationships = parseRelationships(getZipText(zip, worksheetRelationshipsPath(sheetPath)))
     const drawingRelationship = sheetRelationships.find(
       (relationship) => relationship.id === relationshipId && relationship.type === worksheetDrawingRelationshipType,
     )
@@ -450,6 +473,13 @@ export function readImportedWorkbookDrawingArtifacts(
     },
     sheetArtifactsByName,
   }
+}
+
+function worksheetRelationshipsPath(worksheetPath: string): string {
+  const normalizedPath = normalizeZipPath(worksheetPath)
+  const directory = normalizedPath.slice(0, normalizedPath.lastIndexOf('/'))
+  const fileName = normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
+  return `${directory}/_rels/${fileName}.rels`
 }
 
 export function addExportDrawingArtifactsToXlsxBytes(bytes: Uint8Array, snapshot: WorkbookSnapshot): Uint8Array {

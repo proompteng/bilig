@@ -66,6 +66,7 @@ function tryVerifyCompactLargeSimpleArtifact(
   const zip = readXlsxZipEntriesLazy(bytes)
   writeWorkerPhase('import-xlsx')
   const imported = tryInspectLargeSimpleXlsxHeadless(bytes, artifact.fileName, zip, {
+    afterWorksheetScan: collectGarbage,
     minByteLength: 0,
     releaseZipSource: true,
   })
@@ -184,6 +185,17 @@ function sha256Hex(bytes: Uint8Array): string {
 
 function isZipWorkbook(bytes: Uint8Array): boolean {
   return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04
+}
+
+function collectGarbage(): void {
+  if (typeof Bun !== 'undefined' && typeof Bun.gc === 'function') {
+    Bun.gc(true)
+    return
+  }
+  const gc = Reflect.get(globalThis, 'gc')
+  if (typeof gc === 'function') {
+    gc()
+  }
 }
 
 function roundTripWouldBeResourceSkipped(artifact: PublicWorkbookArtifact, featureCounts: PublicWorkbookFeatureCounts): boolean {

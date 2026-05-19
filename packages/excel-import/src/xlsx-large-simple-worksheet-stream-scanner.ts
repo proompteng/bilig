@@ -14,6 +14,7 @@ import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 import {
   appendLargeSimpleRowMetadataTag,
   readLargeSimpleColumnMetadata,
+  readLargeSimpleDrawingRelationshipIdTag,
   readLargeSimpleMergeRefs,
   readLargeSimpleSheetFormatPrTag,
   type LargeSimpleWorksheetMergeRef,
@@ -61,8 +62,6 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     readonly hasSharedStrings: boolean
     readonly retainCells?: boolean
     readonly sharedStrings?: readonly LargeSimpleSharedStringEntry[]
-    readonly collectSharedStringIndexes?: boolean
-    readonly allowInlineStringsWithoutRetention?: boolean
     readonly deferSharedStrings?: boolean
     readonly retainMetadataXml?: boolean
   },
@@ -71,8 +70,6 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     hasSharedStrings: options.hasSharedStrings,
     retainCells: options.retainCells !== false,
     sharedStrings: options.sharedStrings ?? [],
-    collectSharedStringIndexes: options.collectSharedStringIndexes === true,
-    allowInlineStringsWithoutRetention: options.allowInlineStringsWithoutRetention === true,
     deferSharedStrings: options.deferSharedStrings === true,
     retainMetadataXml: options.retainMetadataXml !== false,
   })
@@ -105,6 +102,7 @@ class LargeSimpleWorksheetChunkScanner {
   private maxColumn = -1
   private columnEntries: WorkbookAxisEntrySnapshot[] | undefined
   private columnMetadata: WorkbookAxisMetadataSnapshot[] | undefined
+  private drawingRelationshipId: string | undefined
   private rowEntries: WorkbookAxisEntrySnapshot[] | undefined
   private rowMetadata: WorkbookAxisMetadataSnapshot[] | undefined
   private mergeRefs: LargeSimpleWorksheetMergeRef[] | undefined
@@ -113,8 +111,6 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly hasSharedStrings: boolean
   private readonly retainCells: boolean
   private readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
-  private readonly collectSharedStringIndexes: boolean
-  private readonly allowInlineStringsWithoutRetention: boolean
   private readonly deferSharedStrings: boolean
   private readonly retainMetadataXml: boolean
   private readonly sharedStringIndexes = new Set<number>()
@@ -125,8 +121,6 @@ class LargeSimpleWorksheetChunkScanner {
       readonly hasSharedStrings: boolean
       readonly retainCells: boolean
       readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
-      readonly collectSharedStringIndexes: boolean
-      readonly allowInlineStringsWithoutRetention: boolean
       readonly deferSharedStrings: boolean
       readonly retainMetadataXml: boolean
     },
@@ -134,8 +128,6 @@ class LargeSimpleWorksheetChunkScanner {
     this.hasSharedStrings = options.hasSharedStrings
     this.retainCells = options.retainCells
     this.sharedStrings = options.sharedStrings
-    this.collectSharedStringIndexes = options.collectSharedStringIndexes
-    this.allowInlineStringsWithoutRetention = options.allowInlineStringsWithoutRetention
     this.deferSharedStrings = options.deferSharedStrings
     this.retainMetadataXml = options.retainMetadataXml
   }
@@ -227,6 +219,7 @@ class LargeSimpleWorksheetChunkScanner {
         : undefined
     const metadata: LargeSimpleWorksheetScannedMetadata = {
       ...(columns ? { columns } : {}),
+      ...(this.drawingRelationshipId ? { drawingRelationshipId: this.drawingRelationshipId } : {}),
       ...(rows ? { rows } : {}),
       ...(this.mergeRefs && this.mergeRefs.length > 0 ? { merges: this.mergeRefs } : {}),
       ...(this.sheetFormatPr ? { sheetFormatPr: this.sheetFormatPr } : {}),
@@ -337,15 +330,12 @@ class LargeSimpleWorksheetChunkScanner {
     const row = packedAddressRow(packedAddress)
     const column = packedAddressColumn(packedAddress)
     const cellType = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 't')
-    if (
-      (!this.hasSharedStrings && cellType === 's') ||
-      (!this.retainCells && cellType === 'inlineStr' && !this.allowInlineStringsWithoutRetention)
-    ) {
+    if ((!this.hasSharedStrings && cellType === 's') || (!this.retainCells && cellType === 'inlineStr')) {
       this.failed = true
       return false
     }
     const styleIndex = readCellStyleIndexFromTag(this.buffer, nameEnd, tagEnd)
-    const shouldReadSharedStringIndex = cellType === 's' && (this.retainCells || this.collectSharedStringIndexes || this.deferSharedStrings)
+    const shouldReadSharedStringIndex = cellType === 's' && (this.retainCells || this.deferSharedStrings)
     const rawValue = this.retainCells || shouldReadSharedStringIndex ? readElementText(this.buffer, contentStart, closing.start, 'v') : null
     const sharedStringIndex = shouldReadSharedStringIndex ? readSharedStringIndex(rawValue) : null
     if (shouldReadSharedStringIndex && rawValue !== null) {
@@ -353,7 +343,7 @@ class LargeSimpleWorksheetChunkScanner {
         this.failed = true
         return false
       }
-      if (this.collectSharedStringIndexes || this.deferSharedStrings) {
+      if (this.deferSharedStrings) {
         this.sharedStringIndexes.add(sharedStringIndex)
       }
     }
@@ -476,6 +466,10 @@ class LargeSimpleWorksheetChunkScanner {
     }
     if (localName === 'sheetFormatPr') {
       this.sheetFormatPr = readLargeSimpleSheetFormatPrTag(decodeBytes(this.buffer, startIndex, endIndex)) ?? this.sheetFormatPr
+      return true
+    }
+    if (localName === 'drawing') {
+      this.drawingRelationshipId = readLargeSimpleDrawingRelationshipIdTag(decodeBytes(this.buffer, startIndex, endIndex))
       return true
     }
     return false

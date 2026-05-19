@@ -43,7 +43,11 @@ export function tryInspectLargeSimpleXlsxHeadless(
   data: Uint8Array,
   fileName: string,
   zip: XlsxZipEntries,
-  options: { readonly minByteLength?: number; readonly releaseZipSource?: boolean } = {},
+  options: {
+    readonly afterWorksheetScan?: () => void
+    readonly minByteLength?: number
+    readonly releaseZipSource?: boolean
+  } = {},
 ): LargeSimpleXlsxHeadlessInspectResult | null {
   if (data.byteLength < (options.minByteLength ?? defaultLargeSimpleXlsxByteThreshold)) {
     return null
@@ -111,6 +115,7 @@ export function tryInspectLargeSimpleXlsxHeadless(
       nonEmptyCellCount: scan.cellCount,
       usedRange: scan.usedRange,
     })
+    options.afterWorksheetScan?.()
     phaseRecorder.finish('worksheet-scan', worksheetScanStart)
   }
   delete zip[sharedStringsPath]

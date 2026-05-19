@@ -484,7 +484,16 @@ describe('large simple XLSX import fast path', () => {
       },
     })
 
-    const imported = tryImportLargeSimpleXlsx(bytes, 'hyperlinks-drawing.xlsx', unzipSync(bytes), { minByteLength: 0 })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('drawing metadata should use the streamed worksheet relationship id instead of inflating worksheet XML')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'hyperlinks-drawing.xlsx', zip, { minByteLength: 0 })
 
     expect(imported?.snapshot.sheets[0]?.metadata?.hyperlinks).toEqual([
       { sheetName: 'Data', address: 'A1', target: 'https://example.com/report', tooltip: 'Open report', display: 'Report' },

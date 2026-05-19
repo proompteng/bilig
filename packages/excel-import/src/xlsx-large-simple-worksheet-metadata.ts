@@ -19,6 +19,7 @@ export interface LargeSimpleWorksheetMergeRef {
 
 export interface LargeSimpleWorksheetScannedMetadata {
   readonly columns?: LargeSimpleWorksheetAxisMetadata
+  readonly drawingRelationshipId?: string
   readonly rows?: LargeSimpleWorksheetAxisMetadata
   readonly merges?: readonly LargeSimpleWorksheetMergeRef[]
   readonly sheetFormatPr?: WorkbookSheetFormatPrSnapshot
@@ -284,6 +285,15 @@ export function readLargeSimpleSheetFormatPrTag(tag: string): WorkbookSheetForma
     ...(readOptionalBooleanAttribute(tag, 'thickBottom') !== null ? { thickBottom: readOptionalBooleanAttribute(tag, 'thickBottom') } : {}),
   }
   return Object.keys(output).length > 0 ? output : undefined
+}
+
+export function readLargeSimpleDrawingRelationshipIdTag(tag: string): string | undefined {
+  return readXmlAttribute(tag, 'r:id') ?? readXmlAttribute(tag, 'id') ?? undefined
+}
+
+export function readLargeSimpleDrawingRelationshipId(worksheetXml: string): string | undefined {
+  const tag = /<(?:[A-Za-z_][\w.-]*:)?drawing\b(?:[^>"']|"[^"]*"|'[^']*')*(?:\/>|>)/u.exec(worksheetXml)?.[0]
+  return tag ? readLargeSimpleDrawingRelationshipIdTag(tag) : undefined
 }
 
 function readXmlAttribute(xml: string, attributeName: string): string | null {
