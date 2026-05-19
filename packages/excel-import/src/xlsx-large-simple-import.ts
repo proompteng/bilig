@@ -223,6 +223,7 @@ export function tryImportLargeSimpleXlsx(
     const worksheetScanStart = phaseRecorder.start()
     let streamedWorksheetXml: string | undefined
     let streamedMetadataScan: LargeSimpleWorksheetScannedMetadata | undefined
+    let retainedMetadataScan: LargeSimpleWorksheetScannedMetadata | undefined
     let cellScan: ImportedWorksheetCellScan | null = null
     if (!materializeCells && !materializeMetadata) {
       const headless = parseHeadlessLargeSimpleWorksheetFromChunks(
@@ -282,6 +283,7 @@ export function tryImportLargeSimpleXlsx(
     if (!cellScan) {
       return null
     }
+    retainedMetadataScan = streamedMetadataScan
     if (materializeCells && cellScan.blankStyleCellCount > 0 && cellScan.blankStyleCellCount <= maxPreservedBlankStyleCellCount) {
       return null
     }
@@ -354,6 +356,7 @@ export function tryImportLargeSimpleXlsx(
         ...(conditionalFormats ? { conditionalFormats } : {}),
         ...(conditionalFormatArtifacts ? { conditionalFormatArtifacts } : {}),
       }
+      retainedMetadataScan = withoutConditionalFormattingXml(streamedMetadataScan)
     }
     if (materializeMetadata && streamedMetadataScan?.tableRelationshipIds && streamedMetadataScan.tableRelationshipIds.length > 0) {
       const sheetTables = readImportedSheetTablesFromRelationshipIds(zip, entry.name, entry.path, streamedMetadataScan.tableRelationshipIds)
@@ -388,7 +391,7 @@ export function tryImportLargeSimpleXlsx(
       phaseRecorder.finish('metadata-parsing', metadataParsingStart)
       const snapshotMaterializationStart = phaseRecorder.start()
       appendParsedWorksheet(
-        buildParsedWorksheet(entry.name, order, cellScan, worksheetXml, streamedMetadataScan, metadataInput, {
+        buildParsedWorksheet(entry.name, order, cellScan, worksheetXml, retainedMetadataScan, metadataInput, {
           materializeCells,
           releaseArenaAfterMaterialization: options.releaseArenaAfterMaterialization !== false,
           styleCatalog,
@@ -403,7 +406,7 @@ export function tryImportLargeSimpleXlsx(
       order,
       cellScan,
       worksheetXml,
-      metadataScan: streamedMetadataScan,
+      metadataScan: retainedMetadataScan,
       metadataInput,
     })
     phaseRecorder.finish('metadata-parsing', metadataParsingStart)
@@ -543,6 +546,16 @@ export function tryImportLargeSimpleXlsx(
     }),
     stats,
   }
+}
+
+function withoutConditionalFormattingXml(
+  metadata: LargeSimpleWorksheetScannedMetadata | undefined,
+): LargeSimpleWorksheetScannedMetadata | undefined {
+  if (!metadata?.conditionalFormattingXml) {
+    return metadata
+  }
+  const { conditionalFormattingXml: _released, ...retained } = metadata
+  return Object.keys(retained).length > 0 ? retained : undefined
 }
 
 function buildParsedWorksheet(

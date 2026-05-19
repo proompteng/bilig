@@ -44,6 +44,18 @@ describe('xlsx conditional format roundtrip', () => {
     expect(exportedSheetXml).toContain('<cfRule type="iconSet" priority="3">')
     expect(exportedSheetXml.match(/<conditionalFormatting\b/gu)).toHaveLength(3)
   })
+
+  it('rebuilds simple no-style conditional-format rules without retaining raw artifacts', () => {
+    const imported = importXlsx(buildSimpleConditionalFormattingWorkbook(), 'simple-conditional-format.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.metadata?.conditionalFormats).toHaveLength(1)
+    expect(imported.snapshot.sheets[0]?.metadata?.conditionalFormatArtifacts).toBeUndefined()
+
+    const exportedSheetXml = strFromU8(unzipSync(exportXlsx(imported.snapshot))['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    expect(exportedSheetXml).toContain(
+      '<conditionalFormatting sqref="A1:A2"><cfRule type="cellIs" priority="1" operator="greaterThan"><formula>3</formula></cfRule></conditionalFormatting>',
+    )
+  })
 })
 
 function buildConditionalFormattingWorkbook(): Uint8Array {
@@ -68,6 +80,25 @@ function buildAdvancedConditionalFormattingWorkbook(): Uint8Array {
 
   const zip = unzipSync(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }))
   zip['xl/worksheets/sheet1.xml'] = strToU8(advancedConditionalFormattingWorksheetXml)
+  return zipSync(zip)
+}
+
+function buildSimpleConditionalFormattingWorkbook(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([[7], [1]])
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Checks')
+
+  const zip = unzipSync(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }))
+  zip['xl/worksheets/sheet1.xml'] = strToU8(
+    [
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+      '<dimension ref="A1:A2"/>',
+      '<sheetData><row r="1"><c r="A1"><v>7</v></c></row><row r="2"><c r="A2"><v>1</v></c></row></sheetData>',
+      '<conditionalFormatting sqref="A1:A2"><cfRule type="cellIs" priority="1" operator="greaterThan"><formula>3</formula></cfRule></conditionalFormatting>',
+      '</worksheet>',
+    ].join(''),
+  )
   return zipSync(zip)
 }
 

@@ -639,6 +639,48 @@ export function readImportedSheetConditionalFormatArtifactsFromWorksheetXml(
 export function readImportedSheetConditionalFormatArtifactsFromElementXml(
   conditionalFormattingXml: readonly string[],
 ): WorkbookSheetConditionalFormatArtifactsSnapshot | undefined {
-  const xml = conditionalFormattingXml.join('')
+  const xml = conditionalFormattingXml.filter(needsConditionalFormatArtifactXml).join('')
   return xml.length > 0 ? { xml } : undefined
+}
+
+function needsConditionalFormatArtifactXml(conditionalFormattingXml: string): boolean {
+  let parsed: unknown
+  try {
+    parsed = xmlParser.parse(`<worksheet>${conditionalFormattingXml}</worksheet>`)
+  } catch {
+    return true
+  }
+  const conditionalFormatting = recordChild(parsed, 'worksheet')?.['conditionalFormatting']
+  if (!isRecord(conditionalFormatting) || typeof conditionalFormatting['sqref'] !== 'string') {
+    return true
+  }
+  const supportedConditionalFormattingKeys = new Set(['sqref', 'cfRule'])
+  if (Object.keys(conditionalFormatting).some((key) => !supportedConditionalFormattingKeys.has(key))) {
+    return true
+  }
+  const rules = asArray(conditionalFormatting['cfRule'])
+  return rules.length === 0 || rules.some((rule) => !isFaithfullyTypedConditionalFormatRule(rule))
+}
+
+function isFaithfullyTypedConditionalFormatRule(rule: unknown): boolean {
+  if (!isRecord(rule) || rule['dxfId'] !== undefined || parseConditionalFormatRule(rule) === null) {
+    return false
+  }
+  const type = rule['type']
+  switch (type) {
+    case 'cellIs':
+      return hasOnlyConditionalFormatRuleKeys(rule, ['type', 'priority', 'stopIfTrue', 'operator', 'formula'])
+    case 'expression':
+      return hasOnlyConditionalFormatRuleKeys(rule, ['type', 'priority', 'stopIfTrue', 'formula'])
+    case 'containsBlanks':
+    case 'notContainsBlanks':
+      return hasOnlyConditionalFormatRuleKeys(rule, ['type', 'priority', 'stopIfTrue'])
+    default:
+      return false
+  }
+}
+
+function hasOnlyConditionalFormatRuleKeys(rule: Record<string, unknown>, keys: readonly string[]): boolean {
+  const supported = new Set(keys)
+  return Object.keys(rule).every((key) => supported.has(key))
 }
