@@ -1,7 +1,3 @@
 export * from './persistence.js'
 export * from './work-paper.js'
-export * from './work-paper-mcp-file-server.js'
-export * from './work-paper-mcp-json-rpc.js'
-export * from './work-paper-mcp-server.js'
-export * from './work-paper-mcp-stdio-server.js'
 export * from './work-paper-version.js'

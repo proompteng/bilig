@@ -61,6 +61,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
+    },
     "./xlsx": {
       "types": "./dist/xlsx.d.ts",
       "import": "./dist/xlsx.js"

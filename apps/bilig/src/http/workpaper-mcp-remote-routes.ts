@@ -1,14 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import { WORKPAPER_VERSION } from '@bilig/headless'
 import {
   WORKPAPER_MCP_PROTOCOL_VERSION,
   WORKPAPER_MCP_SUPPORTED_PROTOCOL_VERSIONS,
-  WORKPAPER_VERSION,
   buildDemoWorkPaper,
   createFileBackedWorkPaperMcpToolServer,
   createWorkPaperMcpJsonRpcError,
   dispatchWorkPaperMcpJsonRpc,
   isWorkPaperMcpProtocolVersion,
-} from '@bilig/headless'
+} from '@bilig/headless/mcp'
 
 const MCP_ENDPOINTS = ['/mcp', '/mcp/workpaper'] as const
 const MCP_ALLOWED_METHODS = 'POST, GET, DELETE, OPTIONS'

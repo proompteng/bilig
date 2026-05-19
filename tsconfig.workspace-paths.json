@@ -16,6 +16,7 @@
       "@bilig/formula/program-arena": ["./packages/formula/src/program-arena.ts"],
       "@bilig/grid": ["./packages/grid/src/index.ts"],
       "@bilig/headless": ["./packages/headless/src/index.ts"],
+      "@bilig/headless/mcp": ["./packages/headless/src/mcp.ts"],
       "@bilig/protocol": ["./packages/protocol/src/index.ts"],
       "@bilig/renderer": ["./packages/renderer/src/index.ts"],
       "@bilig/runtime-kernel": ["./packages/runtime-kernel/src/index.ts"],
