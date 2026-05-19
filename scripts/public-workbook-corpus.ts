@@ -22,6 +22,7 @@ import {
   defaultRecentComplexGithubRepositoryQueries,
   discoverRecentComplexGithubQueries,
 } from './public-workbook-corpus-github.ts'
+import { defaultRecentComplexZenodoQueries, discoverRecentComplexZenodoQueries } from './public-workbook-corpus-zenodo.ts'
 import {
   defaultDownloadTimeoutMs,
   defaultFetchBatchSize,
@@ -386,8 +387,30 @@ async function main(): Promise<void> {
         limit: readNumberArg('--limit', targetWorkbookCount),
         perPage: readNumberArg('--per-page', 50),
         maxPagesPerQuery: readNumberArg('--max-pages-per-query', 2),
+        maxRepositoryPagesPerQuery: readNumberArg('--max-repository-pages-per-query', 1),
         maxRepositoriesPerQuery: readNumberArg('--max-repositories-per-query', 20),
         githubToken: process.env['GITHUB_TOKEN'] ?? process.env['GH_TOKEN'] ?? null,
+        onQueryDiscovered: (partialManifest) => {
+          writeJson(manifestPath, partialManifest, 'public-workbook-corpus-manifest')
+        },
+      })
+      writeJson(manifestPath, manifest, 'public-workbook-corpus-manifest')
+    })
+    return
+  }
+  if (command === 'discover-recent-complex-zenodo') {
+    const queries = readRepeatedStringArg('--query')
+    assertPublicCorpusRunNotStopped({
+      commandName: 'public-workbook-corpus discover-recent-complex-zenodo',
+      stopMarkerPath: corpusRunStopMarkerPath,
+    })
+    await withPublicWorkbookCorpusCacheLock(cacheDir, 'discover-recent-complex-zenodo', async () => {
+      const manifest = await discoverRecentComplexZenodoQueries({
+        manifest: readOrCreateManifest(manifestPath, targetWorkbookCount),
+        queries: queries.length > 0 ? queries : defaultRecentComplexZenodoQueries,
+        limit: readNumberArg('--limit', targetWorkbookCount),
+        perPage: readNumberArg('--per-page', 50),
+        maxPagesPerQuery: readNumberArg('--max-pages-per-query', 2),
         onQueryDiscovered: (partialManifest) => {
           writeJson(manifestPath, partialManifest, 'public-workbook-corpus-manifest')
         },

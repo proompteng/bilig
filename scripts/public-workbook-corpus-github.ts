@@ -103,6 +103,7 @@ interface DiscoverGithubWorkbookSourcesArgs {
   readonly limit: number
   readonly perPage: number
   readonly maxPagesPerQuery: number
+  readonly maxRepositoryPagesPerQuery?: number
   readonly maxRepositoriesPerQuery?: number
   readonly githubToken?: string | null
   readonly discoveredAt?: string
@@ -227,11 +228,17 @@ async function discoverGithubRepositoryWorkbookSources(
   const existingSourceIds = new Set(args.manifest.sources.map((source) => source.id))
   const sources: PublicWorkbookSource[] = [...args.manifest.sources]
   const licenseCache = new Map<string, PublicWorkbookLicenseEvidence | null>()
-  const repositories = await fetchGithubRepositorySearchPage({
-    query: args.query,
-    perPage: args.maxRepositoriesPerQuery ?? args.perPage,
-    githubToken: args.githubToken,
-  })
+  const repositoryPages = await Promise.all(
+    Array.from({ length: Math.max(1, args.maxRepositoryPagesPerQuery ?? 1) }, (_, index) =>
+      fetchGithubRepositorySearchPage({
+        query: args.query,
+        page: index + 1,
+        perPage: args.maxRepositoriesPerQuery ?? args.perPage,
+        githubToken: args.githubToken,
+      }),
+    ),
+  )
+  const repositories = repositoryPages.flat()
   const repositorySourceBatches = await mapWithConcurrency(repositories, 2, (repository) =>
     readGithubRepositoryWorkbookSources({
       repository,
@@ -298,11 +305,13 @@ async function fetchGithubCodeSearchPage(args: {
 
 async function fetchGithubRepositorySearchPage(args: {
   readonly query: string
+  readonly page: number
   readonly perPage: number
   readonly githubToken?: string | null
 }): Promise<Record<string, unknown>[]> {
   const url = new URL('https://api.github.com/search/repositories')
   url.searchParams.set('q', args.query)
+  url.searchParams.set('page', String(Math.max(1, args.page)))
   url.searchParams.set('per_page', String(Math.max(1, Math.min(100, args.perPage))))
   try {
     const response = await fetchGithubJson(url, args.githubToken)

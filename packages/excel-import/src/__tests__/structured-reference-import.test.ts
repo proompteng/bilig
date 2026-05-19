@@ -366,6 +366,59 @@ describe('structured reference XLSX import', () => {
     expect(sheet?.cells.find((cell) => cell.address === 'D2')?.formula).toBe("'Sales'!B4")
   })
 
+  it('infers omitted table totals row flags from totals-row column formulas', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Omitted Totals Flag',
+        metadata: {
+          tables: [
+            {
+              name: 'PorosityTable',
+              sheetName: 'Porosity',
+              startAddress: 'A1',
+              endAddress: 'B4',
+              columnNames: ['Sample', 'Average Total Porosity'],
+              columns: [{ name: 'Sample' }, { name: 'Average Total Porosity', totalsRowFunction: 'custom' }],
+              headerRow: true,
+              totalsRow: true,
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Porosity',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 'Sample' },
+            { address: 'B1', value: 'Average Total Porosity' },
+            { address: 'A2', value: 'A' },
+            { address: 'B2', value: 0.25 },
+            { address: 'A3', value: 'B' },
+            { address: 'B3', value: 0.75 },
+            { address: 'A4', value: 'Average' },
+            { address: 'B4', formula: 'AVERAGE(PorosityTable[Average Total Porosity])' },
+          ],
+        },
+      ],
+    }
+
+    const imported = importXlsx(withOmittedTotalsRowShownAndCustomTotalFormula(exportXlsx(snapshot)), 'omitted-totals-flag.xlsx')
+    const table = imported.snapshot.workbook.metadata?.tables?.find((candidate) => candidate.name === 'PorosityTable')
+    const sheet = imported.snapshot.sheets.find((candidate) => candidate.name === 'Porosity')
+
+    expect(table?.totalsRow).toBe(true)
+    expect(sheet?.cells.find((cell) => cell.address === 'B4')?.formula).toBe("AVERAGE('Porosity'!B2:B3)")
+
+    const engine = new SpreadsheetEngine({ workbookName: 'omitted-totals-flag' })
+    await engine.ready()
+    engine.importSnapshot(imported.snapshot)
+
+    expect(engine.getCellValue('Porosity', 'B4')).toEqual({ tag: ValueTag.Number, value: 0.5 })
+  })
+
   it('preserves lowercase defined names and named ranges used by simulation formulas', async () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,
@@ -520,6 +573,21 @@ function withExcelEscapedTableColumnNames(bytes: Uint8Array): Uint8Array {
     tableXml
       .replace(/Number of(?:\r?\n|_x000a_) people inducted/giu, 'Number of_x000a_ people inducted')
       .replace(/Road show (?:\r?\n|_x000a_)visits/giu, 'Road show _x000a_visits'),
+  )
+  return zipSync(zip)
+}
+
+function withOmittedTotalsRowShownAndCustomTotalFormula(bytes: Uint8Array): Uint8Array {
+  const zip = unzipSync(bytes)
+  const tablePath = onlyTablePath(zip)
+  const tableXml = strFromU8(zip[tablePath] ?? new Uint8Array())
+  zip[tablePath] = strToU8(
+    tableXml
+      .replace(/\s+totalsRowShown="1"/u, '')
+      .replace(
+        '<tableColumn id="2" name="Average Total Porosity" totalsRowFunction="custom"/>',
+        '<tableColumn id="2" name="Average Total Porosity" totalsRowFunction="custom"><totalsRowFormula>AVERAGE(PorosityTable[Average Total Porosity])</totalsRowFormula></tableColumn>',
+      ),
   )
   return zipSync(zip)
 }

@@ -48,6 +48,7 @@ export interface PublicWorkbookCorpusRecentComplexSummary {
     readonly discover: string
     readonly discoverHdx: string
     readonly discoverGithub: string
+    readonly discoverZenodo: string
     readonly fetch: string
     readonly publicVerify: string
     readonly headlessVerify: string
@@ -490,8 +491,22 @@ function recentComplexCommands(
       '--limit',
       String(discoverySourceLimit),
       '--skip-code-search',
+      '--max-repository-pages-per-query',
+      '3',
       '--max-repositories-per-query',
       '20',
+    ]),
+    discoverZenodo: formatShellCommand([
+      'bun',
+      'scripts/public-workbook-corpus.ts',
+      'discover-recent-complex-zenodo',
+      ...sharedArgs,
+      '--limit',
+      String(discoverySourceLimit),
+      '--per-page',
+      '100',
+      '--max-pages-per-query',
+      '3',
     ]),
     fetch: formatShellCommand([
       'bun',
