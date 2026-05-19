@@ -3,6 +3,7 @@ import { parseCellAddress } from '@bilig/formula'
 import {
   MAX_COLS,
   MAX_ROWS,
+  ValueTag,
   type CellRangeRef,
   type CellSnapshot,
   type CellStyleField,
@@ -27,6 +28,9 @@ import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { normalizeWorkbookMergeRange } from './worker-runtime-support.js'
 import { buildLocalAxisWorkbookDelta, buildLocalCellSnapshotWorkbookDelta } from './projected-workbook-local-delta.js'
 import { ProjectedViewportPatchRevisionGate } from './projected-viewport-patch-revision-gate.js'
+import { normalizeViewportRange, ProjectedViewportRangeOverlayStore, viewportRangeCellCount } from './projected-viewport-range-overlay.js'
+import { createContentClearedOptimisticSnapshot } from './workbook-optimistic-range.js'
+import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from './workbook-optimistic-cell-flags.js'
 
 export interface ProjectedViewportStoreOptions {
   readonly maxCachedCellsPerSheet?: number
@@ -41,12 +45,14 @@ type CellItem = readonly [number, number]
 type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze' | 'merges'
 type SheetIdentity = { readonly sheetId: number; readonly sheetOrdinal: number }
 const DEFAULT_STYLE_ID = 'style-0'
+const MAX_MATERIALIZED_OPTIMISTIC_STYLE_CELLS = 512
 
 export class ProjectedViewportStore implements GridEngineLike {
   private readonly options: ProjectedViewportStoreOptions
   private readonly cellCache: ProjectedViewportCellCache
   private readonly axisStore: ProjectedViewportAxisStore
   private readonly patchCoordinator: ProjectedViewportPatchCoordinator
+  private readonly rangeOverlayStore: ProjectedViewportRangeOverlayStore
   private readonly patchRevisionGate = new ProjectedViewportPatchRevisionGate()
   private tileSceneStore: ProjectedTileSceneStore | null = null
   private readonly localWorkbookDeltaListeners = new Set<(batch: WorkbookDeltaBatchV3) => void>()
@@ -67,6 +73,19 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.options = options
     this.cellCache = new ProjectedViewportCellCache({
       maxCachedCellsPerSheet: this.options.maxCachedCellsPerSheet ?? DEFAULT_MAX_CACHED_CELLS_PER_SHEET,
+    })
+    this.rangeOverlayStore = new ProjectedViewportRangeOverlayStore({
+      deleteCellSnapshot: (sheetName, address) => {
+        this.cellCache.deleteCellSnapshot(sheetName, address)
+      },
+      forEachCachedOrVisibleCellSnapshotInRange: (range, listener) => {
+        this.cellCache.forEachCachedOrVisibleCellSnapshotInRange(range, listener)
+      },
+      getCell: (sheetName, address) => this.cellCache.getCell(sheetName, address),
+      hasCellSnapshot: (sheetName, address) => this.cellCache.hasCellSnapshot(sheetName, address),
+      setCellSnapshot: (snapshot) => {
+        this.setCellSnapshot(snapshot, { force: true, forceOptimistic: true })
+      },
     })
     this.axisStore = new ProjectedViewportAxisStore({
       markSheetKnown: (sheetName) => this.cellCache.markSheetKnown(sheetName),
@@ -108,7 +127,13 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   peekCell(sheetName: string, address: string): CellSnapshot | undefined {
-    return this.cellCache.peekCell(sheetName, address)
+    const snapshot = this.cellCache.peekCell(sheetName, address)
+    if (snapshot) {
+      return this.rangeOverlayStore.apply(sheetName, address, snapshot)
+    }
+    return this.rangeOverlayStore.hasOverlayForCell(sheetName, address)
+      ? this.rangeOverlayStore.apply(sheetName, address, this.cellCache.getCell(sheetName, address))
+      : undefined
   }
 
   getColumnWidths(sheetName: string): Readonly<Record<number, number>> {
@@ -144,7 +169,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
-    return this.cellCache.getCell(sheetName, address)
+    return this.rangeOverlayStore.apply(sheetName, address, this.cellCache.getCell(sheetName, address))
   }
 
   forEachCellSnapshotInRange(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void): void {
@@ -233,9 +258,14 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   clearOptimisticCellFlagsForSheet(sheetName: string): void {
+    this.rangeOverlayStore.dropSheets([sheetName])
     if (this.cellCache.clearOptimisticCellFlagsForSheet(sheetName)) {
       this.localRevision += 1
     }
+  }
+
+  beginOptimisticClearRange(range: CellRangeRef): (() => void) | null {
+    return this.rangeOverlayStore.register(range, createIdempotentContentClearedSnapshot)
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
@@ -334,6 +364,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     const removedSheets = this.cellCache.setKnownSheets(sheetNames)
     this.axisStore.dropSheets(removedSheets)
     this.tileSceneStore?.dropSheets(removedSheets)
+    this.rangeOverlayStore.dropSheets(removedSheets)
     removedSheets.forEach((sheetName) => {
       this.mergeRangesBySheet.delete(sheetName)
       this.sheetChannelListeners.delete(sheetName)
@@ -355,6 +386,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.cellCache.resetSheets(sheetNames)
     this.axisStore.dropSheets(sheetNames)
     this.tileSceneStore?.dropSheets(sheetNames)
+    this.rangeOverlayStore.dropSheets(sheetNames)
     sheetNames.forEach((sheetName) => {
       this.mergeRangesBySheet.delete(sheetName)
       this.notifySheetChannels(sheetName, ['columnWidths', 'rowHeights', 'hiddenColumns', 'hiddenRows', 'freeze', 'merges'])
@@ -371,12 +403,14 @@ export class ProjectedViewportStore implements GridEngineLike {
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
     options: { readonly initialPatch?: 'full' | 'none' } = {},
   ): () => void {
-    return this.patchCoordinator.subscribeViewport(
+    const unsubscribe = this.patchCoordinator.subscribeViewport(
       sheetName,
       viewport,
       listener,
       options.initialPatch === undefined ? {} : { initialPatch: options.initialPatch },
     )
+    this.rangeOverlayStore.materializeViewport(sheetName, viewport)
+    return unsubscribe
   }
 
   subscribeAuxiliaryViewport(
@@ -551,11 +585,12 @@ export class ProjectedViewportStore implements GridEngineLike {
     range: CellRangeRef,
     mutateStyle: (baseStyle: CellStyleRecord) => Omit<CellStyleRecord, 'id'>,
   ): (() => void) | null {
+    if (viewportRangeCellCount(normalizeViewportRange(range)) > MAX_MATERIALIZED_OPTIMISTIC_STYLE_CELLS) {
+      return this.rangeOverlayStore.register(range, (snapshot) => this.applyStyleMutationToSnapshot(snapshot, mutateStyle))
+    }
     const previousSnapshots: Array<{ readonly existed: boolean; readonly snapshot: CellSnapshot }> = []
     this.cellCache.forEachCachedOrVisibleCellSnapshotInRange(range, (snapshot) => {
-      const baseStyle = this.cellCache.getCellStyle(snapshot.styleId) ?? { id: DEFAULT_STYLE_ID }
-      const nextStyle = this.internLocalCellStyle(mutateStyle(baseStyle))
-      const nextSnapshot = nextStyle.id === DEFAULT_STYLE_ID ? omitSnapshotStyleId(snapshot) : { ...snapshot, styleId: nextStyle.id }
+      const nextSnapshot = this.applyStyleMutationToSnapshot(snapshot, mutateStyle)
       if (snapshotStyleId(snapshot) === snapshotStyleId(nextSnapshot)) {
         return
       }
@@ -586,10 +621,31 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.cellCache.upsertCellStyle(record)
     return record
   }
+
+  private applyStyleMutationToSnapshot(
+    snapshot: CellSnapshot,
+    mutateStyle: (baseStyle: CellStyleRecord) => Omit<CellStyleRecord, 'id'>,
+  ): CellSnapshot {
+    const baseStyle = this.cellCache.getCellStyle(snapshot.styleId) ?? { id: DEFAULT_STYLE_ID }
+    const nextStyle = this.internLocalCellStyle(mutateStyle(baseStyle))
+    return nextStyle.id === DEFAULT_STYLE_ID ? omitSnapshotStyleId(snapshot) : { ...snapshot, styleId: nextStyle.id }
+  }
 }
 
 function snapshotStyleId(snapshot: CellSnapshot): string {
   return snapshot.styleId ?? DEFAULT_STYLE_ID
+}
+
+function createIdempotentContentClearedSnapshot(snapshot: CellSnapshot): CellSnapshot {
+  if (
+    snapshot.value.tag === ValueTag.Empty &&
+    snapshot.formula === undefined &&
+    snapshot.input === undefined &&
+    (snapshot.flags & OPTIMISTIC_CELL_SNAPSHOT_FLAG) !== 0
+  ) {
+    return snapshot
+  }
+  return createContentClearedOptimisticSnapshot(snapshot)
 }
 
 function omitSnapshotStyleId(snapshot: CellSnapshot): CellSnapshot {

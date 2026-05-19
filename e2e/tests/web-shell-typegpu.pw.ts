@@ -1276,6 +1276,72 @@ test('@browser-webgpu @browser-deep name-box range fill presents the current fra
   )
 })
 
+test('@browser-webgpu @browser-deep large range fill remains applied after scrolling into uncached rows', async ({ page }, testInfo) => {
+  const initialPoints = [
+    { ...selectedRangeFillProbe(3, 3), name: 'topLeft' },
+    { ...selectedRangeFillProbe(4, 8), name: 'middle' },
+    { ...selectedRangeFillProbe(5, 12), name: 'bottomRight' },
+  ]
+  const scrolledPoints = [
+    { ...selectedRangeFillProbe(3, 5), name: 'scrolledD' },
+    { ...selectedRangeFillProbe(4, 8), name: 'scrolledE' },
+    { ...selectedRangeFillProbe(5, 11), name: 'scrolledF' },
+  ]
+
+  await page.setViewportSize({ width: 960, height: 720 })
+  await installTypeGpuReadbackHarness(page)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('typegpu-large-range-fill-scroll'))}&persist=0`)
+  await waitForWorkbookReady(page)
+  await waitForTypeGpuRenderer(page)
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        (window as Window & { __biligGpuReadbackInspector?: { readonly isReady: () => boolean } }).__biligGpuReadbackInspector?.isReady(),
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  const nameBox = page.getByTestId('name-box')
+  await nameBox.fill('D4:F240')
+  await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D4:F240')
+  await pickToolbarPresetColor(page, 'Fill color', 'theme green')
+  const initialReadback = await waitForReadback(
+    page,
+    {
+      points: initialPoints,
+      regions: [],
+    },
+    (result) => allReadbackPointsMatch(result, isThemeGreenFill),
+  )
+
+  await page.getByTestId('grid-scroll-viewport').evaluate((viewport, rowHeight) => {
+    if (!(viewport instanceof HTMLDivElement)) {
+      throw new Error('grid scroll viewport is not a div')
+    }
+    viewport.scrollTop = rowHeight * 160
+    viewport.dispatchEvent(new Event('scroll'))
+  }, PRODUCT_ROW_HEIGHT)
+  await waitForReadbackSequence(page, initialReadback.sequence)
+
+  const scrolledReadback = await waitForReadback(
+    page,
+    {
+      points: scrolledPoints,
+      regions: [],
+    },
+    (result) => result.sequence > initialReadback.sequence && allReadbackPointsMatch(result, isThemeGreenFill),
+  )
+  expect(scrolledReadback.sequence).toBeGreaterThan(initialReadback.sequence)
+  await saveReadbackArtifact(
+    page,
+    testInfo,
+    'main-workbook-grid-large-range-fill-scroll-readback.png',
+    'main-workbook-grid-large-range-fill-scroll-readback',
+  )
+})
+
 test('@browser-webgpu @browser-deep full-column fill changes repaint visible cells without waiting for sync catch-up', async ({
   page,
 }, testInfo) => {

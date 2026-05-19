@@ -10,6 +10,7 @@ import { DEFAULT_MAX_CACHED_CELLS_PER_SHEET } from '../projected-viewport-cell-c
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
 import { buildViewportPatchFromEngine, DEFAULT_STYLE_ID } from '../worker-runtime-viewport.js'
 import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from '../workbook-optimistic-cell-flags.js'
+import { applyOptimisticClearRange } from '../workbook-optimistic-range.js'
 import type { WorkerEngine } from '../worker-runtime-support.js'
 
 const TEST_METRICS: RecalcMetrics = {
@@ -337,6 +338,115 @@ describe('ProjectedViewportStore', () => {
     )
     unsubscribeViewport()
     unsubscribeDeltas()
+  })
+
+  it('resolves large range styles for cells that become visible after the mutation', () => {
+    const cache = new ProjectedViewportStore(createNoopWorkerEngineClient())
+    cache.setSheetIdentities([{ id: 7, name: 'Sheet1', order: 3 }])
+
+    const rollback = cache.setRangeStyle(
+      { sheetName: 'Sheet1', startAddress: 'D5', endAddress: 'F900' },
+      { fill: { backgroundColor: '#00ff00' } },
+    )
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(countSheetCells(cache, 'Sheet1')).toBe(0)
+    const offscreenCell = cache.getCell('Sheet1', 'E700')
+    expect(cache.getCellStyle(offscreenCell.styleId)).toEqual({
+      id: offscreenCell.styleId,
+      fill: { backgroundColor: '#00ff00' },
+    })
+    expect(countSheetCells(cache, 'Sheet1')).toBe(0)
+
+    const unsubscribeViewport = cache.subscribeViewport(
+      'Sheet1',
+      {
+        sheetName: 'Sheet1',
+        rowStart: 695,
+        rowEnd: 704,
+        colStart: 3,
+        colEnd: 5,
+      },
+      () => undefined,
+      { initialPatch: 'none' },
+    )
+
+    expect(countSheetCells(cache, 'Sheet1')).toBeLessThanOrEqual(30)
+    const materializedCell = cache.getCell('Sheet1', 'E700')
+    expect(cache.getCellStyle(materializedCell.styleId)).toEqual({
+      id: materializedCell.styleId,
+      fill: { backgroundColor: '#00ff00' },
+    })
+    const tiles = buildLocalFixedRenderTiles({
+      cameraSeq: 1,
+      columnWidths: cache.getColumnWidths('Sheet1'),
+      dprBucket: 1,
+      engine: cache,
+      generation: 3,
+      gridMetrics: getGridMetrics(),
+      rowHeights: cache.getRowHeights('Sheet1'),
+      sheetId: 7,
+      sheetOrdinal: 7,
+      sheetName: 'Sheet1',
+      sortedColumnWidthOverrides: [],
+      sortedRowHeightOverrides: [],
+      viewport: {
+        sheetName: 'Sheet1',
+        rowStart: 695,
+        rowEnd: 704,
+        colStart: 3,
+        colEnd: 5,
+      },
+    })
+    expect(tiles.some((tile) => hasOpaqueGreenFillRect(tile.rectInstances, tile.rectCount))).toBe(true)
+
+    rollback?.()
+    expect(countSheetCells(cache, 'Sheet1')).toBe(0)
+    expect(cache.peekCell('Sheet1', 'E700')).toBeUndefined()
+    unsubscribeViewport()
+  })
+
+  it('keeps large clears visible for future viewports without materializing the whole range', () => {
+    const cache = new ProjectedViewportStore(createNoopWorkerEngineClient())
+
+    const rollback = applyOptimisticClearRange(cache, {
+      sheetName: 'Sheet1',
+      startAddress: 'A1',
+      endAddress: 'D3000',
+    })
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(countSheetCells(cache, 'Sheet1')).toBe(0)
+    const optimisticClear = cache.peekCell('Sheet1', 'D2500')
+    expect(optimisticClear).toMatchObject({
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      value: { tag: ValueTag.Empty },
+    })
+    expect(countSheetCells(cache, 'Sheet1')).toBe(0)
+
+    const unsubscribeViewport = cache.subscribeViewport(
+      'Sheet1',
+      {
+        sheetName: 'Sheet1',
+        rowStart: 2495,
+        rowEnd: 2504,
+        colStart: 0,
+        colEnd: 3,
+      },
+      () => undefined,
+      { initialPatch: 'none' },
+    )
+
+    expect(countSheetCells(cache, 'Sheet1')).toBeLessThanOrEqual(40)
+    expect(cache.getCell('Sheet1', 'D2500')).toMatchObject({
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      value: { tag: ValueTag.Empty },
+    })
+
+    rollback?.()
+    expect(countSheetCells(cache, 'Sheet1')).toBe(0)
+    expect(cache.peekCell('Sheet1', 'D2500')).toBeUndefined()
+    unsubscribeViewport()
   })
 
   it('optimistically styles protected local edit snapshots instead of waiting for worker readback', () => {
