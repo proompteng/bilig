@@ -89,6 +89,18 @@ If step 3 happens later in Excel, the backend never owned the decision.
 | Recalculate workbook formulas inside a Node.js request, job, or agent tool | A formula runtime such as `bilig-workpaper` |
 | Persist formula-backed state as JSON and verify it after restore           | `@bilig/headless` WorkPaper                 |
 
+## One-command proof
+
+Run this before wiring it into an app:
+
+```sh
+npx --package exceljs-formula-recalc exceljs-recalc --demo --json
+```
+
+The demo creates a small workbook, changes `Inputs!B2` and `Inputs!B3`,
+recalculates `Summary!B2`, writes `bilig-formula-recalc-demo.xlsx`, and prints
+`verified: true`.
+
 ## Minimal ExcelJS bridge
 
 Install the runtime in a scratch project:

@@ -41,6 +41,15 @@ npm install xlsx-formula-recalc
 For a one-off CLI run without adding it to a project:
 
 ```sh
+npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+```
+
+The demo creates a tiny workbook, edits input cells, recalculates `Summary!B2`,
+writes `bilig-formula-recalc-demo.xlsx`, and prints `verified: true`.
+
+For an existing workbook:
+
+```sh
 npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
   --set Inputs!B2=48 \
   --set Inputs!B3=1500 \

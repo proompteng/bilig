@@ -130,5 +130,9 @@
   "xlsx-formula-recalc": {
     "packageDir": "packages/xlsx-formula-recalc",
     "sourceEntry": "packages/xlsx-formula-recalc/src/index.ts"
+  },
+  "xlsx-formula-recalc/cli-api": {
+    "packageDir": "packages/xlsx-formula-recalc",
+    "sourceEntry": "packages/xlsx-formula-recalc/src/cli-api.ts"
   }
 }

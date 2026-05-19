@@ -37,6 +37,8 @@
   },
   "files": [
     "dist",
+    "AGENTS.md",
+    "SKILL.md",
     "README.md",
     "LICENSE"
   ],
@@ -48,6 +50,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./cli-api": {
+      "types": "./dist/cli-api.d.ts",
+      "import": "./dist/cli-api.js"
     }
   },
   "publishConfig": {

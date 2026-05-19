@@ -228,7 +228,9 @@
               <strong>Changed XLSX inputs and need fresh formulas now?</strong>
               <p>Start with the file-level recalculation command before moving to a full workbook runtime.</p>
             </div>
-            <pre><code>npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
+            <pre><code>npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+
+npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
   --set Inputs!B2=48 \
   --read Summary!B7 \
   --out pricing.recalculated.xlsx \

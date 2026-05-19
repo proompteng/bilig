@@ -22,6 +22,18 @@ npm install xlsx-formula-recalc
 
 ## CLI
 
+Run a self-contained proof first:
+
+```sh
+npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+```
+
+That command creates a tiny workbook, changes `Inputs!B2` and `Inputs!B3`,
+recalculates `Summary!B2`, writes `bilig-formula-recalc-demo.xlsx`, and prints
+`verified: true` with the recalculated value.
+
+For an existing workbook:
+
 ```sh
 npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
   --set Inputs!B2=48 \

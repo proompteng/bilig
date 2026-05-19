@@ -10,6 +10,29 @@ ExcelJS can read and write formula cells, but it does not run an Excel-compatibl
 npm install exceljs exceljs-formula-recalc
 ```
 
+## CLI
+
+If your ExcelJS workflow has already written an `.xlsx` file, the package also
+ships an ExcelJS-named CLI for quick proof runs:
+
+```sh
+npx --package exceljs-formula-recalc exceljs-recalc --demo --json
+```
+
+For a real workbook saved by ExcelJS:
+
+```sh
+npx --package exceljs-formula-recalc exceljs-recalc quote.xlsx \
+  --set Inputs!B2=48 \
+  --set Inputs!B3=1500 \
+  --read Summary!B7 \
+  --out quote.recalculated.xlsx \
+  --json
+```
+
+Use the API below when backend code needs the recalculated values patched back
+onto the in-memory ExcelJS workbook object.
+
 ## Use With ExcelJS
 
 ```ts

@@ -62,6 +62,7 @@ const {
   showAndTellDiscussionTemplate,
   generalDiscussionTemplate,
   dominanceScorecard,
+  xlsxFormulaRecalculationNode,
   agentXlsxFormulaRecalculationWithoutLibreOffice,
   staleXlsxFormulaCacheNode,
   microsoftGraphExcelRecalculationNode,
@@ -88,6 +89,15 @@ const workpaperPackageJson = await readFile(join(repoRoot, 'packages', 'bilig', 
 const workpaperPackageReadme = await readFile(join(repoRoot, 'packages', 'bilig', 'README.md'), 'utf8')
 const workpaperPackageAgentNotes = await readFile(join(repoRoot, 'packages', 'bilig', 'AGENTS.md'), 'utf8')
 const workpaperPackageSkillNotes = await readFile(join(repoRoot, 'packages', 'bilig', 'SKILL.md'), 'utf8')
+const xlsxRecalcPackageJson = await readFile(join(repoRoot, 'packages', 'xlsx-formula-recalc', 'package.json'), 'utf8')
+const xlsxRecalcPackageReadme = await readFile(join(repoRoot, 'packages', 'xlsx-formula-recalc', 'README.md'), 'utf8')
+const xlsxRecalcPackageAgentNotes = await readFile(join(repoRoot, 'packages', 'xlsx-formula-recalc', 'AGENTS.md'), 'utf8')
+const xlsxRecalcPackageSkillNotes = await readFile(join(repoRoot, 'packages', 'xlsx-formula-recalc', 'SKILL.md'), 'utf8')
+const exceljsRecalcPackageJson = await readFile(join(repoRoot, 'packages', 'exceljs-formula-recalc', 'package.json'), 'utf8')
+const exceljsRecalcPackageReadme = await readFile(join(repoRoot, 'packages', 'exceljs-formula-recalc', 'README.md'), 'utf8')
+const exceljsRecalcPackageAgentNotes = await readFile(join(repoRoot, 'packages', 'exceljs-formula-recalc', 'AGENTS.md'), 'utf8')
+const exceljsRecalcPackageSkillNotes = await readFile(join(repoRoot, 'packages', 'exceljs-formula-recalc', 'SKILL.md'), 'utf8')
+const exceljsFormulaRecalculationNode = await readFile(join(docsRoot, 'exceljs-formula-recalculation-node.md'), 'utf8')
 
 requireHomepageDiscovery(index, siteCss, productCss)
 await requireXlsxCalcAlternativeDiscovery(docsRoot)
@@ -577,6 +587,16 @@ requireIncludes(headlessReadme, 'uploaded to GitHub code scanning on every `main
 requireIncludes(readme, 'examples/xlsx-recalculation-node', 'README.md')
 requireIncludes(readme, 'docs/xlsx-formula-recalculation-node.md', 'README.md')
 requireIncludes(readme, xlsxRecalcCli, 'README.md')
+requireIncludes(xlsxRecalcPackageJson, '"xlsx-recalc": "./dist/cli.js"', 'packages/xlsx-formula-recalc/package.json')
+requireIncludes(xlsxRecalcPackageJson, '"./cli-api"', 'packages/xlsx-formula-recalc/package.json')
+requireIncludes(xlsxRecalcPackageReadme, 'xlsx-recalc --demo --json', 'packages/xlsx-formula-recalc/README.md')
+requireIncludes(xlsxRecalcPackageAgentNotes, 'xlsx-recalc --demo --json', 'packages/xlsx-formula-recalc/AGENTS.md')
+requireIncludes(xlsxRecalcPackageSkillNotes, 'Summary!B2', 'packages/xlsx-formula-recalc/SKILL.md')
+requireIncludes(exceljsRecalcPackageJson, '"exceljs-recalc": "./dist/cli.js"', 'packages/exceljs-formula-recalc/package.json')
+requireIncludes(exceljsRecalcPackageReadme, 'exceljs-recalc --demo --json', 'packages/exceljs-formula-recalc/README.md')
+requireIncludes(exceljsRecalcPackageAgentNotes, 'recalculateExceljsWorkbook', 'packages/exceljs-formula-recalc/AGENTS.md')
+requireIncludes(exceljsRecalcPackageSkillNotes, 'exceljs-recalc --demo --json', 'packages/exceljs-formula-recalc/SKILL.md')
+requireIncludes(exceljsFormulaRecalculationNode, 'exceljs-recalc --demo --json', 'docs/exceljs-formula-recalculation-node.md')
 requireIncludes(readme, 'docs/agent-xlsx-formula-recalculation-without-libreoffice.md', 'README.md')
 requireIncludes(readme, 'docs/excel-file-calculation-engine-node.md', 'README.md')
 requireIncludes(readme, 'docs/exceljs-shared-formula-recalculation-node.md', 'README.md')
@@ -601,6 +621,8 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/tree/main/examples/xl
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/xlsx-formula-recalculation-node.md', 'docs/llms.txt')
 requireIncludes(llms, xlsxRecalcCli, 'docs/llms.txt')
+requireIncludes(index, 'xlsx-recalc --demo --json', 'docs/index.html')
+requireIncludes(xlsxFormulaRecalculationNode, 'xlsx-recalc --demo --json', 'docs/xlsx-formula-recalculation-node.md')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-recalculation-proof.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-recalculation-proof.ts', 'docs/llms.txt')
 requireIncludes(llms, 'creates an XLSX workbook, edits inputs, recalculates formulas in Node.js', 'docs/llms.txt')

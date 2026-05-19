@@ -723,7 +723,11 @@ jobs:
             packages/bilig/AGENTS.md
             packages/bilig/SKILL.md
             packages/bilig/README.md
+            packages/xlsx-formula-recalc/AGENTS.md
+            packages/xlsx-formula-recalc/SKILL.md
             packages/xlsx-formula-recalc/README.md
+            packages/exceljs-formula-recalc/AGENTS.md
+            packages/exceljs-formula-recalc/SKILL.md
             packages/exceljs-formula-recalc/README.md
             packages/headless/CHANGELOG.md
             skills/bilig-workpaper/SKILL.md

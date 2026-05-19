@@ -59,6 +59,8 @@ before returning, use the file-level recalculation package before evaluating
 the broader WorkPaper runtime:
 
 ```sh
+npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+
 npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \
   --set Inputs!B2=42 \
   --read Summary!B7 \
@@ -71,6 +73,7 @@ If the workbook is already in ExcelJS, keep that boundary and add
 
 ```sh
 npm install exceljs exceljs-formula-recalc
+npx --package exceljs-formula-recalc exceljs-recalc --demo --json
 ```
 
 ## Choose An Evaluation Path

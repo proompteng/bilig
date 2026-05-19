@@ -210,6 +210,7 @@ describe('runtime release helpers', () => {
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/xlsx-formula-recalc')
     expect(isRuntimeAffectingPath('packages/xlsx-formula-recalc/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/xlsx-formula-recalc/src/index.ts')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/xlsx-formula-recalc/AGENTS.md')).toBe(true)
   })
 
   it('publishes the ExcelJS formula recalculation package through the common runtime workflow', () => {
@@ -217,6 +218,7 @@ describe('runtime release helpers', () => {
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/exceljs-formula-recalc')
     expect(isRuntimeAffectingPath('packages/exceljs-formula-recalc/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/exceljs-formula-recalc/src/index.ts')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/exceljs-formula-recalc/AGENTS.md')).toBe(true)
   })
 
   it('publishes XLSX import/export through the headless package subpath', () => {

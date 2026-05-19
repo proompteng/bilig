@@ -28,8 +28,13 @@
     "url": "git+https://github.com/proompteng/bilig.git",
     "directory": "packages/exceljs-formula-recalc"
   },
+  "bin": {
+    "exceljs-recalc": "./dist/cli.js"
+  },
   "files": [
     "dist",
+    "AGENTS.md",
+    "SKILL.md",
     "README.md",
     "LICENSE"
   ],
