@@ -1,5 +1,5 @@
-import type { WorkbookAxisEntrySnapshot, WorkbookAxisMetadataSnapshot } from '@bilig/protocol'
-import { appendRowMetadata, type LargeSimpleWorksheetMergeRef } from './xlsx-large-simple-worksheet-metadata.js'
+import type { WorkbookAxisEntrySnapshot, WorkbookAxisMetadataSnapshot, WorkbookSheetFormatPrSnapshot } from '@bilig/protocol'
+import { appendColumnMetadata, appendRowMetadata, type LargeSimpleWorksheetMergeRef } from './xlsx-large-simple-worksheet-metadata.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 
 const lessThan = 60
@@ -62,6 +62,149 @@ export function readLargeSimpleMergeRefsFromBytes(bytes: Uint8Array, startIndex:
     index = tagEnd + 1
   }
   return refs
+}
+
+export function appendLargeSimpleColumnMetadataFromBytes(
+  entries: WorkbookAxisEntrySnapshot[],
+  metadata: WorkbookAxisMetadataSnapshot[],
+  bytes: Uint8Array,
+  startIndex: number,
+  endIndex: number,
+): void {
+  let index = startIndex
+  while (index < endIndex) {
+    if (bytes[index] !== lessThan) {
+      index += 1
+      continue
+    }
+    const tag = readXmlTagName(bytes, index + 1)
+    if (!tag) {
+      index += 1
+      continue
+    }
+    const tagEnd = findTagEnd(bytes, tag.endIndex, endIndex)
+    if (tagEnd === null) {
+      return
+    }
+    if (tag.localName === 'col') {
+      const min = readPositiveIntegerAttributeFromTag(bytes, tag.endIndex, tagEnd, 'min')
+      const max = readPositiveIntegerAttributeFromTag(bytes, tag.endIndex, tagEnd, 'max') ?? min
+      if (min !== null && max !== null) {
+        appendColumnMetadata(entries, metadata, min, max, {
+          width: readNumberAttributeFromTag(bytes, tag.endIndex, tagEnd, 'width'),
+          styleIndex: readNonNegativeIntegerAttributeFromTag(bytes, tag.endIndex, tagEnd, 'style'),
+          hidden: readOptionalBooleanAttributeFromTag(bytes, tag.endIndex, tagEnd, 'hidden'),
+          customWidth: readOptionalBooleanAttributeFromTag(bytes, tag.endIndex, tagEnd, 'customWidth'),
+          customFormat: readOptionalBooleanAttributeFromTag(bytes, tag.endIndex, tagEnd, 'customFormat'),
+          bestFit: readOptionalBooleanAttributeFromTag(bytes, tag.endIndex, tagEnd, 'bestFit'),
+          outlineLevel: readNonNegativeIntegerAttributeFromTag(bytes, tag.endIndex, tagEnd, 'outlineLevel'),
+          collapsed: readOptionalBooleanAttributeFromTag(bytes, tag.endIndex, tagEnd, 'collapsed'),
+        })
+      }
+    }
+    index = tagEnd + 1
+  }
+}
+
+export function readLargeSimpleSheetFormatPrTagFromBytes(
+  bytes: Uint8Array,
+  startIndex: number,
+  endIndex: number,
+): WorkbookSheetFormatPrSnapshot | undefined {
+  const tag = readSingleTag(bytes, startIndex, endIndex, 'sheetFormatPr')
+  if (!tag) {
+    return undefined
+  }
+  const baseColWidth = readNumberAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'baseColWidth')
+  const defaultColWidth = readNumberAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'defaultColWidth')
+  const defaultRowHeight = readNumberAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'defaultRowHeight')
+  const customHeight = readOptionalBooleanAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'customHeight')
+  const outlineLevelRow = readNonNegativeIntegerAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'outlineLevelRow')
+  const outlineLevelCol = readNonNegativeIntegerAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'outlineLevelCol')
+  const thickTop = readOptionalBooleanAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'thickTop')
+  const thickBottom = readOptionalBooleanAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'thickBottom')
+  const output: WorkbookSheetFormatPrSnapshot = {
+    ...(baseColWidth !== null ? { baseColWidth } : {}),
+    ...(defaultColWidth !== null ? { defaultColWidth } : {}),
+    ...(defaultRowHeight !== null ? { defaultRowHeight } : {}),
+    ...(customHeight !== null ? { customHeight } : {}),
+    ...(outlineLevelRow !== null ? { outlineLevelRow } : {}),
+    ...(outlineLevelCol !== null ? { outlineLevelCol } : {}),
+    ...(thickTop !== null ? { thickTop } : {}),
+    ...(thickBottom !== null ? { thickBottom } : {}),
+  }
+  return Object.keys(output).length > 0 ? output : undefined
+}
+
+export function readLargeSimpleDrawingRelationshipIdTagFromBytes(
+  bytes: Uint8Array,
+  startIndex: number,
+  endIndex: number,
+): string | undefined {
+  const tag = readSingleTag(bytes, startIndex, endIndex, 'drawing')
+  return tag
+    ? (readAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'r:id') ??
+        readAttributeFromTag(bytes, tag.nameEnd, tag.tagEnd, 'id') ??
+        undefined)
+    : undefined
+}
+
+export function readLargeSimpleTableRelationshipIdsFromBytes(bytes: Uint8Array, startIndex: number, endIndex: number): string[] {
+  const relationshipIds: string[] = []
+  let index = startIndex
+  while (index < endIndex) {
+    if (bytes[index] !== lessThan) {
+      index += 1
+      continue
+    }
+    const tag = readXmlTagName(bytes, index + 1)
+    if (!tag) {
+      index += 1
+      continue
+    }
+    const tagEnd = findTagEnd(bytes, tag.endIndex, endIndex)
+    if (tagEnd === null) {
+      return relationshipIds
+    }
+    if (tag.localName === 'tablePart') {
+      const relationshipId =
+        readAttributeFromTag(bytes, tag.endIndex, tagEnd, 'r:id') ?? readAttributeFromTag(bytes, tag.endIndex, tagEnd, 'id')
+      if (relationshipId) {
+        relationshipIds.push(relationshipId)
+      }
+    }
+    index = tagEnd + 1
+  }
+  return relationshipIds
+}
+
+function readSingleTag(
+  bytes: Uint8Array,
+  startIndex: number,
+  endIndex: number,
+  localName: string,
+): { readonly nameEnd: number; readonly tagEnd: number } | null {
+  let index = startIndex
+  while (index < endIndex) {
+    if (bytes[index] !== lessThan) {
+      index += 1
+      continue
+    }
+    const tag = readXmlTagName(bytes, index + 1)
+    if (!tag) {
+      index += 1
+      continue
+    }
+    const tagEnd = findTagEnd(bytes, tag.endIndex, endIndex)
+    if (tagEnd === null) {
+      return null
+    }
+    if (tag.localName === localName) {
+      return { nameEnd: tag.endIndex, tagEnd }
+    }
+    index = tagEnd + 1
+  }
+  return null
 }
 
 function readNumberAttributeFromTag(bytes: Uint8Array, startIndex: number, tagEnd: number, attributeName: string): number | null {

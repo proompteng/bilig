@@ -22,24 +22,24 @@ import { readLargeSimpleSheetHyperlinkRefs } from './xlsx-large-simple-hyperlink
 import { appendLargeSimplePrintPageSetupElement, isLargeSimplePrintPageSetupElementName } from './xlsx-large-simple-printer-settings.js'
 import { rowTagHasMetadataAttribute } from './xlsx-large-simple-row-metadata-scan.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
-import { appendLargeSimpleRowMetadataTagFromBytes, readLargeSimpleMergeRefsFromBytes } from './xlsx-large-simple-metadata-byte-scan.js'
+import {
+  appendLargeSimpleColumnMetadataFromBytes,
+  appendLargeSimpleRowMetadataTagFromBytes,
+  readLargeSimpleDrawingRelationshipIdTagFromBytes,
+  readLargeSimpleMergeRefsFromBytes,
+  readLargeSimpleSheetFormatPrTagFromBytes,
+  readLargeSimpleTableRelationshipIdsFromBytes,
+} from './xlsx-large-simple-metadata-byte-scan.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
-import { readWorksheetTableRelationshipIds } from './xlsx-tables.js'
 import {
   metadataWorksheetTagNames,
   richTextRunPattern,
   unsupportedWorksheetTagNames,
 } from './xlsx-large-simple-worksheet-scan-constants.js'
-import {
-  readLargeSimpleColumnMetadata,
-  readLargeSimpleDrawingRelationshipIdTag,
-  readLargeSimpleSheetFormatPrTag,
-  type LargeSimpleWorksheetMergeRef,
-  type LargeSimpleWorksheetScannedMetadata,
-} from './xlsx-large-simple-worksheet-metadata.js'
+import type { LargeSimpleWorksheetMergeRef, LargeSimpleWorksheetScannedMetadata } from './xlsx-large-simple-worksheet-metadata.js'
 
 const lessThan = 60
 const slash = 47
@@ -477,21 +477,17 @@ class LargeSimpleWorksheetChunkScanner {
       return true
     }
     if (localName === 'cols') {
-      const columns = readLargeSimpleColumnMetadata(decodeBytes(this.buffer, startIndex, endIndex))
-      if (columns.entries.length > 0 || columns.metadata.length > 0) {
-        this.columnEntries ??= []
-        this.columnMetadata ??= []
-        this.columnEntries.push(...columns.entries)
-        this.columnMetadata.push(...columns.metadata)
-      }
+      this.columnEntries ??= []
+      this.columnMetadata ??= []
+      appendLargeSimpleColumnMetadataFromBytes(this.columnEntries, this.columnMetadata, this.buffer, startIndex, endIndex)
       return true
     }
     if (localName === 'sheetFormatPr') {
-      this.sheetFormatPr = readLargeSimpleSheetFormatPrTag(decodeBytes(this.buffer, startIndex, endIndex)) ?? this.sheetFormatPr
+      this.sheetFormatPr = readLargeSimpleSheetFormatPrTagFromBytes(this.buffer, startIndex, endIndex) ?? this.sheetFormatPr
       return true
     }
     if (localName === 'drawing') {
-      this.drawingRelationshipId = readLargeSimpleDrawingRelationshipIdTag(decodeBytes(this.buffer, startIndex, endIndex))
+      this.drawingRelationshipId = readLargeSimpleDrawingRelationshipIdTagFromBytes(this.buffer, startIndex, endIndex)
       return true
     }
     if (localName === 'autoFilter') {
@@ -516,7 +512,7 @@ class LargeSimpleWorksheetChunkScanner {
       return true
     }
     if (localName === 'tableParts') {
-      const relationshipIds = readWorksheetTableRelationshipIds(decodeBytes(this.buffer, startIndex, endIndex))
+      const relationshipIds = readLargeSimpleTableRelationshipIdsFromBytes(this.buffer, startIndex, endIndex)
       this.tableCount += relationshipIds.length
       if (relationshipIds.length > 0) {
         this.tableRelationshipIds ??= []
