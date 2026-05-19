@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "package": {
     "name": "@bilig/headless",
-    "version": "0.24.5",
+    "version": "0.25.0",
     "description": "Formula WorkPaper runtime for Node.js services and agent tools with JSON persistence and formula readback.",
     "nodeEngine": ">=22.0.0",
     "keywordCount": 24,
@@ -38,9 +38,9 @@
     "hasMcpBinary": true
   },
   "npmPackDryRun": {
-    "tarballBytes": 489877,
-    "unpackedBytes": 2950529,
-    "entryCount": 483,
+    "tarballBytes": 489270,
+    "unpackedBytes": 2948150,
+    "entryCount": 480,
     "readmeBytes": 44190,
     "packageJsonBytes": 2250
   },
