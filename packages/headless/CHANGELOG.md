@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.25.1
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.25.0
+- Manual override: no
+
+## Fixes
+- fix(headless): harden recent workbook parity (df0b9d88)
+
+## Internal runtime changes
+- docs(discovery): sync headless 0.25.0 surfaces (6f372228)
+
 ## 0.25.0
 
 - Release type: minor
