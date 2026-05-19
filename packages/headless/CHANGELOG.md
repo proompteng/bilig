@@ -4,6 +4,19 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.26.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.25.7
+- Manual override: no
+
+## Features
+- feat(headless): add mcp challenge cli (a0f3eba8)
+
+## Internal runtime changes
+- docs(discovery): sync headless 0.25.7 references (9cd5e8c4)
+- docs(mcp): refresh registry distribution proof (b2d6f700)
+
 ## 0.25.7
 
 - Release type: patch
