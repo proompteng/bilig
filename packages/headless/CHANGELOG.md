@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.24.1
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.24.0
+- Manual override: no
+
+## Fixes
+- fix(workbook): harden edit and tile clear races (6135fe6c)
+
 ## 0.24.0
 
 - Release type: minor

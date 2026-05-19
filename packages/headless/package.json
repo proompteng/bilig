@@ -1,6 +1,6 @@
 {
   "name": "@bilig/headless",
-  "version": "0.24.0",
+  "version": "0.24.1",
   "description": "Formula WorkPaper runtime for Node.js services and agent tools with JSON persistence and formula readback.",
   "keywords": [
     "agent-tools",
