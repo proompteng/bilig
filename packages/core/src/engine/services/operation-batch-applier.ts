@@ -71,6 +71,25 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
   } = input
   const { setEntityVersionForOp, setSheetDeleteVersion, stores: replicaStores } = input.replicaVersionWriter
 
+  const captureLocalStructuralInsertEntries = (batch: EngineOpBatch | undefined, opIndex: number, op: StructuralAxisOp): void => {
+    if (batch === undefined) {
+      return
+    }
+    if (op.kind === 'insertRows' && op.entries === undefined) {
+      batch.ops[opIndex] = {
+        ...op,
+        entries: args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count),
+      }
+      return
+    }
+    if (op.kind === 'insertColumns' && op.entries === undefined) {
+      batch.ops[opIndex] = {
+        ...op,
+        entries: args.state.workbook.snapshotColumnAxisEntries(op.sheetName, op.start, op.count),
+      }
+    }
+  }
+
   const tryApplySingleStructuralAxisOpBatchNow = (
     batch: EngineOpBatch,
     source: MutationSource,
@@ -131,6 +150,9 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
     try {
       const order = batch === undefined ? undefined : batchOpOrder(batch, 0)
       const structural = args.applyStructuralAxisOp(op)
+      if (source === 'local') {
+        captureLocalStructuralInsertEntries(batch, 0, op)
+      }
       const activeFormulaCount = args.state.formulas.size
       const canFinalizeNoValueWithoutEvents =
         !isRestore &&
@@ -511,6 +533,9 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
           case 'deleteColumns':
           case 'moveColumns': {
             const structural = args.applyStructuralAxisOp(op)
+            if (source === 'local') {
+              captureLocalStructuralInsertEntries(batch, opIndex, op)
+            }
             structural.transaction.removedCellIndices.forEach((cellIndex) => {
               precomputedKernelSyncCellIndices.push(cellIndex)
             })
