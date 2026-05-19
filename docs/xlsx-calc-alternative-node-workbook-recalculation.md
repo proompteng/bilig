@@ -33,6 +33,17 @@ save a state it can test again later.
 | Read recalculated outputs before accepting a request             | `@bilig/headless`  |
 | Persist JSON state and still import or export XLSX at the edge   | `@bilig/headless`  |
 
+If you only need to refresh an existing XLSX file before your service returns,
+try the file-level package before migrating workbook state:
+
+```sh
+npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
+  --set Inputs!B2=48 \
+  --read Summary!B7 \
+  --out pricing.recalculated.xlsx \
+  --json
+```
+
 That is the whole distinction. `xlsx-calc` is a calculator over a workbook
 object. Bilig is a workbook runtime with import/export at the edges.
 

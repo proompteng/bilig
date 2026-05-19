@@ -52,6 +52,27 @@ Project site: <https://proompteng.github.io/bilig/>
 | Existing ExcelJS workflow needs recalculated values, not stale cached results | `npm install exceljs exceljs-formula-recalc` | [ExcelJS formula recalculation in Node.js](docs/exceljs-formula-recalculation-node.md) |
 | Full runtime package with agent metadata, MCP binary, provenance docs, and lower-level subpaths | `npm install @bilig/headless` | [npm provenance and package trust](docs/npm-provenance-package-trust.md) |
 
+### Stale XLSX Formula Values? Run This First
+
+If a Node job already has an XLSX file and only needs fresh formula values
+before returning, use the file-level recalculation package before evaluating
+the broader WorkPaper runtime:
+
+```sh
+npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \
+  --set Inputs!B2=42 \
+  --read Summary!B7 \
+  --out quote.recalculated.xlsx \
+  --json
+```
+
+If the workbook is already in ExcelJS, keep that boundary and add
+`exceljs-formula-recalc`:
+
+```sh
+npm install exceljs exceljs-formula-recalc
+```
+
 ## Choose An Evaluation Path
 
 | If you are evaluating... | Start here                                                                                                                                                                                                                | What should be true before you star, watch, or adopt                                                  |

@@ -34,6 +34,20 @@ runtime, test `xlsx-calc` or HyperFormula against your actual workbook. Use
 `@bilig/headless` when the service can own the workbook state locally and needs
 formula readback, JSON persistence, and restore tests.
 
+If you already have an XLSX file and just need fresh values before returning,
+start with the narrow file-level command:
+
+```sh
+npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \
+  --set Inputs!B2=42 \
+  --read Summary!B7 \
+  --out quote.recalculated.xlsx \
+  --json
+```
+
+That is the first path to try for `xlsx-populate`, SheetJS, or template
+generation jobs where the stale value is the blocker, not workbook ownership.
+
 ## What not to trust
 
 Do not treat this as a fresh calculated value:

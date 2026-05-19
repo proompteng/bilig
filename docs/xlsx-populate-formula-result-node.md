@@ -45,6 +45,70 @@ or enqueue a payout, the cached value inside the XLSX file is not a decision
 source. It is only the last value some other spreadsheet engine happened to
 write.
 
+## Add a recalculation step after xlsx-populate
+
+If the rest of the pipeline already uses `xlsx-populate`, keep it there. Treat
+it as the authoring step, then hand the resulting XLSX bytes to
+`xlsx-formula-recalc` before the service reads output cells.
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises'
+import { recalculateXlsx } from 'xlsx-formula-recalc'
+
+// This can also be the Buffer returned by an xlsx-populate output call.
+const source = await readFile('quote.xlsx')
+
+const result = recalculateXlsx(source, {
+  edits: [
+    { target: 'Inputs!B2', value: 42 },
+    { target: 'Inputs!B3', value: 1500 },
+  ],
+  reads: ['Summary!B7'],
+})
+
+console.log(result.reads['Summary!B7'])
+await writeFile('quote.recalculated.xlsx', result.xlsx)
+```
+
+For a file-level repair step:
+
+```sh
+npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \
+  --set Inputs!B2=42 \
+  --set Inputs!B3=1500 \
+  --read Summary!B7 \
+  --out quote.recalculated.xlsx \
+  --json
+```
+
+This is the narrowest bridge for the common public questions:
+
+- "xlsx-populate wrote the formula but the value did not update"
+- "I need formula plus calculated value in the generated workbook"
+- "I need to read the calculated formula value in Node before returning"
+
+It is still not an Excel clone. If the workbook uses unsupported functions,
+macros, external links, or volatile formulas, keep a reduced fixture in tests
+and compare the answer to Excel or LibreOffice before treating it as production
+logic.
+
+## TODAY() and cached date values
+
+`TODAY()` is a volatile formula. `xlsx-populate` can read the cached serial date
+stored in the file, but it does not execute `TODAY()` again.
+
+If the cached value is enough, convert the Excel serial number explicitly:
+
+```ts
+function excelSerialDateToUtcDate(serial: number): Date {
+  return new Date((serial - 25569) * 86400 * 1000)
+}
+```
+
+That assumes the normal Excel 1900 date system. If the workbook uses the 1904
+date system, or if the backend needs today's value at request time, recalculate
+the workbook before reading the cell.
+
 ## The small rule
 
 Keep `xlsx-populate` for file authoring. Move the calculation step to a runtime
@@ -162,3 +226,8 @@ contents.
 
 Source issue:
 <https://github.com/dtjohnson/xlsx-populate/issues/265>
+
+Related public issues:
+
+- <https://github.com/dtjohnson/xlsx-populate/issues/354>
+- <https://github.com/dtjohnson/xlsx-populate/issues/275>

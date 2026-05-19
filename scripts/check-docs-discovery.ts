@@ -76,6 +76,7 @@ const {
 const headlessPackageSpec = `@bilig/headless@${headlessPackageVersion}`
 const mcpbReleaseAssetUrl = `https://github.com/proompteng/bilig/releases/download/libraries-v${headlessPackageVersion}/bilig-workpaper.mcpb`
 const mcpbReleaseChecksumUrl = `${mcpbReleaseAssetUrl}.sha256`
+const xlsxRecalcCli = 'npx --package xlsx-formula-recalc xlsx-recalc'
 
 const headlessSpreadsheetEngineNodeServicesAgents = await readFile(
   join(docsRoot, 'headless-spreadsheet-engine-node-services-agents.md'),
@@ -121,6 +122,8 @@ requireIncludes(index, '"downloadUrl": "https://www.npmjs.com/package/bilig-work
 requireIncludes(index, '"https://www.npmjs.com/package/xlsx-formula-recalc"', 'docs/index.html')
 requireIncludes(index, '"https://www.npmjs.com/package/exceljs-formula-recalc"', 'docs/index.html')
 requireIncludes(index, '<h2 id="packages-title">Install the package that matches the job.</h2>', 'docs/index.html')
+requireIncludes(index, 'highest-traffic entry', 'docs/index.html')
+requireIncludes(index, xlsxRecalcCli, 'docs/index.html')
 requireIncludes(index, '"applicationCategory": "DeveloperApplication"', 'docs/index.html')
 requireIncludes(index, '"@type": "FAQPage"', 'docs/index.html')
 requireIncludes(
@@ -202,6 +205,7 @@ for (const required of [
   'title: Fix stale XLSX formula values in Node.js',
   'An `.xlsx` can store both the formula text',
   'Run a formula runtime before reading',
+  xlsxRecalcCli,
   '`@bilig/headless` when the service can own the workbook state locally',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
@@ -550,6 +554,7 @@ requireIncludes(headlessReadme, 'https://api.scorecard.dev/projects/github.com/p
 requireIncludes(headlessReadme, 'uploaded to GitHub code scanning on every `main` update', 'packages/headless/README.md')
 requireIncludes(readme, 'examples/xlsx-recalculation-node', 'README.md')
 requireIncludes(readme, 'docs/xlsx-formula-recalculation-node.md', 'README.md')
+requireIncludes(readme, xlsxRecalcCli, 'README.md')
 requireIncludes(readme, 'docs/agent-xlsx-formula-recalculation-without-libreoffice.md', 'README.md')
 requireIncludes(readme, 'docs/excel-file-calculation-engine-node.md', 'README.md')
 requireIncludes(readme, 'docs/exceljs-shared-formula-recalculation-node.md', 'README.md')
@@ -573,6 +578,7 @@ requireIncludes(index, './xlsx-populate-formula-result-node.html', 'docs/index.h
 requireIncludes(llms, 'https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/xlsx-formula-recalculation-node.md', 'docs/llms.txt')
+requireIncludes(llms, xlsxRecalcCli, 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-recalculation-proof.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-recalculation-proof.ts', 'docs/llms.txt')
 requireIncludes(llms, 'creates an XLSX workbook, edits inputs, recalculates formulas in Node.js', 'docs/llms.txt')

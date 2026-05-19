@@ -31,6 +31,21 @@ the read cells with fresh formula results.
 Use `@bilig/headless` or `bilig-workpaper` directly when the workbook can live
 as a TypeScript WorkPaper document with JSON persistence and verified readback.
 
+## The Exact ExcelJS Failure
+
+Searches like "ExcelJS formula result not updating", "updating formula result",
+and "get computed value of Excel sheet cell in Node.js" usually describe the
+same boundary:
+
+1. ExcelJS can write the formula record.
+2. ExcelJS can preserve a cached `result`.
+3. ExcelJS does not recalculate the dependency graph after your service edits
+   an input cell.
+
+If the service needs the computed value in the same request or job, bridge the
+ExcelJS workbook through `exceljs-formula-recalc` and read the returned proof
+values before sending the response.
+
 ## Why cached values are not enough
 
 Spreadsheet files can contain formula text and cached results. A file library

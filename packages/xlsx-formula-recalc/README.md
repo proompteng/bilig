@@ -10,6 +10,10 @@ This package is a narrow wrapper around Bilig WorkPaper for the high-friction No
 4. read proof values,
 5. export an updated XLSX.
 
+It fits the common `xlsx-populate`, SheetJS, and template-generation case
+where the file writer can create or edit the XLSX, but the Node service also
+needs fresh formula readback before returning.
+
 ## Install
 
 ```sh
@@ -44,6 +48,16 @@ const result = recalculateXlsx(await fs.promises.readFile('pricing.xlsx'), {
 
 await fs.promises.writeFile('pricing.recalculated.xlsx', result.xlsx)
 console.log(result.reads['Summary!B7'])
+```
+
+If another library already produced the workbook bytes, pass those bytes directly:
+
+```ts
+const output = await workbook.outputAsync('nodebuffer') // for example, from xlsx-populate
+
+const result = recalculateXlsx(output, {
+  reads: ['Summary!B7'],
+})
 ```
 
 For the full workbook API, import `WorkPaper`, `importXlsx`, and `exportXlsx` from this package.

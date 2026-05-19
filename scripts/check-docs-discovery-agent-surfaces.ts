@@ -551,6 +551,8 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     'canonical_url: https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html',
     'npm install exceljs exceljs-formula-recalc',
     "import { recalculateExceljsWorkbook } from 'exceljs-formula-recalc'",
+    'ExcelJS formula result not updating',
+    'get computed value of Excel sheet cell in Node.js',
     'Use `exceljs-formula-recalc` for an ExcelJS workbook that needs fresh formula',
     'Do not choose `@bilig/headless` only to generate styled XLSX files',
     'star the repository',

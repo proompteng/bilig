@@ -387,6 +387,50 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
+.traffic-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 0.58fr) minmax(360px, 0.72fr);
+  gap: clamp(18px, 4vw, 36px);
+  align-items: stretch;
+  border: 1px solid var(--line);
+  background: #faf8f1;
+  margin-bottom: 22px;
+  padding: 18px;
+}
+
+.traffic-entry span {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.traffic-entry strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1.14;
+}
+
+.traffic-entry p {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.traffic-entry pre {
+  overflow-x: auto;
+  margin: 0;
+  background: var(--dark);
+  color: #f8f1e7;
+  padding: 16px;
+}
+
+.traffic-entry code {
+  white-space: pre;
+}
+
 .work-row,
 .path-link {
   display: grid;
@@ -821,6 +865,7 @@ footer {
     grid-template-columns: 1fr 1fr;
   }
 
+  .traffic-entry,
   .work-row,
   .path-link,
   .link-stack .path-link,
@@ -868,6 +913,7 @@ footer {
   .hero-media,
   .lede,
   .install-command,
+  .traffic-entry,
   .hero-actions {
     width: 100%;
     max-width: none;

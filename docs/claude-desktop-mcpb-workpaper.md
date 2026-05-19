@@ -26,7 +26,7 @@ https://github.com/proompteng/bilig/releases/download/libraries-v0.32.6/bilig-wo
 Checksum:
 
 ```text
-4edfdd64f0cf96e67f3def948d7abcafe1704d470ece937b4353b6d3634b4501  bilig-workpaper.mcpb
+e554eedf5d5ce0bdba7fb800ea77ebfac20eef8110e77b2608370b59d0efb682  bilig-workpaper.mcpb
 ```
 
 The matching checksum file is published beside the bundle:

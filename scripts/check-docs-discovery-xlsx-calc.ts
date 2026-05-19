@@ -11,6 +11,7 @@ export async function requireXlsxCalcAlternativeDiscovery(docsRoot: string): Pro
     'cd bilig/examples/xlsx-recalculation-node',
     '"exportedReimportMatchesAfter": true',
     '"formulasSurvivedXlsxRoundTrip": true',
+    'npx --package xlsx-formula-recalc xlsx-recalc',
     'packages/benchmarks/baselines/workpaper-vs-xlsx-calc.json',
     'WorkPaper mean wins: `4/4`',
     'WorkPaper p95 wins: `4/4`',

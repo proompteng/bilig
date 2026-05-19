@@ -28,7 +28,8 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - Use `bilig-workpaper` for formula workbook state inside a Node service,
   queue worker, route handler, test, or agent tool.
 - Use `xlsx-formula-recalc` when XLSX inputs changed in Node and formula
-  outputs must be recalculated before returning.
+  outputs must be recalculated before returning. Start with this command:
+  `npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx --set Inputs!B2=48 --read Summary!B7 --out pricing.recalculated.xlsx --json`.
 - Use `exceljs-formula-recalc` when an existing ExcelJS workbook needs fresh
   formula results instead of stale cached values.
 - Use `@bilig/headless` when the caller needs lower-level WorkPaper subpaths,
