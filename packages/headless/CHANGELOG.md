@@ -4,6 +4,26 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.30.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.29.0
+- Manual override: no
+
+## Features
+- feat(package): add xlsx formula recalc npm entrypoint (08ac4689)
+- feat(formula): batch native direct scalar initialization (03df35e9)
+- feat(formula): add native aggregate matrix batches (b25d12ce)
+
+## Fixes
+- fix(grid): validate visible fill coverage by geometry (39f36931)
+- perf(core): streamline clean direct scalar deltas (016b2153)
+- fix(xlsx-formula-recalc): inherit workspace aliases (7876c92b)
+
+## Internal runtime changes
+- docs(discovery): sync runtime package 0.29.0 (17dabbe1)
+- chore(format): normalize xlsx formula readme (b02af111)
+
 ## 0.29.0
 
 - Release type: minor
