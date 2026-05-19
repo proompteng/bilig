@@ -4,6 +4,19 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.25.4
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.25.3
+- Manual override: no
+
+## Fixes
+- perf(excel-import): enable formula import restore sidecar (8313f2d7)
+
+## Internal runtime changes
+- docs(discovery): sync headless 0.25.3 references (ea015ad6)
+- docs(agent): publish Claude Desktop MCPB install path (6d25dad4)
+
 ## 0.25.3
 
 - Release type: patch

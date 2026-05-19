@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "package": {
     "name": "@bilig/headless",
-    "version": "0.25.3",
-    "releasePleaseManifestVersion": "0.25.3",
-    "mcpServerVersion": "0.25.3",
-    "mcpPackageVersion": "0.25.3"
+    "version": "0.25.4",
+    "releasePleaseManifestVersion": "0.25.4",
+    "mcpServerVersion": "0.25.4",
+    "mcpPackageVersion": "0.25.4"
   },
   "workpaperVsHyperFormula": {
     "artifactPath": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
