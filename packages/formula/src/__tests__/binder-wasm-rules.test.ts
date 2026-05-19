@@ -150,7 +150,7 @@ describe('binder wasm rules', () => {
     expectArgs('TRIMMEAN(A1:A4,0.2)', true)
     expectArgs('LOOKUP(1,A1:A4,B1:B4)', true)
     expectArgs('XLOOKUP("pear",A1:A4,B1:B4)', true)
-    expectArgs('XLOOKUP(72,G1:G5,H1:H5,,-1)', false)
+    expectArgs('XLOOKUP(72,G1:G5,H1:H5,,-1)', true)
     expectArgs('XLOOKUP("ID2",O1:O3,P1:R3)', false)
     expectArgs('XLOOKUP(T1:T3,J1:M1,J2:M2)', false)
     expectArgs('TRANSPOSE(A1:B4)', true)

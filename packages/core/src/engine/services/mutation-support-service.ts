@@ -17,17 +17,6 @@ function mutationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message
 }
 
-function advanceEpoch(current: number, setEpoch: (next: number) => void, seen: U32): number {
-  if (current >= 0xffff_fffe) {
-    setEpoch(1)
-    seen.fill(0)
-    return 1
-  }
-  const next = current + 1
-  setEpoch(next)
-  return next
-}
-
 export interface EngineMutationSupportService {
   readonly beginMutationCollection: () => Effect.Effect<void, EngineMutationError>
   readonly markInputChanged: (cellIndex: number, count: number) => Effect.Effect<number, EngineMutationError>
@@ -335,28 +324,6 @@ export function createEngineMutationSupportService(args: {
     }
   }
 
-  const collectImpactedFormulasForCells = (cellIndices: readonly number[]): number => {
-    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + 1)
-    advanceEpoch(args.getImpactedFormulaEpoch(), args.setImpactedFormulaEpoch, args.getImpactedFormulaSeen())
-
-    let impactedCount = 0
-    for (let cellCursor = 0; cellCursor < cellIndices.length; cellCursor += 1) {
-      const cellIndex = cellIndices[cellCursor]!
-      const dependents = args.collectFormulaDependents(makeCellEntity(cellIndex))
-      for (let dependentIndex = 0; dependentIndex < dependents.length; dependentIndex += 1) {
-        const formulaCellIndex = dependents[dependentIndex]!
-        if (args.getImpactedFormulaSeen()[formulaCellIndex] === args.getImpactedFormulaEpoch()) {
-          continue
-        }
-        args.getImpactedFormulaSeen()[formulaCellIndex] = args.getImpactedFormulaEpoch()
-        args.getImpactedFormulaBuffer()[impactedCount] = formulaCellIndex
-        impactedCount += 1
-      }
-    }
-
-    return impactedCount
-  }
-
   const removeSheetRuntimeNow = (
     sheetName: string,
     explicitChangedCount: number,
@@ -370,7 +337,6 @@ export function createEngineMutationSupportService(args: {
     sheet.grid.forEachCell((cellIndex) => {
       cellIndices.push(cellIndex)
     })
-    const impactedCount = collectImpactedFormulasForCells(cellIndices)
 
     let changedInputCount = 0
     let formulaChangedCount = 0
@@ -388,11 +354,7 @@ export function createEngineMutationSupportService(args: {
       const nextSheet = [...args.state.workbook.sheetsByName.values()].toSorted((left, right) => left.order - right.order)[0]
       args.setSelection(nextSheet?.name ?? sheetName, 'A1')
     }
-    formulaChangedCount = args.rebindFormulasForSheet(
-      sheetName,
-      formulaChangedCount,
-      args.getImpactedFormulaBuffer().subarray(0, impactedCount),
-    )
+    formulaChangedCount = args.rebindFormulasForSheet(sheetName, formulaChangedCount)
     return { changedInputCount, formulaChangedCount, explicitChangedCount }
   }
 

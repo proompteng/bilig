@@ -1,4 +1,4 @@
-import { BuiltinId, FormulaMode, Opcode } from '@bilig/protocol'
+import { BuiltinId, ErrorCode, FormulaMode, Opcode } from '@bilig/protocol'
 import type { FormulaNode } from './ast.js'
 import { formatRangeAddress, parseRangeAddress } from './addressing.js'
 import { getNativeGroupedArrayKind } from './binder-wasm-rules.js'
@@ -41,6 +41,15 @@ interface CompilerState {
   refs: string[]
   ranges: string[]
   strings: string[]
+}
+
+function emitNumberConstant(value: number, state: CompilerState): void {
+  const index = state.constants.push(value) - 1
+  state.program.push(encodeInstruction(Opcode.PushNumber, index))
+}
+
+function emitErrorConstant(code: ErrorCode, state: CompilerState): void {
+  state.program.push(encodeInstruction(Opcode.PushError, code))
 }
 
 const SIMPLE_CELL_REF_RE = /^\$?[A-Z]+\$?[1-9][0-9]*$/
@@ -100,9 +109,28 @@ function emitArgument(node: FormulaNode, state: CompilerState): number {
   return 1
 }
 
-function emitCallArgument(callee: string, node: FormulaNode, state: CompilerState): number {
+function emitXlookupOmittedArgument(argumentIndex: number, state: CompilerState): boolean {
+  if (argumentIndex === 3) {
+    emitErrorConstant(ErrorCode.NA, state)
+    return true
+  }
+  if (argumentIndex === 4) {
+    emitNumberConstant(0, state)
+    return true
+  }
+  if (argumentIndex === 5) {
+    emitNumberConstant(1, state)
+    return true
+  }
+  return false
+}
+
+function emitCallArgument(callee: string, node: FormulaNode, state: CompilerState, argumentIndex: number): number {
   if (callee === 'SUM' && node.kind === 'CellRef') {
     emitCellRefAsRange(node.ref, node.sheetName, state)
+    return 1
+  }
+  if (callee === 'XLOOKUP' && node.kind === 'OmittedArgument' && emitXlookupOmittedArgument(argumentIndex, state)) {
     return 1
   }
   return emitArgument(node, state)
@@ -185,8 +213,7 @@ function isNativeMakearraySumLambda(node: FormulaNode): boolean {
 function emitNode(node: FormulaNode, state: CompilerState): void {
   switch (node.kind) {
     case 'NumberLiteral': {
-      const index = state.constants.push(node.value) - 1
-      state.program.push(encodeInstruction(Opcode.PushNumber, index))
+      emitNumberConstant(node.value, state)
       return
     }
     case 'BooleanLiteral':
@@ -200,7 +227,7 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       }
       return
     case 'ErrorLiteral':
-      state.program.push(encodeInstruction(Opcode.PushError, node.code))
+      emitErrorConstant(node.code, state)
       return
     case 'ArrayConstant':
       throw new Error('Array constants are not supported on the wasm fast path')
@@ -347,8 +374,8 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
           return
         }
         let argc = 0
-        node.args.forEach((arg) => {
-          argc += emitCallArgument(callee, arg, state)
+        node.args.forEach((arg, index) => {
+          argc += emitCallArgument(callee, arg, state, index)
         })
         state.program.push(encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(callee) << 8) | argc))
       }

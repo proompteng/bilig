@@ -215,8 +215,31 @@ function isCanonicalAggregateName(node: FormulaNode | undefined, expected: strin
   return node?.kind === 'NameRef' && node.name.trim().toUpperCase() === expected.trim().toUpperCase()
 }
 
+function staticIntegerLiteralValue(node: FormulaNode | undefined): number | undefined {
+  if (!node) {
+    return undefined
+  }
+  if (node.kind === 'NumberLiteral' && Number.isInteger(node.value)) {
+    return node.value
+  }
+  if (
+    node.kind === 'UnaryExpr' &&
+    node.operator === '-' &&
+    node.argument.kind === 'NumberLiteral' &&
+    Number.isInteger(node.argument.value)
+  ) {
+    return -node.argument.value
+  }
+  return undefined
+}
+
 function isIntegerLiteral(node: FormulaNode | undefined, expected: number): boolean {
-  return node?.kind === 'NumberLiteral' && Math.trunc(node.value) === expected && node.value === expected
+  return staticIntegerLiteralValue(node) === expected
+}
+
+function isIntegerLiteralOneOf(node: FormulaNode | undefined, expected: readonly number[]): boolean {
+  const value = staticIntegerLiteralValue(node)
+  return value !== undefined && expected.includes(value)
 }
 
 export type NativeGroupedArrayKind = 'groupby-sum-canonical' | 'pivotby-sum-canonical'
@@ -260,6 +283,7 @@ export function getNativeGroupedArrayKind(node: FormulaNode): NativeGroupedArray
 export function isWasmSafeBuiltinArgs(callee: string, args: readonly FormulaNode[], deps: WasmSafeBuiltinArgsDeps): boolean {
   const argc = args.length
   const isScalarArg = (arg: FormulaNode): boolean => deps.isWasmSafe(arg)
+  const isOptionalScalarArg = (arg: FormulaNode): boolean => arg.kind === 'OmittedArgument' || isScalarArg(arg)
   const isCellRangeArg = (arg: FormulaNode): boolean => deps.isWasmSafe(arg, true) && isCellRangeNode(arg)
   const isCellRangeLikeArg = (arg: FormulaNode): boolean => {
     if (isCellRangeArg(arg)) {
@@ -446,8 +470,9 @@ export function isWasmSafeBuiltinArgs(callee: string, args: readonly FormulaNode
         isScalarArg(args[0]!) &&
         isCellVectorArg(args[1]!) &&
         isCellVectorArg(args[2]!) &&
-        (args.length < 5 || args[4]?.kind === 'OmittedArgument' || isIntegerLiteral(args[4], 0)) &&
-        args.slice(3).every((arg) => isScalarArg(arg))
+        (args.length < 4 || isOptionalScalarArg(args[3]!)) &&
+        (args.length < 5 || args[4]?.kind === 'OmittedArgument' || isIntegerLiteralOneOf(args[4], [-1, 0, 1])) &&
+        (args.length < 6 || isOptionalScalarArg(args[5]!))
       )
     case 'INDEX':
       return (

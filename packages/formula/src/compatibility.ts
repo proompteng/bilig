@@ -245,10 +245,20 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry('lookup-reference:match-exact', 'lookup-reference', '=MATCH("pear",A1:A3,0)', 'implemented-wasm-production'),
   entry('lookup-reference:vlookup-exact', 'lookup-reference', '=VLOOKUP("pear",A1:B3,2,FALSE)', 'implemented-wasm-production'),
   entry('lookup-reference:xlookup-exact', 'lookup-reference', '=XLOOKUP("pear",A1:A3,B1:B3)', 'implemented-wasm-production'),
+  entry(
+    'lookup-reference:xlookup-approximate-scalar-vector',
+    'lookup-reference',
+    '=XLOOKUP(72,G1:G5,H1:H5,,-1)',
+    'implemented-wasm-production',
+    {
+      notes:
+        'Scalar lookup arrays with scalar return vectors now support exact, next-smaller, and next-larger match modes on the native path.',
+    },
+  ),
   entry('lookup-reference:xlookup-advanced-return-modes', 'lookup-reference', '=XLOOKUP(A1,A2:A5,B2:D5,,-1)', 'implemented-js', {
     scope: 'extended',
     notes:
-      'Exact scalar vector XLOOKUP remains native; approximate match modes, multi-cell return slices, and array-valued lookup values use the JS spill path to preserve Excel-compatible reference shape semantics.',
+      'Exact and approximate scalar-vector XLOOKUP run native; multi-cell return slices and array-valued lookup values use the JS spill path to preserve Excel-compatible reference shape semantics.',
   }),
   entry('statistical:averageif-basic', 'statistical', '=AVERAGEIF(A1:A4,">0")', 'implemented-wasm-production'),
   entry('statistical:countif-basic', 'statistical', '=COUNTIF(A1:A4,">0")', 'implemented-wasm-production'),

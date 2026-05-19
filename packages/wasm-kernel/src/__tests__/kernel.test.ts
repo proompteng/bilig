@@ -2778,8 +2778,12 @@ describe('wasm kernel', () => {
       ]),
       new Uint16Array(40),
     )
-    kernel.uploadRangeMembers(new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), Uint32Array.from([0, 4, 8]), Uint32Array.from([4, 4, 3]))
-    kernel.uploadRangeShapes(Uint32Array.from([4, 4, 3]), Uint32Array.from([1, 1, 1]))
+    kernel.uploadRangeMembers(
+      new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+      Uint32Array.from([0, 4, 8, 4]),
+      Uint32Array.from([4, 4, 3, 3]),
+    )
+    kernel.uploadRangeShapes(Uint32Array.from([4, 4, 3, 3]), Uint32Array.from([1, 1, 1, 1]))
 
     const packed = packPrograms([
       [encodePushString(2), encodePushRange(0), encodePushNumber(0), encodeCall(BUILTIN.MATCH, 3), encodeRet()],
@@ -2787,6 +2791,24 @@ describe('wasm kernel', () => {
       [encodePushString(2), encodePushRange(0), encodePushNumber(0), encodePushNumber(3), encodeCall(BUILTIN.XMATCH, 4), encodeRet()],
       [encodePushString(2), encodePushRange(0), encodePushRange(1), encodeCall(BUILTIN.XLOOKUP, 3), encodeRet()],
       [encodePushString(6), encodePushRange(0), encodePushRange(1), encodePushString(5), encodeCall(BUILTIN.XLOOKUP, 4), encodeRet()],
+      [
+        encodePushNumber(1),
+        encodePushRange(2),
+        encodePushRange(3),
+        encodePushString(5),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.XLOOKUP, 5),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(1),
+        encodePushRange(2),
+        encodePushRange(3),
+        encodePushString(5),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.XLOOKUP, 5),
+        encodeRet(),
+      ],
     ])
     kernel.uploadPrograms(
       packed.programs,
@@ -2798,6 +2820,8 @@ describe('wasm kernel', () => {
         cellIndex(4, 3, width),
         cellIndex(4, 4, width),
         cellIndex(4, 5, width),
+        cellIndex(4, 6, width),
+        cellIndex(4, 7, width),
       ]),
     )
     kernel.uploadConstants(new Float64Array([0, 4, 1, -1]), new Uint32Array([0, 0, 0, 0, 0]), new Uint32Array([1, 2, 2, 0, 0]))
@@ -2808,6 +2832,8 @@ describe('wasm kernel', () => {
         cellIndex(4, 3, width),
         cellIndex(4, 4, width),
         cellIndex(4, 5, width),
+        cellIndex(4, 6, width),
+        cellIndex(4, 7, width),
       ]),
     )
 
@@ -2821,6 +2847,10 @@ describe('wasm kernel', () => {
     expect(kernel.readNumbers()[cellIndex(4, 4, width)]).toBe(20)
     expect(kernel.readTags()[cellIndex(4, 5, width)]).toBe(ValueTag.String)
     expect(kernel.readStringIds()[cellIndex(4, 5, width)]).toBe(5)
+    expect(kernel.readTags()[cellIndex(4, 6, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(4, 6, width)]).toBe(20)
+    expect(kernel.readTags()[cellIndex(4, 7, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(4, 7, width)]).toBe(30)
   })
 
   it('evaluates lookup functions over dynamic arrays and multi-cell XLOOKUP returns on the wasm path', async () => {

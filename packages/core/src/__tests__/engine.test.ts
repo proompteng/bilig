@@ -3286,6 +3286,16 @@ describe('SpreadsheetEngine', () => {
     })
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 })
 
+    engine.setCellFormula('Sheet1', 'D6', 'XLOOKUP(4,C1:C3,B1:B3,"fallback",-1)')
+    expect(engine.getCellValue('Sheet1', 'D6')).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(engine.explainCell('Sheet1', 'D6').mode).toBe(FormulaMode.WasmFastPath)
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 })
+
+    engine.setCellFormula('Sheet1', 'D7', 'XLOOKUP(4,C1:C3,B1:B3,"fallback",1)')
+    expect(engine.getCellValue('Sheet1', 'D7')).toEqual({ tag: ValueTag.Number, value: 30 })
+    expect(engine.explainCell('Sheet1', 'D7').mode).toBe(FormulaMode.WasmFastPath)
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 })
+
     engine.setCellValue('Sheet1', 'A1', 'pear')
     expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 1 })
     expect(engine.getCellValue('Sheet1', 'D3')).toEqual({ tag: ValueTag.Number, value: 3 })

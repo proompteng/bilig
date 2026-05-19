@@ -666,7 +666,7 @@ describe('formula', () => {
     expect(compileFormula('SUMIF(A1:A4,B1:B4,C1:C4,D1:D4)').mode).toBe(0)
     expect(compileFormula('SUMIFS(A1:A4,">0")').mode).toBe(0)
     expect(compileFormula('MATCH("pear",A1:B3,0)').mode).toBe(0)
-    expect(compileFormula('XLOOKUP(72,G1:G5,H1:H5,,-1)').mode).toBe(0)
+    expect(compileFormula('XLOOKUP(72,G1:G5,H1:H5,,-1)').mode).toBe(1)
     expect(compileFormula('XLOOKUP("pear",A1:B3,C1:D4)').mode).toBe(0)
     expect(compileFormula('XLOOKUP(T1:T3,J1:M1,J2:M2)').mode).toBe(0)
     expect(compileFormula('VLOOKUP("pear",A1:B3,2,FALSE,1)').mode).toBe(0)

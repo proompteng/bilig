@@ -131,8 +131,8 @@
         "passed": true,
         "evidence": [
           "508/508 Office-listed functions are production-routed",
-          "300/300 canonical formula rows are production-routed",
-          "300/300 canonical fixtures are covered by the calculation semantics scorecard",
+          "301/301 canonical formula rows are production-routed",
+          "301/301 canonical fixtures are covered by the calculation semantics scorecard",
           "36/36 live Microsoft Excel calculation cases match",
           "36/36 live Google Sheets calculation cases match"
         ],
@@ -315,7 +315,7 @@
     ],
     "collaborationPosturePassed": true,
     "collaborationUncoveredControls": [],
-    "calculationSemanticsCoveredCanonicalFixtureCount": 300,
+    "calculationSemanticsCoveredCanonicalFixtureCount": 301,
     "calculationSemanticsCoveredWorkbookSemanticsFixtureCount": 11,
     "calculationSemanticsPassed": true,
     "externalGoogleSheetsEvidence": "not-captured-in-repo",
@@ -503,11 +503,11 @@
       "target": "Excel-compatible semantics on the supported workbook and formula surface, with oracle-backed production routing.",
       "status": "repo-proved-lead",
       "currentEvidence": [
-        "canonical formula closure is 300/300 (100%)",
+        "canonical formula closure is 301/301 (100%)",
         "Office-listed formula breadth is 508/508 (100%)",
         "tracked formula breadth is 525/525 (100%)",
         "strategic canonical rows are production-routed; open canonical rows: 0",
-        "committed calculation semantics scorecard covers 300/300 canonical fixtures and 11/11 workbook-semantics fixtures",
+        "committed calculation semantics scorecard covers 301/301 canonical fixtures and 11/11 workbook-semantics fixtures",
         "live Microsoft Excel calculation scorecard passes 36/36 required cases on Excel 16.108.2",
         "live Microsoft Excel calculation features: excelLive.arithmeticPrecedence, excelLive.aggregateSumRange, excelLive.conditionalIfComparison, excelLive.numericRounding, excelLive.aggregateCountRange, excelLive.textConcat, excelLive.textJoinIgnoreEmptyRange, excelLive.lookupXlookupExact, excelLive.lookupMatchExact, excelLive.lookupIndexRange, excelLive.booleanAnd, excelLive.booleanOr, excelLive.dateSerial, excelLive.dateYearFromSerial, excelLive.conditionalSumifRange, excelLive.mathAbsSqrt, excelLive.aggregateAverageRange, excelLive.aggregateMinRange, excelLive.aggregateMaxRange, excelLive.aggregateCountaRange, excelLive.aggregateCountblankRange, excelLive.mathProductRange, excelLive.mathSumsqRange, excelLive.mathMod, excelLive.mathPower, excelLive.mathGcdRange, excelLive.textLeft, excelLive.textRight, excelLive.textMid, excelLive.textLen, excelLive.textTrimUpper, excelLive.textSearchCaseInsensitive, excelLive.lookupVlookupExact, excelLive.lookupChoose, excelLive.statisticalCountif, excelLive.statisticalAverageif",
         "live Google Sheets calculation scorecard passes 36/36 required cases via native Google Sheets conversion",
