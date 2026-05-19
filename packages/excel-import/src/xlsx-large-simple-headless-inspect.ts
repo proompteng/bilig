@@ -1,5 +1,9 @@
 import { normalizeWorkbookName } from './workbook-import-helpers.js'
-import type { LargeSimpleXlsxImportStats, LargeSimpleXlsxSheetDimension } from './xlsx-large-simple-import.js'
+import type {
+  LargeSimpleXlsxImportStats,
+  LargeSimpleXlsxOwnedSourceReleaseEvidence,
+  LargeSimpleXlsxSheetDimension,
+} from './xlsx-large-simple-import.js'
 import { LargeSimpleXlsxImportPhaseRecorder } from './xlsx-large-simple-import-telemetry.js'
 import { parseHeadlessLargeSimpleWorksheetFromChunks } from './xlsx-large-simple-headless-worksheet-scanner.js'
 import {
@@ -41,16 +45,17 @@ const unsupportedPackagePathPattern =
   /^xl\/(?:charts|chartSheets|comments|ctrlProps|externalLinks|model|pivotCache|pivotTables|threadedComments|vbaProject\.bin)/u
 
 export function tryInspectLargeSimpleXlsxHeadless(
-  data: Uint8Array,
+  source: { readonly byteLength: number },
   fileName: string,
   zip: XlsxZipEntries,
   options: {
     readonly afterWorksheetScan?: () => void
     readonly minByteLength?: number
     readonly releaseZipSource?: boolean
+    readonly releaseOwnedSourceBytes?: () => LargeSimpleXlsxOwnedSourceReleaseEvidence | undefined
   } = {},
 ): LargeSimpleXlsxHeadlessInspectResult | null {
-  if (data.byteLength < (options.minByteLength ?? defaultLargeSimpleXlsxByteThreshold)) {
+  if (source.byteLength < (options.minByteLength ?? defaultLargeSimpleXlsxByteThreshold)) {
     return null
   }
   const phaseRecorder = new LargeSimpleXlsxImportPhaseRecorder()
@@ -124,9 +129,11 @@ export function tryInspectLargeSimpleXlsxHeadless(
     const zipSourceReleaseStart = phaseRecorder.start()
     const zipSourceBytesBeforeRelease = readLazyXlsxZipSourceByteLength(zip)
     releaseLazyXlsxZipSource(zip)
+    const ownedSourceReleaseEvidence = options.releaseOwnedSourceBytes?.()
     phaseRecorder.finish('zip-source-release', zipSourceReleaseStart, {
       ...(zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesBeforeRelease } : {}),
       ...(zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesAfterRelease: readLazyXlsxZipSourceByteLength(zip) ?? 0 } : {}),
+      ...ownedSourceReleaseEvidence,
     })
   }
   return {

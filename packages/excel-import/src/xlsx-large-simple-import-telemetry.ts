@@ -14,6 +14,8 @@ export interface LargeSimpleXlsxImportPhaseTelemetry {
   readonly heapUsedBytes?: number
   readonly zipSourceBytesBeforeRelease?: number
   readonly zipSourceBytesAfterRelease?: number
+  readonly ownedSourceBytesBeforeRelease?: number
+  readonly ownedSourceBytesAfterRelease?: number
 }
 
 interface PhaseAccumulator {
@@ -22,11 +24,15 @@ interface PhaseAccumulator {
   heapUsedBytes?: number
   zipSourceBytesBeforeRelease?: number
   zipSourceBytesAfterRelease?: number
+  ownedSourceBytesBeforeRelease?: number
+  ownedSourceBytesAfterRelease?: number
 }
 
 export interface LargeSimpleXlsxImportPhaseEvidence {
   readonly zipSourceBytesBeforeRelease?: number
   readonly zipSourceBytesAfterRelease?: number
+  readonly ownedSourceBytesBeforeRelease?: number
+  readonly ownedSourceBytesAfterRelease?: number
 }
 
 export class LargeSimpleXlsxImportPhaseRecorder {
@@ -59,6 +65,12 @@ export class LargeSimpleXlsxImportPhaseRecorder {
     if (evidence.zipSourceBytesAfterRelease !== undefined) {
       accumulator.zipSourceBytesAfterRelease = evidence.zipSourceBytesAfterRelease
     }
+    if (evidence.ownedSourceBytesBeforeRelease !== undefined) {
+      accumulator.ownedSourceBytesBeforeRelease = evidence.ownedSourceBytesBeforeRelease
+    }
+    if (evidence.ownedSourceBytesAfterRelease !== undefined) {
+      accumulator.ownedSourceBytesAfterRelease = evidence.ownedSourceBytesAfterRelease
+    }
   }
 
   entries(): LargeSimpleXlsxImportPhaseTelemetry[] {
@@ -71,6 +83,10 @@ export class LargeSimpleXlsxImportPhaseRecorder {
         ...(entry.heapUsedBytes !== undefined ? { heapUsedBytes: entry.heapUsedBytes } : {}),
         ...(entry.zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesBeforeRelease: entry.zipSourceBytesBeforeRelease } : {}),
         ...(entry.zipSourceBytesAfterRelease !== undefined ? { zipSourceBytesAfterRelease: entry.zipSourceBytesAfterRelease } : {}),
+        ...(entry.ownedSourceBytesBeforeRelease !== undefined
+          ? { ownedSourceBytesBeforeRelease: entry.ownedSourceBytesBeforeRelease }
+          : {}),
+        ...(entry.ownedSourceBytesAfterRelease !== undefined ? { ownedSourceBytesAfterRelease: entry.ownedSourceBytesAfterRelease } : {}),
       }
     })
   }

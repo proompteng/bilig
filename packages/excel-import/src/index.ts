@@ -94,9 +94,10 @@ import {
 import { compareCellAddresses, readImportedLiteralCellValue, readImportedNumberFormat } from './xlsx-import-cell-values.js'
 import { tryImportLargeSimpleXlsx } from './xlsx-large-simple-import.js'
 import { createPreservedVbaProjectPayload, type PreservedVbaProjectCodeNames } from './xlsx-macros.js'
+import { releaseOwnedXlsxSourceBytes, type OwnedXlsxSourceBytes } from './xlsx-owned-source-release.js'
 import { worksheetCellAt, worksheetCellEntries, worksheetCellEntriesAtAddresses } from './xlsx-worksheet-cells.js'
 import { readImportedWorksheetTextValuesForSheet, shouldReadImportedWorksheetTextValuesForSheet } from './xlsx-worksheet-text-values.js'
-import { readXlsxZipEntries, readXlsxZipEntriesLazy } from './xlsx-zip.js'
+import { readLazyXlsxZipSource, readXlsxZipEntries, readXlsxZipEntriesLazy } from './xlsx-zip.js'
 
 export { exportXlsx } from './xlsx-export.js'
 export { manualCalculationModeWarning, precisionAsDisplayedCalculationWarning } from './xlsx-calculation-settings.js'
@@ -843,18 +844,24 @@ function importSheetJsWorkbook(
 }
 
 export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
-  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  const workbookZip = readValidXlsxZipContainer(data, 'lazy')
+  const ownedSource: OwnedXlsxSourceBytes = { bytes: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes) }
+  const sourceByteLength = ownedSource.bytes.byteLength
+  const workbookZip = readValidXlsxZipContainer(ownedSource.bytes, 'lazy')
   const largeSimpleImport = Object.hasOwn(workbookZip, 'xl/calcChain.xml')
     ? null
-    : tryImportLargeSimpleXlsx(data, fileName, workbookZip, {
+    : tryImportLargeSimpleXlsx({ byteLength: sourceByteLength }, fileName, workbookZip, {
         releaseArenaAfterMaterialization: true,
         releaseZipSource: true,
+        releaseOwnedSourceBytes: () => releaseOwnedXlsxSourceBytes(ownedSource),
       })
   if (largeSimpleImport) {
     return largeSimpleImport
   }
-  return importSheetJsWorkbook(data, fileName, XLSX_CONTENT_TYPE, readValidXlsxZipContainer(data))
+  const fallbackData = ownedSource.bytes.byteLength > 0 ? ownedSource.bytes : readLazyXlsxZipSource(workbookZip)
+  if (!fallbackData) {
+    throw new InvalidXlsxZipContainerError()
+  }
+  return importSheetJsWorkbook(fallbackData, fileName, XLSX_CONTENT_TYPE, readValidXlsxZipContainer(fallbackData))
 }
 
 export function importXlsm(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {

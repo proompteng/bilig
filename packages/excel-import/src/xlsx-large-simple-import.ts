@@ -71,6 +71,16 @@ export interface LargeSimpleXlsxImportOptions {
   materializeMetadata?: boolean
   releaseArenaAfterMaterialization?: boolean
   releaseZipSource?: boolean
+  releaseOwnedSourceBytes?: () => LargeSimpleXlsxOwnedSourceReleaseEvidence | undefined
+}
+
+export interface LargeSimpleXlsxImportSource {
+  readonly byteLength: number
+}
+
+export interface LargeSimpleXlsxOwnedSourceReleaseEvidence {
+  readonly ownedSourceBytesBeforeRelease?: number
+  readonly ownedSourceBytesAfterRelease?: number
 }
 
 export interface LargeSimpleXlsxImportStats {
@@ -151,12 +161,12 @@ const unsupportedPackagePathPattern =
 const maxPreservedBlankStyleCellCount = 100_000
 
 export function tryImportLargeSimpleXlsx(
-  data: Uint8Array,
+  source: LargeSimpleXlsxImportSource,
   fileName: string,
   zip: XlsxZipEntries,
   options: LargeSimpleXlsxImportOptions = {},
 ): LargeSimpleXlsxImportResult | null {
-  if (data.byteLength < (options.minByteLength ?? defaultLargeSimpleXlsxByteThreshold)) {
+  if (source.byteLength < (options.minByteLength ?? defaultLargeSimpleXlsxByteThreshold)) {
     return null
   }
   const phaseRecorder = new LargeSimpleXlsxImportPhaseRecorder()
@@ -468,9 +478,11 @@ export function tryImportLargeSimpleXlsx(
     const zipSourceReleaseStart = phaseRecorder.start()
     const zipSourceBytesBeforeRelease = readLazyXlsxZipSourceByteLength(zip)
     releaseLazyXlsxZipSource(zip)
+    const ownedSourceReleaseEvidence = options.releaseOwnedSourceBytes?.()
     phaseRecorder.finish('zip-source-release', zipSourceReleaseStart, {
       ...(zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesBeforeRelease } : {}),
       ...(zipSourceBytesBeforeRelease !== undefined ? { zipSourceBytesAfterRelease: readLazyXlsxZipSourceByteLength(zip) ?? 0 } : {}),
+      ...ownedSourceReleaseEvidence,
     })
   }
   for (const [index, scanned] of scannedWorksheets.entries()) {
@@ -549,7 +561,7 @@ export function tryImportLargeSimpleXlsx(
     preview: createWorkbookPreview({
       contentType: XLSX_CONTENT_TYPE,
       fileName,
-      fileSizeBytes: data.byteLength,
+      fileSizeBytes: source.byteLength,
       workbookName,
       sheets: previewSheets,
       warnings,

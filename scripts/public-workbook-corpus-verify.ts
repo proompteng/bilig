@@ -422,7 +422,7 @@ async function verifyLargeSimpleWorkbookCompact(
   runStructuralSmoke: boolean,
 ): Promise<PublicWorkbookCorpusCase | null> {
   const imported = await timeVerificationPhase(runtimeMetrics, workerOptions, 'import-xlsx', () =>
-    tryImportLargeSimpleXlsx(bytes, artifact.fileName, readXlsxZipEntriesLazy(bytes), {
+    tryImportLargeSimpleXlsx({ byteLength: bytes.byteLength }, artifact.fileName, readXlsxZipEntriesLazy(bytes), {
       materializeCells: false,
       materializeMetadata: false,
       minByteLength: 0,

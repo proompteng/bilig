@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { parsePublicWorkbookArtifact, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
 import { tryInspectLargeSimpleXlsxHeadless } from '../packages/excel-import/src/xlsx-large-simple-headless-inspect.js'
 import type { LargeSimpleXlsxImportStats } from '../packages/excel-import/src/xlsx-large-simple-import.js'
+import { releaseOwnedXlsxSourceBytes, type OwnedXlsxSourceBytes } from '../packages/excel-import/src/xlsx-owned-source-release.js'
 import { readXlsxZipEntriesLazy } from '../packages/excel-import/src/xlsx-zip.js'
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookFeatureCounts } from './public-workbook-corpus-types.ts'
 import { defaultSelfRssCheckIntervalMs, startSelfRssGuard } from './public-workbook-corpus-process.ts'
@@ -59,16 +60,22 @@ function tryVerifyCompactLargeSimpleArtifact(
     return null
   }
   writeWorkerPhase('read-cache')
-  const bytes = readFileSync(cachePath)
-  if (sha256Hex(bytes) !== artifact.sha256 || !isZipWorkbook(bytes)) {
+  const ownedSource: OwnedXlsxSourceBytes = { bytes: readFileSync(cachePath) }
+  if (sha256Hex(ownedSource.bytes) !== artifact.sha256 || !isZipWorkbook(ownedSource.bytes)) {
     return null
   }
-  const zip = readXlsxZipEntriesLazy(bytes)
+  const sourceByteLength = ownedSource.bytes.byteLength
+  const zip = readXlsxZipEntriesLazy(ownedSource.bytes)
   writeWorkerPhase('import-xlsx')
-  const imported = tryInspectLargeSimpleXlsxHeadless(bytes, artifact.fileName, zip, {
+  const imported = tryInspectLargeSimpleXlsxHeadless({ byteLength: sourceByteLength }, artifact.fileName, zip, {
     afterWorksheetScan: collectGarbage,
     minByteLength: 0,
     releaseZipSource: true,
+    releaseOwnedSourceBytes: () => {
+      const evidence = releaseOwnedXlsxSourceBytes(ownedSource)
+      collectGarbage()
+      return evidence
+    },
   })
   if (!imported) {
     return null

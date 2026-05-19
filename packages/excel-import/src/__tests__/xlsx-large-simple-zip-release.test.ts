@@ -1,13 +1,14 @@
 import { strToU8, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 
+import { tryInspectLargeSimpleXlsxHeadless } from '../xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from '../xlsx-large-simple-import.js'
 import { readLazyXlsxZipSourceByteLength, readXlsxZipEntriesLazy } from '../xlsx-zip.js'
 
 describe('large simple XLSX import ZIP ownership', () => {
   it('records lazy ZIP source release before shared-string snapshot materialization', () => {
-    const bytes = buildSharedStringWorkbook()
-    const zip = readXlsxZipEntriesLazy(bytes)
+    let ownedBytes = buildSharedStringWorkbook()
+    const zip = readXlsxZipEntriesLazy(ownedBytes)
     Object.defineProperty(zip, 'xl/sharedStrings.xml', {
       configurable: true,
       enumerable: true,
@@ -23,9 +24,17 @@ describe('large simple XLSX import ZIP ownership', () => {
       },
     })
 
-    const imported = tryImportLargeSimpleXlsx(bytes, 'zip-release.xlsx', zip, {
+    const imported = tryImportLargeSimpleXlsx({ byteLength: ownedBytes.byteLength }, 'zip-release.xlsx', zip, {
       minByteLength: 0,
       releaseZipSource: true,
+      releaseOwnedSourceBytes: () => {
+        const ownedSourceBytesBeforeRelease = ownedBytes.byteLength
+        ownedBytes = new Uint8Array(0)
+        return {
+          ownedSourceBytesBeforeRelease,
+          ownedSourceBytesAfterRelease: ownedBytes.byteLength,
+        }
+      },
     })
 
     const phases = imported?.stats.phaseTelemetry.map((entry) => entry.phase) ?? []
@@ -35,12 +44,41 @@ describe('large simple XLSX import ZIP ownership', () => {
       { address: 'B1', value: 'Beta' },
     ])
     expect(releasePhase).toMatchObject({
-      zipSourceBytesBeforeRelease: bytes.byteLength,
+      zipSourceBytesBeforeRelease: releasePhase?.ownedSourceBytesBeforeRelease,
       zipSourceBytesAfterRelease: 0,
+      ownedSourceBytesAfterRelease: 0,
     })
+    expect(releasePhase?.ownedSourceBytesBeforeRelease).toBeGreaterThan(0)
     expect(readLazyXlsxZipSourceByteLength(zip)).toBe(0)
+    expect(ownedBytes.byteLength).toBe(0)
     expect(phases.indexOf('zip-source-release')).toBeGreaterThanOrEqual(0)
     expect(phases.indexOf('zip-source-release')).toBeLessThan(phases.indexOf('public-snapshot-materialization'))
+  })
+
+  it('records owned source release for the headless verifier path', () => {
+    let ownedBytes = buildSharedStringWorkbook()
+    const zip = readXlsxZipEntriesLazy(ownedBytes)
+
+    const inspected = tryInspectLargeSimpleXlsxHeadless({ byteLength: ownedBytes.byteLength }, 'headless-zip-release.xlsx', zip, {
+      minByteLength: 0,
+      releaseZipSource: true,
+      releaseOwnedSourceBytes: () => {
+        const ownedSourceBytesBeforeRelease = ownedBytes.byteLength
+        ownedBytes = new Uint8Array(0)
+        return {
+          ownedSourceBytesBeforeRelease,
+          ownedSourceBytesAfterRelease: ownedBytes.byteLength,
+        }
+      },
+    })
+
+    const releasePhase = inspected?.stats.phaseTelemetry.find((entry) => entry.phase === 'zip-source-release')
+    expect(inspected?.stats.cellCount).toBe(2)
+    expect(releasePhase?.zipSourceBytesAfterRelease).toBe(0)
+    expect(releasePhase?.ownedSourceBytesBeforeRelease).toBeGreaterThan(0)
+    expect(releasePhase?.ownedSourceBytesAfterRelease).toBe(0)
+    expect(readLazyXlsxZipSourceByteLength(zip)).toBe(0)
+    expect(ownedBytes.byteLength).toBe(0)
   })
 })
 

@@ -68,6 +68,11 @@ export function releaseLazyXlsxZipSource(zip: XlsxZipEntries): boolean {
   return true
 }
 
+export function readLazyXlsxZipSource(zip: XlsxZipEntries): Uint8Array | undefined {
+  const metadata = (zip as XlsxZipEntriesWithCentralDirectorySource)[xlsxZipCentralDirectorySourceSymbol]
+  return metadata?.source ?? undefined
+}
+
 export function readLazyXlsxZipSourceByteLength(zip: XlsxZipEntries): number | undefined {
   const metadata = (zip as XlsxZipEntriesWithCentralDirectorySource)[xlsxZipCentralDirectorySourceSymbol]
   return metadata ? (metadata.source?.byteLength ?? 0) : undefined
