@@ -322,6 +322,24 @@ test('@browser-ci web app keeps in-cell caret movement stable during rapid typin
     end: 3,
     start: 2,
   })
+
+  await page.keyboard.press('Home')
+  await page.keyboard.press('z')
+  await expect(editor).toHaveValue('zabxc')
+  await expect.poll(readEditorSelection).toEqual({
+    direction: 'none',
+    end: 1,
+    start: 1,
+  })
+
+  await page.keyboard.press('End')
+  await page.keyboard.press('!')
+  await expect(editor).toHaveValue('zabxc!')
+  await expect.poll(readEditorSelection).toEqual({
+    direction: 'none',
+    end: 6,
+    start: 6,
+  })
 })
 
 test('@browser-ci web app keeps click-away commits and keyboard clears stable', async ({ page }) => {

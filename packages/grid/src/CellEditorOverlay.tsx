@@ -30,16 +30,6 @@ function normalizeNumpadKey(key: string, code: string): string | null {
   return key.length === 1 ? key : null
 }
 
-function moveCaretToBoundary(input: HTMLTextAreaElement, boundary: 'start' | 'end', extendSelection: boolean) {
-  const nextPosition = boundary === 'start' ? 0 : input.value.length
-  const anchor = boundary === 'start' ? input.selectionEnd : input.selectionStart
-  if (extendSelection) {
-    input.setSelectionRange(boundary === 'start' ? nextPosition : anchor, boundary === 'start' ? anchor : nextPosition)
-    return
-  }
-  input.setSelectionRange(nextPosition, nextPosition)
-}
-
 interface EditorTextSelection {
   readonly direction: 'backward' | 'forward' | 'none'
   readonly end: number
@@ -94,6 +84,10 @@ function resolveEditorHistoryShortcut(
     return 'redo'
   }
   return null
+}
+
+function isComposingEditorKey(event: Pick<KeyboardEvent, 'isComposing' | 'key' | 'keyCode'>): boolean {
+  return event.isComposing || event.key === 'Process' || event.keyCode === 229
 }
 
 function clampTextOffset(offset: number, textLength: number): number {
@@ -257,19 +251,6 @@ export function CellEditorOverlay({
         pendingKeyboardSelectionRef.current = null
       }
     })
-  }
-
-  const preserveCaretSelection = (input: HTMLTextAreaElement) => {
-    const selection = {
-      direction: input.selectionDirection ?? 'none',
-      end: input.selectionEnd ?? input.value.length,
-      start: input.selectionStart ?? input.value.length,
-    }
-    rememberEditorHistoryCurrent({
-      selection,
-      value: pendingKeyboardSelectionRef.current ? draftValueRef.current : input.value,
-    })
-    scheduleSelectionRestore(input, selection)
   }
 
   const beginCompletion = useCallback((nextState: 'commit' | 'cancel') => {
@@ -469,6 +450,45 @@ export function CellEditorOverlay({
         direction: 'none',
         end: nextPosition,
         start: nextPosition,
+      }
+    }
+
+    pendingKeyboardSelectionRef.current = nextSelection
+    input.setSelectionRange(nextSelection.start, nextSelection.end, nextSelection.direction)
+    rememberEditorHistoryCurrent({ selection: nextSelection, value: currentValue })
+    scheduleSelectionRestore(input, nextSelection)
+  }
+
+  const moveCaretToBoundary = (input: HTMLTextAreaElement, boundary: 'start' | 'end', extendSelection: boolean) => {
+    const pendingSelection = pendingKeyboardSelectionRef.current
+    const currentValue = pendingSelection ? draftValueRef.current : input.value
+    const rawSelectionStart = pendingSelection?.start ?? input.selectionStart ?? currentValue.length
+    const rawSelectionEnd = pendingSelection?.end ?? input.selectionEnd ?? currentValue.length
+    const selectionStart = clampTextOffset(Math.min(rawSelectionStart, rawSelectionEnd), currentValue.length)
+    const selectionEnd = clampTextOffset(Math.max(rawSelectionStart, rawSelectionEnd), currentValue.length)
+    const selectionDirection = pendingSelection?.direction ?? input.selectionDirection ?? 'none'
+    const boundaryPosition = boundary === 'start' ? 0 : currentValue.length
+
+    let nextSelection: EditorTextSelection
+    if (extendSelection) {
+      const anchor =
+        selectionDirection === 'backward'
+          ? selectionEnd
+          : selectionDirection === 'forward'
+            ? selectionStart
+            : boundary === 'start'
+              ? selectionEnd
+              : selectionStart
+      nextSelection = {
+        direction: boundaryPosition < anchor ? 'backward' : boundaryPosition > anchor ? 'forward' : 'none',
+        end: Math.max(anchor, boundaryPosition),
+        start: Math.min(anchor, boundaryPosition),
+      }
+    } else {
+      nextSelection = {
+        direction: 'none',
+        end: boundaryPosition,
+        start: boundaryPosition,
       }
     }
 
@@ -719,32 +739,27 @@ export function CellEditorOverlay({
           if (event.defaultPrevented) {
             return
           }
-          const historyDirection = !event.nativeEvent.isComposing ? resolveEditorHistoryShortcut(event.nativeEvent) : null
+          if (isComposingEditorKey(event.nativeEvent)) {
+            return
+          }
+          const historyDirection = resolveEditorHistoryShortcut(event.nativeEvent)
           if (historyDirection) {
             event.preventDefault()
             applyEditorHistory(event.currentTarget, historyDirection)
             return
           }
           const normalizedNumpadKey = normalizeNumpadKey(event.key, event.code)
-          if (
-            !event.nativeEvent.isComposing &&
-            normalizedNumpadKey !== null &&
-            event.key !== normalizedNumpadKey &&
-            !event.ctrlKey &&
-            !event.metaKey &&
-            !event.altKey
-          ) {
+          if (normalizedNumpadKey !== null && event.key !== normalizedNumpadKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault()
             insertTextAtSelection(event.currentTarget, normalizedNumpadKey)
             return
           }
-          if (!event.nativeEvent.isComposing && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault()
             insertTextAtSelection(event.currentTarget, event.key)
             return
           }
           if (
-            !event.nativeEvent.isComposing &&
             (event.key === 'Backspace' || event.key === 'Delete') &&
             !event.shiftKey &&
             !event.ctrlKey &&
@@ -755,13 +770,7 @@ export function CellEditorOverlay({
             deleteTextAtSelection(event.currentTarget, event.key === 'Backspace' ? 'backward' : 'forward')
             return
           }
-          if (
-            !event.nativeEvent.isComposing &&
-            (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
-            !event.ctrlKey &&
-            !event.metaKey &&
-            !event.altKey
-          ) {
+          if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault()
             moveCaretHorizontally(event.currentTarget, event.key === 'ArrowLeft' ? 'left' : 'right', event.shiftKey)
             return
@@ -769,10 +778,9 @@ export function CellEditorOverlay({
           if ((event.key === 'Home' || event.key === 'End') && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault()
             moveCaretToBoundary(event.currentTarget, event.key === 'Home' ? 'start' : 'end', event.shiftKey)
-            preserveCaretSelection(event.currentTarget)
             return
           }
-          if (!event.nativeEvent.isComposing && event.key.toLowerCase() === 'a' && (event.ctrlKey || event.metaKey) && !event.altKey) {
+          if (event.key.toLowerCase() === 'a' && (event.ctrlKey || event.metaKey) && !event.altKey) {
             event.preventDefault()
             selectAllText(event.currentTarget)
             return

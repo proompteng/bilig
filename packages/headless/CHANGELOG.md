@@ -11,10 +11,12 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(formula): match excel log error semantics (15d01a85)
 - fix(package): resolve xlsx recalc workspace imports (d0485880)
 
 ## Internal runtime changes
+
 - docs(discovery): sync runtime package 0.30.0 (9de932db)
 
 ## 0.30.0
@@ -24,16 +26,19 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(package): add xlsx formula recalc npm entrypoint (08ac4689)
 - feat(formula): batch native direct scalar initialization (03df35e9)
 - feat(formula): add native aggregate matrix batches (b25d12ce)
 
 ## Fixes
+
 - fix(grid): validate visible fill coverage by geometry (39f36931)
 - perf(core): streamline clean direct scalar deltas (016b2153)
 - fix(xlsx-formula-recalc): inherit workspace aliases (7876c92b)
 
 ## Internal runtime changes
+
 - docs(discovery): sync runtime package 0.29.0 (17dabbe1)
 - chore(format): normalize xlsx formula readme (b02af111)
 
