@@ -1,7 +1,6 @@
-import { SpreadsheetEngine, type EngineCellMutationRef, type SheetRecord } from '@bilig/core'
-import { MAX_COLS, MAX_ROWS, ValueTag, type CellSnapshot, type CellValue, type WorkbookSnapshot } from '@bilig/protocol'
+import type { EngineCellMutationRef, SheetRecord, SpreadsheetEngine } from '@bilig/core'
+import { MAX_COLS, MAX_ROWS, type CellSnapshot, type CellValue, type WorkbookSnapshot } from '@bilig/protocol'
 import {
-  WorkPaperEvaluationTimeoutError,
   WorkPaperInvalidArgumentsError,
   WorkPaperNamedExpressionDoesNotExistError,
   WorkPaperOperationError,
@@ -18,7 +17,7 @@ import {
   WORKPAPER_CONFIG_KEYS,
   WORKPAPER_PUBLIC_ERROR_NAMES,
 } from './work-paper-config.js'
-import { assertRowAndColumn, makeNamedExpressionKey, tryEvaluateSimpleNamedExpression, valuesEqual } from './work-paper-runtime-helpers.js'
+import { assertRowAndColumn, makeNamedExpressionKey } from './work-paper-runtime-helpers.js'
 import {
   inspectSheetDimensionsWithinLimits,
   validateSheetWithinLimits,
@@ -27,10 +26,7 @@ import {
 import { WorkPaperSheetDimensionCache } from './work-paper-sheet-dimension-cache.js'
 import type { WorkPaperAxisIntervalEditMode, WorkPaperAxisKind } from './work-paper-axis-helpers.js'
 import {
-  cloneNamedExpressionValue,
   createInternalNamedExpressionRecord,
-  createSerializedWorkPaperNamedExpression,
-  createWorkPaperNamedExpressionChange,
   evaluateWorkPaperNamedExpression,
   trySimpleWorkPaperNamedExpressionDefinedNameSnapshot,
   validateWorkPaperNamedExpression,
@@ -39,11 +35,9 @@ import {
   type InternalNamedExpression,
   type WorkPaperNamedExpressionValueSnapshot,
 } from './work-paper-named-expression-helpers.js'
-import { orderWorkPaperCellChanges } from './change-order.js'
 import type {
   WorkPaperAxisInterval,
   WorkPaperCellAddress,
-  WorkPaperCellChange,
   WorkPaperCellRange,
   WorkPaperChange,
   WorkPaperConfig,
@@ -81,18 +75,15 @@ import { buildWorkPaperRawCellMutation } from './work-paper-literal-mutation-que
 import { WorkPaperMutationQueues } from './work-paper-mutation-queues.js'
 import { WorkPaperEngineEventTracker } from './work-paper-engine-event-tracker.js'
 import { WorkPaperRuntimeFastPathBase } from './work-paper-runtime-fast-path-base.js'
-import { cloneWorkPaperHistoryRecords, type WorkPaperHistoryRecord } from './work-paper-history.js'
+import { cloneWorkPaperHistoryRecords } from './work-paper-history.js'
+import { tryChangeSimpleNumericNamedExpressionFastPath } from './work-paper-named-expression-fast-path-runtime.js'
+import {
+  createWorkPaperEngine,
+  workPaperEvaluationTimeoutErrorFrom,
+  type WorkPaperTransactionSnapshot,
+} from './work-paper-runtime-construction.js'
 
 type NamedExpressionValueSnapshot = WorkPaperNamedExpressionValueSnapshot
-
-interface WorkPaperTransactionSnapshot {
-  readonly clipboard: WorkPaperClipboardPayload | null
-  readonly config: WorkPaperConfig
-  readonly namedExpressions: readonly SerializedWorkPaperNamedExpression[]
-  readonly redoStack: readonly WorkPaperHistoryRecord[]
-  readonly sheets: WorkPaperSheets
-  readonly undoStack: readonly WorkPaperHistoryRecord[]
-}
 
 let nextWorkbookId = 1
 type MetadataRenameEngine = SpreadsheetEngine & {
@@ -102,22 +93,6 @@ type MetadataRenameEngine = SpreadsheetEngine & {
 type WorkPaperStructuralInsertEngine = SpreadsheetEngine & {
   insertRows(sheetName: string, start: number, count: number, options?: { readonly emitTracked?: boolean }): void
   insertColumns(sheetName: string, start: number, count: number, options?: { readonly emitTracked?: boolean }): void
-}
-
-function workPaperEvaluationTimeoutErrorFrom(error: unknown): WorkPaperEvaluationTimeoutError | undefined {
-  let current: unknown = error
-  while (typeof current === 'object' && current !== null) {
-    if (current instanceof WorkPaperEvaluationTimeoutError) {
-      return current
-    }
-    const name = current instanceof Error ? current.name : undefined
-    if (name === 'WorkPaperEvaluationTimeoutError' || name === 'EngineEvaluationTimeoutError') {
-      const timeoutMs = Reflect.get(current, 'timeoutMs')
-      return new WorkPaperEvaluationTimeoutError(typeof timeoutMs === 'number' ? timeoutMs : 0)
-    }
-    current = Reflect.get(current, 'cause')
-  }
-  return undefined
 }
 
 export class WorkPaper extends WorkPaperRuntimeFastPathBase {
@@ -314,72 +289,24 @@ export class WorkPaper extends WorkPaperRuntimeFastPathBase {
     expression: RawCellContent,
     scope: number | undefined,
   ): WorkPaperChange[] | null {
-    if (!this.canUseNamedExpressionChangeFastPath()) {
-      return null
-    }
-    this.validateNamedExpression(expressionName, expression, scope)
-    const existing = this.namedExpressions.get(makeNamedExpressionKey(expressionName, scope))
-    if (!existing) {
-      return null
-    }
-    const beforeValue = tryEvaluateSimpleNamedExpression(existing.expression)
-    const afterValue = tryEvaluateSimpleNamedExpression(expression)
-    if (beforeValue === undefined || afterValue?.tag !== ValueTag.Number) {
-      return null
-    }
-
-    this.assertNotDisposed()
-    this.engineEvents.materializePendingLazyChanges()
-    this.downgradeTrackedBatchFastPath()
-    if (!this.canUseNamedExpressionChangeFastPath()) {
-      return null
-    }
-
-    const record = createInternalNamedExpressionRecord(
-      createSerializedWorkPaperNamedExpression({
-        name: expressionName,
-        expression,
-        scope,
-        options: undefined,
-      }),
-    )
-    const key = makeNamedExpressionKey(record.publicName, record.scope)
-    try {
-      const changedCellIndices = this.engine.upsertNumericDefinedNameFast(
-        record.internalName,
-        this.toDefinedNameSnapshot(record.expression, record.scope),
-        afterValue.value,
-      )
-      if (changedCellIndices === null) {
-        return null
-      }
-      this.namedExpressions.set(key, record)
-      this.namedExpressionValueCache?.set(key, cloneNamedExpressionValue(afterValue))
-      const cellChanges: WorkPaperCellChange[] = []
-      for (let index = 0; index < changedCellIndices.length; index += 1) {
-        const change = this.readSingleTrackedCellChange(changedCellIndices[index]!)
-        if (change) {
-          cellChanges.push(change)
-        }
-      }
-      const orderedCellChanges =
-        cellChanges.length > 1 ? orderWorkPaperCellChanges(cellChanges, this.listSheetRecords(), cellChanges.length) : cellChanges
-      return valuesEqual(beforeValue, afterValue)
-        ? orderedCellChanges
-        : [
-            ...orderedCellChanges,
-            createWorkPaperNamedExpressionChange({
-              name: record.publicName,
-              scope: record.scope,
-              newValue: cloneNamedExpressionValue(afterValue),
-            }),
-          ]
-    } catch (error) {
-      if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
-        throw error
-      }
-      throw new WorkPaperOperationError(this.messageOf(error, 'Mutation failed'))
-    }
+    return tryChangeSimpleNumericNamedExpressionFastPath({
+      assertNotDisposed: () => this.assertNotDisposed(),
+      canUseNamedExpressionChangeFastPath: () => this.canUseNamedExpressionChangeFastPath(),
+      downgradeTrackedBatchFastPath: () => this.downgradeTrackedBatchFastPath(),
+      engine: this.engine,
+      listSheetRecords: () => this.listSheetRecords(),
+      materializePendingLazyChanges: () => this.engineEvents.materializePendingLazyChanges(),
+      messageOf: (error, fallback) => this.messageOf(error, fallback),
+      namedExpressionValueCache: this.namedExpressionValueCache,
+      namedExpressions: this.namedExpressions,
+      publicErrorNames: WORKPAPER_PUBLIC_ERROR_NAMES,
+      readSingleTrackedCellChange: (cellIndex) => this.readSingleTrackedCellChange(cellIndex),
+      toDefinedNameSnapshot: (nextExpression, nextScope) => this.toDefinedNameSnapshot(nextExpression, nextScope),
+      validateNamedExpression: (nextName, nextExpression, nextScope) => this.validateNamedExpression(nextName, nextExpression, nextScope),
+      expressionName,
+      expression,
+      scope,
+    })
   }
 
   private addSingleAxisIntervalWithoutRuntimeAdapters(
@@ -1068,18 +995,4 @@ export class WorkPaper extends WorkPaperRuntimeFastPathBase {
   protected messageOf(error: unknown, fallback: string): string {
     return error instanceof Error && error.message.length > 0 ? error.message : fallback
   }
-}
-
-function createWorkPaperEngine(config: WorkPaperConfig): SpreadsheetEngine {
-  const engine = new SpreadsheetEngine({
-    workbookName: 'Workbook',
-    trackReplicaVersions: false,
-    ...(config.useColumnIndex !== undefined ? { useColumnIndex: config.useColumnIndex } : {}),
-    ...(config.evaluationTimeoutMs !== undefined ? { evaluationTimeoutMs: config.evaluationTimeoutMs } : {}),
-  })
-  const calculationSettings = normalizeConfiguredWorkPaperCalculationSettings(config.calculationSettings)
-  if (calculationSettings !== undefined) {
-    engine.setCalculationSettings(calculationSettings)
-  }
-  return engine
 }

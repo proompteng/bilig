@@ -1,88 +1,34 @@
-import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
-import { FormulaMode, type CellRangeRef, type CellValue, type EngineEvent } from '@bilig/protocol'
-import { batchOpOrder, compareOpOrder, markBatchApplied, type OpOrder } from '../../replica-state.js'
+import { parseCellAddress } from '@bilig/formula'
+import type { EngineOpBatch } from '@bilig/workbook-domain'
+import { FormulaMode, type CellRangeRef, type EngineEvent } from '@bilig/protocol'
+import { batchOpOrder, compareOpOrder, markBatchApplied } from '../../replica-state.js'
+import { CellFlags } from '../../cell-store.js'
 import { calculationSettingsEqual, normalizeWorkbookCalculationSettings, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { PreparedCellAddress } from '../runtime-state.js'
 import { DirectFormulaIndexCollection } from './direct-formula-index-collection.js'
 import { assertNever } from './operation-change-helpers.js'
 import { isScalarOnlyDefinedNameValue } from './defined-name-value-helpers.js'
-import { shouldApplyOp as shouldApplyReplicaOp, type OperationReplicaVersionWriter } from './operation-replica-helpers.js'
+import { shouldApplyOp as shouldApplyReplicaOp } from './operation-replica-helpers.js'
 import { assertProtectionAllowsOp as assertProtectionAllowsProtectedOp } from './operation-protection-helpers.js'
 import type { DirectFormulaMetricCounts } from './operation-post-recalc-direct-formulas.js'
 import { applyOperationStructuralMetadataOp } from './operation-structural-metadata-ops.js'
 import { createOperationPreparedCellTracker } from './operation-cell-address-resolver.js'
-import type { OperationLookupAccess } from './operation-lookup-access.js'
-import type { OperationLookupPlanner } from './operation-lookup-planner.js'
-import type { ExactLookupImpactCaches, OperationLookupDirtyMarkerService } from './operation-lookup-dirty-markers.js'
-import type { OperationColumnDependencyTrackerService } from './operation-column-dependency-tracker.js'
-import type { OperationDirectRangeDependentService } from './operation-direct-range-dependents.js'
+import type { ExactLookupImpactCaches } from './operation-lookup-dirty-markers.js'
 import { shouldMaterializeOperationChangedCells } from './operation-event-emission.js'
 import { finalizeOperationMutationEvents } from './operation-mutation-event-finalizer.js'
 import { finalizeOperationRecalcAndEvents } from './operation-recalc-finalizer.js'
 import { createOperationBatchMetrics } from './operation-batch-metrics.js'
-import type { CreateEngineOperationServiceArgs, MutationSource, StructuralAxisOp } from './operation-service-types.js'
 import { applyBatchSetCellFormulaOp } from './operation-batch-cell-formula-mutations.js'
+import type { MutationSource, StructuralAxisOp } from './operation-service-types.js'
 import { applyBatchClearCellOp, applyBatchSetCellValueOp } from './operation-batch-cell-value-mutations.js'
 import { canFinalizeStructuralNoValueMutationWithoutRecalc, isStructuralAxisOp } from './operation-structural-no-value-finalization.js'
+import type { CreateOperationBatchApplierArgs } from './operation-batch-applier-types.js'
 
-type OperationBatchDirectFormulaCallbacks = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['directFormulaCallbacks']
-type OperationBatchDirtyTraversalSkip = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['canSkipDirtyTraversalForChangedInputs']
-type OperationBatchCycleInputMarker = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['markCycleMemberInputsChanged']
-type OperationBatchDerivedOp<K extends EngineOp['kind']> = Extract<EngineOp, { kind: K }>
 const EMPTY_INVALIDATED_RANGES: CellRangeRef[] = []
 const EMPTY_INVALIDATED_ROWS: NonNullable<EngineEvent['invalidatedRows']> = []
 const EMPTY_INVALIDATED_COLUMNS: NonNullable<EngineEvent['invalidatedColumns']> = []
 const EMPTY_CELL_INDICES: number[] = []
-
-interface CreateOperationBatchApplierArgs {
-  readonly serviceArgs: CreateEngineOperationServiceArgs
-  readonly emitBatch: (batch: EngineOpBatch) => void
-  readonly replicaVersionWriter: OperationReplicaVersionWriter
-  readonly isNullLiteralWriteNoOp: (cellIndex: number) => boolean
-  readonly isClearCellNoOp: (cellIndex: number) => boolean
-  readonly readCellValueForLookup: OperationLookupAccess['readCellValueForLookup']
-  readonly readExactNumericValueForLookup: OperationLookupAccess['readExactNumericValueForLookup']
-  readonly hasTrackedExactLookupDependents: OperationColumnDependencyTrackerService['hasTrackedExactLookupDependents']
-  readonly hasTrackedSortedLookupDependents: OperationColumnDependencyTrackerService['hasTrackedSortedLookupDependents']
-  readonly hasTrackedDirectRangeDependents: OperationColumnDependencyTrackerService['hasTrackedDirectRangeDependents']
-  readonly planExactLookupNumericColumnWrite: OperationLookupPlanner['planExactLookupNumericColumnWrite']
-  readonly planApproximateLookupNumericColumnWrite: OperationLookupPlanner['planApproximateLookupNumericColumnWrite']
-  readonly noteExactLookupLiteralWriteWhenDirty: OperationLookupDirtyMarkerService['noteExactLookupLiteralWriteWhenDirty']
-  readonly noteSortedLookupLiteralWriteWhenDirty: OperationLookupDirtyMarkerService['noteSortedLookupLiteralWriteWhenDirty']
-  readonly markAffectedDirectRangeDependents: OperationDirectRangeDependentService['markAffectedDirectRangeDependents']
-  readonly markPostRecalcDirectFormulaDependents: (
-    cellIndex: number,
-    postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
-    oldValue?: CellValue,
-    newValue?: CellValue,
-  ) => boolean
-  readonly markDirectScalarDeltaClosure: (
-    rootCellIndex: number,
-    oldValue: CellValue,
-    newValue: CellValue,
-    postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
-  ) => void
-  readonly collectAffectedDirectRangeDependents: OperationDirectRangeDependentService['collectAffectedDirectRangeDependents']
-  readonly tryApplyFormulaReplacementAsDirectScalarDeltaRoot: (request: {
-    readonly cellIndex: number
-    readonly oldNumber: number | undefined
-    readonly changedTopology: boolean
-    readonly postRecalcDirectFormulaIndices: DirectFormulaIndexCollection
-    readonly postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts
-  }) => boolean
-  readonly rebindDynamicFormulaDependents: (cellIndex: number, formulaChangedCount: number) => number
-  readonly refreshDependentRangesAndRebindFormulaDependents: (cellIndex: number, formulaChangedCount: number) => number
-  readonly pruneCellIfOrphaned: (cellIndex: number) => void
-  readonly normalizeHistoryDependencyPlaceholder: (cellIndex: number, source: MutationSource) => void
-  readonly markCycleMemberInputsChanged: OperationBatchCycleInputMarker
-  readonly hasCycleMembersNow: () => boolean
-  readonly canSkipDirtyTraversalForChangedInputs: OperationBatchDirtyTraversalSkip
-  readonly directFormulaCallbacks: OperationBatchDirectFormulaCallbacks
-  readonly applySpillRangeOp: (op: OperationBatchDerivedOp<'upsertSpillRange' | 'deleteSpillRange'>, order: OpOrder) => number[]
-  readonly applyPivotUpsertOp: (op: OperationBatchDerivedOp<'upsertPivotTable'>, order: OpOrder) => number[]
-  readonly applyPivotDeleteOp: (op: OperationBatchDerivedOp<'deletePivotTable'>, order: OpOrder) => number[]
-}
 
 export function createOperationBatchApplier(input: CreateOperationBatchApplierArgs) {
   const {
