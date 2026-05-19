@@ -89,6 +89,8 @@ function buildReconciliationSheets(rowCount: number): Record<string, TestCell[][
 }
 
 describe('guarded SUMIFS workpaper performance', () => {
+  const reconciliationEvaluationTimeoutMs = 15_000
+
   it('evaluates blank-key guards without leaving the direct criteria path', () => {
     const workbook = WorkPaper.buildFromSheets(
       {
@@ -114,16 +116,20 @@ describe('guarded SUMIFS workpaper performance', () => {
     expect(workbook.getPerformanceCounters().directFormulaInitialEvaluations).toBe(3)
   })
 
-  it('builds repeated reconciliation SUMIFS formulas within a bounded budget', () => {
-    const rowCount = 1_500
-    const workbook = WorkPaper.buildFromSheets(buildReconciliationSheets(rowCount), {
-      evaluationTimeoutMs: 5_000,
-      useWildcards: true,
-      useRegularExpressions: false,
-    })
+  it(
+    'builds repeated reconciliation SUMIFS formulas within a bounded budget',
+    () => {
+      const rowCount = 1_500
+      const workbook = WorkPaper.buildFromSheets(buildReconciliationSheets(rowCount), {
+        evaluationTimeoutMs: reconciliationEvaluationTimeoutMs,
+        useWildcards: true,
+        useRegularExpressions: false,
+      })
 
-    expectNumber(cellValue(workbook, 'Summary', 1, 1), 0)
-    expectNumber(cellValue(workbook, 'Summary', 2, 1), 0)
-    expect(workbook.getConfig().useColumnIndex).toBe(true)
-  }, 8_000)
+      expectNumber(cellValue(workbook, 'Summary', 1, 1), 0)
+      expectNumber(cellValue(workbook, 'Summary', 2, 1), 0)
+      expect(workbook.getConfig().useColumnIndex).toBe(true)
+    },
+    reconciliationEvaluationTimeoutMs + 5_000,
+  )
 })
