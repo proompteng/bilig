@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as fc from 'fast-check'
 import { fuzzJsonValueArbitrary, runProperty } from '@bilig/test-fuzz'
-import { parseJsonRpcResponse, parseServerNotification, parseServerRequest } from './codex-app-server-message-parsers.js'
+import { parseJsonRpcResponse, parseServerNotification, parseServerRequest } from '../codex-app-server-message-parsers.js'
 
 describe('Codex app-server message parser fuzz', () => {
   it('should parse generated JSON-RPC responses without losing result or error identity', async () => {

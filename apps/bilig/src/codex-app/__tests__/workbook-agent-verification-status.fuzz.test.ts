@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as fc from 'fast-check'
 import { runProperty } from '@bilig/test-fuzz'
-import { summarizeWorkbookAgentVerificationStatus } from './workbook-agent-verification-status.js'
+import { summarizeWorkbookAgentVerificationStatus } from '../workbook-agent-verification-status.js'
 
 describe('workbook agent verification status fuzz', () => {
   it('should make verification completeness exactly match required generated checks', async () => {

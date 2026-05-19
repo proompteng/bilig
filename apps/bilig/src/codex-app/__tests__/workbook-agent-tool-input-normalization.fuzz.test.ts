@@ -4,7 +4,7 @@ import { fuzzLiteralInputArbitrary, runProperty } from '@bilig/test-fuzz'
 import {
   normalizeWorkbookAgentToolNumberFormatInput,
   normalizeWorkbookAgentWriteCellInput,
-} from './workbook-agent-tool-input-normalization.js'
+} from '../workbook-agent-tool-input-normalization.js'
 
 describe('workbook agent tool input normalization fuzz', () => {
   it('should normalize generated supported write cell inputs into protocol-safe values', async () => {
@@ -16,8 +16,7 @@ describe('workbook agent tool input normalization fuzz', () => {
 
         if (typeof normalized === 'number') {
           expect(Number.isFinite(normalized)).toBe(true)
-        } else if (normalized && typeof normalized === 'object') {
-          expect('formula' in normalized).toBe(true)
+        } else if (normalized && typeof normalized === 'object' && 'formula' in normalized) {
           expect(String(normalized.formula)).toMatch(/^=/u)
         } else {
           expect(normalized === null || typeof normalized === 'boolean' || typeof normalized === 'string').toBe(true)
@@ -51,7 +50,10 @@ describe('workbook agent tool input normalization fuzz', () => {
         if (typeof input === 'string') {
           expect(normalized).toBe(input)
         } else {
-          expect(typeof normalized).toBe('object')
+          expect(typeof normalized).not.toBe('string')
+          if (typeof normalized === 'string') {
+            throw new Error('Expected preset number format normalization to return a preset object')
+          }
           expect(normalized.kind).toBe(input.kind)
         }
       },

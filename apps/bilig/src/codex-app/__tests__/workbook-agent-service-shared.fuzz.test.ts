@@ -11,7 +11,7 @@ import {
   upsertEntry,
   upsertWorkflowRun,
   type WorkbookAgentThreadState,
-} from './workbook-agent-service-shared.js'
+} from '../workbook-agent-service-shared.js'
 
 describe('workbook agent service shared state fuzz', () => {
   it('should preserve snapshot isolation across generated thread states', async () => {
