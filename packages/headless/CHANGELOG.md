@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.32.2
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.32.1
+- Manual override: no
+
+## Fixes
+- perf(formula): batch direct scalar recalc natively (ecd34ab9)
+
+## Internal runtime changes
+- docs(discovery): sync 0.32.1 agent surfaces (f297f822)
+
 ## 0.32.1
 
 - Release type: patch
