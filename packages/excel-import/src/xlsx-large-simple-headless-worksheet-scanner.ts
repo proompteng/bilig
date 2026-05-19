@@ -204,18 +204,16 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
   }
 
   private readDimension(nameEnd: number, tagEnd: number): void {
-    const ref = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 'ref')
+    const ref = readXmlAttributeRangeFromTag(this.buffer, nameEnd, tagEnd, 'ref')
     if (!ref) {
       return
     }
-    const [startRef, endRef = startRef] = ref.split(':')
-    const start = decodeCellAddress(startRef ?? '')
-    const end = decodeCellAddress(endRef ?? '')
-    if (!start || !end) {
+    const range = readDimensionAddressRange(this.buffer, ref.start, ref.end)
+    if (!range) {
       return
     }
-    this.rowCount = Math.max(this.rowCount, start.row + 1, end.row + 1)
-    this.columnCount = Math.max(this.columnCount, start.column + 1, end.column + 1)
+    this.rowCount = Math.max(this.rowCount, range.startRow + 1, range.endRow + 1)
+    this.columnCount = Math.max(this.columnCount, range.startColumn + 1, range.endColumn + 1)
   }
 
   private readCell(nameEnd: number, tagEnd: number, final: boolean): boolean {
@@ -396,8 +394,7 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
 
   private countMetadata(localName: string, nameEnd: number, tagEnd: number, contentStart: number, contentEnd: number): void {
     if (localName === 'conditionalFormatting') {
-      const sqref = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 'sqref')
-      const rangeCount = sqref ? Math.max(1, sqref.trim().split(/\s+/u).filter(Boolean).length) : 1
+      const rangeCount = countSqrefRangesFromTag(this.buffer, nameEnd, tagEnd)
       this.conditionalFormatCount += rangeCount * Math.max(1, countOpeningTags(this.buffer, contentStart, contentEnd, 'cfRule'))
     } else if (localName === 'mergeCells') {
       this.mergeCount += countOpeningTags(this.buffer, contentStart, contentEnd, 'mergeCell')
@@ -477,6 +474,49 @@ function isSelfClosingTag(bytes: Uint8Array, tagEnd: number): boolean {
   return bytes[index] === slash
 }
 
+function readDimensionAddressRange(
+  bytes: Uint8Array,
+  startIndex: number,
+  endIndex: number,
+): { readonly startRow: number; readonly startColumn: number; readonly endRow: number; readonly endColumn: number } | null {
+  const trimmed = trimAsciiWhitespace(bytes, startIndex, endIndex)
+  if (trimmed.start === trimmed.end) {
+    return null
+  }
+  const separator = findByte(bytes, trimmed.start, trimmed.end, 58)
+  const firstEnd = separator ?? trimmed.end
+  const start = decodePackedCellAddressBytes(bytes, trimmed.start, firstEnd)
+  const end = separator === null ? start : decodePackedCellAddressBytes(bytes, separator + 1, trimmed.end)
+  return start === null || end === null
+    ? null
+    : {
+        startRow: packedAddressRow(start),
+        startColumn: packedAddressColumn(start),
+        endRow: packedAddressRow(end),
+        endColumn: packedAddressColumn(end),
+      }
+}
+
+function countSqrefRangesFromTag(bytes: Uint8Array, nameEnd: number, tagEnd: number): number {
+  const sqref = readXmlAttributeRangeFromTag(bytes, nameEnd, tagEnd, 'sqref')
+  if (!sqref) {
+    return 1
+  }
+  let count = 0
+  let inToken = false
+  for (let index = sqref.start; index < sqref.end; index += 1) {
+    if (isAsciiWhitespace(bytes[index] ?? 0)) {
+      inToken = false
+      continue
+    }
+    if (!inToken) {
+      count += 1
+      inToken = true
+    }
+  }
+  return Math.max(1, count)
+}
+
 function readXmlTagName(bytes: Uint8Array, startIndex: number): { readonly localName: string; readonly endIndex: number } | null {
   const first = bytes[startIndex]
   if (first === undefined || first === 33 || first === slash || first === 63) {
@@ -493,11 +533,6 @@ function readXmlTagName(bytes: Uint8Array, startIndex: number): { readonly local
   return index === localNameStart
     ? null
     : { localName: readKnownXmlLocalName(bytes, localNameStart, index) ?? decodeAscii(bytes, localNameStart, index), endIndex: index }
-}
-
-function readXmlAttributeFromTag(bytes: Uint8Array, startIndex: number, tagEnd: number, attributeName: string): string | null {
-  const range = readXmlAttributeRangeFromTag(bytes, startIndex, tagEnd, attributeName)
-  return range ? decodeAscii(bytes, range.start, range.end) : null
 }
 
 function readXmlAttributeRangeFromTag(
@@ -561,17 +596,25 @@ function skipAsciiWhitespace(bytes: Uint8Array, startIndex: number, endIndex: nu
   return index
 }
 
-function decodeCellAddress(address: string): { readonly row: number; readonly column: number } | null {
-  const match = /^([A-Z]{1,3})([1-9][0-9]*)$/iu.exec(address.replaceAll('$', ''))
-  if (!match) {
-    return null
+function trimAsciiWhitespace(bytes: Uint8Array, startIndex: number, endIndex: number): { readonly start: number; readonly end: number } {
+  let start = startIndex
+  let end = endIndex
+  while (start < end && isAsciiWhitespace(bytes[start] ?? 0)) {
+    start += 1
   }
-  let column = 0
-  for (const letter of match[1]?.toUpperCase() ?? '') {
-    column = column * 26 + letter.charCodeAt(0) - 64
+  while (end > start && isAsciiWhitespace(bytes[end - 1] ?? 0)) {
+    end -= 1
   }
-  const row = Number(match[2])
-  return Number.isSafeInteger(row) && row > 0 && column > 0 ? { row: row - 1, column: column - 1 } : null
+  return { start, end }
+}
+
+function findByte(bytes: Uint8Array, startIndex: number, endIndex: number, target: number): number | null {
+  for (let index = startIndex; index < endIndex; index += 1) {
+    if (bytes[index] === target) {
+      return index
+    }
+  }
+  return null
 }
 
 function decodePackedCellAddressBytes(bytes: Uint8Array, startIndex: number, endIndex: number): number | null {

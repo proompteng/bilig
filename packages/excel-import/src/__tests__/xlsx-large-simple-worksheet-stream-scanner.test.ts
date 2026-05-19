@@ -15,6 +15,23 @@ describe('large simple worksheet stream scanners', () => {
     expect(scan?.usedRange).toEqual({ startRow: 0, startColumn: 0, endRow: 0, endColumn: 1 })
   })
 
+  it('counts headless dimensions and conditional format ranges from attribute bytes', () => {
+    const scan = parseHeadlessLargeSimpleWorksheetFromChunks(splitAfterTagOpen(headlessMetadataWorksheetXml()), 0, {
+      hasSharedStrings: false,
+    })
+
+    expect(scan).toMatchObject({
+      cellCount: 2,
+      valueCellCount: 2,
+      rowCount: 12,
+      columnCount: 3,
+      mergeCount: 2,
+      tableCount: 2,
+      conditionalFormatCount: 4,
+      usedRange: { startRow: 0, startColumn: 0, endRow: 11, endColumn: 2 },
+    })
+  })
+
   it('retains tag-open boundaries across chunks in materialized scans', () => {
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(worksheetXml()), 0, { hasSharedStrings: false })
 
@@ -175,6 +192,21 @@ function worksheetXml(): string {
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
     '<dimension ref="A1:B1"/>',
     '<sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row></sheetData>',
+    '</worksheet>',
+  ].join('')
+}
+
+function headlessMetadataWorksheetXml(): string {
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref=" $A$1:$C$12 "/>',
+    '<sheetData><row r="1"><c r="A1"><v>1</v></c></row><row r="12"><c r="C12"><v>2</v></c></row></sheetData>',
+    '<conditionalFormatting sqref="A1:A2 C1:C2">',
+    '<cfRule type="cellIs" priority="1" operator="greaterThan"><formula>0</formula></cfRule>',
+    '<cfRule type="cellIs" priority="2" operator="lessThan"><formula>9</formula></cfRule>',
+    '</conditionalFormatting>',
+    '<mergeCells count="2"><mergeCell ref="A1:B1"/><mergeCell ref="A2:B2"/></mergeCells>',
+    '<tableParts count="2"><tablePart r:id="rIdTable1"/><tablePart r:id="rIdTable2"/></tableParts>',
     '</worksheet>',
   ].join('')
 }
