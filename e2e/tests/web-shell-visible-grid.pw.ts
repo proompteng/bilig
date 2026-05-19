@@ -364,6 +364,38 @@ test('@browser-ci web app preserves visible fill while Delete clears only cell c
       timeout: 5_000,
     })
     .toBeGreaterThan(120)
+
+  await clickProductCell(page, 3, 3)
+  await expect.poll(() => nativeTextRunsInclude(page, text)).toBe(false)
+  await expect
+    .poll(() => countGreenFillPixelsInCell(page, 1, 1), {
+      message: 'deleted text must not come back after focus leaves the formatted cell',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(120)
+
+  const scrollViewport = page.getByTestId('grid-scroll-viewport')
+  await scrollViewport.evaluate((viewport) => {
+    viewport.scrollTop = 900
+    viewport.scrollLeft = 220
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+  })
+  await expect.poll(() => nativeTextRunsInclude(page, text)).toBe(false)
+
+  await scrollViewport.evaluate((viewport) => {
+    viewport.scrollTop = 0
+    viewport.scrollLeft = 0
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+  })
+  await clickProductCell(page, 1, 1)
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunTextAt(page, 1, 1)).toBe('')
+  await expect
+    .poll(() => countGreenFillPixelsInCell(page, 1, 1), {
+      message: 'formatted deleted cell must survive tile eviction and return without ghost content',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(120)
 })
 
 test('@browser-ci web app repaints same-size TypeGPU fill color changes without stale tile colors', async ({ page }) => {
