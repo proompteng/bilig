@@ -13,12 +13,9 @@ import {
   precisionAsDisplayedCalculationWarning,
   volatileFormulasWarning,
 } from '../packages/excel-import/src/index.js'
-import { tryImportLargeSimpleXlsx, type LargeSimpleXlsxImportStats } from '../packages/excel-import/src/xlsx-large-simple-import.js'
-import { readXlsxZipEntriesLazy } from '../packages/excel-import/src/xlsx-zip.js'
 import { ValueTag } from '../packages/protocol/src/enums.js'
 import type { CellValue, LiteralInput, WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import { validatePublicWorkbookManifest } from './public-workbook-corpus-json.ts'
-import { largeSimpleImportPhaseTelemetryEvidence } from './public-workbook-corpus-large-simple-evidence.ts'
 import {
   classifyUnsupportedLocaleDecimalCommaFormulaOracle,
   localeDecimalCommaFormulaOracleUnsupportedClassification,
@@ -34,6 +31,11 @@ import {
   publicWorkbookPivotClassifierEvidence,
   publicWorkbookResourceLimitClassifierEvidence,
 } from './public-workbook-corpus-evidence.ts'
+import {
+  shouldUseCompactLargeSimpleVerification,
+  verifyLargeSimpleWorkbookCompact,
+  verifyLargeSimpleWorkbookCompactPreflight,
+} from './public-workbook-corpus-large-simple-compact.ts'
 import { inspectWorkbookFootprintIsolated, type PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus-footprint.ts'
 import {
   importResourceLimitPreflight,
@@ -62,7 +64,6 @@ import {
   isUnsupportedCycleOracleMismatch,
   sha256HexSync,
   workbookMetadata,
-  type WorkbookFootprint,
 } from './public-workbook-corpus-workbook.ts'
 import type {
   BuildScorecardArgs,
@@ -196,6 +197,20 @@ export async function verifyCachedWorkbookArtifact(
         ]),
       )
     }
+    const preflightCompactCase = verifyLargeSimpleWorkbookCompactPreflight({
+      artifact,
+      bytes,
+      baseEvidence,
+      classifyUnsupportedFeatures,
+      maxCellCount,
+      minByteLength: isolatedFootprintByteThreshold,
+      runStructuralSmoke,
+      runtimeMetrics,
+      workerOptions,
+    })
+    if (preflightCompactCase) {
+      return finishCase(preflightCompactCase)
+    }
     const footprint = await timeVerificationPhase(runtimeMetrics, workerOptions, 'inspect-footprint', () =>
       bytes.byteLength >= isolatedFootprintByteThreshold
         ? inspectWorkbookFootprintIsolated({
@@ -223,17 +238,18 @@ export async function verifyCachedWorkbookArtifact(
     }
     collectGarbage()
     if (shouldUseCompactLargeSimpleVerification(artifact, footprint, runStructuralSmoke)) {
-      const compactCase = await verifyLargeSimpleWorkbookCompact(
+      const compactImportCase = await verifyLargeSimpleWorkbookCompact({
         artifact,
         bytes,
         footprint,
         baseEvidence,
+        classifyUnsupportedFeatures,
+        runStructuralSmoke,
         runtimeMetrics,
         workerOptions,
-        runStructuralSmoke,
-      )
-      if (compactCase) {
-        return finishCase(compactCase)
+      })
+      if (compactImportCase) {
+        return finishCase(compactImportCase)
       }
     }
     const { imported, featureCounts, metadata } = await timeVerificationPhase(runtimeMetrics, workerOptions, 'import-xlsx', () => {
@@ -394,123 +410,6 @@ export async function verifyCachedWorkbookArtifact(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return finishCase(failedCase(artifact, 'error', baseEvidence, [message]))
-  }
-}
-
-function shouldUseCompactLargeSimpleVerification(
-  artifact: PublicWorkbookArtifact,
-  footprint: WorkbookFootprint,
-  runStructuralSmoke: boolean,
-): boolean {
-  const counts = footprint.featureCounts
-  return (
-    footprint.largeSimpleXlsxImport?.eligible === true &&
-    counts.cellCount >= 500_000 &&
-    counts.formulaCellCount === 0 &&
-    roundTripResourceLimitPreflight(artifact, counts) !== null &&
-    (!runStructuralSmoke || structuralSmokeResourceLimitPreflight(counts) !== null)
-  )
-}
-
-async function verifyLargeSimpleWorkbookCompact(
-  artifact: PublicWorkbookArtifact,
-  bytes: Uint8Array,
-  footprint: WorkbookFootprint,
-  baseEvidence: readonly string[],
-  runtimeMetrics: ReturnType<typeof startVerificationRuntimeMetrics>,
-  workerOptions: PublicWorkbookCorpusWorkerOptions,
-  runStructuralSmoke: boolean,
-): Promise<PublicWorkbookCorpusCase | null> {
-  const imported = await timeVerificationPhase(runtimeMetrics, workerOptions, 'import-xlsx', () =>
-    tryImportLargeSimpleXlsx({ byteLength: bytes.byteLength }, artifact.fileName, readXlsxZipEntriesLazy(bytes), {
-      materializeCells: false,
-      materializeMetadata: false,
-      minByteLength: 0,
-      releaseArenaAfterMaterialization: true,
-      releaseZipSource: true,
-    }),
-  )
-  if (!imported) {
-    return null
-  }
-  const featureCounts = mergeImportedAndFootprintFeatureCounts(featureCountsFromLargeSimpleStats(imported.stats), footprint.featureCounts)
-  const metadata: PublicWorkbookCorpusCase['workbookMetadata'] = {
-    workbookName: imported.workbookName,
-    sheetNames: imported.sheetNames,
-    dimensions: imported.stats.dimensions.map((dimension) => ({
-      sheetName: dimension.sheetName,
-      rowCount: dimension.rowCount,
-      columnCount: dimension.columnCount,
-      nonEmptyCellCount: dimension.nonEmptyCellCount,
-      usedRange: dimension.usedRange,
-    })),
-  }
-  collectGarbage()
-  const roundTripResourceLimit = roundTripResourceLimitPreflight(artifact, featureCounts)
-  const structuralSmokeResourceLimit = runStructuralSmoke ? structuralSmokeResourceLimitPreflight(featureCounts) : null
-  if (!roundTripResourceLimit || (runStructuralSmoke && !structuralSmokeResourceLimit)) {
-    return null
-  }
-  const phaseResourceLimitClassifications = [
-    roundTripResourceLimit.classification,
-    ...(structuralSmokeResourceLimit ? [structuralSmokeResourceLimit.classification] : []),
-  ]
-  const phaseResourceLimitEvidence = [...roundTripResourceLimit.evidence, ...(structuralSmokeResourceLimit?.evidence ?? [])]
-  const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings, featureCounts, {
-    extraClassifications: phaseResourceLimitClassifications,
-  })
-  const validation: PublicWorkbookValidationSummary = {
-    importPassed: true,
-    formulaOraclePassed: true,
-    formulaOracleComparisons: 0,
-    formulaOracleMismatches: [],
-    roundTripPassed: true,
-    structuralSmokePassed: null,
-  }
-  return {
-    id: artifact.id,
-    sourceId: artifact.sourceId,
-    sourceUrl: artifact.sourceUrl,
-    fileName: artifact.fileName,
-    sha256: artifact.sha256,
-    byteSize: artifact.byteSize,
-    license: artifact.license,
-    status: unsupportedFeatureClassifications.length > 0 ? 'unsupported' : 'passed',
-    passed: true,
-    featureCounts,
-    workbookMetadata: metadata,
-    validation,
-    unsupportedFeatureClassifications,
-    evidence: [
-      ...baseEvidence,
-      `sheets=${String(featureCounts.sheetCount)}`,
-      `cells=${String(featureCounts.cellCount)}`,
-      `formulas=${String(featureCounts.formulaCellCount)}`,
-      ...largeSimpleImportPhaseTelemetryEvidence(imported.stats),
-      ...(hasResourceLimitUnsupportedClassifications(unsupportedFeatureClassifications)
-        ? [publicWorkbookResourceLimitClassifierEvidence, ...phaseResourceLimitEvidence]
-        : []),
-      ...validationEvidence(validation),
-    ],
-  }
-}
-
-function featureCountsFromLargeSimpleStats(stats: LargeSimpleXlsxImportStats): PublicWorkbookFeatureCounts {
-  return {
-    sheetCount: stats.sheetCount,
-    cellCount: stats.cellCount,
-    formulaCellCount: stats.formulaCellCount,
-    valueCellCount: stats.valueCellCount,
-    definedNameCount: stats.definedNameCount,
-    tableCount: stats.tableCount,
-    chartCount: 0,
-    pivotCount: 0,
-    mergeCount: stats.mergeCount,
-    styleRangeCount: 0,
-    conditionalFormatCount: stats.conditionalFormatCount,
-    dataValidationCount: 0,
-    macroPayloadCount: 0,
-    warningCount: stats.warningCount,
   }
 }
 
