@@ -5,7 +5,7 @@ import { tryImportLargeSimpleXlsx } from '../xlsx-large-simple-import.js'
 import { readLazyXlsxZipSourceByteLength, readXlsxZipEntriesLazy } from '../xlsx-zip.js'
 
 describe('large simple XLSX import materialization lifetime', () => {
-  it('materializes independent sheets before global resolution phases', () => {
+  it('releases ZIP source bytes before materializing independent sheets when ownership release is enabled', () => {
     const bytes = buildIndependentWorkbook([
       {
         name: 'First',
@@ -49,15 +49,17 @@ describe('large simple XLSX import materialization lifetime', () => {
         { address: 'B1', value: 'B inline' },
       ],
     ])
-    expect(imported?.stats.phaseTelemetry.map((entry) => entry.phase)).toEqual([
+    const phases = imported?.stats.phaseTelemetry.map((entry) => entry.phase) ?? []
+    expect(phases).toEqual([
       'zip-setup',
       'worksheet-scan',
       'metadata-parsing',
-      'public-snapshot-materialization',
       'shared-string-resolution',
       'style-parsing',
       'zip-source-release',
+      'public-snapshot-materialization',
     ])
+    expect(phases.indexOf('zip-source-release')).toBeLessThan(phases.indexOf('public-snapshot-materialization'))
   })
 
   it('materializes shared-string sheets after ZIP source release without dropping rich text', () => {

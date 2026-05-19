@@ -12,6 +12,7 @@ describe('large simple XLSX import arena', () => {
     styleIndexes.add(0, 0, 1)
 
     expect(arena.materializeSheetCells(0)).toEqual([{ address: 'A1', value: 'Alpha', formula: 'B1' }])
+    expect(arena.readPreviewText(0, 0)).toBe('Alpha')
     expect(styleIndexes.count).toBe(1)
 
     arena.release()
@@ -91,5 +92,24 @@ describe('large simple XLSX import arena', () => {
 
     arena.setFormula(numericCell, '1+1')
     expect(arena.snapshot().formulaIds).toEqual(new Uint32Array([0, 0xffffffff, 0xffffffff]))
+  })
+
+  it('keeps preview values in fixed slots without overriding values with formulas', () => {
+    const arena = new ImportedWorkbookArena()
+    const valueFormulaCell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })
+    const formulaOnlyCell = arena.addCell({ sheetIndex: 0, row: 0, column: 1, value: undefined })
+    arena.addCell({ sheetIndex: 0, row: 8, column: 0, value: 'Outside preview' })
+
+    arena.setFormula(valueFormulaCell, '40+2')
+    arena.setFormula(formulaOnlyCell, 'SUM(A1:A1)')
+
+    expect(arena.readPreviewText(0, 0)).toBe('42')
+    expect(arena.readPreviewText(0, 1)).toBe('=SUM(A1:A1)')
+    expect(arena.readPreviewText(8, 0)).toBe('')
+    expect(arena.materializeSheetCells(0)).toEqual([
+      { address: 'A1', value: 42, formula: '40+2' },
+      { address: 'B1', formula: 'SUM(A1:A1)' },
+      { address: 'A9', value: 'Outside preview' },
+    ])
   })
 })

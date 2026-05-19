@@ -218,7 +218,8 @@ export function tryImportLargeSimpleXlsx(
   const styleCatalog = new Map<string, CellStyleRecord>()
   const scannedWorksheets: (ScannedWorksheet | undefined)[] = []
   const referencedSharedStringIndexes = new Set<number>()
-  const materializeSheetsImmediately = materializeCells && !hasSharedStrings && !hasStyles && !hasDrawingParts
+  const materializeSheetsImmediately =
+    materializeCells && options.releaseZipSource !== true && !hasSharedStrings && !hasStyles && !hasDrawingParts
   const emptyStylesByIndex = new Map<number, Omit<CellStyleRecord, 'id'>>()
   const appendParsedWorksheet = (parsed: ParsedWorksheet): void => {
     sheets.push(parsed.sheet)

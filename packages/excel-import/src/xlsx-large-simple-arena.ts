@@ -12,6 +12,9 @@ const valueKindBoolean = 3
 const valueKindNull = 4
 const valueKindSharedStringRef = 5
 const initialStyleIndexCapacity = 256
+const previewRowCount = 8
+const previewColumnCount = 6
+const previewCellCount = previewRowCount * previewColumnCount
 
 export interface ImportedWorksheetArenaCellInput {
   readonly sheetIndex: number
@@ -108,7 +111,8 @@ export class ImportedWorkbookArena {
   private readonly stringIdsByValue = new Map<string, number>()
   private readonly formulas: string[] = []
   private readonly formulaIdsByValue = new Map<string, number>()
-  private readonly previewValues = new Map<string, LiteralInput | string>()
+  private readonly previewValues: (LiteralInput | undefined)[] = Array.from({ length: previewCellCount })
+  private readonly previewValueSet = new Uint8Array(previewCellCount)
 
   constructor(private readonly stringPool?: ImportedWorkbookStringPool) {}
 
@@ -120,10 +124,10 @@ export class ImportedWorkbookArena {
     this.ensureCapacity(this.length + 1)
     const index = this.appendCell(input.sheetIndex, input.row, input.column)
     this.addValue(index, input.value)
-    if (input.row < 8 && input.column < 6 && input.value !== undefined) {
+    if (isPreviewCell(input.row, input.column) && input.value !== undefined) {
       const previewValue = this.materializeValue(index)
       if (previewValue !== undefined) {
-        this.previewValues.set(previewKey(input.row, input.column), previewValue)
+        this.setPreviewValue(input.row, input.column, previewValue)
       }
     }
     return index
@@ -142,8 +146,8 @@ export class ImportedWorkbookArena {
     this.ensureFormulaIdStorage()[cellIndex] = formulaId
     const row = this.rows[cellIndex]
     const column = this.columns[cellIndex]
-    if (row !== undefined && column !== undefined && row < 8 && column < 6 && !this.previewValues.has(previewKey(row, column))) {
-      this.previewValues.set(previewKey(row, column), `=${this.formulas[formulaId] ?? formula}`)
+    if (row !== undefined && column !== undefined && isPreviewCell(row, column) && !this.hasPreviewValue(row, column)) {
+      this.setPreviewValue(row, column, `=${this.formulas[formulaId] ?? formula}`)
     }
   }
 
@@ -180,7 +184,7 @@ export class ImportedWorkbookArena {
   }
 
   readPreviewText(row: number, column: number): string {
-    return toDisplayText(this.previewValues.get(previewKey(row, column)))
+    return toDisplayText(this.readPreviewValue(row, column))
   }
 
   collectSharedStringIndexes(output: Set<number>): void {
@@ -211,8 +215,8 @@ export class ImportedWorkbookArena {
       stringIds[index] = this.internString(entry.text)
       const row = this.rows[index] ?? 0
       const column = this.columns[index] ?? 0
-      if (row < 8 && column < 6) {
-        this.previewValues.set(previewKey(row, column), entry.text)
+      if (isPreviewCell(row, column)) {
+        this.setPreviewValue(row, column, entry.text)
       }
       if (entry.rich) {
         const text = this.strings[stringIds[index] ?? noPoolId] ?? entry.text
@@ -258,7 +262,8 @@ export class ImportedWorkbookArena {
     this.stringIdsByValue.clear()
     this.formulas.length = 0
     this.formulaIdsByValue.clear()
-    this.previewValues.clear()
+    this.previewValues.fill(undefined)
+    this.previewValueSet.fill(0)
   }
 
   private appendCell(sheetIndex: number, row: number, column: number): number {
@@ -407,6 +412,25 @@ export class ImportedWorkbookArena {
     return next
   }
 
+  private setPreviewValue(row: number, column: number, value: LiteralInput): void {
+    const index = previewIndex(row, column)
+    if (index === -1) {
+      return
+    }
+    this.previewValues[index] = value
+    this.previewValueSet[index] = 1
+  }
+
+  private hasPreviewValue(row: number, column: number): boolean {
+    const index = previewIndex(row, column)
+    return index !== -1 && this.previewValueSet[index] === 1
+  }
+
+  private readPreviewValue(row: number, column: number): LiteralInput | undefined {
+    const index = previewIndex(row, column)
+    return index === -1 || this.previewValueSet[index] !== 1 ? undefined : this.previewValues[index]
+  }
+
   private ensureCapacity(nextLength: number): void {
     if (nextLength <= this.rows.length) {
       return
@@ -491,8 +515,12 @@ function growFloat64Array(source: Float64Array<ArrayBuffer>, nextCapacity: numbe
   return output
 }
 
-function previewKey(row: number, column: number): string {
-  return `${String(row)}:${String(column)}`
+function isPreviewCell(row: number, column: number): boolean {
+  return row >= 0 && row < previewRowCount && column >= 0 && column < previewColumnCount
+}
+
+function previewIndex(row: number, column: number): number {
+  return isPreviewCell(row, column) ? row * previewColumnCount + column : -1
 }
 
 function encodeCellAddress(row: number, column: number): string {
