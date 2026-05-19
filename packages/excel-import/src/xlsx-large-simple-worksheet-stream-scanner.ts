@@ -22,6 +22,7 @@ import { readLargeSimpleSheetHyperlinkRefs } from './xlsx-large-simple-hyperlink
 import { appendLargeSimplePrintPageSetupElement, isLargeSimplePrintPageSetupElementName } from './xlsx-large-simple-printer-settings.js'
 import { rowTagHasMetadataAttribute } from './xlsx-large-simple-row-metadata-scan.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import { appendLargeSimpleRowMetadataTagFromBytes, readLargeSimpleMergeRefsFromBytes } from './xlsx-large-simple-metadata-byte-scan.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
@@ -33,10 +34,8 @@ import {
   unsupportedWorksheetTagNames,
 } from './xlsx-large-simple-worksheet-scan-constants.js'
 import {
-  appendLargeSimpleRowMetadataTag,
   readLargeSimpleColumnMetadata,
   readLargeSimpleDrawingRelationshipIdTag,
-  readLargeSimpleMergeRefs,
   readLargeSimpleSheetFormatPrTag,
   type LargeSimpleWorksheetMergeRef,
   type LargeSimpleWorksheetScannedMetadata,
@@ -330,10 +329,9 @@ class LargeSimpleWorksheetChunkScanner {
     if (!rowTagHasMetadataAttribute(this.buffer, nameEnd, tagEnd)) {
       return
     }
-    const openingTag = decodeBytes(this.buffer, this.index, tagEnd + 1)
     this.rowEntries ??= []
     this.rowMetadata ??= []
-    appendLargeSimpleRowMetadataTag(this.rowEntries, this.rowMetadata, openingTag)
+    appendLargeSimpleRowMetadataTagFromBytes(this.rowEntries, this.rowMetadata, this.buffer, nameEnd, tagEnd)
   }
 
   private readCell(nameEnd: number, tagEnd: number, final: boolean): boolean {
@@ -470,7 +468,7 @@ class LargeSimpleWorksheetChunkScanner {
 
   private collectTypedMetadataElement(localName: string, startIndex: number, endIndex: number): boolean {
     if (localName === 'mergeCells') {
-      const refs = readLargeSimpleMergeRefs(decodeBytes(this.buffer, startIndex, endIndex))
+      const refs = readLargeSimpleMergeRefsFromBytes(this.buffer, startIndex, endIndex)
       this.mergeCount += refs.length
       if (refs.length > 0) {
         this.mergeRefs ??= []
