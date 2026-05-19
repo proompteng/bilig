@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.29.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.28.2
+- Manual override: yes
+
+## Features
+- feat(package): add unscoped bilig npm entrypoint (c43c5b69)
+
+## Internal runtime changes
+- docs(discovery): sync runtime package 0.28.2 (26662b3c)
+
 ## 0.28.2
 
 - Release type: patch

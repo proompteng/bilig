@@ -1,6 +1,6 @@
 {
   "name": "bilig",
-  "version": "0.28.2",
+  "version": "0.29.0",
   "description": "Formula WorkPaper runtime for Node.js services: edit cells, recalculate formulas, read results, and persist JSON.",
   "keywords": [
     "bilig",
