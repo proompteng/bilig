@@ -112,6 +112,19 @@ describe('test-fuzz replay-path extraction', () => {
     expect(readReplayPath(artifactPath)).toBe('/tmp/from-string.json')
   })
 
+  it('writes replay commands through the unified fuzz entrypoint', () => {
+    const artifactPath = withTempCwd(() =>
+      captureCounterexample({
+        suite: 'grid/replay-command',
+        kind: 'browser',
+        details: createRunDetails(789, '0:1', ['Command(replayPath="/tmp/from-string.json")']),
+      }),
+    )
+    const raw: unknown = JSON.parse(readFileSync(artifactPath, 'utf8'))
+
+    expect(isRecord(raw) ? raw['reproductionCommand'] : null).toBe(`pnpm test:fuzz -- replay ${artifactPath}`)
+  })
+
   it('resolves fuzz capture flags strictly', () => {
     expect(resolveFuzzCaptureEnabled({})).toBe(false)
     expect(resolveFuzzCaptureEnabled({ BILIG_FUZZ_CAPTURE: '1' })).toBe(true)
@@ -136,5 +149,18 @@ describe('test-fuzz replay-path extraction', () => {
         }),
       ),
     ).rejects.toThrow('BILIG_FUZZ_CAPTURE must be "1", "true", "0", or "false" when set, got yes')
+  })
+
+  it('rejects retired fuzz profile names instead of silently downgrading them', async () => {
+    await expect(
+      withEnv({ BILIG_FUZZ_PROFILE: 'main' }, () =>
+        runProperty({
+          suite: 'profile/retired-name',
+          arbitrary: fc.constant('value'),
+          predicate: () => {},
+          parameters: { numRuns: 1 },
+        }),
+      ),
+    ).rejects.toThrow('BILIG_FUZZ_PROFILE must be "fuzz" or "replay" when set, got main')
   })
 })

@@ -14,7 +14,7 @@ describe('browser test phases', () => {
     expect(phases[0]?.args).toEqual([
       '--workers=2',
       '--grep-invert',
-      '@clipboard-global|@browser-serial|@fuzz-browser|@browser-perf|@browser-deep|@browser-webgpu',
+      '@clipboard-global|@browser-serial|@browser-perf|@browser-deep|@browser-webgpu',
     ])
     expect(phases[1]).toEqual({
       label: 'browser webgpu tests',
@@ -24,14 +24,12 @@ describe('browser test phases', () => {
     expect(phases[2]?.args).toEqual(['--workers=1', '--grep', '@browser-serial', '--grep-invert', '@browser-webgpu'])
   })
 
-  it('adds perf, deep, and fuzz only for the deep browser profile', () => {
+  it('adds perf and deep only for the deep browser profile', () => {
     const phases = resolveBrowserTestPhases({
       playwrightArgs: [],
       env: {
-        BILIG_BROWSER_INCLUDE_FUZZ: '1',
         BILIG_BROWSER_INCLUDE_PERF: '1',
         BILIG_BROWSER_INCLUDE_DEEP: '1',
-        BILIG_FUZZ_PROFILE: 'nightly',
       },
     })
 
@@ -44,7 +42,6 @@ describe('browser test phases', () => {
       'browser webgpu deep tests',
       'browser serial tests',
       'clipboard global tests',
-      'browser fuzz tests',
     ])
     expect(phases.find((phase) => phase.label === 'browser perf tests')?.args).toEqual([
       '--workers=1',
@@ -71,11 +68,7 @@ describe('browser test phases', () => {
       args: ['--workers=1', '--grep', '@browser-webgpu.*@browser-deep|@browser-deep.*@browser-webgpu'],
       env: { BILIG_BROWSER_WEBGPU: '1' },
     })
-    expect(phases.at(-1)?.env).toEqual({
-      BILIG_FUZZ_BROWSER: '1',
-      BILIG_FUZZ_PROFILE: 'nightly',
-      BILIG_FUZZ_CAPTURE: '1',
-    })
+    expect(phases.at(-1)?.label).toBe('clipboard global tests')
   })
 
   it('allows the default parallel browser worker cap to be configured', () => {
@@ -89,7 +82,7 @@ describe('browser test phases', () => {
     expect(phases[0]?.args).toEqual([
       '--workers=4',
       '--grep-invert',
-      '@clipboard-global|@browser-serial|@fuzz-browser|@browser-perf|@browser-deep|@browser-webgpu',
+      '@clipboard-global|@browser-serial|@browser-perf|@browser-deep|@browser-webgpu',
     ])
   })
 
@@ -136,7 +129,7 @@ describe('browser test phases', () => {
     expect(phases).toEqual([
       {
         label: 'browser ci smoke tests',
-        args: ['--workers=3', '--grep', '@browser-ci', '--grep-invert', '@browser-perf|@browser-deep|@fuzz-browser|@browser-webgpu'],
+        args: ['--workers=3', '--grep', '@browser-ci', '--grep-invert', '@browser-perf|@browser-deep|@browser-webgpu'],
       },
     ])
   })

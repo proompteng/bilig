@@ -6,7 +6,7 @@ const args = process.argv.slice(2).filter((value) => value !== '--')
 const [artifactPath, fixturePath] = args
 
 if (!artifactPath || !fixturePath) {
-  console.error('Usage: pnpm test:fuzz:promote -- <artifact-path> <fixture-path>')
+  console.error('Usage: bun scripts/promote-fuzz-artifact.ts <artifact-path> <fixture-path>')
   process.exit(1)
 }
 

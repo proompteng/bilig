@@ -264,10 +264,7 @@ const coverageLane: CiTask = {
     },
   ],
 }
-const fuzzScript = runDeepGates ? 'test:fuzz:main' : 'test:fuzz'
-const vitestFuzzLane = withEnv(pnpm(runDeepGates ? 'vitest fuzz main' : 'vitest fuzz default', fuzzScript), {
-  BILIG_FUZZ_SKIP_BROWSER: '1',
-})
+const vitestFuzzLane = pnpm('vitest fuzz', 'test:fuzz')
 const browserWebBundleBuild = withEnv(pnpm('browser web bundle build', '--filter', '@bilig/web', 'build:bundle'), {
   VITE_BILIG_REMOTE_SYNC: '0',
 })
@@ -286,11 +283,8 @@ const browserLane: CiTask = {
       BILIG_BROWSER_CI_SMOKE: runFullGates ? '0' : '1',
       BILIG_BROWSER_INCLUDE_PERF: runDeepGates ? '1' : '0',
       BILIG_BROWSER_INCLUDE_DEEP: runDeepGates ? '1' : '0',
-      BILIG_BROWSER_INCLUDE_FUZZ: runDeepGates ? '1' : '0',
       BILIG_DEV_APP_RUNTIME_BUILD: '0',
       BILIG_DEV_WEB_PREVIEW_BUILD: '0',
-      BILIG_FUZZ_PROFILE: 'main',
-      BILIG_FUZZ_CAPTURE: '1',
     }),
   ],
 }
@@ -406,7 +400,7 @@ try {
   log(`profile ${ciProfile}`)
   if (!runFullGates) {
     log(
-      'fast profile runs generated checks, static checks, focused correctness tests, browser smoke, release budgets, perf smoke, and clean-diff checks; run pnpm run ci:full for coverage, fuzz, full browser, and deep benchmark gates',
+      'fast profile runs generated checks, static checks, focused correctness tests, default fuzz, browser smoke, release budgets, perf smoke, and clean-diff checks; run pnpm run ci:full for coverage, full browser, and deep benchmark gates',
     )
   }
   if (skipBrowserGates) {
@@ -457,6 +451,7 @@ try {
     // termination before assertion output on constrained machines.
     allCompleted.push(...(await runSequential('focused correctness checks', parallelFocusedCorrectnessLanes)))
     allCompleted.push(...(await runSequential('corpus correctness benchmark', [corpusCorrectnessLane])))
+    allCompleted.push(...(await runSequential('fast fuzz checks', [vitestFuzzLane])))
     if (!skipBrowserGates) {
       allCompleted.push(...(await runStage('browser smoke setup', [browserWebBundleBuild])))
     }

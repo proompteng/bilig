@@ -4,7 +4,9 @@ import { dirname, resolve } from 'node:path'
 import * as fc from 'fast-check'
 import type { AsyncCommand, IAsyncProperty, IProperty, Parameters, RunDetails, Scheduler } from 'fast-check'
 
-export type FuzzProfile = 'default' | 'main' | 'nightly' | 'replay'
+export * from './workbook-arbitraries.js'
+
+export type FuzzProfile = 'fuzz' | 'replay'
 export type FuzzSuiteKind = 'property' | 'model' | 'scheduled' | 'browser'
 
 interface BudgetProfile {
@@ -15,23 +17,11 @@ interface BudgetProfile {
 }
 
 const BUDGETS: Record<Exclude<FuzzProfile, 'replay'>, BudgetProfile> = {
-  default: {
-    property: { numRuns: 50, maxMs: 10_000 },
-    model: { numRuns: 10, maxMs: 15_000 },
-    scheduled: { numRuns: 4, maxMs: 4_000 },
-    browser: { numRuns: 5, maxMs: 20_000 },
-  },
-  main: {
+  fuzz: {
     property: { numRuns: 200, maxMs: 30_000 },
     model: { numRuns: 40, maxMs: 30_000 },
     scheduled: { numRuns: 12, maxMs: 12_000 },
     browser: { numRuns: 15, maxMs: 30_000 },
-  },
-  nightly: {
-    property: { numRuns: 2_000, maxMs: 120_000 },
-    model: { numRuns: 200, maxMs: 120_000 },
-    scheduled: { numRuns: 60, maxMs: 60_000 },
-    browser: { numRuns: 75, maxMs: 120_000 },
   },
 }
 
@@ -157,15 +147,18 @@ function serializeArtifactValue(value: unknown): unknown {
 
 function resolveFuzzProfile(): FuzzProfile {
   const raw = process.env['BILIG_FUZZ_PROFILE']
-  if (raw === 'main' || raw === 'nightly' || raw === 'replay') {
+  if (raw === undefined || raw === 'fuzz') {
+    return 'fuzz'
+  }
+  if (raw === 'replay') {
     return raw
   }
-  return 'default'
+  throw new Error(`BILIG_FUZZ_PROFILE must be "fuzz" or "replay" when set, got ${raw}`)
 }
 
 function resolveBudget(kind: FuzzSuiteKind): { numRuns: number; maxMs: number } {
   const profile = resolveFuzzProfile()
-  const baseProfile = profile === 'replay' ? 'main' : profile
+  const baseProfile = profile === 'replay' ? 'fuzz' : profile
   return BUDGETS[baseProfile][kind === 'browser' ? 'browser' : kind]
 }
 
@@ -327,7 +320,7 @@ export function captureCounterexample<Ts extends unknown[]>(options: CaptureCoun
     counterexample: serializeArtifactValue(options.details.counterexample ?? null),
     failures: serializeArtifactValue(options.details.failures ?? null),
     error: serializeArtifactValue(options.details.errorInstance ?? null),
-    reproductionCommand: `pnpm test:fuzz:replay -- ${artifactPath}`,
+    reproductionCommand: `pnpm test:fuzz -- replay ${artifactPath}`,
     createdAt: new Date().toISOString(),
   }
   mkdirSync(dirname(artifactPath), { recursive: true })

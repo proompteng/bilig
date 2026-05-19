@@ -7,6 +7,10 @@ import { resolveCiProfile, resolveCiSkipBrowserGates } from '../run-ci-config.ts
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 describe('run-ci', () => {
   it('defaults to the fast CI profile and accepts explicit profiles', () => {
     expect(resolveCiProfile({})).toBe('fast')
@@ -63,6 +67,23 @@ describe('run-ci', () => {
     expect(packageJson).toContain('"ci": "BILIG_CI_PROFILE=fast BILIG_CI_SKIP_BROWSER=1 tsx scripts/run-ci.ts"')
     expect(packageJson).toContain('"ci:core": "BILIG_CI_PROFILE=fast BILIG_CI_SKIP_BROWSER=1 tsx scripts/run-ci.ts"')
     expect(packageJson).toContain('"ci:full": "BILIG_CI_PROFILE=full tsx scripts/run-ci.ts"')
+  })
+
+  it('exposes one fuzz test entrypoint', () => {
+    const packageJson: unknown = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8'))
+    const scripts = isRecord(packageJson) && isRecord(packageJson['scripts']) ? packageJson['scripts'] : {}
+
+    expect(Object.keys(scripts).filter((scriptName) => scriptName === 'test:fuzz' || scriptName.startsWith('test:fuzz:'))).toEqual([
+      'test:fuzz',
+    ])
+  })
+
+  it('keeps the unified fuzz lane in fast CI', () => {
+    const source = readFileSync(resolve(repoRoot, 'scripts/run-ci.ts'), 'utf8')
+
+    expect(source).toContain("const vitestFuzzLane = pnpm('vitest fuzz', 'test:fuzz')")
+    expect(source).toContain("await runSequential('fast fuzz checks', [vitestFuzzLane])")
+    expect(source).toContain('run pnpm run ci:full for coverage, full browser, and deep benchmark gates')
   })
 
   it('guards broad pre-push lint through the same resource gate', () => {

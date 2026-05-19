@@ -46,5 +46,5 @@
       "format": "0.00"
     }
   ],
-  "reproductionCommand": "pnpm test:fuzz:replay -- apps/bilig/src/zero/__tests__/fixtures/fuzz-replays/projection-live-snapshot-parity.json"
+  "reproductionCommand": "pnpm test:fuzz -- replay apps/bilig/src/zero/__tests__/fixtures/fuzz-replays/projection-live-snapshot-parity.json"
 }

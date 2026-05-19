@@ -680,7 +680,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm reliability:check',
           'pnpm exec vitest run apps/web/src/__tests__/worker-runtime-reconnect.test.ts apps/web/src/__tests__/worker-runtime-authoritative-bootstrap.test.ts apps/web/src/__tests__/worker-runtime-mutation-journal.test.ts packages/zero-sync/src/__tests__/workbook-events.test.ts',
           'pnpm test:browser e2e/tests/web-shell-remote-sync.pw.ts -g "restores persisted workbook state after a full reload"',
-          'pnpm test:fuzz:main',
+          'pnpm test:fuzz',
           'pnpm test:correctness:browser',
           'pnpm test:correctness:server',
         ],

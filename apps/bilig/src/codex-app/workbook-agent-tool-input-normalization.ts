@@ -103,7 +103,13 @@ export function normalizeWorkbookAgentToolNumberFormatInput(input: WorkbookAgent
 }
 
 export function normalizeWorkbookAgentWriteCellInput(cellInput: unknown): WorkbookAgentWriteCellInput {
-  if (cellInput === null || typeof cellInput === 'number' || typeof cellInput === 'boolean') {
+  if (cellInput === null || typeof cellInput === 'boolean') {
+    return cellInput
+  }
+  if (typeof cellInput === 'number') {
+    if (!Number.isFinite(cellInput)) {
+      throw new Error(`Number cell input must be finite, received ${String(cellInput)}`)
+    }
     return cellInput
   }
   if (typeof cellInput === 'string') {
@@ -136,6 +142,9 @@ export function normalizeWorkbookAgentWriteCellInput(cellInput: unknown): Workbo
   if (cellInput['type'] === 'number') {
     const value = cellInput['value']
     if (typeof value === 'number') {
+      if (!Number.isFinite(value)) {
+        throw new Error(`Typed number cell requires a finite number or numeric string, received ${String(value)}`)
+      }
       return value
     }
     if (typeof value === 'string' && isNumericText(value)) {
@@ -167,7 +176,13 @@ export function normalizeWorkbookAgentWriteCellInput(cellInput: unknown): Workbo
   }
   if ('value' in cellInput) {
     const value = cellInput['value']
-    if (value === null || typeof value === 'number' || typeof value === 'boolean') {
+    if (value === null || typeof value === 'boolean') {
+      return value
+    }
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) {
+        throw new Error(`Number cell input must be finite, received ${String(value)}`)
+      }
       return value
     }
     if (typeof value === 'string') {

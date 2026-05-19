@@ -36,5 +36,5 @@
       "kind": "ack"
     }
   ],
-  "reproductionCommand": "pnpm test:fuzz:replay -- apps/web/src/__tests__/fixtures/fuzz-replays/runtime-sync-reconnect-convergence.json"
+  "reproductionCommand": "pnpm test:fuzz -- replay apps/web/src/__tests__/fixtures/fuzz-replays/runtime-sync-reconnect-convergence.json"
 }
