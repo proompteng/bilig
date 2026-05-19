@@ -33,6 +33,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./external-function-adapter": {
+      "types": "./dist/external-function-adapter.d.ts",
+      "import": "./dist/external-function-adapter.js"
+    },
     "./program-arena": {
       "types": "./dist/program-arena.d.ts",
       "import": "./dist/program-arena.js"

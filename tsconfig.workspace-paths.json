@@ -13,6 +13,7 @@
       "@bilig/excel-fixtures": ["./packages/excel-fixtures/src/index.ts"],
       "@bilig/excel-import": ["./packages/excel-import/src/index.ts"],
       "@bilig/formula": ["./packages/formula/src/index.ts"],
+      "@bilig/formula/external-function-adapter": ["./packages/formula/src/external-function-adapter.ts"],
       "@bilig/formula/program-arena": ["./packages/formula/src/program-arena.ts"],
       "@bilig/grid": ["./packages/grid/src/index.ts"],
       "@bilig/headless": ["./packages/headless/src/index.ts"],

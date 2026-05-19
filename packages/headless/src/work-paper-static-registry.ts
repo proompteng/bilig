@@ -1,5 +1,5 @@
 import { ErrorCode, type CellValue } from '@bilig/protocol'
-import { installExternalFunctionAdapter } from '@bilig/formula'
+import { installExternalFunctionAdapter } from '@bilig/formula/external-function-adapter'
 import {
   WorkPaperFunctionPluginValidationError,
   WorkPaperLanguageAlreadyRegisteredError,

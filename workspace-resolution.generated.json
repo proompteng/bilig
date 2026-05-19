@@ -43,6 +43,10 @@
     "packageDir": "packages/formula",
     "sourceEntry": "packages/formula/src/index.ts"
   },
+  "@bilig/formula/external-function-adapter": {
+    "packageDir": "packages/formula",
+    "sourceEntry": "packages/formula/src/external-function-adapter.ts"
+  },
   "@bilig/formula/program-arena": {
     "packageDir": "packages/formula",
     "sourceEntry": "packages/formula/src/program-arena.ts"

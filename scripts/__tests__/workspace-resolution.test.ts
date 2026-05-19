@@ -17,6 +17,10 @@ describe('workspace resolution', () => {
       packageDir: 'packages/headless',
       sourceEntry: 'packages/excel-import/src/index.ts',
     })
+    expect(resolution['@bilig/formula/external-function-adapter']).toEqual({
+      packageDir: 'packages/formula',
+      sourceEntry: 'packages/formula/src/external-function-adapter.ts',
+    })
   })
 
   it('orders Vitest aliases with package subpaths before package roots', async () => {
