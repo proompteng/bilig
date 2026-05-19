@@ -6,6 +6,9 @@
   },
   "references": [
     {
+      "path": "../excel-import"
+    },
+    {
       "path": "../headless"
     },
     {
