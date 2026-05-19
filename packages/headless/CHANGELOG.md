@@ -4,6 +4,16 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.32.7
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.32.6
+- Manual override: no
+
+## Fixes
+- fix(release): sync static discovery references (0eaed367)
+- fix(xlsx-formula-recalc): surface high-traffic recalc entrypoint (d7f76fde)
+
 ## 0.32.6
 
 - Release type: patch
