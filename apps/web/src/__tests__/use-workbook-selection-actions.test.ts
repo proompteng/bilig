@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { ValueTag, type CellRangeRef, type CellSnapshot } from '@bilig/protocol'
 import {
   applyOptimisticClearRange,
   applyOptimisticCommitOps,
@@ -105,8 +105,28 @@ describe('use workbook selection action helpers', () => {
 
   it('clears the projected selected range before worker patches arrive', () => {
     const cells = new Map<string, CellSnapshot>([
-      ['Sheet1:B2', { ...emptyCell('Sheet1', 'B2'), input: 12, value: { tag: ValueTag.Number, value: 12 }, version: 3 }],
-      ['Sheet1:C2', { ...emptyCell('Sheet1', 'C2'), input: 13, value: { tag: ValueTag.Number, value: 13 }, version: 4 }],
+      [
+        'Sheet1:B2',
+        {
+          ...emptyCell('Sheet1', 'B2'),
+          input: 12,
+          format: '0.00',
+          numberFormatId: 'fmt-body',
+          styleId: 'style-fill',
+          value: { tag: ValueTag.Number, value: 12 },
+          version: 3,
+        },
+      ],
+      [
+        'Sheet1:C2',
+        {
+          ...emptyCell('Sheet1', 'C2'),
+          input: 13,
+          styleId: 'style-fill',
+          value: { tag: ValueTag.Number, value: 13 },
+          version: 4,
+        },
+      ],
     ])
     const viewportStore = {
       getCell(sheetName: string, address: string) {
@@ -125,17 +145,30 @@ describe('use workbook selection action helpers', () => {
 
     expect(rollback).toEqual(expect.any(Function))
     expect(cells.get('Sheet1:B2')).toMatchObject({
+      format: '0.00',
+      numberFormatId: 'fmt-body',
+      styleId: 'style-fill',
       value: { tag: ValueTag.Empty },
       version: 4,
     })
+    expect('input' in (cells.get('Sheet1:B2') ?? {})).toBe(false)
     expect(cells.get('Sheet1:C2')).toMatchObject({
+      styleId: 'style-fill',
       value: { tag: ValueTag.Empty },
       version: 5,
     })
+    expect('input' in (cells.get('Sheet1:C2') ?? {})).toBe(false)
   })
 
   it('clears cached cells for huge selected ranges without materializing every address', () => {
-    const cached = { ...emptyCell('Sheet1', 'B1'), input: 'clear', value: { tag: ValueTag.String, value: 'clear' } as const, version: 3 }
+    const cached = {
+      ...emptyCell('Sheet1', 'B1'),
+      input: 'clear',
+      numberFormatId: 'fmt-cached',
+      styleId: 'style-cached-fill',
+      value: { tag: ValueTag.String, value: 'clear' } as const,
+      version: 3,
+    }
     const writes: CellSnapshot[] = []
     const viewportStore = {
       forEachCellSnapshotInRange(
@@ -163,6 +196,8 @@ describe('use workbook selection action helpers', () => {
     expect(writes[0]).toMatchObject({
       address: 'B1',
       sheetName: 'Sheet1',
+      numberFormatId: 'fmt-cached',
+      styleId: 'style-cached-fill',
       value: { tag: ValueTag.Empty },
       version: 4,
     })
@@ -175,6 +210,7 @@ describe('use workbook selection action helpers', () => {
         {
           ...emptyCell('Sheet1', 'B2'),
           input: 'cached-visible',
+          styleId: 'style-visible-fill',
           value: { tag: ValueTag.String, value: 'cached-visible', stringId: 1 },
           version: 1,
         },
@@ -207,6 +243,7 @@ describe('use workbook selection action helpers', () => {
 
     expect(rollback).toEqual(expect.any(Function))
     expect(cells.get('Sheet1:B2')).toMatchObject({
+      styleId: 'style-visible-fill',
       value: { tag: ValueTag.Empty },
       flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
       version: 2,
@@ -478,6 +515,216 @@ describe('use workbook selection action helpers', () => {
       numberFormatId: 'fmt-source',
       styleId: 'style-source',
       value: { tag: ValueTag.Number, value: 7 },
+    })
+  })
+
+  it('copies visible cells for huge ranges without materializing offscreen targets', () => {
+    const cells = new Map<string, CellSnapshot>([
+      [
+        'Sheet1:B1',
+        {
+          ...emptyCell('Sheet1', 'B1'),
+          input: 'styled-source',
+          format: '0.00',
+          numberFormatId: 'fmt-source',
+          styleId: 'style-source',
+          value: { tag: ValueTag.String, value: 'styled-source' },
+          version: 3,
+        },
+      ],
+      [
+        'Sheet1:B2',
+        {
+          ...emptyCell('Sheet1', 'B2'),
+          input: 'plain-source',
+          value: { tag: ValueTag.String, value: 'plain-source' },
+          version: 4,
+        },
+      ],
+      [
+        'Sheet1:D1',
+        {
+          ...emptyCell('Sheet1', 'D1'),
+          input: 'stale-target',
+          styleId: 'style-stale',
+          value: { tag: ValueTag.String, value: 'stale-target' },
+          version: 5,
+        },
+      ],
+      [
+        'Sheet1:D2',
+        {
+          ...emptyCell('Sheet1', 'D2'),
+          input: 'stale-target-two',
+          styleId: 'style-stale-two',
+          value: { tag: ValueTag.String, value: 'stale-target-two' },
+          version: 6,
+        },
+      ],
+    ])
+    const visitedRanges: string[] = []
+    const viewportStore = {
+      forEachCachedOrVisibleCellSnapshotInRange(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void) {
+        visitedRanges.push(`${range.startAddress}:${range.endAddress}`)
+        if (range.startAddress !== 'D1') {
+          throw new Error('huge copy should only enumerate cached-or-visible target cells')
+        }
+        listener(cells.get('Sheet1:D1') ?? emptyCell('Sheet1', 'D1'))
+        listener(cells.get('Sheet1:D2') ?? emptyCell('Sheet1', 'D2'))
+      },
+      getCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`) ?? emptyCell(sheetName, address)
+      },
+      setCellSnapshot(snapshot: CellSnapshot) {
+        cells.set(`${snapshot.sheetName}:${snapshot.address}`, snapshot)
+      },
+    }
+
+    const rollback = applyOptimisticCopyRange(
+      viewportStore,
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B20000' },
+      { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' },
+    )
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(visitedRanges).toEqual(['D1:D20000'])
+    expect(cells.get('Sheet1:D1')).toMatchObject({
+      input: 'styled-source',
+      format: '0.00',
+      numberFormatId: 'fmt-source',
+      styleId: 'style-source',
+      value: { tag: ValueTag.String, value: 'styled-source' },
+    })
+    expect(cells.get('Sheet1:D2')).toMatchObject({
+      input: 'plain-source',
+      value: { tag: ValueTag.String, value: 'plain-source' },
+    })
+    expect(cells.get('Sheet1:D2')?.styleId).toBeUndefined()
+  })
+
+  it('fills visible cells for huge ranges without materializing offscreen targets', () => {
+    const cells = new Map<string, CellSnapshot>([
+      [
+        'Sheet1:B1',
+        {
+          ...emptyCell('Sheet1', 'B1'),
+          input: 7,
+          format: '0.00',
+          numberFormatId: 'fmt-source',
+          styleId: 'style-source',
+          value: { tag: ValueTag.Number, value: 7 },
+          version: 3,
+        },
+      ],
+      [
+        'Sheet1:D1',
+        { ...emptyCell('Sheet1', 'D1'), input: 'target-one', value: { tag: ValueTag.String, value: 'target-one' }, version: 5 },
+      ],
+      [
+        'Sheet1:D2',
+        { ...emptyCell('Sheet1', 'D2'), input: 'target-two', value: { tag: ValueTag.String, value: 'target-two' }, version: 6 },
+      ],
+    ])
+    const viewportStore = {
+      forEachCachedOrVisibleCellSnapshotInRange(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void) {
+        if (range.startAddress !== 'D1') {
+          throw new Error('huge fill should only enumerate cached-or-visible target cells')
+        }
+        listener(cells.get('Sheet1:D1') ?? emptyCell('Sheet1', 'D1'))
+        listener(cells.get('Sheet1:D2') ?? emptyCell('Sheet1', 'D2'))
+      },
+      getCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`) ?? emptyCell(sheetName, address)
+      },
+      setCellSnapshot(snapshot: CellSnapshot) {
+        cells.set(`${snapshot.sheetName}:${snapshot.address}`, snapshot)
+      },
+    }
+
+    const rollback = applyOptimisticFillRange(
+      viewportStore,
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B1' },
+      { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' },
+    )
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(cells.get('Sheet1:D1')).toMatchObject({
+      input: 7,
+      format: '0.00',
+      numberFormatId: 'fmt-source',
+      styleId: 'style-source',
+      value: { tag: ValueTag.Number, value: 7 },
+    })
+    expect(cells.get('Sheet1:D2')).toMatchObject({
+      input: 7,
+      format: '0.00',
+      numberFormatId: 'fmt-source',
+      styleId: 'style-source',
+      value: { tag: ValueTag.Number, value: 7 },
+    })
+  })
+
+  it('moves visible cells for huge ranges and clears visible source presentation', () => {
+    const cells = new Map<string, CellSnapshot>([
+      [
+        'Sheet1:B1',
+        {
+          ...emptyCell('Sheet1', 'B1'),
+          input: 'move-source',
+          format: '0.00',
+          numberFormatId: 'fmt-source',
+          styleId: 'style-source',
+          value: { tag: ValueTag.String, value: 'move-source' },
+          version: 3,
+        },
+      ],
+      [
+        'Sheet1:D1',
+        { ...emptyCell('Sheet1', 'D1'), input: 'target-one', value: { tag: ValueTag.String, value: 'target-one' }, version: 5 },
+      ],
+    ])
+    const visitedRanges: string[] = []
+    const viewportStore = {
+      forEachCachedOrVisibleCellSnapshotInRange(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void) {
+        visitedRanges.push(`${range.startAddress}:${range.endAddress}`)
+        if (range.startAddress === 'B1') {
+          listener(cells.get('Sheet1:B1') ?? emptyCell('Sheet1', 'B1'))
+          return
+        }
+        if (range.startAddress === 'D1') {
+          listener(cells.get('Sheet1:D1') ?? emptyCell('Sheet1', 'D1'))
+          return
+        }
+        throw new Error('unexpected huge move range enumeration')
+      },
+      getCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`) ?? emptyCell(sheetName, address)
+      },
+      setCellSnapshot(snapshot: CellSnapshot) {
+        cells.set(`${snapshot.sheetName}:${snapshot.address}`, snapshot)
+      },
+    }
+
+    const rollback = applyOptimisticMoveRange(
+      viewportStore,
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B20000' },
+      { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' },
+    )
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(visitedRanges).toEqual(['B1:B20000', 'D1:D20000'])
+    expect(cells.get('Sheet1:B1')).toMatchObject({
+      value: { tag: ValueTag.Empty },
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 4,
+    })
+    expect(cells.get('Sheet1:B1')?.styleId).toBeUndefined()
+    expect(cells.get('Sheet1:D1')).toMatchObject({
+      input: 'move-source',
+      format: '0.00',
+      numberFormatId: 'fmt-source',
+      styleId: 'style-source',
+      value: { tag: ValueTag.String, value: 'move-source' },
     })
   })
 })

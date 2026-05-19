@@ -13,6 +13,7 @@ import { createEmptyOptimisticSnapshot, normalizeCellRange, type OptimisticViewp
 export { applyOptimisticClearRange } from './workbook-optimistic-range.js'
 
 type RangeMutationMethod = 'fillRange' | 'copyRange' | 'moveRange'
+const MAX_MATERIALIZED_OPTIMISTIC_RANGE_CELLS = 10_000
 
 export function buildPasteCommitOps(sheetName: string, startAddr: string, values: readonly (readonly string[])[]): CommitOp[] {
   const start = parseCellAddress(startAddr, sheetName)
@@ -83,6 +84,10 @@ export function applyOptimisticMoveRange(
     return null
   }
 
+  if (height * width > MAX_MATERIALIZED_OPTIMISTIC_RANGE_CELLS) {
+    return applyVisibleOptimisticMoveRange(viewportStore, source, target, sourceBounds, targetBounds)
+  }
+
   const previousSnapshots: CellSnapshot[] = []
   const nextSourceSnapshots: CellSnapshot[] = []
   const nextTargetSnapshots: CellSnapshot[] = []
@@ -135,6 +140,10 @@ export function applyOptimisticCopyRange(
   const width = sourceBounds.endCol - sourceBounds.startCol + 1
   if (height !== targetBounds.endRow - targetBounds.startRow + 1 || width !== targetBounds.endCol - targetBounds.startCol + 1) {
     return null
+  }
+
+  if (height * width > MAX_MATERIALIZED_OPTIMISTIC_RANGE_CELLS) {
+    return applyVisibleOptimisticCopyRange(viewportStore, source, target, sourceBounds, targetBounds)
   }
 
   const previousSnapshots: CellSnapshot[] = []
@@ -196,6 +205,10 @@ export function applyOptimisticFillRange(
   const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1
   if (sourceHeight <= 0 || sourceWidth <= 0) {
     return null
+  }
+  const targetCellCount = (targetBounds.endRow - targetBounds.startRow + 1) * (targetBounds.endCol - targetBounds.startCol + 1)
+  if (targetCellCount > MAX_MATERIALIZED_OPTIMISTIC_RANGE_CELLS) {
+    return applyVisibleOptimisticFillRange(viewportStore, source, target, sourceBounds, targetBounds)
   }
 
   const sourceCells: CellSnapshot[][] = []
@@ -311,6 +324,168 @@ export function applyOptimisticCommitOps(viewportStore: OptimisticViewportStore 
       viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion))
     })
   }
+}
+
+function applyVisibleOptimisticMoveRange(
+  viewportStore: OptimisticViewportStore,
+  source: CellRangeRef,
+  target: CellRangeRef,
+  sourceBounds: ReturnType<typeof normalizeCellRange>,
+  targetBounds: ReturnType<typeof normalizeCellRange>,
+): (() => void) | null {
+  if (!viewportStore.forEachCachedOrVisibleCellSnapshotInRange) {
+    return null
+  }
+
+  const previousSnapshots: CellSnapshot[] = []
+  const nextSourceSnapshots: CellSnapshot[] = []
+  const nextTargetSnapshots: CellSnapshot[] = []
+  let rollbackVersion = 0
+
+  viewportStore.forEachCachedOrVisibleCellSnapshotInRange(source, (sourceSnapshot) => {
+    const next = createEmptyOptimisticSnapshot(sourceSnapshot.sheetName, sourceSnapshot.address, sourceSnapshot.version + 1)
+    previousSnapshots.push(sourceSnapshot)
+    nextSourceSnapshots.push(next)
+    rollbackVersion = Math.max(rollbackVersion, next.version)
+  })
+  viewportStore.forEachCachedOrVisibleCellSnapshotInRange(target, (targetSnapshot) => {
+    const targetPosition = parseCellAddress(targetSnapshot.address, targetSnapshot.sheetName)
+    const sourceAddress = formatAddress(
+      sourceBounds.startRow + (targetPosition.row - targetBounds.startRow),
+      sourceBounds.startCol + (targetPosition.col - targetBounds.startCol),
+    )
+    const sourceSnapshot = viewportStore.getCell(source.sheetName, sourceAddress)
+    const next = {
+      ...sourceSnapshot,
+      sheetName: target.sheetName,
+      address: targetSnapshot.address,
+      flags: sourceSnapshot.flags | OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: Math.max(sourceSnapshot.version, targetSnapshot.version) + 1,
+    }
+    previousSnapshots.push(targetSnapshot)
+    nextTargetSnapshots.push(next)
+    rollbackVersion = Math.max(rollbackVersion, next.version)
+  })
+
+  if (nextSourceSnapshots.length + nextTargetSnapshots.length === 0) {
+    return null
+  }
+
+  nextSourceSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+  nextTargetSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+
+  return () => {
+    previousSnapshots.forEach((snapshot) => {
+      rollbackVersion += 1
+      viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion))
+    })
+  }
+}
+
+function applyVisibleOptimisticCopyRange(
+  viewportStore: OptimisticViewportStore,
+  source: CellRangeRef,
+  target: CellRangeRef,
+  sourceBounds: ReturnType<typeof normalizeCellRange>,
+  targetBounds: ReturnType<typeof normalizeCellRange>,
+): (() => void) | null {
+  if (!viewportStore.forEachCachedOrVisibleCellSnapshotInRange) {
+    return null
+  }
+
+  const stagedSnapshots = new Map<string, CellSnapshot>()
+  return applyVisibleOptimisticTargetRange(viewportStore, target, (targetSnapshot) => {
+    const targetPosition = parseCellAddress(targetSnapshot.address, targetSnapshot.sheetName)
+    const sourceAddress = formatAddress(
+      sourceBounds.startRow + (targetPosition.row - targetBounds.startRow),
+      sourceBounds.startCol + (targetPosition.col - targetBounds.startCol),
+    )
+    const sourceSnapshot = viewportStore.getCell(source.sheetName, sourceAddress)
+    const next = createCopiedOptimisticSnapshot(viewportStore, sourceSnapshot, sourceAddress, targetSnapshot, stagedSnapshots)
+    stagedSnapshots.set(optimisticSnapshotKey(targetSnapshot.sheetName, targetSnapshot.address), next)
+    return next
+  })
+}
+
+function applyVisibleOptimisticFillRange(
+  viewportStore: OptimisticViewportStore,
+  source: CellRangeRef,
+  target: CellRangeRef,
+  sourceBounds: ReturnType<typeof normalizeCellRange>,
+  targetBounds: ReturnType<typeof normalizeCellRange>,
+): (() => void) | null {
+  if (!viewportStore.forEachCachedOrVisibleCellSnapshotInRange) {
+    return null
+  }
+
+  const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1
+  const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1
+  const stagedSnapshots = new Map<string, CellSnapshot>()
+  return applyVisibleOptimisticTargetRange(viewportStore, target, (targetSnapshot) => {
+    const targetPosition = parseCellAddress(targetSnapshot.address, targetSnapshot.sheetName)
+    const sourceRowOffset = (targetPosition.row - targetBounds.startRow) % sourceHeight
+    const sourceColOffset = (targetPosition.col - targetBounds.startCol) % sourceWidth
+    const sourceAddress = formatAddress(sourceBounds.startRow + sourceRowOffset, sourceBounds.startCol + sourceColOffset)
+    const sourceSnapshot = viewportStore.getCell(source.sheetName, sourceAddress)
+    const next = createCopiedOptimisticSnapshot(viewportStore, sourceSnapshot, sourceAddress, targetSnapshot, stagedSnapshots)
+    stagedSnapshots.set(optimisticSnapshotKey(targetSnapshot.sheetName, targetSnapshot.address), next)
+    return next
+  })
+}
+
+function applyVisibleOptimisticTargetRange(
+  viewportStore: OptimisticViewportStore,
+  target: CellRangeRef,
+  createNextSnapshot: (targetSnapshot: CellSnapshot) => CellSnapshot,
+): (() => void) | null {
+  const previousSnapshots: CellSnapshot[] = []
+  const nextSnapshots: CellSnapshot[] = []
+  let rollbackVersion = 0
+  viewportStore.forEachCachedOrVisibleCellSnapshotInRange?.(target, (targetSnapshot) => {
+    const next = createNextSnapshot(targetSnapshot)
+    previousSnapshots.push(targetSnapshot)
+    nextSnapshots.push(next)
+    rollbackVersion = Math.max(rollbackVersion, next.version)
+  })
+
+  if (nextSnapshots.length === 0) {
+    return null
+  }
+
+  nextSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+
+  return () => {
+    previousSnapshots.forEach((snapshot) => {
+      rollbackVersion += 1
+      viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion))
+    })
+  }
+}
+
+function createCopiedOptimisticSnapshot(
+  viewportStore: OptimisticViewportStore,
+  sourceSnapshot: CellSnapshot,
+  sourceAddress: string,
+  targetSnapshot: CellSnapshot,
+  stagedSnapshots: ReadonlyMap<string, CellSnapshot>,
+): CellSnapshot {
+  const parsed = parsedInputForCopiedSnapshot(sourceSnapshot, sourceAddress, targetSnapshot.sheetName, targetSnapshot.address)
+  const next = createOptimisticCellSnapshot({
+    sheetName: targetSnapshot.sheetName,
+    address: targetSnapshot.address,
+    current: targetSnapshot,
+    parsed,
+    evaluateFormula: (formula) =>
+      evaluateOptimisticFormula({
+        sheetName: targetSnapshot.sheetName,
+        address: targetSnapshot.address,
+        formula,
+        getCell: (sheetName, address) =>
+          stagedSnapshots.get(optimisticSnapshotKey(sheetName, address)) ?? viewportStore.getCell(sheetName, address),
+      }),
+  })
+  applyCopiedSnapshotPresentation(next, sourceSnapshot)
+  return next
 }
 
 function parsedInputForCopiedSnapshot(

@@ -11,6 +11,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(workbook): harden edit and tile clear races (6135fe6c)
 
 ## 0.24.0
@@ -20,6 +21,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(mcp): add remote workpaper endpoint (a2349d8e)
 
 ## 0.23.4
@@ -29,9 +31,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(workbook): preserve tile presentation mutations (a234caaf)
 
 ## Internal runtime changes
+
 - docs(headless): add skill registry metadata (d35669b6)
 - docs(agent): pin headless npm exec commands (fb68ce57)
 - docs(agent): harden public skill command guidance (5f9f5ec7)

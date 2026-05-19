@@ -4,6 +4,8 @@ import {
   PRODUCT_ROW_MARKER_WIDTH,
   PRIMARY_MODIFIER,
   clickProductCell,
+  countBlueFillPixelsInCell,
+  countGreenFillPixelsInCell,
   createTestDocumentId,
   dragProductBodySelection,
   getProductColumnLeft,
@@ -319,6 +321,46 @@ test('@browser-ci web app keeps rendered edits, clears, headers, and fills coher
   await expect
     .poll(() => countGreenFillPixelsInCell(page, 4, 5), {
       message: 'toolbar fill color must survive reload and stay visibly painted',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(120)
+})
+
+test('@browser-ci web app preserves visible fill while Delete clears only cell content', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-delete-preserves-fill')
+  const text = 'delete-keeps-fill'
+  await page.setViewportSize({ width: 1166, height: 820 })
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  const grid = page.getByTestId('sheet-grid')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 1, 1)
+  await formulaInput.fill(text)
+  await formulaInput.press('Enter')
+  await expect(formulaInput).toHaveValue(text)
+  await pickToolbarPresetColor(page, 'Fill color', 'green')
+  await expect
+    .poll(() => countGreenFillPixelsInCell(page, 1, 1), {
+      message: 'test setup should visibly paint B2 green before Delete',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(120)
+
+  await clickProductCell(page, 1, 1)
+  await grid.press('Delete')
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunTextAt(page, 1, 1)).toBe('')
+
+  const postDeleteFillSamples = await sampleGreenFillPixelsAcrossFrames(page, 1, 1, 4)
+  expect(
+    Math.min(...postDeleteFillSamples),
+    'Delete must not flash the selected cell background to default while the clear mutation is optimistic or settling',
+  ).toBeGreaterThan(120)
+  await expect
+    .poll(() => countGreenFillPixelsInCell(page, 1, 1), {
+      message: 'Delete should clear content while leaving cell fill formatting visible after persistence settles',
       timeout: 5_000,
     })
     .toBeGreaterThan(120)
@@ -753,77 +795,19 @@ async function nativeTextRunTextAt(page: Page, columnIndex: number, rowIndex: nu
   )
 }
 
-async function countGreenFillPixelsInCell(page: Page, columnIndex: number, rowIndex: number): Promise<number> {
-  return await countFillPixelsInCell(page, columnIndex, rowIndex, 'green')
-}
-
-async function countBlueFillPixelsInCell(page: Page, columnIndex: number, rowIndex: number): Promise<number> {
-  return await countFillPixelsInCell(page, columnIndex, rowIndex, 'blue')
-}
-
-async function countFillPixelsInCell(page: Page, columnIndex: number, rowIndex: number, color: 'blue' | 'green'): Promise<number> {
-  const gridLocator = page.getByTestId('sheet-grid')
-  await expect(gridLocator).toBeVisible()
-  const grid = await gridLocator.boundingBox()
-  if (!grid) {
-    throw new Error('sheet grid is not visible')
+async function sampleGreenFillPixelsAcrossFrames(
+  page: Page,
+  columnIndex: number,
+  rowIndex: number,
+  remainingSamples: number,
+  samples: readonly number[] = [],
+): Promise<readonly number[]> {
+  if (remainingSamples <= 0) {
+    return samples
   }
-
-  const [columnLeft, columnWidth, rowTop, rowHeight, scroll] = await Promise.all([
-    getProductColumnLeft(page, columnIndex),
-    getProductColumnWidth(page, columnIndex),
-    getProductRowTop(page, rowIndex),
-    getProductRowHeight(page, rowIndex),
-    page.getByTestId('grid-scroll-viewport').evaluate((node) => ({
-      scrollLeft: node.scrollLeft,
-      scrollTop: node.scrollTop,
-    })),
-  ])
-  const buffer = await page.screenshot({
-    animations: 'disabled',
-    caret: 'hide',
-    clip: {
-      x: Math.round(grid.x + columnLeft - scroll.scrollLeft + 8),
-      y: Math.round(grid.y + PRODUCT_HEADER_HEIGHT + rowTop - scroll.scrollTop + 5),
-      width: Math.max(1, Math.round(columnWidth - 16)),
-      height: Math.max(1, Math.round(rowHeight - 10)),
-    },
-  })
-
-  return await page.evaluate(
-    async ({ dataUrl, targetColor }) => {
-      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const element = new Image()
-        element.addEventListener('load', () => resolve(element), { once: true })
-        element.addEventListener('error', () => reject(new Error('Failed to decode fill screenshot')), { once: true })
-        element.src = dataUrl
-      })
-      const canvas = document.createElement('canvas')
-      canvas.width = image.naturalWidth
-      canvas.height = image.naturalHeight
-      const context = canvas.getContext('2d')
-      if (!context) {
-        throw new Error('Missing 2d context for fill screenshot analysis')
-      }
-      context.drawImage(image, 0, 0)
-      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
-      let matchingPixels = 0
-      for (let index = 0; index < pixels.length; index += 4) {
-        const alpha = pixels[index + 3] ?? 0
-        const red = pixels[index] ?? 255
-        const green = pixels[index + 1] ?? 0
-        const blue = pixels[index + 2] ?? 255
-        if (targetColor === 'green' && alpha > 220 && red < 110 && green > 135 && blue < 120) {
-          matchingPixels += 1
-        }
-        if (targetColor === 'blue' && alpha > 220 && red < 120 && green < 120 && blue > 135) {
-          matchingPixels += 1
-        }
-      }
-      return matchingPixels
-    },
-    { dataUrl: `data:image/png;base64,${buffer.toString('base64')}`, targetColor: color },
-  )
+  const pixels = await countGreenFillPixelsInCell(page, columnIndex, rowIndex)
+  await page.waitForTimeout(50)
+  return await sampleGreenFillPixelsAcrossFrames(page, columnIndex, rowIndex, remainingSamples - 1, [...samples, pixels])
 }
 
 async function countInitialShellNonBlankPixels(page: Page): Promise<number> {

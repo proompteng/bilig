@@ -33,6 +33,16 @@ export function createEmptyOptimisticSnapshot(sheetName: string, address: string
   }
 }
 
+export function createContentClearedOptimisticSnapshot(snapshot: CellSnapshot): CellSnapshot {
+  const { formula: _formula, input: _input, ...base } = snapshot
+  return {
+    ...base,
+    value: { tag: ValueTag.Empty },
+    flags: base.flags | OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+    version: snapshot.version + 1,
+  }
+}
+
 export function applyOptimisticClearRange(viewportStore: OptimisticViewportStore | null, range: CellRangeRef): (() => void) | null {
   if (!viewportStore) {
     return null
@@ -46,7 +56,7 @@ export function applyOptimisticClearRange(viewportStore: OptimisticViewportStore
 
   if (cellCount > MAX_MATERIALIZED_OPTIMISTIC_CLEAR_CELLS) {
     const queueClearSnapshot = (previous: CellSnapshot) => {
-      const next = createEmptyOptimisticSnapshot(previous.sheetName, previous.address, previous.version + 1)
+      const next = createContentClearedOptimisticSnapshot(previous)
       previousSnapshots.push(previous)
       nextSnapshots.push(next)
       rollbackVersion = Math.max(rollbackVersion, next.version)
@@ -74,7 +84,7 @@ export function applyOptimisticClearRange(viewportStore: OptimisticViewportStore
     for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
       const address = formatAddress(row, col)
       const previous = viewportStore.getCell(range.sheetName, address)
-      const next = createEmptyOptimisticSnapshot(range.sheetName, address, previous.version + 1)
+      const next = createContentClearedOptimisticSnapshot(previous)
       previousSnapshots.push(previous)
       nextSnapshots.push(next)
       rollbackVersion = Math.max(rollbackVersion, next.version)
