@@ -8,10 +8,17 @@ import {
   parseLargeSimpleSharedFormulaIndex,
   readLargeSimpleFormulaTypeCode,
 } from './xlsx-large-simple-formula-records.js'
+import { readLargeSimpleSheetHyperlinkRefs } from './xlsx-large-simple-hyperlinks.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
+import {
+  metadataWorksheetTagNames,
+  richTextRunPattern,
+  rowMetadataAttributePattern,
+  unsupportedWorksheetTagNames,
+} from './xlsx-large-simple-worksheet-scan-constants.js'
 import {
   appendLargeSimpleRowMetadataTag,
   readLargeSimpleColumnMetadata,
@@ -29,25 +36,6 @@ const doubleQuote = 34
 const singleQuote = 39
 const packedAddressColumnFactor = 16_384
 const emptyBytes = new Uint8Array(0)
-const unsupportedWorksheetTagNames = new Set(['dataValidations', 'legacyDrawing', 'oleObjects', 'picture', 'sheetProtection'])
-const metadataWorksheetTagNames = new Set([
-  'autoFilter',
-  'colBreaks',
-  'cols',
-  'conditionalFormatting',
-  'drawing',
-  'headerFooter',
-  'hyperlinks',
-  'mergeCells',
-  'pageMargins',
-  'pageSetup',
-  'printOptions',
-  'rowBreaks',
-  'sheetFormatPr',
-  'tableParts',
-])
-const rowMetadataAttributePattern = /\b(?:ht|hidden|customHeight|s|customFormat|outlineLevel|collapsed|thickTop|thickBottom)=/u
-const richTextRunPattern = /<(?:[A-Za-z_][\w.-]*:)?r\b/u
 
 export interface LargeSimpleWorksheetStreamScan {
   readonly cellScan: ImportedWorksheetCellScan
@@ -106,6 +94,7 @@ class LargeSimpleWorksheetChunkScanner {
   private columnEntries: WorkbookAxisEntrySnapshot[] | undefined
   private columnMetadata: WorkbookAxisMetadataSnapshot[] | undefined
   private drawingRelationshipId: string | undefined
+  private hyperlinks: LargeSimpleWorksheetScannedMetadata['hyperlinks']
   private rowEntries: WorkbookAxisEntrySnapshot[] | undefined
   private rowMetadata: WorkbookAxisMetadataSnapshot[] | undefined
   private mergeRefs: LargeSimpleWorksheetMergeRef[] | undefined
@@ -225,6 +214,7 @@ class LargeSimpleWorksheetChunkScanner {
     const metadata: LargeSimpleWorksheetScannedMetadata = {
       ...(columns ? { columns } : {}),
       ...(this.drawingRelationshipId ? { drawingRelationshipId: this.drawingRelationshipId } : {}),
+      ...(this.hyperlinks && this.hyperlinks.length > 0 ? { hyperlinks: this.hyperlinks } : {}),
       ...(rows ? { rows } : {}),
       ...(this.mergeRefs && this.mergeRefs.length > 0 ? { merges: this.mergeRefs } : {}),
       ...(this.sheetFormatPr ? { sheetFormatPr: this.sheetFormatPr } : {}),
@@ -475,6 +465,14 @@ class LargeSimpleWorksheetChunkScanner {
     }
     if (localName === 'drawing') {
       this.drawingRelationshipId = readLargeSimpleDrawingRelationshipIdTag(decodeBytes(this.buffer, startIndex, endIndex))
+      return true
+    }
+    if (localName === 'hyperlinks') {
+      const refs = readLargeSimpleSheetHyperlinkRefs(decodeBytes(this.buffer, startIndex, endIndex))
+      if (refs === null) {
+        return false
+      }
+      this.hyperlinks = [...(this.hyperlinks ?? []), ...refs]
       return true
     }
     return false

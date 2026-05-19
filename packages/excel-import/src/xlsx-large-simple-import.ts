@@ -15,7 +15,7 @@ import {
 } from './xlsx-conditional-formats.js'
 import { readImportedWorkbookDrawingArtifactsFromWorksheetRelationships } from './xlsx-drawing-artifacts.js'
 import { readImportedSheetAutoFilters } from './xlsx-filters.js'
-import { readLargeSimpleSheetHyperlinks } from './xlsx-large-simple-hyperlinks.js'
+import { readLargeSimpleSheetHyperlinks, resolveLargeSimpleSheetHyperlinks } from './xlsx-large-simple-hyperlinks.js'
 import { LargeSimpleXlsxImportPhaseRecorder, type LargeSimpleXlsxImportPhaseTelemetry } from './xlsx-large-simple-import-telemetry.js'
 import { readLargeSimpleSheetPrintMetadata } from './xlsx-large-simple-printer-settings.js'
 import { readAllLargeSimpleSharedStrings, readReferencedLargeSimpleSharedStrings } from './xlsx-large-simple-referenced-shared-strings.js'
@@ -307,7 +307,9 @@ export function tryImportLargeSimpleXlsx(
         ? readImportedSheetConditionalFormatsFromWorksheetXml(zip, entry.name, worksheetXml)
         : undefined
       if (materializeCells) {
-        const hyperlinks = readLargeSimpleSheetHyperlinks(zip, entry.name, entry.path, worksheetXml)
+        const hyperlinks = streamedMetadataScan?.hyperlinks
+          ? undefined
+          : readLargeSimpleSheetHyperlinks(zip, entry.name, entry.path, worksheetXml)
         if (hyperlinks === null) {
           return null
         }
@@ -329,6 +331,16 @@ export function tryImportLargeSimpleXlsx(
       } else {
         metadataInput = conditionalFormats ? { conditionalFormats } : {}
       }
+    }
+    const streamedHyperlinks =
+      materializeCells && streamedMetadataScan?.hyperlinks
+        ? resolveLargeSimpleSheetHyperlinks(zip, entry.name, entry.path, streamedMetadataScan.hyperlinks)
+        : undefined
+    if (streamedHyperlinks === null) {
+      return null
+    }
+    if (streamedHyperlinks) {
+      metadataInput = { ...metadataInput, hyperlinks: streamedHyperlinks }
     }
     worksheetBytes = undefined
     scannedWorksheets.push({

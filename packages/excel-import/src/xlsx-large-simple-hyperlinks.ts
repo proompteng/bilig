@@ -6,13 +6,31 @@ const hyperlinkRelationshipType = 'http://schemas.openxmlformats.org/officeDocum
 const hyperlinkElementPattern = /<(?:[A-Za-z_][\w.-]*:)?hyperlink\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gu
 const maxExpandedHyperlinkRangeCells = 1_024
 
+export interface LargeSimpleHyperlinkRef {
+  readonly ref: string
+  readonly relationshipId?: string
+  readonly location?: string
+  readonly tooltip?: string
+  readonly display?: string
+}
+
 export function readLargeSimpleSheetHyperlinks(
   zip: XlsxZipEntries,
   sheetName: string,
   worksheetPath: string,
   worksheetXml: string,
 ): WorkbookHyperlinkSnapshot[] | null | undefined {
-  if (!/<(?:[A-Za-z_][\w.-]*:)?hyperlinks\b/u.test(worksheetXml)) {
+  const refs = readLargeSimpleSheetHyperlinkRefs(worksheetXml)
+  return refs === null ? null : resolveLargeSimpleSheetHyperlinks(zip, sheetName, worksheetPath, refs)
+}
+
+export function resolveLargeSimpleSheetHyperlinks(
+  zip: XlsxZipEntries,
+  sheetName: string,
+  worksheetPath: string,
+  refs: readonly LargeSimpleHyperlinkRef[],
+): WorkbookHyperlinkSnapshot[] | null | undefined {
+  if (refs.length === 0) {
     return undefined
   }
   const relationships = new Map(
@@ -21,32 +39,23 @@ export function readLargeSimpleSheetHyperlinks(
       .map((relationship) => [relationship.id, relationship]),
   )
   const hyperlinks: WorkbookHyperlinkSnapshot[] = []
-  for (const match of worksheetXml.matchAll(hyperlinkElementPattern)) {
-    const tag = match[0]
-    const ref = readXmlAttribute(tag, 'ref')
-    if (!ref) {
-      continue
-    }
-    const addresses = hyperlinkAddresses(ref)
+  for (const ref of refs) {
+    const addresses = hyperlinkAddresses(ref.ref)
     if (!addresses) {
       return null
     }
-    const relationshipId = readXmlAttribute(tag, 'r:id') ?? readXmlAttribute(tag, 'id')
-    const relationshipTarget = relationshipId ? relationships.get(relationshipId)?.target : undefined
-    const location = readXmlAttribute(tag, 'location')
-    const target = relationshipTarget ?? (location ? `#${decodeXmlText(location)}` : undefined)
+    const relationshipTarget = ref.relationshipId ? relationships.get(ref.relationshipId)?.target : undefined
+    const target = relationshipTarget ? decodeXmlText(relationshipTarget) : ref.location ? `#${ref.location}` : undefined
     if (!target) {
       continue
     }
-    const tooltip = readNonEmptyXmlAttribute(tag, 'tooltip')
-    const display = readNonEmptyXmlAttribute(tag, 'display')
     for (const address of addresses) {
       hyperlinks.push({
         sheetName,
         address,
-        target: decodeXmlText(target),
-        ...(tooltip ? { tooltip } : {}),
-        ...(display ? { display } : {}),
+        target,
+        ...(ref.tooltip ? { tooltip: ref.tooltip } : {}),
+        ...(ref.display ? { display: ref.display } : {}),
       })
     }
   }
@@ -56,6 +65,35 @@ export function readLargeSimpleSheetHyperlinks(
           decodeCellAddress(left.address)!.row - decodeCellAddress(right.address)!.row || left.address.localeCompare(right.address),
       )
     : undefined
+}
+
+export function readLargeSimpleSheetHyperlinkRefs(worksheetXml: string): LargeSimpleHyperlinkRef[] | null {
+  if (!/<(?:[A-Za-z_][\w.-]*:)?hyperlinks\b/u.test(worksheetXml)) {
+    return []
+  }
+  const refs: LargeSimpleHyperlinkRef[] = []
+  for (const match of worksheetXml.matchAll(hyperlinkElementPattern)) {
+    const tag = match[0]
+    const ref = readXmlAttribute(tag, 'ref')
+    if (!ref) {
+      continue
+    }
+    if (!hyperlinkAddresses(ref)) {
+      return null
+    }
+    const relationshipId = readXmlAttribute(tag, 'r:id') ?? readXmlAttribute(tag, 'id')
+    const location = readNonEmptyXmlAttribute(tag, 'location')
+    const tooltip = readNonEmptyXmlAttribute(tag, 'tooltip')
+    const display = readNonEmptyXmlAttribute(tag, 'display')
+    refs.push({
+      ref,
+      ...(relationshipId ? { relationshipId } : {}),
+      ...(location ? { location } : {}),
+      ...(tooltip ? { tooltip } : {}),
+      ...(display ? { display } : {}),
+    })
+  }
+  return refs
 }
 
 function worksheetRelationshipsPath(worksheetPath: string): string {

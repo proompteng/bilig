@@ -4,6 +4,7 @@ import type {
   WorkbookMergeRangeSnapshot,
   WorkbookSheetFormatPrSnapshot,
 } from '@bilig/protocol'
+import type { LargeSimpleHyperlinkRef } from './xlsx-large-simple-hyperlinks.js'
 
 const maxExpandedAxisMetadataEntries = 2_048
 
@@ -20,6 +21,7 @@ export interface LargeSimpleWorksheetMergeRef {
 export interface LargeSimpleWorksheetScannedMetadata {
   readonly columns?: LargeSimpleWorksheetAxisMetadata
   readonly drawingRelationshipId?: string
+  readonly hyperlinks?: readonly LargeSimpleHyperlinkRef[]
   readonly rows?: LargeSimpleWorksheetAxisMetadata
   readonly merges?: readonly LargeSimpleWorksheetMergeRef[]
   readonly sheetFormatPr?: WorkbookSheetFormatPrSnapshot

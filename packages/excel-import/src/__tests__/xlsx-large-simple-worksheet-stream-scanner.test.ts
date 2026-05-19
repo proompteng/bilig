@@ -51,6 +51,7 @@ describe('large simple worksheet stream scanners', () => {
         ],
       },
       drawingRelationshipId: 'rIdDrawing1',
+      hyperlinks: [{ ref: 'A1:B1', location: 'Summary!A1', tooltip: 'Jump', display: 'Summary' }],
       rows: {
         entries: [{ id: 'row:1', index: 1, size: 24, hidden: true }],
         metadata: [
@@ -94,6 +95,15 @@ describe('large simple worksheet stream scanners', () => {
     ])
     expect(pool.count).toBe(2)
   })
+
+  it('retains hyperlink XML when range expansion would lose fidelity', () => {
+    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(oversizedHyperlinkWorksheetXml()), 0, {
+      hasSharedStrings: false,
+    })
+
+    expect(scan?.metadata?.hyperlinks).toBeUndefined()
+    expect(scan?.metadataXml).toContain('<hyperlinks>')
+  })
 })
 
 function splitAfterTagOpen(xml: string): (onChunk: (chunk: Uint8Array) => void) => boolean {
@@ -136,6 +146,7 @@ function metadataWorksheetXml(): string {
     '</row>',
     '</sheetData>',
     '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
+    '<hyperlinks><hyperlink ref="A1:B1" location="Summary!A1" tooltip="Jump" display="Summary"/></hyperlinks>',
     '<drawing r:id="rIdDrawing1"/>',
     '</worksheet>',
   ].join('')
@@ -149,6 +160,16 @@ function repeatedStringFormulaWorksheetXml(): string {
     '<c r="A1" t="inlineStr"><is><t>Repeated label</t></is></c>',
     '<c r="B1"><f>A1&amp;&quot;!&quot;</f><v>1</v></c>',
     '</row></sheetData>',
+    '</worksheet>',
+  ].join('')
+}
+
+function oversizedHyperlinkWorksheetXml(): string {
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1:A2000"/>',
+    '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>',
+    '<hyperlinks><hyperlink ref="A1:A2000" location="Summary!A1"/></hyperlinks>',
     '</worksheet>',
   ].join('')
 }
