@@ -210,6 +210,13 @@ export function tryImportLargeSimpleXlsx(
   const styleCatalog = new Map<string, CellStyleRecord>()
   const scannedWorksheets: ScannedWorksheet[] = []
   const referencedSharedStringIndexes = new Set<number>()
+  const materializeSheetsImmediately = materializeCells && !hasSharedStrings && !hasStyles && !hasDrawingParts
+  const emptyStylesByIndex = new Map<number, Omit<CellStyleRecord, 'id'>>()
+  const appendParsedWorksheet = (parsed: ParsedWorksheet): void => {
+    sheets.push(parsed.sheet)
+    previewSheets.push(parsed.preview)
+    sheetStats.push(parsed.stats)
+  }
 
   for (const [order, entry] of worksheetEntries.entries()) {
     const worksheetScanStart = phaseRecorder.start()
@@ -376,6 +383,20 @@ export function tryImportLargeSimpleXlsx(
       metadataInput = { ...metadataInput, filters: [...streamedMetadataScan.filters] }
     }
     worksheetBytes = undefined
+    if (materializeSheetsImmediately) {
+      phaseRecorder.finish('metadata-parsing', metadataParsingStart)
+      const snapshotMaterializationStart = phaseRecorder.start()
+      appendParsedWorksheet(
+        buildParsedWorksheet(entry.name, order, cellScan, worksheetXml, streamedMetadataScan, metadataInput, {
+          materializeCells,
+          releaseArenaAfterMaterialization: options.releaseArenaAfterMaterialization !== false,
+          styleCatalog,
+          stylesByIndex: emptyStylesByIndex,
+        }),
+      )
+      phaseRecorder.finish('public-snapshot-materialization', snapshotMaterializationStart)
+      continue
+    }
     scannedWorksheets.push({
       name: entry.name,
       order,
@@ -466,9 +487,7 @@ export function tryImportLargeSimpleXlsx(
         stylesByIndex,
       },
     )
-    sheets.push(parsed.sheet)
-    previewSheets.push(parsed.preview)
-    sheetStats.push(parsed.stats)
+    appendParsedWorksheet(parsed)
     phaseRecorder.finish('public-snapshot-materialization', snapshotMaterializationStart)
   }
   stringPool.release()
