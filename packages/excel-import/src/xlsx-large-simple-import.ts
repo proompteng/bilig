@@ -1,5 +1,6 @@
 import type {
   CellStyleRecord,
+  WorkbookConditionalFormatSnapshot,
   SheetMetadataSnapshot,
   WorkbookDefinedNameSnapshot,
   WorkbookDefinedNameValueSnapshot,
@@ -136,17 +137,13 @@ interface ScannedWorksheet {
   readonly cellScan: ImportedWorksheetCellScan
   readonly worksheetXml: string | undefined
   readonly metadataScan: LargeSimpleWorksheetScannedMetadata | undefined
-  readonly metadataInput: Pick<
-    SheetMetadataSnapshot,
-    | 'conditionalFormatArtifacts'
-    | 'conditionalFormats'
-    | 'drawingArtifacts'
-    | 'filters'
-    | 'hyperlinks'
-    | 'printerSettings'
-    | 'printPageSetup'
-  >
+  readonly metadataInput: LargeSimpleSheetMetadataInput
 }
+
+type LargeSimpleSheetMetadataInput = Pick<
+  SheetMetadataSnapshot,
+  'conditionalFormatArtifacts' | 'conditionalFormats' | 'drawingArtifacts' | 'filters' | 'hyperlinks' | 'printerSettings' | 'printPageSetup'
+>
 
 const defaultLargeSimpleXlsxByteThreshold = 1_000_000
 const workbookPath = 'xl/workbook.xml'
@@ -301,16 +298,7 @@ export function tryImportLargeSimpleXlsx(
     phaseRecorder.finish('worksheet-scan', worksheetScanStart)
     const metadataParsingStart = phaseRecorder.start()
     let worksheetXml: string | undefined
-    let metadataInput: Pick<
-      SheetMetadataSnapshot,
-      | 'conditionalFormatArtifacts'
-      | 'conditionalFormats'
-      | 'drawingArtifacts'
-      | 'filters'
-      | 'hyperlinks'
-      | 'printerSettings'
-      | 'printPageSetup'
-    > = {}
+    let metadataInput: LargeSimpleSheetMetadataInput = {}
     const needsWorksheetXml =
       materializeMetadata &&
       (streamedWorksheetXml !== undefined || (worksheetBytes ? needsLargeSimpleWorksheetMetadataXml(worksheetBytes) : false))
@@ -342,15 +330,20 @@ export function tryImportLargeSimpleXlsx(
         const conditionalFormatArtifacts = hasConditionalFormats
           ? readImportedSheetConditionalFormatArtifactsFromWorksheetXml(worksheetXml)
           : undefined
-        metadataInput = {
-          ...(hyperlinks ? { hyperlinks } : {}),
-          ...(filters.length > 0 ? { filters } : {}),
-          ...(conditionalFormats ? { conditionalFormats } : {}),
-          ...(conditionalFormatArtifacts ? { conditionalFormatArtifacts } : {}),
-        }
+        metadataInput = appendConditionalFormats(
+          {
+            ...(hyperlinks ? { hyperlinks } : {}),
+            ...(filters.length > 0 ? { filters } : {}),
+            ...(conditionalFormatArtifacts ? { conditionalFormatArtifacts } : {}),
+          },
+          conditionalFormats,
+        )
       } else {
-        metadataInput = conditionalFormats ? { conditionalFormats } : {}
+        metadataInput = appendConditionalFormats(metadataInput, conditionalFormats)
       }
+    }
+    if (streamedMetadataScan?.conditionalFormats && streamedMetadataScan.conditionalFormats.length > 0) {
+      metadataInput = appendConditionalFormats(metadataInput, streamedMetadataScan.conditionalFormats)
     }
     if (materializeMetadata && streamedMetadataScan?.conditionalFormattingXml && streamedMetadataScan.conditionalFormattingXml.length > 0) {
       const conditionalFormats = readImportedSheetConditionalFormatsFromElementXml(
@@ -361,11 +354,13 @@ export function tryImportLargeSimpleXlsx(
       const conditionalFormatArtifacts = materializeCells
         ? readImportedSheetConditionalFormatArtifactsFromElementXml(streamedMetadataScan.conditionalFormattingXml)
         : undefined
-      metadataInput = {
-        ...metadataInput,
-        ...(conditionalFormats ? { conditionalFormats } : {}),
-        ...(conditionalFormatArtifacts ? { conditionalFormatArtifacts } : {}),
-      }
+      metadataInput = appendConditionalFormats(
+        {
+          ...metadataInput,
+          ...(conditionalFormatArtifacts ? { conditionalFormatArtifacts } : {}),
+        },
+        conditionalFormats,
+      )
       retainedMetadataScan = withoutConditionalFormattingXml(streamedMetadataScan)
     }
     if (materializeMetadata && streamedMetadataScan?.tableRelationshipIds && streamedMetadataScan.tableRelationshipIds.length > 0) {
@@ -580,22 +575,39 @@ function withoutConditionalFormattingXml(
   return Object.keys(retained).length > 0 ? retained : undefined
 }
 
+function appendConditionalFormats(
+  input: LargeSimpleSheetMetadataInput,
+  conditionalFormats: readonly WorkbookConditionalFormatSnapshot[] | undefined,
+): LargeSimpleSheetMetadataInput {
+  if (!conditionalFormats || conditionalFormats.length === 0) {
+    return input
+  }
+  return {
+    ...input,
+    conditionalFormats: [...(input.conditionalFormats ?? []), ...conditionalFormats],
+  }
+}
+
+function normalizeConditionalFormatIds(
+  sheetName: string,
+  conditionalFormats: readonly WorkbookConditionalFormatSnapshot[] | undefined,
+): SheetMetadataSnapshot['conditionalFormats'] | undefined {
+  if (!conditionalFormats || conditionalFormats.length === 0) {
+    return undefined
+  }
+  return conditionalFormats.map((format, index) => ({
+    ...format,
+    id: `xlsx-cf:${sheetName}:${format.range.startAddress}:${format.range.endAddress}:${String(index + 1)}`,
+  }))
+}
+
 function buildParsedWorksheet(
   sheetName: string,
   order: number,
   cellScan: ImportedWorksheetCellScan,
   worksheetXml: string | undefined,
   metadataScan: LargeSimpleWorksheetScannedMetadata | undefined,
-  input: Pick<
-    SheetMetadataSnapshot,
-    | 'conditionalFormatArtifacts'
-    | 'conditionalFormats'
-    | 'drawingArtifacts'
-    | 'filters'
-    | 'hyperlinks'
-    | 'printerSettings'
-    | 'printPageSetup'
-  > = {},
+  input: LargeSimpleSheetMetadataInput = {},
   options: {
     readonly materializeCells: boolean
     readonly releaseArenaAfterMaterialization?: boolean
@@ -613,6 +625,7 @@ function buildParsedWorksheet(
   const conditionalFormatCount =
     input.conditionalFormats?.length ??
     (worksheetXml ? readConditionalFormattingBlockCount(worksheetXml) : (cellScan.conditionalFormatCount ?? 0))
+  const conditionalFormats = normalizeConditionalFormatIds(sheetName, input.conditionalFormats)
   const styleRanges =
     options.materializeCells && options.styleCatalog && options.stylesByIndex
       ? buildLargeSimpleStyleRanges(sheetName, cellScan, options.stylesByIndex, options.styleCatalog)
@@ -628,7 +641,7 @@ function buildParsedWorksheet(
     ...(input.drawingArtifacts ? { drawingArtifacts: input.drawingArtifacts } : {}),
     ...(input.filters ? { filters: input.filters } : {}),
     ...(input.hyperlinks ? { hyperlinks: input.hyperlinks } : {}),
-    ...(input.conditionalFormats ? { conditionalFormats: input.conditionalFormats } : {}),
+    ...(conditionalFormats ? { conditionalFormats } : {}),
     ...(input.conditionalFormatArtifacts ? { conditionalFormatArtifacts: input.conditionalFormatArtifacts } : {}),
     ...(input.printerSettings ? { printerSettings: input.printerSettings } : {}),
     ...(input.printPageSetup ? { printPageSetup: input.printPageSetup } : {}),

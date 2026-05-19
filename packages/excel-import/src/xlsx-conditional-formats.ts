@@ -643,7 +643,7 @@ export function readImportedSheetConditionalFormatArtifactsFromElementXml(
   return xml.length > 0 ? { xml } : undefined
 }
 
-function needsConditionalFormatArtifactXml(conditionalFormattingXml: string): boolean {
+export function needsConditionalFormatArtifactXml(conditionalFormattingXml: string): boolean {
   let parsed: unknown
   try {
     parsed = xmlParser.parse(`<worksheet>${conditionalFormattingXml}</worksheet>`)

@@ -88,8 +88,14 @@ describe('large simple worksheet stream scanners', () => {
           },
         ],
       },
-      conditionalFormattingXml: [
-        '<conditionalFormatting sqref="A1:B2"><cfRule type="cellIs" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>',
+      conditionalFormats: [
+        {
+          id: 'xlsx-cf:Data:A1:B2:1',
+          range: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B2' },
+          rule: { kind: 'cellIs', operator: 'greaterThan', values: [0] },
+          style: {},
+          priority: 1,
+        },
       ],
       drawingRelationshipId: 'rIdDrawing1',
       filters: [
@@ -135,6 +141,19 @@ describe('large simple worksheet stream scanners', () => {
       sheetFormatPr: { defaultRowHeight: 15, outlineLevelRow: 1 },
       tableRelationshipIds: ['rIdTable1'],
     })
+  })
+
+  it('keeps raw conditional-format XML only when style artifacts are required', () => {
+    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(styledConditionalFormatWorksheetXml()), 0, {
+      hasSharedStrings: false,
+      sheetName: 'Data',
+    })
+
+    expect(scan?.metadataXml).toBeUndefined()
+    expect(scan?.metadata?.conditionalFormats).toBeUndefined()
+    expect(scan?.metadata?.conditionalFormattingXml).toEqual([
+      '<conditionalFormatting sqref="A1"><cfRule type="cellIs" dxfId="0" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>',
+    ])
   })
 
   it('shares repeated inline strings and formulas through the import string pool', () => {
@@ -253,6 +272,16 @@ function metadataWorksheetXml(): string {
     '<colBreaks count="1"><brk id="2" max="1048575" man="1"/></colBreaks>',
     '<drawing r:id="rIdDrawing1"/>',
     '<tableParts count="1"><tablePart r:id="rIdTable1"/></tableParts>',
+    '</worksheet>',
+  ].join('')
+}
+
+function styledConditionalFormatWorksheetXml(): string {
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1"/>',
+    '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>',
+    '<conditionalFormatting sqref="A1"><cfRule type="cellIs" dxfId="0" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>',
     '</worksheet>',
   ].join('')
 }

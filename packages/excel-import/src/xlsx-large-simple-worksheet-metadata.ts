@@ -2,6 +2,7 @@ import type {
   WorkbookAxisEntrySnapshot,
   WorkbookAxisMetadataSnapshot,
   WorkbookAutoFilterSnapshot,
+  WorkbookConditionalFormatSnapshot,
   WorkbookMergeRangeSnapshot,
   WorkbookSheetFormatPrSnapshot,
 } from '@bilig/protocol'
@@ -22,6 +23,7 @@ export interface LargeSimpleWorksheetMergeRef {
 
 export interface LargeSimpleWorksheetScannedMetadata {
   readonly columns?: LargeSimpleWorksheetAxisMetadata
+  readonly conditionalFormats?: readonly WorkbookConditionalFormatSnapshot[]
   readonly conditionalFormattingXml?: readonly string[]
   readonly drawingRelationshipId?: string
   readonly filters?: readonly WorkbookAutoFilterSnapshot[]
