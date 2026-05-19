@@ -1,5 +1,5 @@
 import type { GridEngineLike, GridRenderRevisionSnapshot } from '@bilig/grid'
-import { parseCellAddress } from '@bilig/formula'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import {
   MAX_COLS,
   MAX_ROWS,
@@ -28,7 +28,7 @@ import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { normalizeWorkbookMergeRange } from './worker-runtime-support.js'
 import { buildLocalAxisWorkbookDelta, buildLocalCellSnapshotWorkbookDelta } from './projected-workbook-local-delta.js'
 import { ProjectedViewportPatchRevisionGate } from './projected-viewport-patch-revision-gate.js'
-import { ProjectedViewportRangeOverlayStore } from './projected-viewport-range-overlay.js'
+import { normalizeViewportRange, ProjectedViewportRangeOverlayStore, viewportRangeCellCount } from './projected-viewport-range-overlay.js'
 import { createContentClearedOptimisticSnapshot } from './workbook-optimistic-range.js'
 import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from './workbook-optimistic-cell-flags.js'
 
@@ -40,11 +40,13 @@ interface ProjectedCellSnapshotWriteOptions {
   readonly forceOptimistic?: boolean
   readonly allowOptimisticClearResurrection?: boolean
   readonly emitLocalDelta?: boolean
+  readonly suppressRangeOverlays?: boolean
 }
 type CellItem = readonly [number, number]
 type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze' | 'merges'
 type SheetIdentity = { readonly sheetId: number; readonly sheetOrdinal: number }
 const DEFAULT_STYLE_ID = 'style-0'
+const MAX_MATERIALIZED_OPTIMISTIC_STYLE_CELLS = 512
 
 export class ProjectedViewportStore implements GridEngineLike {
   private readonly options: ProjectedViewportStoreOptions
@@ -83,7 +85,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       getCell: (sheetName, address) => this.cellCache.getCell(sheetName, address),
       hasCellSnapshot: (sheetName, address) => this.cellCache.hasCellSnapshot(sheetName, address),
       setCellSnapshot: (snapshot) => {
-        this.setCellSnapshot(snapshot, { force: true, forceOptimistic: true })
+        this.setCellSnapshot(snapshot, { force: true, forceOptimistic: true, suppressRangeOverlays: false })
       },
     })
     this.axisStore = new ProjectedViewportAxisStore({
@@ -249,6 +251,9 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   setCellSnapshot(snapshot: CellSnapshot, options: ProjectedCellSnapshotWriteOptions = {}): void {
+    if (options.suppressRangeOverlays !== false) {
+      this.rangeOverlayStore.suppressExistingOverlaysForCell(snapshot.sheetName, snapshot.address)
+    }
     const result = this.cellCache.writeCellSnapshot(snapshot, options)
     if (result.changed && result.acceptedSnapshot && options.emitLocalDelta !== false) {
       this.localRevision += 1
@@ -588,7 +593,43 @@ export class ProjectedViewportStore implements GridEngineLike {
     range: CellRangeRef,
     mutateStyle: (baseStyle: CellStyleRecord) => Omit<CellStyleRecord, 'id'>,
   ): (() => void) | null {
-    return this.rangeOverlayStore.register(range, (snapshot) => this.applyStyleMutationToSnapshot(snapshot, mutateStyle))
+    const normalizedRange = normalizeViewportRange(range)
+    if (viewportRangeCellCount(normalizedRange) > MAX_MATERIALIZED_OPTIMISTIC_STYLE_CELLS) {
+      return this.rangeOverlayStore.register(range, (snapshot) => this.applyStyleMutationToSnapshot(snapshot, mutateStyle))
+    }
+    const previousSnapshots: Array<{
+      readonly existed: boolean
+      readonly overlaySuppressionCutoff: number
+      readonly snapshot: CellSnapshot
+    }> = []
+    for (let row = normalizedRange.startRow; row <= normalizedRange.endRow; row += 1) {
+      for (let col = normalizedRange.startCol; col <= normalizedRange.endCol; col += 1) {
+        const address = formatAddress(row, col)
+        const snapshot = this.getCell(range.sheetName, address)
+        const nextSnapshot = this.applyStyleMutationToSnapshot(snapshot, mutateStyle)
+        if (snapshotStyleId(snapshot) === snapshotStyleId(nextSnapshot)) {
+          continue
+        }
+        previousSnapshots.push({
+          existed: this.cellCache.hasCellSnapshot(snapshot.sheetName, snapshot.address),
+          overlaySuppressionCutoff: this.rangeOverlayStore.getSuppressedOverlayMaxId(snapshot.sheetName, snapshot.address),
+          snapshot: structuredClone(snapshot),
+        })
+        this.setCellSnapshot(nextSnapshot, { force: true, forceOptimistic: true })
+      }
+    }
+    if (previousSnapshots.length === 0) {
+      return null
+    }
+    return () => {
+      previousSnapshots.forEach(({ existed, overlaySuppressionCutoff, snapshot }) => {
+        this.rangeOverlayStore.restoreOverlaySuppression(snapshot.sheetName, snapshot.address, overlaySuppressionCutoff)
+        this.setCellSnapshot(snapshot, { force: true, forceOptimistic: true, suppressRangeOverlays: false })
+        if (!existed) {
+          this.cellCache.deleteCellSnapshot(snapshot.sheetName, snapshot.address)
+        }
+      })
+    }
   }
 
   private internLocalCellStyle(style: Omit<CellStyleRecord, 'id'>): CellStyleRecord {
@@ -608,6 +649,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     const nextStyle = this.internLocalCellStyle(mutateStyle(baseStyle))
     return nextStyle.id === DEFAULT_STYLE_ID ? omitSnapshotStyleId(snapshot) : { ...snapshot, styleId: nextStyle.id }
   }
+}
+
+function snapshotStyleId(snapshot: CellSnapshot): string {
+  return snapshot.styleId ?? DEFAULT_STYLE_ID
 }
 
 function createIdempotentContentClearedSnapshot(snapshot: CellSnapshot): CellSnapshot {

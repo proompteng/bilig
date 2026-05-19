@@ -32,6 +32,7 @@ export interface ProjectedViewportRangeOverlayStoreCallbacks {
 
 export class ProjectedViewportRangeOverlayStore {
   private readonly overlays: PendingViewportRangeOverlay[] = []
+  private readonly suppressedOverlayMaxIdByCell = new Map<string, number>()
   private readonly resolvedSnapshotCache = new Map<
     string,
     { readonly baseSignature: string; readonly overlayRevision: number; readonly snapshot: CellSnapshot }
@@ -42,7 +43,8 @@ export class ProjectedViewportRangeOverlayStore {
   constructor(private readonly callbacks: ProjectedViewportRangeOverlayStoreCallbacks) {}
 
   hasOverlayForCell(sheetName: string, address: string): boolean {
-    return this.overlays.some((overlay) => overlayContainsAddress(overlay, sheetName, address))
+    const cutoff = this.getSuppressedOverlayMaxId(sheetName, address)
+    return this.overlays.some((overlay) => overlay.id > cutoff && overlayContainsAddress(overlay, sheetName, address))
   }
 
   apply(sheetName: string, address: string, snapshot: CellSnapshot): CellSnapshot {
@@ -50,6 +52,7 @@ export class ProjectedViewportRangeOverlayStore {
       return snapshot
     }
     const key = snapshotOverlayKey(sheetName, address)
+    const cutoff = this.getSuppressedOverlayMaxId(sheetName, address)
     const baseSignature = cellSnapshotSignature(snapshot)
     const cached = this.resolvedSnapshotCache.get(key)
     if (cached && cached.baseSignature === baseSignature && cached.overlayRevision === this.overlayRevision) {
@@ -57,7 +60,7 @@ export class ProjectedViewportRangeOverlayStore {
     }
     let nextSnapshot = snapshot
     this.overlays.forEach((overlay) => {
-      if (!overlayContainsAddress(overlay, sheetName, address)) {
+      if (overlay.id <= cutoff || !overlayContainsAddress(overlay, sheetName, address)) {
         return
       }
       nextSnapshot = overlay.apply(nextSnapshot)
@@ -68,6 +71,39 @@ export class ProjectedViewportRangeOverlayStore {
       snapshot: nextSnapshot,
     })
     return nextSnapshot
+  }
+
+  getSuppressedOverlayMaxId(sheetName: string, address: string): number {
+    return this.suppressedOverlayMaxIdByCell.get(snapshotOverlayKey(sheetName, address)) ?? 0
+  }
+
+  restoreOverlaySuppression(sheetName: string, address: string, cutoff: number): void {
+    const key = snapshotOverlayKey(sheetName, address)
+    if (cutoff <= 0) {
+      if (this.suppressedOverlayMaxIdByCell.delete(key)) {
+        this.invalidateResolvedSnapshots()
+      }
+      return
+    }
+    if (this.suppressedOverlayMaxIdByCell.get(key) === cutoff) {
+      return
+    }
+    this.suppressedOverlayMaxIdByCell.set(key, cutoff)
+    this.invalidateResolvedSnapshots()
+  }
+
+  suppressExistingOverlaysForCell(sheetName: string, address: string): void {
+    let cutoff = 0
+    this.overlays.forEach((overlay) => {
+      if (overlayContainsAddress(overlay, sheetName, address)) {
+        cutoff = Math.max(cutoff, overlay.id)
+      }
+    })
+    if (cutoff <= 0 || this.getSuppressedOverlayMaxId(sheetName, address) >= cutoff) {
+      return
+    }
+    this.suppressedOverlayMaxIdByCell.set(snapshotOverlayKey(sheetName, address), cutoff)
+    this.invalidateResolvedSnapshots()
   }
 
   register(range: CellRangeRef, apply: (snapshot: CellSnapshot) => CellSnapshot): (() => void) | null {
@@ -86,17 +122,31 @@ export class ProjectedViewportRangeOverlayStore {
   }
 
   dropSheets(sheetNames: readonly string[]): void {
-    if (sheetNames.length === 0 || this.overlays.length === 0) {
+    if (sheetNames.length === 0) {
       return
     }
     const removedSheets = new Set(sheetNames)
-    for (let index = this.overlays.length - 1; index >= 0; index -= 1) {
-      const overlay = this.overlays[index]
-      if (overlay && removedSheets.has(overlay.range.sheetName)) {
-        this.overlays.splice(index, 1)
+    let changed = false
+    if (this.overlays.length > 0) {
+      for (let index = this.overlays.length - 1; index >= 0; index -= 1) {
+        const overlay = this.overlays[index]
+        if (overlay && removedSheets.has(overlay.range.sheetName)) {
+          this.overlays.splice(index, 1)
+          changed = true
+        }
       }
     }
-    this.invalidateResolvedSnapshots()
+    for (const key of this.suppressedOverlayMaxIdByCell.keys()) {
+      const separatorIndex = key.indexOf('!')
+      const sheetName = separatorIndex >= 0 ? key.slice(0, separatorIndex) : key
+      if (removedSheets.has(sheetName)) {
+        this.suppressedOverlayMaxIdByCell.delete(key)
+        changed = true
+      }
+    }
+    if (changed || this.overlays.length > 0) {
+      this.invalidateResolvedSnapshots()
+    }
   }
 
   materializeViewport(sheetName: string, viewport: Viewport): void {
@@ -120,6 +170,9 @@ export class ProjectedViewportRangeOverlayStore {
     }
     this.invalidateResolvedSnapshots()
     overlay.materializedPreviousSnapshots.forEach(({ restoreSnapshot, snapshot }) => {
+      if (this.getSuppressedOverlayMaxId(snapshot.sheetName, snapshot.address) >= overlay.id) {
+        return
+      }
       const nextSnapshot = this.apply(snapshot.sheetName, snapshot.address, snapshot)
       if (restoreSnapshot || cellSnapshotSignature(nextSnapshot) !== cellSnapshotSignature(snapshot)) {
         this.callbacks.setCellSnapshot(nextSnapshot)
