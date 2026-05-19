@@ -49,13 +49,25 @@ export const defaultRecentComplexGithubRepositoryQueries = [
   '3 statement model excel license:mit',
   'bond valuation excel license:mit',
   'corporate finance model excel license:mit',
+  'excel dashboard 2025 license:mit',
+  'excel dashboard 2026 license:mit',
+  'excel dashboard license:mit',
+  'financial analysis excel 2025 license:mit',
+  'financial analysis excel 2026 license:mit',
+  'financial analysis excel license:mit',
+  'financial model 2025 excel license:mit',
+  'financial model 2026 excel license:mit',
   'financial modeling course excel license:mit',
   'investment banking excel model license:mit',
   'm&a valuation excel license:mit',
+  'portfolio optimization excel license:mit',
   'real estate financial model excel license:mit',
   'saas financial model excel license:mit',
   'startup valuation excel license:mit',
+  'actuarial excel model license:mit',
   'excel financial modeling license:apache-2.0',
+  'excel dashboard license:apache-2.0',
+  'financial analysis excel license:apache-2.0',
   'financial model excel license:apache-2.0',
   'project finance excel license:apache-2.0',
   'dcf excel model license:apache-2.0',
@@ -376,6 +388,7 @@ async function readGithubRepositoryWorkbookSources(args: {
   if (!license || !hasUsableLicenseEvidence(license)) {
     return []
   }
+  const repositoryDateFields = githubRepositoryDateFields(args.repository)
   const treeEntries = await readGithubRepositoryTree(repositoryFullName, defaultBranch, args.githubToken)
   const candidates = treeEntries
     .flatMap((entry) => {
@@ -397,6 +410,7 @@ async function readGithubRepositoryWorkbookSources(args: {
       defaultBranch,
       license,
       candidate,
+      repositoryDateFields,
     }),
   )
   return sources.flatMap((source) => (source ? [source] : []))
@@ -411,6 +425,7 @@ async function readGithubRepositoryWorkbookSource(args: {
   readonly query: string
   readonly discoveredAt: string
   readonly githubToken?: string | null
+  readonly repositoryDateFields: readonly { readonly name: string; readonly value: string }[]
 }): Promise<PublicWorkbookSource | null> {
   const { path, fileName } = args.candidate
   const encodedPath = encodeGithubPath(path)
@@ -422,13 +437,17 @@ async function readGithubRepositoryWorkbookSource(args: {
     { name: 'downloadUrl', value: downloadUrl },
     { name: 'fileName', value: fileName },
   ]
-  const pathDateEvidence = recentWorkbookDateEvidenceForFields(dateFields)
+  const pathDateEvidence = recentWorkbookDateEvidenceForFields([...args.repositoryDateFields, ...dateFields])
   const commitDate =
     pathDateEvidence.length > 0
       ? null
       : await readGithubPathLatestCommitDate(args.repositoryFullName, args.defaultBranch, path, args.githubToken)
   const topicEvidence = [
-    ...recentWorkbookDateEvidenceForFields(commitDate ? [...dateFields, { name: 'github.commitDate', value: commitDate }] : dateFields),
+    ...recentWorkbookDateEvidenceForFields(
+      commitDate
+        ? [...args.repositoryDateFields, ...dateFields, { name: 'github.commitDate', value: commitDate }]
+        : [...args.repositoryDateFields, ...dateFields],
+    ),
     `github-repo-query:${stableId(args.query)}`,
   ]
   if (!topicEvidence.some((evidence) => evidence.startsWith('recent-2025:') || evidence.startsWith('recent-2026:'))) {
@@ -444,6 +463,15 @@ async function readGithubRepositoryWorkbookSource(args: {
     license: args.license,
     topicEvidence,
   }
+}
+
+function githubRepositoryDateFields(repository: Record<string, unknown>): { readonly name: string; readonly value: string }[] {
+  return [
+    { name: 'github.repositoryFullName', value: readString(repository, 'full_name') },
+    { name: 'github.repositoryName', value: readString(repository, 'name') },
+    { name: 'github.repositoryDescription', value: readString(repository, 'description') },
+    { name: 'github.repositoryUrl', value: readString(repository, 'html_url') },
+  ].flatMap((field) => (field.value ? [{ name: field.name, value: field.value }] : []))
 }
 
 async function readGithubRepositoryTree(

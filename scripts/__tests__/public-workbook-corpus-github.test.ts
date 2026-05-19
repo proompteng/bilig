@@ -261,6 +261,71 @@ describe('public workbook corpus GitHub discovery', () => {
       expect.arrayContaining(['recent-2026:github.commitDate', expect.stringMatching(/^github-repo-query:/u)]),
     )
   })
+
+  it('uses repository names and descriptions as recent evidence before per-file commit lookups', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL) => {
+        const url = String(input)
+        if (url.startsWith('https://api.github.com/search/repositories')) {
+          return jsonResponse({
+            items: [
+              {
+                full_name: 'acme/forecast-models-2025',
+                name: 'forecast-models-2025',
+                description: 'Open financial model workbooks for 2025 planning',
+                html_url: 'https://github.com/acme/forecast-models-2025',
+                default_branch: 'main',
+              },
+            ],
+          })
+        }
+        if (url === 'https://api.github.com/repos/acme/forecast-models-2025/license') {
+          return jsonResponse({
+            license: {
+              spdx_id: 'MIT',
+              name: 'MIT License',
+            },
+            html_url: 'https://github.com/acme/forecast-models-2025/blob/main/LICENSE',
+          })
+        }
+        if (url === 'https://api.github.com/repos/acme/forecast-models-2025/git/trees/main?recursive=1') {
+          return jsonResponse({
+            tree: [
+              {
+                type: 'blob',
+                path: 'models/operating-model.xlsx',
+              },
+            ],
+          })
+        }
+        throw new Error(`Unexpected GitHub API request: ${url}`)
+      }),
+    )
+
+    const manifest = await discoverRecentComplexGithubQueries({
+      manifest: createEmptyPublicWorkbookManifest('2026-05-17T00:00:00.000Z', 500),
+      queries: [],
+      repositoryQueries: ['financial model excel license:mit'],
+      limit: 500,
+      perPage: 25,
+      maxPagesPerQuery: 1,
+      maxRepositoriesPerQuery: 5,
+      githubToken: 'ghs_test',
+      discoveredAt: '2026-05-17T00:00:00.000Z',
+    })
+
+    validatePublicWorkbookManifest(manifest)
+    expect(manifest.sources).toHaveLength(1)
+    expect(manifest.sources[0]).toMatchObject({
+      sourceUrl: 'https://github.com/acme/forecast-models-2025/blob/main/models/operating-model.xlsx',
+      downloadUrl: 'https://raw.githubusercontent.com/acme/forecast-models-2025/main/models/operating-model.xlsx',
+      fileName: 'operating-model.xlsx',
+    })
+    expect(manifest.sources[0]?.topicEvidence).toEqual(
+      expect.arrayContaining(['recent-2025:github.repositoryFullName', 'recent-2025:github.repositoryDescription']),
+    )
+  })
 })
 
 function githubSearchItem(args: { readonly repo: string; readonly path: string; readonly name: string }): Record<string, unknown> {

@@ -232,6 +232,7 @@ describe('public workbook recent complex headless corpus gate', () => {
     expect(scripts['public-workbook-corpus:retarget-recent-complex']).toContain('public-workbook-corpus.ts retarget')
     expect(scripts['public-workbook-corpus:discover-recent-complex']).toContain('discover-recent-complex-ckan')
     expect(scripts['public-workbook-corpus:discover-recent-complex-hdx']).toContain('https://data.humdata.org/api/3/action')
+    expect(scripts['public-workbook-corpus:discover-recent-complex-github']).toContain('discover-recent-complex-github')
     expect(scripts['public-workbook-corpus:fetch-recent-complex']).toContain('--fetch-batch-size 2')
     expect(scripts['public-workbook-corpus:fetch-recent-complex']).toContain('--limit 5000')
     expect(scripts['public-workbook-corpus:headless-recent-complex']).toContain('public-workbook-corpus-recent-complex.ts headless')
@@ -264,13 +265,18 @@ describe('public workbook recent complex headless corpus gate', () => {
     expect(defaultRecentComplexGithubRepositoryQueries).toEqual(
       expect.arrayContaining([
         '3 statement model excel license:mit',
+        'excel dashboard 2025 license:mit',
+        'financial analysis excel license:mit',
+        'financial model 2026 excel license:mit',
         'bond valuation excel license:mit',
         'financial modeling course excel license:mit',
         'investment banking excel model license:mit',
         'm&a valuation excel license:mit',
+        'portfolio optimization excel license:mit',
         'real estate financial model excel license:mit',
         'saas financial model excel license:mit',
         'startup valuation excel license:mit',
+        'actuarial excel model license:mit',
       ]),
     )
   })
@@ -311,6 +317,8 @@ describe('public workbook recent complex headless corpus gate', () => {
     expect(summary.commands.discoverHdx).toContain('https://data.humdata.org/api/3/action')
     expect(summary.commands.discoverHdx).toContain('--query 2025')
     expect(summary.commands.discoverHdx).toContain('--query 2026')
+    expect(summary.commands.discoverGithub).toContain('discover-recent-complex-github')
+    expect(summary.commands.discoverGithub).toContain('--skip-code-search')
     expect(validatePublicWorkbookCorpusRecentComplexSummary(summary)).toContain(
       'manifest target workbook count is below the recent complex target',
     )
@@ -349,10 +357,56 @@ describe('public workbook recent complex headless corpus gate', () => {
 
     expect(summary.recommendedManifestTargetWorkbookCount).toBe(3)
     expect(summary.recommendedFetchArtifactLimit).toBe(3)
+    expect(summary.recommendedDiscoverySourceLimit).toBe(7)
     expect(summary.commands.retarget).toContain('--target-workbook-count 3')
     expect(summary.commands.retarget).not.toContain('--target-workbook-count 1')
+    expect(summary.commands.discover).toContain('--limit 7')
+    expect(summary.commands.discoverGithub).toContain('--limit 7')
     expect(summary.commands.fetch).toContain('--limit 3')
     expect(summary.commands.fetch).not.toContain('--limit 1')
+  })
+
+  it('keeps discovery commands actionable when existing sources exceed the old default limit', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-recent-complex-discovery-limit-'))
+    const cacheDir = join(dir, 'cache')
+    const manifestPath = join(dir, 'manifest.json')
+    const scorecardPath = join(dir, 'scorecard.json')
+    const headlessScorecardPath = join(dir, 'headless-scorecard.json')
+    const sources = Array.from({ length: 6 }, (_, index) => sourceFor(recentArtifact(`source-${String(index)}`)))
+    writeFileSync(
+      manifestPath,
+      `${JSON.stringify(
+        {
+          ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z', 500),
+          artifacts: [],
+          sources,
+        },
+        null,
+        2,
+      )}\n`,
+    )
+    writeFileSync(scorecardPath, `${JSON.stringify(scorecardFor([]), null, 2)}\n`)
+
+    const summary = buildPublicWorkbookCorpusRecentComplexSummary({
+      cacheDir,
+      childTimeoutMs: 31_000,
+      corpusRunStopMarkerPath: join(dir, 'missing-stop.md'),
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      headlessScorecardPath,
+      manifestPath,
+      maxFileBytes: 50 * 1024 * 1024,
+      minComplexityScore: 5,
+      minFormulaCells: 10,
+      scorecardPath,
+      targetWorkbookCount: 1,
+      timeoutMs: 30_000,
+    })
+
+    expect(summary.manifestSourceCount).toBe(6)
+    expect(summary.recommendedDiscoverySourceLimit).toBe(11)
+    expect(summary.commands.discover).toContain('--limit 11')
+    expect(summary.commands.discoverHdx).toContain('--limit 11')
+    expect(summary.commands.discoverGithub).toContain('--limit 11')
   })
 })
 

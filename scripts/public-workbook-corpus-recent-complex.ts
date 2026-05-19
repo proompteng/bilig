@@ -25,8 +25,10 @@ export interface PublicWorkbookCorpusRecentComplexSummary {
   readonly generatedAt: string
   readonly targetWorkbookCount: number
   readonly manifestTargetWorkbookCount: number | null
+  readonly manifestSourceCount: number
   readonly manifestArtifactCount: number
   readonly recommendedManifestTargetWorkbookCount: number
+  readonly recommendedDiscoverySourceLimit: number
   readonly recommendedFetchArtifactLimit: number
   readonly publicScorecardCaseCount: number
   readonly recentArtifactCount: number
@@ -45,6 +47,7 @@ export interface PublicWorkbookCorpusRecentComplexSummary {
     readonly retarget: string
     readonly discover: string
     readonly discoverHdx: string
+    readonly discoverGithub: string
     readonly fetch: string
     readonly publicVerify: string
     readonly headlessVerify: string
@@ -224,6 +227,7 @@ export function buildPublicWorkbookCorpusRecentComplexSummary(args: RecentComple
     generatedAt: args.generatedAt,
     targetWorkbookCount: args.targetWorkbookCount,
     manifestTargetWorkbookCount: manifest?.targetWorkbookCount ?? null,
+    manifestSourceCount: manifest?.sources.length ?? 0,
     manifestArtifactCount: artifacts.length,
     publicScorecardCaseCount: scorecard?.cases.length ?? 0,
     recentArtifactCount: artifacts.filter(hasRecentWorkbookEvidence).length,
@@ -247,9 +251,11 @@ export function buildPublicWorkbookCorpusRecentComplexSummary(args: RecentComple
       .slice(0, 20)
       .map((entry) => entry.candidate.artifact.id),
     recommendedManifestTargetWorkbookCount: recommendedManifestTargetWorkbookCount(args, manifest, artifacts.length),
+    recommendedDiscoverySourceLimit: recommendedDiscoverySourceLimit(args, manifest),
     recommendedFetchArtifactLimit: recommendedFetchArtifactLimit(args, manifest, artifacts.length),
     commands: recentComplexCommands(args, {
       minimumManifestTargetWorkbookCount: recommendedManifestTargetWorkbookCount(args, manifest, artifacts.length),
+      minimumDiscoverySourceLimit: recommendedDiscoverySourceLimit(args, manifest),
     }),
   }
 }
@@ -414,10 +420,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function recentComplexCommands(
   args: RecentComplexArgs,
-  options: { readonly minimumManifestTargetWorkbookCount?: number } = {},
+  options: { readonly minimumDiscoverySourceLimit?: number; readonly minimumManifestTargetWorkbookCount?: number } = {},
 ): PublicWorkbookCorpusRecentComplexSummary['commands'] {
   const retargetWorkbookCount = Math.max(args.targetWorkbookCount, options.minimumManifestTargetWorkbookCount ?? 0)
   const fetchArtifactLimit = Math.max(args.targetWorkbookCount, options.minimumManifestTargetWorkbookCount ?? 0)
+  const discoverySourceLimit = Math.max(args.targetWorkbookCount * 5, options.minimumDiscoverySourceLimit ?? 0)
   const sharedArgs = [
     '--manifest',
     formatCommandPath(args.manifestPath),
@@ -455,7 +462,7 @@ function recentComplexCommands(
       'discover-recent-complex-ckan',
       ...sharedArgs,
       '--limit',
-      String(args.targetWorkbookCount * 5),
+      String(discoverySourceLimit),
     ]),
     discoverHdx: formatShellCommand([
       'bun',
@@ -463,13 +470,24 @@ function recentComplexCommands(
       'discover-recent-complex-ckan',
       ...sharedArgs,
       '--limit',
-      String(args.targetWorkbookCount * 5),
+      String(discoverySourceLimit),
       '--portal',
       'https://data.humdata.org/api/3/action',
       '--query',
       '2025',
       '--query',
       '2026',
+    ]),
+    discoverGithub: formatShellCommand([
+      'bun',
+      'scripts/public-workbook-corpus.ts',
+      'discover-recent-complex-github',
+      ...sharedArgs,
+      '--limit',
+      String(discoverySourceLimit),
+      '--skip-code-search',
+      '--max-repositories-per-query',
+      '20',
     ]),
     fetch: formatShellCommand([
       'bun',
@@ -504,6 +522,11 @@ function recommendedManifestTargetWorkbookCount(
   artifactCount: number,
 ): number {
   return Math.max(args.targetWorkbookCount, manifest?.targetWorkbookCount ?? 0, artifactCount)
+}
+
+function recommendedDiscoverySourceLimit(args: RecentComplexArgs, manifest: ReturnType<typeof readManifestIfExists>): number {
+  const currentSourceCount = manifest?.sources.length ?? 0
+  return Math.max(args.targetWorkbookCount * 5, currentSourceCount + args.targetWorkbookCount * 5)
 }
 
 function recommendedFetchArtifactLimit(
