@@ -18,7 +18,8 @@ describe('large simple XLSX import arena', () => {
     styleIndexes.release()
 
     const snapshot = arena.snapshot()
-    expect(snapshot.sheetIndexes).toHaveLength(0)
+    expect(snapshot.sheetIndex).toBeNull()
+    expect(snapshot.sheetIndexes).toBeUndefined()
     expect(snapshot.rows).toHaveLength(0)
     expect(snapshot.strings).toHaveLength(0)
     expect(snapshot.formulas).toHaveLength(0)
@@ -40,5 +41,38 @@ describe('large simple XLSX import arena', () => {
     expect(firstArena.materializeSheetCells(0)).toEqual([{ address: 'A1', value: 'Repeated label', formula: 'A1&"!"' }])
     expect(secondArena.materializeSheetCells(1)).toEqual([{ address: 'A1', value: 'Repeated label', formula: 'A1&"!"' }])
     expect(pool.count).toBe(2)
+  })
+
+  it('uses scalar sheet ownership for single-sheet arenas and falls back only for mixed ownership', () => {
+    const arena = new ImportedWorkbookArena()
+    arena.addCell({ sheetIndex: 4, row: 0, column: 0, value: 1 })
+
+    expect(arena.snapshot().sheetIndex).toBe(4)
+    expect(arena.snapshot().sheetIndexes).toBeUndefined()
+    expect(arena.snapshot().stringIds).toBeUndefined()
+    expect(arena.snapshot().formulaIds).toBeUndefined()
+    expect(arena.materializeSheetCells(3)).toEqual([])
+    expect(arena.materializeSheetCells(4)).toEqual([{ address: 'A1', value: 1 }])
+
+    arena.addCell({ sheetIndex: 5, row: 1, column: 0, value: 2 })
+
+    expect(arena.snapshot().sheetIndexes).toEqual(new Uint32Array([4, 5]))
+    expect(arena.materializeSheetCells(4)).toEqual([{ address: 'A1', value: 1 }])
+    expect(arena.materializeSheetCells(5)).toEqual([{ address: 'A2', value: 2 }])
+  })
+
+  it('allocates string and formula id storage only when cells need those pools', () => {
+    const arena = new ImportedWorkbookArena()
+    const numericCell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })
+
+    expect(arena.snapshot().stringIds).toBeUndefined()
+    expect(arena.snapshot().formulaIds).toBeUndefined()
+
+    arena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 'Label' })
+    expect(arena.snapshot().stringIds).toEqual(new Uint32Array([0xffffffff, 0]))
+    expect(arena.snapshot().formulaIds).toBeUndefined()
+
+    arena.setFormula(numericCell, '1+1')
+    expect(arena.snapshot().formulaIds).toEqual(new Uint32Array([0, 0xffffffff]))
   })
 })
