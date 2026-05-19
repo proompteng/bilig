@@ -168,6 +168,56 @@ describe('use workbook selection action helpers', () => {
     })
   })
 
+  it('clears active visible cells for huge selected ranges so deleted tile content cannot reappear', () => {
+    const cells = new Map<string, CellSnapshot>([
+      [
+        'Sheet1:B2',
+        {
+          ...emptyCell('Sheet1', 'B2'),
+          input: 'cached-visible',
+          value: { tag: ValueTag.String, value: 'cached-visible', stringId: 1 },
+          version: 1,
+        },
+      ],
+    ])
+    const viewportStore = {
+      forEachCellSnapshotInRange() {
+        throw new Error('large clears must use cached-or-visible candidates when available')
+      },
+      forEachCachedOrVisibleCellSnapshotInRange(
+        _range: { sheetName: string; startAddress: string; endAddress: string },
+        listener: (snapshot: CellSnapshot) => void,
+      ) {
+        listener(cells.get('Sheet1:B2') ?? emptyCell('Sheet1', 'B2'))
+        listener(emptyCell('Sheet1', 'C12'))
+      },
+      getCell() {
+        throw new Error('huge optimistic clears must not materialize missing cells')
+      },
+      setCellSnapshot(snapshot: CellSnapshot) {
+        cells.set(`${snapshot.sheetName}:${snapshot.address}`, snapshot)
+      },
+    }
+
+    const rollback = applyOptimisticClearRange(viewportStore, {
+      sheetName: 'Sheet1',
+      startAddress: 'A1',
+      endAddress: 'XFD1048576',
+    })
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(cells.get('Sheet1:B2')).toMatchObject({
+      value: { tag: ValueTag.Empty },
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 2,
+    })
+    expect(cells.get('Sheet1:C12')).toMatchObject({
+      value: { tag: ValueTag.Empty },
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 1,
+    })
+  })
+
   it('marks moved target cells optimistic so stale patches cannot erase them', () => {
     const cells = new Map<string, CellSnapshot>([
       [

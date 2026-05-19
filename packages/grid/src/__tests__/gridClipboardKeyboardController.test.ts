@@ -231,6 +231,66 @@ describe('gridClipboardKeyboardController', () => {
     }
   })
 
+  test('commits a pending typed seed before pointer selection can move it to another cell', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    document.body.innerHTML = ''
+    const originalRequestAnimationFrame = window.requestAnimationFrame
+    const originalCancelAnimationFrame = window.cancelAnimationFrame
+    const callbacks: FrameRequestCallback[] = []
+    window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      callbacks.push(callback)
+      return callbacks.length
+    })
+    window.cancelAnimationFrame = vi.fn()
+    const beginSelectedEdit = vi.fn()
+    const onCommitEdit = vi.fn()
+    const setGridSelection = vi.fn()
+    const onSelectionChange = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          createElement(KeyboardHandlerHarness, {
+            beginSelectedEdit,
+            onCommitEdit,
+            onSelectionChange,
+            setGridSelection,
+          }),
+        )
+      })
+
+      const firstKey = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'a' })
+      const secondKey = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'b' })
+      const pointerDown = new Event('pointerdown', { bubbles: true, cancelable: true })
+
+      await act(async () => {
+        window.dispatchEvent(firstKey)
+        window.dispatchEvent(secondKey)
+        window.dispatchEvent(pointerDown)
+      })
+
+      expect(firstKey.defaultPrevented).toBe(true)
+      expect(secondKey.defaultPrevented).toBe(true)
+      expect(onCommitEdit).toHaveBeenCalledTimes(1)
+      expect(onCommitEdit).toHaveBeenCalledWith(undefined, 'ab')
+      expect(beginSelectedEdit).not.toHaveBeenCalled()
+
+      callbacks[0]?.(performance.now())
+
+      expect(beginSelectedEdit).not.toHaveBeenCalled()
+    } finally {
+      window.requestAnimationFrame = originalRequestAnimationFrame
+      window.cancelAnimationFrame = originalCancelAnimationFrame
+      await act(async () => {
+        root.unmount()
+      })
+    }
+  })
+
   test('routes external clipboard data through paste operations', () => {
     const onCopyRange = vi.fn()
     const onMoveRange = vi.fn()

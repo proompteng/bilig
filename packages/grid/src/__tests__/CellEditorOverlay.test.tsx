@@ -1004,6 +1004,67 @@ describe('CellEditorOverlay', () => {
     }
   })
 
+  it('commits an immediate click-away blur even before the initial blur guard frame is armed', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const mockFrames = installMockAnimationFrames()
+    const onCommit = vi.fn()
+    const host = document.createElement('div')
+    const toolbarButton = document.createElement('button')
+    toolbarButton.textContent = 'Toolbar'
+    document.body.append(host, toolbarButton)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <CellEditorOverlay
+            label="Sheet1!B2"
+            targetSelection={makeTargetSelection()}
+            onCancel={() => {}}
+            onChange={() => {}}
+            onCommit={onCommit}
+            resolvedValue=""
+            selectionBehavior="caret-end"
+            value="draft before click-away"
+          />,
+        )
+      })
+
+      const textarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
+      expect(textarea).not.toBeNull()
+      if (!textarea) {
+        throw new Error('Expected mounted cell editor input')
+      }
+      expect(document.activeElement).toBe(textarea)
+
+      await act(async () => {
+        toolbarButton.focus()
+      })
+
+      expect(document.activeElement).toBe(toolbarButton)
+      expect(onCommit).not.toHaveBeenCalled()
+
+      await act(async () => {
+        mockFrames.flushAnimationFrames()
+      })
+      expect(onCommit).not.toHaveBeenCalled()
+      expect(textarea.readOnly).toBe(true)
+
+      await act(async () => {
+        mockFrames.flushAnimationFrames()
+      })
+
+      expect(onCommit).toHaveBeenCalledTimes(1)
+      expect(onCommit).toHaveBeenLastCalledWith(undefined, 'draft before click-away', makeTargetSelection())
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      mockFrames.restore()
+    }
+  })
+
   it('keeps Home and End caret movement inside the editor', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

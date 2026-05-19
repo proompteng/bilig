@@ -222,6 +222,24 @@ export function useWorkbookGridKeyboardHandler(input: {
   )
 
   useEffect(() => {
+    const commitPendingTypedEditBeforePointerSelection = () => {
+      if (input.isEditingCell) {
+        return
+      }
+      const pendingEdit = deferredBeginEditScheduler.consume()
+      if (!pendingEdit) {
+        return
+      }
+      input.pendingTypeSeedRef.current = null
+      input.onCommitEdit(undefined, pendingEdit.seed)
+    }
+    window.addEventListener('pointerdown', commitPendingTypedEditBeforePointerSelection, true)
+    return () => {
+      window.removeEventListener('pointerdown', commitPendingTypedEditBeforePointerSelection, true)
+    }
+  }, [deferredBeginEditScheduler, input])
+
+  useEffect(() => {
     const handleWindowKeyDown = (event: KeyboardEvent) => {
       if (
         event.defaultPrevented ||

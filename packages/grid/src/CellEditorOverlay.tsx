@@ -121,7 +121,9 @@ export function CellEditorOverlay({
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const completionRef = useRef<'idle' | 'commit' | 'cancel'>('idle')
   const blurArmedRef = useRef(false)
+  const pendingEarlyBlurCommitRef = useRef(false)
   const pendingBlurCommitRef = useRef<number | null>(null)
+  const scheduleBlurCommitRef = useRef<() => void>(() => {})
   const pendingSelectionRestoreRef = useRef<EditorTextSelection | null>(null)
   const pendingKeyboardSelectionRef = useRef<EditorTextSelection | null>(null)
   const caretWriteSequenceRef = useRef(0)
@@ -132,6 +134,7 @@ export function CellEditorOverlay({
   const MAX_EDITOR_HEIGHT = 220
 
   const cancelPendingBlurCommit = () => {
+    pendingEarlyBlurCommitRef.current = false
     const pendingFrame = pendingBlurCommitRef.current
     if (pendingFrame === null) {
       return
@@ -209,19 +212,19 @@ export function CellEditorOverlay({
     scheduleSelectionRestore(input, selection)
   }
 
-  const beginCompletion = (nextState: 'commit' | 'cancel') => {
+  const beginCompletion = useCallback((nextState: 'commit' | 'cancel') => {
     completionRef.current = nextState
     setIsCompleting(true)
     overlayRef.current?.style.setProperty('pointer-events', 'none')
-  }
+  }, [])
 
-  const readCurrentDraftValue = () => {
+  const readCurrentDraftValue = useCallback(() => {
     const input = inputRef.current
     if (!input) {
       return draftValueRef.current
     }
     return pendingKeyboardSelectionRef.current ? draftValueRef.current : input.value
-  }
+  }, [])
 
   const insertTextAtSelection = (input: HTMLTextAreaElement, text: string) => {
     const pendingSelection = pendingKeyboardSelectionRef.current
@@ -330,6 +333,20 @@ export function CellEditorOverlay({
     scheduleSelectionRestore(input, nextSelection)
   }
 
+  const scheduleBlurCommit = useCallback(() => {
+    if (completionRef.current !== 'idle' || pendingBlurCommitRef.current !== null) {
+      return
+    }
+    const nextValue = readCurrentDraftValue()
+    const nextTargetSelection = targetSelectionRef.current
+    beginCompletion('commit')
+    pendingBlurCommitRef.current = window.requestAnimationFrame(() => {
+      pendingBlurCommitRef.current = null
+      onCommit(undefined, nextValue, nextTargetSelection)
+    })
+  }, [beginCompletion, onCommit, readCurrentDraftValue])
+  scheduleBlurCommitRef.current = scheduleBlurCommit
+
   useLayoutEffect(() => {
     blurArmedRef.current = false
     focusEditorInput({ applyInitialSelection: true })
@@ -344,6 +361,14 @@ export function CellEditorOverlay({
     focusFrames.push(frameOne)
     const blurArm = window.requestAnimationFrame(() => {
       blurArmedRef.current = true
+      if (!pendingEarlyBlurCommitRef.current) {
+        return
+      }
+      pendingEarlyBlurCommitRef.current = false
+      if (document.activeElement === inputRef.current) {
+        return
+      }
+      scheduleBlurCommitRef.current()
     })
 
     return () => {
@@ -427,16 +452,14 @@ export function CellEditorOverlay({
   }
 
   const commitAfterBlur = () => {
-    if (!blurArmedRef.current || completionRef.current !== 'idle' || pendingBlurCommitRef.current !== null) {
+    if (completionRef.current !== 'idle' || pendingBlurCommitRef.current !== null) {
       return
     }
-    const nextValue = readCurrentDraftValue()
-    const nextTargetSelection = targetSelectionRef.current
-    beginCompletion('commit')
-    pendingBlurCommitRef.current = window.requestAnimationFrame(() => {
-      pendingBlurCommitRef.current = null
-      onCommit(undefined, nextValue, nextTargetSelection)
-    })
+    if (!blurArmedRef.current) {
+      pendingEarlyBlurCommitRef.current = true
+      return
+    }
+    scheduleBlurCommit()
   }
 
   const cancel = () => {

@@ -4,6 +4,7 @@ import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from './workbook-optimistic-cell-flags.
 import { createSupersedingCellSnapshot } from './workbook-optimistic-cell.js'
 
 export interface OptimisticViewportStore {
+  forEachCachedOrVisibleCellSnapshotInRange?(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void): void
   forEachCellSnapshotInRange?(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void): void
   getCell(sheetName: string, address: string): CellSnapshot
   setCellSnapshot(snapshot: CellSnapshot): void
@@ -44,15 +45,19 @@ export function applyOptimisticClearRange(viewportStore: OptimisticViewportStore
   const cellCount = (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1)
 
   if (cellCount > MAX_MATERIALIZED_OPTIMISTIC_CLEAR_CELLS) {
-    if (!viewportStore.forEachCellSnapshotInRange) {
-      return null
-    }
-    viewportStore.forEachCellSnapshotInRange(range, (previous) => {
+    const queueClearSnapshot = (previous: CellSnapshot) => {
       const next = createEmptyOptimisticSnapshot(previous.sheetName, previous.address, previous.version + 1)
       previousSnapshots.push(previous)
       nextSnapshots.push(next)
       rollbackVersion = Math.max(rollbackVersion, next.version)
-    })
+    }
+    if (viewportStore.forEachCachedOrVisibleCellSnapshotInRange) {
+      viewportStore.forEachCachedOrVisibleCellSnapshotInRange(range, queueClearSnapshot)
+    } else if (viewportStore.forEachCellSnapshotInRange) {
+      viewportStore.forEachCellSnapshotInRange(range, queueClearSnapshot)
+    } else {
+      return null
+    }
     if (nextSnapshots.length === 0) {
       return null
     }

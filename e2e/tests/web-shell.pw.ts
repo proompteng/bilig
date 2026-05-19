@@ -1478,6 +1478,77 @@ test('web app keeps delayed in-cell typing anchored and exits cleanly on click-a
   await expect(formulaInput).toHaveValue('asdf')
 })
 
+test('@browser-ci web app commits typed seeds before a same-frame click-away can retarget them', async ({ page }) => {
+  await page.keyboard.up(PRIMARY_MODIFIER)
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-pending-type-click-away'))}`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+  const renderer = page.getByTestId('grid-pane-renderer')
+
+  await clickProductCell(page, 2, 11)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C12')
+
+  await page.evaluate(() => {
+    const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window)
+    const originalCancelAnimationFrame = window.cancelAnimationFrame.bind(window)
+    const callbacks = new Map<number, FrameRequestCallback>()
+    let nextFrame = 1
+    ;(
+      window as typeof window & {
+        __biligHeldAnimationFrames?: {
+          flush(): void
+          restore(): void
+        }
+      }
+    ).__biligHeldAnimationFrames = {
+      flush() {
+        const pending = [...callbacks.values()]
+        callbacks.clear()
+        pending.forEach((callback) => callback(performance.now()))
+      },
+      restore() {
+        window.requestAnimationFrame = originalRequestAnimationFrame
+        window.cancelAnimationFrame = originalCancelAnimationFrame
+      },
+    }
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      const frame = nextFrame
+      nextFrame += 1
+      callbacks.set(frame, callback)
+      return frame
+    }) as typeof window.requestAnimationFrame
+    window.cancelAnimationFrame = ((frame: number) => {
+      callbacks.delete(frame)
+    }) as typeof window.cancelAnimationFrame
+  })
+
+  await page.keyboard.press('g')
+  await page.keyboard.press('o')
+  await clickProductCell(page, 3, 11)
+  await page.evaluate(() => {
+    const held = (
+      window as typeof window & {
+        __biligHeldAnimationFrames?: {
+          flush(): void
+          restore(): void
+        }
+      }
+    ).__biligHeldAnimationFrames
+    held?.restore()
+    held?.flush()
+    delete (window as typeof window & { __biligHeldAnimationFrames?: unknown }).__biligHeldAnimationFrames
+  })
+
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D12')
+  await expect(page.getByTestId('cell-editor-input')).toHaveCount(0)
+  await expect.poll(async () => Number((await renderer.getAttribute('data-v3-header-text-run-count')) ?? '0')).toBeGreaterThan(10)
+
+  await clickProductCell(page, 2, 11)
+  await expect(formulaInput).toHaveValue('go')
+  await expect.poll(() => nativeTextRunsInclude(page, 'go')).toBe(true)
+})
+
 test('web app drags a selected range by its border with a grab cursor', async ({ page }) => {
   await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('range-border-drag'))}`)
   await waitForWorkbookReady(page)

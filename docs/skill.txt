@@ -43,7 +43,7 @@ Configure stdio as an argument array, not a shell-concatenated string:
   "args": [
     "exec",
     "--package",
-    "@bilig/headless@0.23.4",
+    "@bilig/headless@0.24.0",
     "--",
     "bilig-workpaper-mcp",
     "--workpaper",
@@ -117,7 +117,7 @@ When the user has a reduced XLSX formula/import bug, generate a local report thr
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.23.4", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
+  "args": ["exec", "--package", "@bilig/headless@0.24.0", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
 }
 ```
 

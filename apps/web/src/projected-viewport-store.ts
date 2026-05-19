@@ -151,6 +151,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.cellCache.forEachCellSnapshotInRange(range, listener)
   }
 
+  forEachCachedOrVisibleCellSnapshotInRange(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void): void {
+    this.cellCache.forEachCachedOrVisibleCellSnapshotInRange(range, listener)
+  }
+
   getCellStyle(styleId: string | undefined): CellStyleRecord | undefined {
     return this.cellCache.getCellStyle(styleId)
   }
