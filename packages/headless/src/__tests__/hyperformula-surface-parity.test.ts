@@ -7,17 +7,23 @@ import {
 } from '../../../../scripts/workpaper-surface-contract.js'
 
 const ALLOWED_BILIG_INSTANCE_METHODS = [
+  'calculateScalarFormula',
+  'compileScalarFormula',
   'dispose',
   'exportSnapshot',
   'getCalculationSettings',
   'getCellDisplayValue',
   'getCellFormulaDiagnostics',
   'getPerformanceCounters',
+  'getRangeValueBlock',
   'offDetailed',
   'onDetailed',
   'onceDetailed',
   'resetPerformanceCounters',
   'setCalculationSettings',
+  'setCellValues',
+  'setSheetCellValues',
+  'setSheetRangeValues',
   'transaction',
 ] as const
 const ALLOWED_BILIG_INSTANCE_ACCESSORS = ['internals'] as const
@@ -30,6 +36,7 @@ describe('WorkPaper HyperFormula snapshot parity', () => {
     const currentSurface = extractClassSurface(
       [
         readFileSync(new URL('../work-paper-runtime.ts', import.meta.url), 'utf8'),
+        readFileSync(new URL('../work-paper-runtime-fast-path-base.ts', import.meta.url), 'utf8'),
         readFileSync(new URL('../work-paper-runtime-surface.ts', import.meta.url), 'utf8'),
         readFileSync(new URL('../work-paper-runtime-metadata-surface.ts', import.meta.url), 'utf8'),
         readFileSync(new URL('../work-paper-public-surface.ts', import.meta.url), 'utf8'),
