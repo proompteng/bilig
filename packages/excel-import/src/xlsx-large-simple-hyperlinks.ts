@@ -5,6 +5,12 @@ import { parseRelationships } from './xlsx-pivot-artifacts.js'
 const hyperlinkRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink'
 const hyperlinkElementPattern = /<(?:[A-Za-z_][\w.-]*:)?hyperlink\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gu
 const maxExpandedHyperlinkRangeCells = 1_024
+const lessThan = 60
+const slash = 47
+const colon = 58
+const doubleQuote = 34
+const singleQuote = 39
+const greaterThan = 62
 
 export interface LargeSimpleHyperlinkRef {
   readonly ref: string
@@ -96,6 +102,54 @@ export function readLargeSimpleSheetHyperlinkRefs(worksheetXml: string): LargeSi
   return refs
 }
 
+export function readLargeSimpleSheetHyperlinkRefsFromBytes(
+  bytes: Uint8Array,
+  startIndex: number,
+  endIndex: number,
+): LargeSimpleHyperlinkRef[] | null {
+  const refs: LargeSimpleHyperlinkRef[] = []
+  let index = startIndex
+  while (index < endIndex) {
+    if (bytes[index] !== lessThan) {
+      index += 1
+      continue
+    }
+    const tag = readXmlTagName(bytes, index + 1)
+    if (!tag) {
+      index += 1
+      continue
+    }
+    const tagEnd = findTagEnd(bytes, tag.endIndex, endIndex)
+    if (tagEnd === null) {
+      return refs
+    }
+    if (tag.localName === 'hyperlink') {
+      const ref = readAttributeFromTag(bytes, tag.endIndex, tagEnd, 'ref')
+      if (!ref) {
+        index = tagEnd + 1
+        continue
+      }
+      if (!hyperlinkAddresses(ref)) {
+        return null
+      }
+      const relationshipId =
+        readAttributeFromTag(bytes, tag.endIndex, tagEnd, 'r:id') ?? readAttributeFromTag(bytes, tag.endIndex, tagEnd, 'id')
+      const location = readNonEmptyXmlAttributeFromTag(bytes, tag.endIndex, tagEnd, 'location')
+      const tooltip = readNonEmptyXmlAttributeFromTag(bytes, tag.endIndex, tagEnd, 'tooltip')
+      const display = readNonEmptyXmlAttributeFromTag(bytes, tag.endIndex, tagEnd, 'display')
+      refs.push({
+        ref,
+        ...(relationshipId ? { relationshipId } : {}),
+        ...(location ? { location } : {}),
+        ...(tooltip ? { tooltip } : {}),
+        ...(display ? { display } : {}),
+      })
+    }
+    index = tagEnd + 1
+  }
+  return refs
+}
+
 function worksheetRelationshipsPath(worksheetPath: string): string {
   const directory = worksheetPath.slice(0, worksheetPath.lastIndexOf('/'))
   const fileName = worksheetPath.slice(worksheetPath.lastIndexOf('/') + 1)
@@ -126,6 +180,15 @@ function hyperlinkAddresses(ref: string): string[] | null {
   return addresses
 }
 
+function readNonEmptyXmlAttributeFromTag(bytes: Uint8Array, startIndex: number, tagEnd: number, attributeName: string): string | undefined {
+  const value = readAttributeFromTag(bytes, startIndex, tagEnd, attributeName)
+  if (!value) {
+    return undefined
+  }
+  const decoded = decodeXmlText(value).trim()
+  return decoded.length > 0 ? decoded : undefined
+}
+
 function readNonEmptyXmlAttribute(xml: string, attributeName: string): string | undefined {
   const value = readXmlAttribute(xml, attributeName)
   if (!value) {
@@ -137,6 +200,117 @@ function readNonEmptyXmlAttribute(xml: string, attributeName: string): string | 
 
 function readXmlAttribute(xml: string, attributeName: string): string | null {
   return new RegExp(`\\s${attributeName}=("|')([\\s\\S]*?)\\1`, 'u').exec(xml)?.[2] ?? null
+}
+
+function readAttributeFromTag(bytes: Uint8Array, startIndex: number, tagEnd: number, attributeName: string): string | null {
+  const range = readAttributeRangeFromTag(bytes, startIndex, tagEnd, attributeName)
+  return range ? decodeAscii(bytes, range.start, range.end) : null
+}
+
+function readAttributeRangeFromTag(
+  bytes: Uint8Array,
+  startIndex: number,
+  tagEnd: number,
+  attributeName: string,
+): { readonly start: number; readonly end: number } | null {
+  let index = startIndex
+  while (index < tagEnd) {
+    while (index < tagEnd && isAsciiWhitespace(bytes[index] ?? 0)) {
+      index += 1
+    }
+    const nameStart = index
+    while (index < tagEnd && isXmlNameByte(bytes[index] ?? 0)) {
+      index += 1
+    }
+    const nameEnd = index
+    index = skipAsciiWhitespace(bytes, index, tagEnd)
+    if (bytes[index] !== 61) {
+      index += 1
+      continue
+    }
+    index = skipAsciiWhitespace(bytes, index + 1, tagEnd)
+    const quote = bytes[index]
+    if (quote !== doubleQuote && quote !== singleQuote) {
+      index += 1
+      continue
+    }
+    const valueStart = index + 1
+    index = valueStart
+    while (index < tagEnd && bytes[index] !== quote) {
+      index += 1
+    }
+    const valueEnd = index
+    if (attributeNameMatches(bytes, nameStart, nameEnd, attributeName)) {
+      return { start: valueStart, end: valueEnd }
+    }
+    index += 1
+  }
+  return null
+}
+
+function readXmlTagName(bytes: Uint8Array, startIndex: number): { readonly localName: string; readonly endIndex: number } | null {
+  const first = bytes[startIndex]
+  if (first === undefined || first === 33 || first === slash || first === 63) {
+    return null
+  }
+  let index = startIndex
+  let localNameStart = startIndex
+  while (index < bytes.byteLength && isXmlNameByte(bytes[index] ?? 0)) {
+    if (bytes[index] === colon) {
+      localNameStart = index + 1
+    }
+    index += 1
+  }
+  return index === localNameStart ? null : { localName: decodeAscii(bytes, localNameStart, index), endIndex: index }
+}
+
+function findTagEnd(bytes: Uint8Array, startIndex: number, endIndex: number): number | null {
+  let quote: number | null = null
+  for (let index = startIndex; index < endIndex; index += 1) {
+    const byte = bytes[index] ?? 0
+    if (quote !== null) {
+      if (byte === quote) {
+        quote = null
+      }
+      continue
+    }
+    if (byte === doubleQuote || byte === singleQuote) {
+      quote = byte
+      continue
+    }
+    if (byte === greaterThan) {
+      return index
+    }
+  }
+  return null
+}
+
+function attributeNameMatches(bytes: Uint8Array, startIndex: number, endIndex: number, attributeName: string): boolean {
+  if (endIndex - startIndex !== attributeName.length) {
+    return false
+  }
+  for (let index = 0; index < attributeName.length; index += 1) {
+    if (bytes[startIndex + index] !== attributeName.charCodeAt(index)) {
+      return false
+    }
+  }
+  return true
+}
+
+function skipAsciiWhitespace(bytes: Uint8Array, startIndex: number, endIndex: number): number {
+  let index = startIndex
+  while (index < endIndex && isAsciiWhitespace(bytes[index] ?? 0)) {
+    index += 1
+  }
+  return index
+}
+
+function decodeAscii(bytes: Uint8Array, startIndex: number, endIndex: number): string {
+  let output = ''
+  for (let index = startIndex; index < endIndex; index += 1) {
+    output += String.fromCharCode(bytes[index] ?? 0)
+  }
+  return output
 }
 
 function decodeXmlText(value: string): string {
@@ -195,4 +369,20 @@ function encodeColumnName(index: number): string {
     value = Math.floor(value / 26)
   }
   return output
+}
+
+function isAsciiWhitespace(byte: number): boolean {
+  return byte === 9 || byte === 10 || byte === 12 || byte === 13 || byte === 32
+}
+
+function isXmlNameByte(byte: number): boolean {
+  return (
+    (byte >= 65 && byte <= 90) ||
+    (byte >= 97 && byte <= 122) ||
+    (byte >= 48 && byte <= 57) ||
+    byte === 45 ||
+    byte === 46 ||
+    byte === colon ||
+    byte === 95
+  )
 }

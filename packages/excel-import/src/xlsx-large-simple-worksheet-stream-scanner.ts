@@ -18,7 +18,7 @@ import {
   parseLargeSimpleSharedFormulaIndex,
   readLargeSimpleFormulaTypeCode,
 } from './xlsx-large-simple-formula-records.js'
-import { readLargeSimpleSheetHyperlinkRefs } from './xlsx-large-simple-hyperlinks.js'
+import { readLargeSimpleSheetHyperlinkRefsFromBytes } from './xlsx-large-simple-hyperlinks.js'
 import { appendLargeSimplePrintPageSetupElement, isLargeSimplePrintPageSetupElementName } from './xlsx-large-simple-printer-settings.js'
 import { rowTagHasMetadataAttribute } from './xlsx-large-simple-row-metadata-scan.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
@@ -499,7 +499,7 @@ class LargeSimpleWorksheetChunkScanner {
       return true
     }
     if (localName === 'hyperlinks') {
-      const refs = readLargeSimpleSheetHyperlinkRefs(decodeBytes(this.buffer, startIndex, endIndex))
+      const refs = readLargeSimpleSheetHyperlinkRefsFromBytes(this.buffer, startIndex, endIndex)
       if (refs === null) {
         return false
       }
