@@ -4,6 +4,19 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.25.3
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.25.2
+- Manual override: no
+
+## Fixes
+- perf(excel-import): add import restore coordinate fast path (0788025e)
+
+## Internal runtime changes
+- docs(discovery): sync headless 0.25.2 references (f3196fb4)
+- test(headless): stabilize guarded sumifs budget (e33507fc)
+
 ## 0.25.2
 
 - Release type: patch
