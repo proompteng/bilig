@@ -11,7 +11,6 @@ const valueKindString = 2
 const valueKindBoolean = 3
 const valueKindNull = 4
 const valueKindSharedStringRef = 5
-const flagHasFormula = 1 << 0
 const initialStyleIndexCapacity = 256
 
 export interface ImportedWorksheetArenaCellInput {
@@ -32,20 +31,19 @@ export interface ImportedWorkbookArenaSnapshot {
   readonly sheetIndex: number | null
   readonly sheetIndexes?: Uint32Array
   readonly rows: Uint32Array
-  readonly columns: Uint32Array
+  readonly columns: Uint16Array
   readonly valueKinds: Uint8Array
-  readonly numberValues: Float64Array
+  readonly numberValues?: Float64Array
   readonly stringIds?: Uint32Array
-  readonly booleanValues: Uint8Array
+  readonly booleanValues?: Uint8Array
   readonly formulaIds?: Uint32Array
-  readonly flags: Uint8Array
   readonly strings: readonly string[]
   readonly formulas: readonly string[]
 }
 
 export class ImportedWorksheetStyleIndexArena {
   private rows: Uint32Array<ArrayBuffer> = new Uint32Array(initialStyleIndexCapacity)
-  private columns: Uint32Array<ArrayBuffer> = new Uint32Array(initialStyleIndexCapacity)
+  private columns: Uint16Array<ArrayBuffer> = new Uint16Array(initialStyleIndexCapacity)
   private styleIndexes: Uint32Array<ArrayBuffer> = new Uint32Array(initialStyleIndexCapacity)
   private length = 0
 
@@ -76,7 +74,7 @@ export class ImportedWorksheetStyleIndexArena {
 
   release(): void {
     this.rows = new Uint32Array(0)
-    this.columns = new Uint32Array(0)
+    this.columns = new Uint16Array(0)
     this.styleIndexes = new Uint32Array(0)
     this.length = 0
   }
@@ -90,7 +88,7 @@ export class ImportedWorksheetStyleIndexArena {
       nextCapacity *= 2
     }
     this.rows = growUint32Array(this.rows, nextCapacity)
-    this.columns = growUint32Array(this.columns, nextCapacity)
+    this.columns = growUint16Array(this.columns, nextCapacity)
     this.styleIndexes = growUint32Array(this.styleIndexes, nextCapacity)
   }
 }
@@ -99,13 +97,12 @@ export class ImportedWorkbookArena {
   private sheetIndex: number | null = null
   private sheetIndexes: Uint32Array<ArrayBuffer> | undefined
   private rows: Uint32Array<ArrayBuffer> = new Uint32Array(initialCellCapacity)
-  private columns: Uint32Array<ArrayBuffer> = new Uint32Array(initialCellCapacity)
+  private columns: Uint16Array<ArrayBuffer> = new Uint16Array(initialCellCapacity)
   private valueKinds: Uint8Array<ArrayBuffer> = new Uint8Array(initialCellCapacity)
-  private numberValues: Float64Array<ArrayBuffer> = new Float64Array(initialCellCapacity)
+  private numberValues: Float64Array<ArrayBuffer> | undefined
   private stringIds: Uint32Array<ArrayBuffer> | undefined
-  private booleanValues: Uint8Array<ArrayBuffer> = new Uint8Array(initialCellCapacity)
+  private booleanValues: Uint8Array<ArrayBuffer> | undefined
   private formulaIds: Uint32Array<ArrayBuffer> | undefined
-  private flags: Uint8Array<ArrayBuffer> = new Uint8Array(initialCellCapacity)
   private length = 0
   private readonly strings: string[] = []
   private readonly stringIdsByValue = new Map<string, number>()
@@ -136,16 +133,13 @@ export class ImportedWorkbookArena {
     this.ensureCapacity(this.length + 1)
     const index = this.appendCell(input.sheetIndex, input.row, input.column)
     this.valueKinds[index] = valueKindSharedStringRef
-    this.numberValues[index] = 0
     this.ensureStringIdStorage()[index] = input.sharedStringIndex
-    this.booleanValues[index] = 0
     return index
   }
 
   setFormula(cellIndex: number, formula: string): void {
     const formulaId = this.internFormula(formula)
     this.ensureFormulaIdStorage()[cellIndex] = formulaId
-    this.flags[cellIndex] = (this.flags[cellIndex] ?? 0) | flagHasFormula
     const row = this.rows[cellIndex]
     const column = this.columns[cellIndex]
     if (row !== undefined && column !== undefined && row < 8 && column < 6 && !this.previewValues.has(previewKey(row, column))) {
@@ -240,11 +234,10 @@ export class ImportedWorkbookArena {
       rows: this.rows.subarray(0, this.length),
       columns: this.columns.subarray(0, this.length),
       valueKinds: this.valueKinds.subarray(0, this.length),
-      numberValues: this.numberValues.subarray(0, this.length),
+      ...(this.numberValues ? { numberValues: this.numberValues.subarray(0, this.length) } : {}),
       ...(this.stringIds ? { stringIds: this.stringIds.subarray(0, this.length) } : {}),
-      booleanValues: this.booleanValues.subarray(0, this.length),
+      ...(this.booleanValues ? { booleanValues: this.booleanValues.subarray(0, this.length) } : {}),
       ...(this.formulaIds ? { formulaIds: this.formulaIds.subarray(0, this.length) } : {}),
-      flags: this.flags.subarray(0, this.length),
       strings: this.strings,
       formulas: this.formulas,
     }
@@ -254,13 +247,12 @@ export class ImportedWorkbookArena {
     this.sheetIndex = null
     this.sheetIndexes = undefined
     this.rows = new Uint32Array(0)
-    this.columns = new Uint32Array(0)
+    this.columns = new Uint16Array(0)
     this.valueKinds = new Uint8Array(0)
-    this.numberValues = new Float64Array(0)
+    this.numberValues = undefined
     this.stringIds = undefined
-    this.booleanValues = new Uint8Array(0)
+    this.booleanValues = undefined
     this.formulaIds = undefined
-    this.flags = new Uint8Array(0)
     this.length = 0
     this.strings.length = 0
     this.stringIdsByValue.clear()
@@ -275,7 +267,6 @@ export class ImportedWorkbookArena {
     this.recordSheetIndex(index, sheetIndex)
     this.rows[index] = row
     this.columns[index] = column
-    this.flags[index] = 0
     return index
   }
 
@@ -300,45 +291,37 @@ export class ImportedWorkbookArena {
   private addValue(index: number, value: LiteralInput | undefined): void {
     if (value === undefined) {
       this.valueKinds[index] = valueKindEmpty
-      this.numberValues[index] = 0
-      this.booleanValues[index] = 0
       return
     }
     if (value === null) {
       this.valueKinds[index] = valueKindNull
-      this.numberValues[index] = 0
-      this.booleanValues[index] = 0
       return
     }
     if (typeof value === 'number') {
       this.valueKinds[index] = valueKindNumber
-      this.numberValues[index] = value
-      this.booleanValues[index] = 0
+      this.ensureNumberValueStorage()[index] = value
       return
     }
     if (typeof value === 'boolean') {
       this.valueKinds[index] = valueKindBoolean
-      this.numberValues[index] = 0
-      this.booleanValues[index] = value ? 1 : 0
+      this.ensureBooleanValueStorage()[index] = value ? 1 : 0
       return
     }
     this.valueKinds[index] = valueKindString
-    this.numberValues[index] = 0
     this.ensureStringIdStorage()[index] = this.internString(value)
-    this.booleanValues[index] = 0
   }
 
   private materializeValue(index: number): LiteralInput | undefined {
     const valueKind = this.valueKinds[index] ?? valueKindEmpty
     switch (valueKind) {
       case valueKindNumber:
-        return this.numberValues[index]
+        return this.numberValues?.[index]
       case valueKindString: {
         const stringId = this.stringIds?.[index] ?? noPoolId
         return stringId === noPoolId ? undefined : this.strings[stringId]
       }
       case valueKindBoolean:
-        return (this.booleanValues[index] ?? 0) === 1
+        return (this.booleanValues?.[index] ?? 0) === 1
       case valueKindNull:
         return null
       default:
@@ -376,12 +359,28 @@ export class ImportedWorkbookArena {
     return this.stringIds
   }
 
+  private ensureNumberValueStorage(): Float64Array<ArrayBuffer> {
+    if (this.numberValues) {
+      return this.numberValues
+    }
+    this.numberValues = new Float64Array(this.rows.length)
+    return this.numberValues
+  }
+
   private ensureFormulaIdStorage(): Uint32Array<ArrayBuffer> {
     if (this.formulaIds) {
       return this.formulaIds
     }
     this.formulaIds = filledUint32Array(this.rows.length, noPoolId)
     return this.formulaIds
+  }
+
+  private ensureBooleanValueStorage(): Uint8Array<ArrayBuffer> {
+    if (this.booleanValues) {
+      return this.booleanValues
+    }
+    this.booleanValues = new Uint8Array(this.rows.length)
+    return this.booleanValues
   }
 
   private internString(value: string): number {
@@ -420,17 +419,20 @@ export class ImportedWorkbookArena {
       this.sheetIndexes = growUint32Array(this.sheetIndexes, nextCapacity)
     }
     this.rows = growUint32Array(this.rows, nextCapacity)
-    this.columns = growUint32Array(this.columns, nextCapacity)
+    this.columns = growUint16Array(this.columns, nextCapacity)
     this.valueKinds = growUint8Array(this.valueKinds, nextCapacity)
-    this.numberValues = growFloat64Array(this.numberValues, nextCapacity)
+    if (this.numberValues) {
+      this.numberValues = growFloat64Array(this.numberValues, nextCapacity)
+    }
     if (this.stringIds) {
       this.stringIds = growUint32Array(this.stringIds, nextCapacity, noPoolId)
     }
-    this.booleanValues = growUint8Array(this.booleanValues, nextCapacity)
+    if (this.booleanValues) {
+      this.booleanValues = growUint8Array(this.booleanValues, nextCapacity)
+    }
     if (this.formulaIds) {
       this.formulaIds = growUint32Array(this.formulaIds, nextCapacity, noPoolId)
     }
-    this.flags = growUint8Array(this.flags, nextCapacity)
   }
 }
 
@@ -474,6 +476,12 @@ function growUint32Array(source: Uint32Array<ArrayBuffer>, nextCapacity: number,
   if (fillValue !== undefined && nextCapacity > source.length) {
     output.fill(fillValue, source.length)
   }
+  return output
+}
+
+function growUint16Array(source: Uint16Array<ArrayBuffer>, nextCapacity: number): Uint16Array<ArrayBuffer> {
+  const output = new Uint16Array(nextCapacity)
+  output.set(source)
   return output
 }
 

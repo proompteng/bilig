@@ -21,6 +21,9 @@ describe('large simple XLSX import arena', () => {
     expect(snapshot.sheetIndex).toBeNull()
     expect(snapshot.sheetIndexes).toBeUndefined()
     expect(snapshot.rows).toHaveLength(0)
+    expect(snapshot.columns).toBeInstanceOf(Uint16Array)
+    expect(snapshot.numberValues).toBeUndefined()
+    expect(snapshot.booleanValues).toBeUndefined()
     expect(snapshot.strings).toHaveLength(0)
     expect(snapshot.formulas).toHaveLength(0)
     expect(arena.cellCount).toBe(0)
@@ -49,7 +52,10 @@ describe('large simple XLSX import arena', () => {
 
     expect(arena.snapshot().sheetIndex).toBe(4)
     expect(arena.snapshot().sheetIndexes).toBeUndefined()
+    expect(arena.snapshot().columns).toBeInstanceOf(Uint16Array)
+    expect(arena.snapshot().numberValues).toEqual(new Float64Array([1]))
     expect(arena.snapshot().stringIds).toBeUndefined()
+    expect(arena.snapshot().booleanValues).toBeUndefined()
     expect(arena.snapshot().formulaIds).toBeUndefined()
     expect(arena.materializeSheetCells(3)).toEqual([])
     expect(arena.materializeSheetCells(4)).toEqual([{ address: 'A1', value: 1 }])
@@ -61,18 +67,29 @@ describe('large simple XLSX import arena', () => {
     expect(arena.materializeSheetCells(5)).toEqual([{ address: 'A2', value: 2 }])
   })
 
-  it('allocates string and formula id storage only when cells need those pools', () => {
+  it('allocates number, string, boolean, and formula storage only when cells need those pools', () => {
+    const stringOnlyArena = new ImportedWorkbookArena()
+    stringOnlyArena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 'Only text' })
+    expect(stringOnlyArena.snapshot().numberValues).toBeUndefined()
+    expect(stringOnlyArena.materializeSheetCells(0)).toEqual([{ address: 'A1', value: 'Only text' }])
+
     const arena = new ImportedWorkbookArena()
     const numericCell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })
 
+    expect(arena.snapshot().numberValues).toEqual(new Float64Array([42]))
     expect(arena.snapshot().stringIds).toBeUndefined()
+    expect(arena.snapshot().booleanValues).toBeUndefined()
     expect(arena.snapshot().formulaIds).toBeUndefined()
 
     arena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 'Label' })
     expect(arena.snapshot().stringIds).toEqual(new Uint32Array([0xffffffff, 0]))
+    expect(arena.snapshot().booleanValues).toBeUndefined()
     expect(arena.snapshot().formulaIds).toBeUndefined()
 
+    arena.addCell({ sheetIndex: 0, row: 2, column: 0, value: true })
+    expect(arena.snapshot().booleanValues).toEqual(new Uint8Array([0, 0, 1]))
+
     arena.setFormula(numericCell, '1+1')
-    expect(arena.snapshot().formulaIds).toEqual(new Uint32Array([0, 0xffffffff]))
+    expect(arena.snapshot().formulaIds).toEqual(new Uint32Array([0, 0xffffffff, 0xffffffff]))
   })
 })
