@@ -25,6 +25,7 @@ export type GridKeyAction =
       pendingTypeSeed: string | null
     }
   | { kind: 'move-selection'; cell: Item }
+  | { kind: 'move-selection-in-range'; cell: Item; range: Rectangle }
   | { kind: 'extend-selection'; anchor: Item; target: Item }
   | { kind: 'clear-cell'; pendingTypeSeed: null }
   | { kind: 'clipboard-copy' }
@@ -66,6 +67,42 @@ function resolveSelectionActiveCell(
     anchorCell[1] === currentSelectionRange.y ? currentSelectionRange.y + currentSelectionRange.height - 1 : currentSelectionRange.y
 
   return [horizontalTarget, verticalTarget]
+}
+
+function isMultiCellRange(range: Rectangle | null | undefined): range is Rectangle {
+  return Boolean(range && (range.width > 1 || range.height > 1))
+}
+
+function isCellInRange(cell: Item, range: Rectangle): boolean {
+  return cell[0] >= range.x && cell[0] < range.x + range.width && cell[1] >= range.y && cell[1] < range.y + range.height
+}
+
+function resolveRangeNavigationCell(selectedCell: Item, currentSelectionCell: Item | null, range: Rectangle): Item {
+  if (currentSelectionCell && isCellInRange(currentSelectionCell, range)) {
+    return currentSelectionCell
+  }
+  if (isCellInRange(selectedCell, range)) {
+    return selectedCell
+  }
+  return [range.x, range.y]
+}
+
+function moveWithinRange(cell: Item, range: Rectangle, axis: 'horizontal' | 'vertical', reverse: boolean): Item {
+  const total = range.width * range.height
+  if (total <= 1) {
+    return [range.x, range.y]
+  }
+
+  const colOffset = Math.min(range.width - 1, Math.max(0, cell[0] - range.x))
+  const rowOffset = Math.min(range.height - 1, Math.max(0, cell[1] - range.y))
+  const currentIndex = axis === 'horizontal' ? rowOffset * range.width + colOffset : colOffset * range.height + rowOffset
+  const nextIndex = (currentIndex + (reverse ? -1 : 1) + total) % total
+
+  if (axis === 'horizontal') {
+    return [range.x + (nextIndex % range.width), range.y + Math.floor(nextIndex / range.width)]
+  }
+
+  return [range.x + Math.floor(nextIndex / range.height), range.y + (nextIndex % range.height)]
 }
 
 interface ResolveGridKeyActionOptions {
@@ -175,6 +212,18 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   }
 
   if (event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (isMultiCellRange(currentSelectionRange)) {
+      return {
+        kind: 'move-selection-in-range',
+        cell: moveWithinRange(
+          resolveRangeNavigationCell(selectedCell, currentSelectionCell, currentSelectionRange),
+          currentSelectionRange,
+          'vertical',
+          Boolean(event.shiftKey),
+        ),
+        range: currentSelectionRange,
+      }
+    }
     return {
       kind: 'move-selection',
       cell: clampCell([activeCell[0], activeCell[1] + (event.shiftKey ? -1 : 1)]),
@@ -182,6 +231,18 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   }
 
   if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (isMultiCellRange(currentSelectionRange)) {
+      return {
+        kind: 'move-selection-in-range',
+        cell: moveWithinRange(
+          resolveRangeNavigationCell(selectedCell, currentSelectionCell, currentSelectionRange),
+          currentSelectionRange,
+          'horizontal',
+          Boolean(event.shiftKey),
+        ),
+        range: currentSelectionRange,
+      }
+    }
     return {
       kind: 'move-selection',
       cell: clampCell([activeCell[0] + (event.shiftKey ? -1 : 1), activeCell[1]]),

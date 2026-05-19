@@ -851,6 +851,63 @@ describe('gridClipboardKeyboardController', () => {
     expect(onSelectionChange).toHaveBeenCalledTimes(1)
   })
 
+  test('keeps rectangular range ownership while Enter and Tab move the active cell', () => {
+    const setGridSelection = vi.fn()
+    const onSelectionChange = vi.fn()
+    const rangeSelection = createRangeSelection(createGridSelection(1, 1), [1, 1], [2, 2])
+
+    handleGridKey({
+      applyClipboardValues: vi.fn(),
+      beginSelectedEdit: vi.fn(),
+      captureInternalClipboardSelection: vi.fn(),
+      editorValue: '',
+      event: {
+        key: 'Tab',
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault: vi.fn(),
+      },
+      gridSelection: rangeSelection,
+      internalClipboardRef: { current: null },
+      isSelectedCellBoolean: () => false,
+      isEditingCell: false,
+      onCancelEdit: vi.fn(),
+      onClearCell: vi.fn(),
+      onCommitEdit: vi.fn(),
+      onEditorChange: vi.fn(),
+      onFillRange: vi.fn(),
+      onSelectionChange,
+      pendingClipboardCopySequenceRef: { current: 0 },
+      pendingKeyboardPasteSequenceRef: { current: 0 },
+      pendingTypeSeedRef: { current: null },
+      selectedCell: { col: 1, row: 1 },
+      setGridSelection,
+      sheetName: 'Sheet1',
+      suppressNextNativePasteRef: { current: false },
+      toggleSelectedBooleanCell: vi.fn(),
+    })
+
+    expect(setGridSelection).toHaveBeenCalledWith({
+      columns: expect.objectContaining({ length: 0 }),
+      current: {
+        cell: [2, 1],
+        range: { x: 1, y: 1, width: 2, height: 2 },
+        rangeStack: [],
+      },
+      rows: expect.objectContaining({ length: 0 }),
+    })
+    expect(onSelectionChange).toHaveBeenCalledWith({
+      columns: expect.objectContaining({ length: 0 }),
+      current: {
+        cell: [2, 1],
+        range: { x: 1, y: 1, width: 2, height: 2 },
+        rangeStack: [],
+      },
+      rows: expect.objectContaining({ length: 0 }),
+    })
+  })
+
   test('routes fill down and fill right keyboard shortcuts through range fill operations', () => {
     const onFillRange = vi.fn()
     const fillDownEvent = {

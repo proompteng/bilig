@@ -1904,6 +1904,52 @@ test('web app expands the active range with shift-click', async ({ page }) => {
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:E6')
 })
 
+test('web app cycles the active cell inside a selected range with Enter and Tab', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  const documentId = createTestDocumentId('playwright-range-active-cell-cycle')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=B2`)
+  await waitForWorkbookReady(page)
+
+  const grid = page.getByTestId('sheet-grid')
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 1, 1)
+  await page.evaluate(() => navigator.clipboard.writeText('range-b2\trange-c2\nrange-b3\trange-c3'))
+  await grid.press(`${PRIMARY_MODIFIER}+V`)
+  await expect(formulaInput).toHaveValue('range-b2')
+
+  await dragProductBodySelection(page, 1, 1, 2, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+  await expect(nameBox).toHaveValue('B2:C3')
+  await expect(formulaInput).toHaveValue('range-b2')
+
+  await grid.press('Tab')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+  await expect(nameBox).toHaveValue('B2:C3')
+  await expect(formulaInput).toHaveValue('range-c2')
+
+  await grid.press('Tab')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+  await expect(nameBox).toHaveValue('B2:C3')
+  await expect(formulaInput).toHaveValue('range-b3')
+
+  await grid.press('Shift+Tab')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+  await expect(nameBox).toHaveValue('B2:C3')
+  await expect(formulaInput).toHaveValue('range-c2')
+
+  await grid.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+  await expect(nameBox).toHaveValue('B2:C3')
+  await expect(formulaInput).toHaveValue('range-c3')
+
+  await grid.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+  await expect(nameBox).toHaveValue('B2:C3')
+  await expect(formulaInput).toHaveValue('range-b2')
+})
+
 for (const key of ['Delete', 'Backspace'] as const) {
   test(`web app clears the full selected range with ${key.toLowerCase()}`, async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])

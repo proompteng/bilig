@@ -114,6 +114,66 @@ describe('gridKeyActions', () => {
     ).toEqual({ kind: 'extend-selection', anchor: [1, 4], target: [3, 4] })
   })
 
+  test('cycles Enter and Tab through the active range without collapsing it', () => {
+    const range = { x: 1, y: 1, width: 2, height: 2 }
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'Tab', ctrlKey: false, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [1, 1],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: range,
+      }),
+    ).toEqual({ kind: 'move-selection-in-range', cell: [2, 1], range })
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'Tab', ctrlKey: false, metaKey: false, altKey: false, shiftKey: true },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [1, 1],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: range,
+      }),
+    ).toEqual({ kind: 'move-selection-in-range', cell: [2, 2], range })
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'Enter', ctrlKey: false, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [1, 1],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: range,
+      }),
+    ).toEqual({ kind: 'move-selection-in-range', cell: [1, 2], range })
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'Enter', ctrlKey: false, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [2, 2],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: range,
+      }),
+    ).toEqual({ kind: 'move-selection-in-range', cell: [1, 1], range })
+  })
+
   test('supports sheet-style navigation keys and selection shortcuts', () => {
     expect(
       resolveGridKeyAction({

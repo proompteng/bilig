@@ -277,7 +277,7 @@ describe('WorkbookPaneRendererV3', () => {
         headerPaneCount: 1,
         tilePaneCount: 1,
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldMountWorkbookCanvasProofLayerV3({
         backendStatus: 'ready',

@@ -202,15 +202,20 @@ describe('WorkbookPaneRendererHostRuntimeV3', () => {
 
     expect(runtime.getFrameProofStatusSnapshot()).toBe('presented')
     expect(runtime.getHasPresentedFrameSnapshot()).toBe(true)
+    const firstPresentedSignature = runtime.getPresentedFrameProofSignatureSnapshot()
+    expect(firstPresentedSignature).toBe(runtime.getFrameProofSignatureSnapshot())
 
     runtime.updateProps({ ...props, tilePanes: [secondPane] })
 
     expect(runtime.getFrameProofStatusSnapshot()).toBe('pending')
-    expect(runtime.getHasPresentedFrameSnapshot()).toBe(true)
+    expect(runtime.getHasPresentedFrameSnapshot()).toBe(false)
+    expect(runtime.getPresentedFrameProofSignatureSnapshot()).toBe(firstPresentedSignature)
+    expect(runtime.getPresentedFrameProofSignatureSnapshot()).not.toBe(runtime.getFrameProofSignatureSnapshot())
 
     animationFrames.flushNextFrame()
     expect(runtime.getFrameProofStatusSnapshot()).toBe('presented')
     expect(runtime.getHasPresentedFrameSnapshot()).toBe(true)
+    expect(runtime.getPresentedFrameProofSignatureSnapshot()).toBe(runtime.getFrameProofSignatureSnapshot())
 
     runtime.dispose()
     animationFrames.restore()
@@ -255,7 +260,7 @@ describe('WorkbookPaneRendererHostRuntimeV3', () => {
     runtime.updateProps({ ...props, drawText: false })
 
     expect(runtime.getFrameProofStatusSnapshot()).toBe('pending')
-    expect(runtime.getHasPresentedFrameSnapshot()).toBe(true)
+    expect(runtime.getHasPresentedFrameSnapshot()).toBe(false)
 
     animationFrames.flushNextFrame()
     expect(drawFrame.mock.calls.at(-1)?.[0]).toMatchObject({ drawText: false })

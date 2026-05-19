@@ -60,10 +60,20 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     hostRuntime.getFrameProofStatusSnapshot,
     hostRuntime.getFrameProofStatusSnapshot,
   )
+  const frameProofSignature = useSyncExternalStore(
+    hostRuntime.subscribeFrameProofStatus,
+    hostRuntime.getFrameProofSignatureSnapshot,
+    hostRuntime.getFrameProofSignatureSnapshot,
+  )
   const hasPresentedFrame = useSyncExternalStore(
     hostRuntime.subscribeFrameProofStatus,
     hostRuntime.getHasPresentedFrameSnapshot,
     hostRuntime.getHasPresentedFrameSnapshot,
+  )
+  const presentedFrameProofSignature = useSyncExternalStore(
+    hostRuntime.subscribeFrameProofStatus,
+    hostRuntime.getPresentedFrameProofSignatureSnapshot,
+    hostRuntime.getPresentedFrameProofSignatureSnapshot,
   )
 
   const setCanvasRef = useCallback(
@@ -199,10 +209,13 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           data-v3-canvas-proof-layer={showCanvasFallback ? 'mounted' : 'not-mounted'}
           data-v3-draw-text={showNativeTextLayer ? 'false' : 'true'}
           data-v3-frame-proof-status={frameProofStatus}
+          data-v3-frame-proof-signature={frameProofSignature}
+          data-v3-has-presented-frame={hasPresentedFrame ? 'true' : 'false'}
           data-v3-header-pane-count={headerPanes.length}
           data-v3-header-text-run-count={headerTextRunCount}
           data-v3-authoritative-render-revision={renderRevisionSnapshot?.authoritativeRevision ?? ''}
           data-v3-local-render-revision={renderRevisionSnapshot?.localRevision ?? ''}
+          data-v3-presented-frame-proof-signature={presentedFrameProofSignature}
           data-v3-preload-pane-count={preloadTilePanes.length}
           data-v3-projected-render-revision={renderRevisionSnapshot?.projectedRevision ?? ''}
           data-v3-text-run-count={tileTextRunCount}
@@ -244,9 +257,6 @@ export function shouldMountWorkbookCanvasProofLayerV3(input: {
 }): boolean {
   if (input.enableCanvasFallback || input.backendStatus !== 'ready') {
     return true
-  }
-  if (input.hasPresentedFrame) {
-    return false
   }
   const hasVisiblePaneContent = hasWorkbookPaneVisibleContentV3(input)
   if (input.frameProofStatus === 'pending') {

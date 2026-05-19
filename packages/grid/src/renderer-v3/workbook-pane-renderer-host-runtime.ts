@@ -59,6 +59,7 @@ export class WorkbookPaneRendererHostRuntimeV3 {
   private frameProofSignature = ''
   private frameProofStatus: WorkbookPaneFrameProofStatusV3 = 'idle'
   private hasPresentedFrame = false
+  private presentedFrameProofSignature = ''
   private props: WorkbookPaneRendererHostPropsV3 = EMPTY_HOST_PROPS
   private readonly rendererRuntime: WorkbookPaneRendererRuntimeV3
   private surfaceBackendStatus: WorkbookPaneSurfaceBackendStatusV3
@@ -86,8 +87,10 @@ export class WorkbookPaneRendererHostRuntimeV3 {
   }
 
   readonly getBackendStatusSnapshot = (): WorkbookPaneSurfaceBackendStatusV3 => this.surfaceBackendStatus
+  readonly getFrameProofSignatureSnapshot = (): string => this.frameProofSignature
   readonly getFrameProofStatusSnapshot = (): WorkbookPaneFrameProofStatusV3 => this.frameProofStatus
   readonly getHasPresentedFrameSnapshot = (): boolean => this.hasPresentedFrame
+  readonly getPresentedFrameProofSignatureSnapshot = (): string => this.presentedFrameProofSignature
 
   readonly subscribeBackendStatus = (listener: () => void): (() => void) => {
     if (this.disposed) {
@@ -180,9 +183,11 @@ export class WorkbookPaneRendererHostRuntimeV3 {
   }
 
   private handleFrameResult(result: WorkbookPaneFrameResultV3): void {
-    if (!result.submitted || !this.frameProofSignature) {
+    const signature = this.frameProofSignature
+    if (!result.submitted || !signature) {
       return
     }
+    this.setPresentedFrameProofSignature(signature)
     this.setHasPresentedFrame(true)
     this.setFrameProofStatus('presented')
   }
@@ -203,13 +208,29 @@ export class WorkbookPaneRendererHostRuntimeV3 {
     this.emitFrameProofStatus()
   }
 
+  private setPresentedFrameProofSignature(signature: string): void {
+    if (this.presentedFrameProofSignature === signature) {
+      return
+    }
+    this.presentedFrameProofSignature = signature
+    this.emitFrameProofStatus()
+  }
+
   private syncFrameProofSignature(props: WorkbookPaneRendererHostPropsV3): void {
     const signature = resolveWorkbookPaneFrameProofSignatureV3(props)
     if (this.frameProofSignature === signature) {
       return
     }
     this.frameProofSignature = signature
-    this.setFrameProofStatus(signature ? 'pending' : 'idle')
+    if (!signature) {
+      this.setPresentedFrameProofSignature('')
+      this.setHasPresentedFrame(false)
+      this.setFrameProofStatus('idle')
+      return
+    }
+    const hasPresentedCurrentSignature = this.presentedFrameProofSignature === signature
+    this.setHasPresentedFrame(hasPresentedCurrentSignature)
+    this.setFrameProofStatus(hasPresentedCurrentSignature ? 'presented' : 'pending')
   }
 
   private syncCanvasTarget(): void {

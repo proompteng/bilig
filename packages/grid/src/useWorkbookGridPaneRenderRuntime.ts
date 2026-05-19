@@ -1,4 +1,4 @@
-import { useMemo, type Dispatch, type SetStateAction } from 'react'
+import { useMemo, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import type { GridAxisWorldIndex } from './gridAxisWorldIndex.js'
 import type { GridEngineLike } from './grid-engine.js'
@@ -24,6 +24,71 @@ type SortedAxisOverrides = readonly (readonly [number, number])[]
 export function resolveGridDrawDprBucket(source: { readonly devicePixelRatio?: number | undefined } | null | undefined): number {
   const ratio = source?.devicePixelRatio ?? 1
   return Number.isFinite(ratio) ? Math.max(1, Math.ceil(ratio || 1)) : 1
+}
+
+function getGridDrawDprBucketSnapshot(): number {
+  return resolveGridDrawDprBucket(typeof window === 'undefined' ? null : window)
+}
+
+function subscribeGridDrawDprBucketChange(listener: () => void): () => void {
+  if (typeof window === 'undefined') {
+    return () => {}
+  }
+
+  let disposed = false
+  let resolutionQuery: MediaQueryList | null = null
+  const removeResolutionQuery = () => {
+    if (!resolutionQuery) {
+      return
+    }
+    if (typeof resolutionQuery.removeEventListener === 'function') {
+      resolutionQuery.removeEventListener('change', handleChange)
+    } else {
+      const legacyQuery = resolutionQuery as MediaQueryList & { removeListener?: (listener: () => void) => void }
+      legacyQuery.removeListener?.(handleChange)
+    }
+    resolutionQuery = null
+  }
+  const addResolutionQuery = () => {
+    if (typeof window.matchMedia !== 'function') {
+      return
+    }
+    resolutionQuery = window.matchMedia(`(resolution: ${Math.max(1, window.devicePixelRatio || 1)}dppx)`)
+    if (typeof resolutionQuery.addEventListener === 'function') {
+      resolutionQuery.addEventListener('change', handleChange)
+    } else {
+      const legacyQuery = resolutionQuery as MediaQueryList & { addListener?: (listener: () => void) => void }
+      legacyQuery.addListener?.(handleChange)
+    }
+  }
+  const resetResolutionQuery = () => {
+    if (disposed) {
+      return
+    }
+    removeResolutionQuery()
+    addResolutionQuery()
+  }
+  function handleChange(): void {
+    if (disposed) {
+      return
+    }
+    resetResolutionQuery()
+    listener()
+  }
+
+  addResolutionQuery()
+  window.addEventListener('resize', handleChange)
+  window.visualViewport?.addEventListener('resize', handleChange)
+  return () => {
+    disposed = true
+    removeResolutionQuery()
+    window.removeEventListener('resize', handleChange)
+    window.visualViewport?.removeEventListener('resize', handleChange)
+  }
+}
+
+export function useGridDrawDprBucket(): number {
+  return useSyncExternalStore(subscribeGridDrawDprBucketChange, getGridDrawDprBucketSnapshot, () => 1)
 }
 
 export function resolveShouldUseRemoteRenderTileSource(input: {
@@ -126,7 +191,7 @@ export function useWorkbookGridPaneRenderRuntime(input: {
     syncRuntimeAxes,
     visibleRegion,
   } = input
-  const dprBucket = resolveGridDrawDprBucket(typeof window === 'undefined' ? null : window)
+  const dprBucket = useGridDrawDprBucket()
   const shouldUseRemoteRenderTileSource = resolveShouldUseRemoteRenderTileSource({ renderTileSource, sheetId })
   const viewportResidency = useWorkbookGridViewportRuntime({
     columnAxis,

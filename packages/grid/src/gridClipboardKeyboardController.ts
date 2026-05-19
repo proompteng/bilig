@@ -8,7 +8,7 @@ import {
   createSheetSelection,
   selectionToSnapshot,
 } from './gridSelection.js'
-import type { GridSelection, GridSelectionSnapshot, Item } from './gridTypes.js'
+import { CompactSelection, type GridSelection, type GridSelectionSnapshot, type Item } from './gridTypes.js'
 import { parseClipboardContent, parseClipboardPlainText } from './gridClipboard.js'
 import { cellToEditorSeed, snapshotToRenderCell } from './gridCells.js'
 import {
@@ -345,6 +345,21 @@ export function handleGridKey({
     case 'move-selection':
       {
         const nextSelection = createGridSelection(action.cell[0], action.cell[1])
+        setGridSelection(nextSelection)
+        onSelectionChange(nextSelection)
+      }
+      return
+    case 'move-selection-in-range':
+      {
+        const nextSelection: GridSelection = {
+          current: {
+            cell: action.cell,
+            range: { ...action.range },
+            rangeStack: gridSelection.current?.rangeStack ?? [],
+          },
+          columns: CompactSelection.empty(),
+          rows: CompactSelection.empty(),
+        }
         setGridSelection(nextSelection)
         onSelectionChange(nextSelection)
       }
