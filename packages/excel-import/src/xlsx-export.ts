@@ -51,6 +51,7 @@ import { addExportSparklinesToXlsxBytes } from './xlsx-sparklines.js'
 import { addExportHyperlinksToWorksheet, hasExportHyperlinks } from './xlsx-hyperlinks.js'
 import { preserveSnapshotNumberFormats } from './xlsx-export-number-formats.js'
 import { escapeXmlAttribute, getZipText, setXmlAttribute, setZipText } from './xlsx-export-xml.js'
+import { encodeExcelEscapedText } from './xlsx-escaped-text.js'
 import {
   appendCustomCellXfsToStylesXml,
   readCellXfs,
@@ -578,7 +579,7 @@ function buildExportCell(cell: WorkbookSnapshot['sheets'][number]['cells'][numbe
     const type = cellTypeForLiteral(cell.value)
     if (type) {
       output.t = type
-      output.v = cell.value
+      output.v = typeof cell.value === 'string' ? encodeExcelEscapedText(cell.value) : cell.value
     }
   }
   if (typeof cell.formula === 'string' && cell.formula.trim().length > 0) {
