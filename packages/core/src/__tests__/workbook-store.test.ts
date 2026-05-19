@@ -554,6 +554,25 @@ describe('WorkbookStore', () => {
     })
   })
 
+  it('clears physical grid entries when pruning empty physical cells', () => {
+    const workbook = new WorkbookStore('prune-physical-grid-entry')
+    const sheet = workbook.createSheet('Sheet1')
+    const cellIndex = workbook.ensureCell('Sheet1', 'F8')
+
+    expect(sheet.grid.getPhysical(7, 5)).toBe(cellIndex)
+    expect(workbook.pruneCellIfEmpty(cellIndex)).toBe(true)
+
+    expect(sheet.logical.getVisibleCell(7, 5)).toBeUndefined()
+    expect(sheet.grid.getPhysical(7, 5)).toBe(-1)
+    expect(workbook.getCellIndex('Sheet1', 'F8')).toBeUndefined()
+
+    const nextCellIndex = workbook.ensureCell('Sheet1', 'F8')
+    expect(nextCellIndex).not.toBe(cellIndex)
+    expect(sheet.logical.getVisibleCell(7, 5)).toBe(nextCellIndex)
+    expect(sheet.grid.getPhysical(7, 5)).toBe(nextCellIndex)
+    expect(workbook.getCellIndex('Sheet1', 'F8')).toBe(nextCellIndex)
+  })
+
   it('restores sparse column axis entries without synthesizing blank identities', () => {
     const workbook = new WorkbookStore('sparse-axis-restore')
     workbook.createSheet('Sheet1')

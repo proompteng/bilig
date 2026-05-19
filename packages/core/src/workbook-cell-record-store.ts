@@ -205,7 +205,8 @@ export class WorkbookCellRecordStore {
       if (this.options.cellKeyToIndex.get(key) === index) {
         this.options.cellKeyToIndex.delete(key)
       }
-      if (sheet.grid.get(row, col) === index) {
+      const visibleGridIndex = sheet.structureVersion === 1 ? sheet.grid.getPhysical(row, col) : sheet.grid.get(row, col)
+      if (visibleGridIndex === index) {
         sheet.grid.clear(row, col)
       }
     }

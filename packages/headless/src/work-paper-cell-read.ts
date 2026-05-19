@@ -22,7 +22,9 @@ import type {
 export function getVisibleWorkPaperCellIndexInSheet(sheet: SheetRecord, row: number, col: number): number | undefined {
   if (sheet.structureVersion === 1) {
     const cellIndex = sheet.grid.getPhysical(row, col)
-    return cellIndex === -1 ? undefined : cellIndex
+    if (cellIndex !== -1 && sheet.logical.cellIdentityMatchesVisiblePosition(cellIndex, row, col)) {
+      return cellIndex
+    }
   }
   return sheet.logical.getVisibleCell(row, col)
 }

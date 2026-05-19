@@ -307,6 +307,8 @@ export function createWorkPaperRuntimeAdapters(args: CreateWorkPaperRuntimeAdapt
     getBatchDepth: args.getBatchDepth,
     enqueueSuspendedLiteralMutation: args.enqueueSuspendedLiteralMutation,
     enqueueDeferredBatchLiteral: args.enqueueDeferredBatchLiteral,
+    getCellSerialized: (address) =>
+      args.cellSnapshotToRawContent(args.getEngine().getCell(args.sheetName(address.sheet), args.a1(address)), address.sheet),
     trySetExistingNumericCellContentsWithTrackedFastPath: (request) =>
       trySetExistingNumericWorkPaperCellContentsWithTrackedFastPath(existingNumericFastPathRuntime, request),
     trySetExistingLiteralCellContentsWithTrackedFastPath: (request) =>

@@ -27,6 +27,7 @@ interface OperationMutationCellResolverWorkbook {
         readonly structureVersion: number
         readonly logical?: {
           getCellVisiblePosition(cellIndex: number): { readonly row: number; readonly col: number } | undefined
+          cellIdentityMatchesVisiblePosition?: (cellIndex: number, row: number, col: number) => boolean
         }
       }
     | undefined
@@ -123,7 +124,11 @@ export function resolveOperationExistingMutationCellIndex(
   if (candidate !== undefined && workbook.cellStore.sheetIds[candidate] === sheetId) {
     const sheet = workbook.getSheetById(sheetId)
     if (sheet?.structureVersion === 1) {
-      if (workbook.cellStore.rows[candidate] === mutation.row && workbook.cellStore.cols[candidate] === mutation.col) {
+      if (
+        workbook.cellStore.rows[candidate] === mutation.row &&
+        workbook.cellStore.cols[candidate] === mutation.col &&
+        sheet.logical?.cellIdentityMatchesVisiblePosition?.(candidate, mutation.row, mutation.col) === true
+      ) {
         return candidate
       }
     } else {
