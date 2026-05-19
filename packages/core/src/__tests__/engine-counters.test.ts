@@ -37,6 +37,7 @@ const oracleAggregateCounterKeys = [
   'directAggregateScanEvaluations',
   'directAggregateScanCells',
   'directAggregatePrefixEvaluations',
+  'nativeDirectAggregatePrefixEvaluations',
   'directAggregateDeltaApplications',
   'directAggregateDeltaOnlyRecalcSkips',
   'directScalarDeltaApplications',

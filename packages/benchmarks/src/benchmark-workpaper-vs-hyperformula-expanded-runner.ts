@@ -182,6 +182,7 @@ function summarizeEngineCounters(samples: readonly BenchmarkSample[]): EngineCou
     directAggregateScanEvaluations: zeroSummary,
     directAggregateScanCells: zeroSummary,
     directAggregatePrefixEvaluations: zeroSummary,
+    nativeDirectAggregatePrefixEvaluations: zeroSummary,
     directAggregateDeltaApplications: zeroSummary,
     directAggregateDeltaOnlyRecalcSkips: zeroSummary,
     directScalarDeltaApplications: zeroSummary,

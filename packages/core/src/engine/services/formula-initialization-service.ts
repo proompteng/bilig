@@ -6,8 +6,11 @@ import { addEngineCounter } from '../../perf/engine-counters.js'
 import type { RuntimeFormula, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 import { evaluateInitialDirectScalar, evaluateInitialDirectScalarNumber } from './formula-initialization-direct-scalar.js'
-import { materializeDeferredFormulaFamilyRunMembers, type DeferredInitialFormulaFamilyRun } from './formula-initialization-family-runs.js'
-import { initialFormulaFamilyShapeKey } from './formula-initialization-template-keys.js'
+import {
+  noteDeferredFormulaFamilyRunMember as noteDeferredFormulaFamilyRunMemberNow,
+  registerDeferredFormulaFamilyRunNow,
+  type DeferredInitialFormulaFamilyRun,
+} from './formula-initialization-family-runs.js'
 import { createInitialTemplateFormulaResolver } from './formula-initialization-template-resolver.js'
 import { createInitialFormulaValueWriter, type InitialFormulaValueWriter } from './formula-initialization-value-writer.js'
 import { noteDeferredFormulaInstance, readAlignedFreshFormulaInstancesFromRefs } from './formula-initialization-fresh-instances.js'
@@ -76,91 +79,15 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
 
   const noteDeferredFormulaFamilyRunMember = (
     runs: Map<string, DeferredInitialFormulaFamilyRun> | undefined,
-    prepared: {
-      readonly cellIndex: number
-      readonly sheetId: number
-      readonly row: number
-      readonly col: number
-      readonly templateId?: number
-    },
-  ): void => {
-    if (!runs) {
-      return
-    }
-    const templateId = prepared.templateId
-    if (templateId === undefined) {
-      return
-    }
-    const familyKey = `${prepared.sheetId}\t${templateId}\t${prepared.col}`
-    let run = runs.get(familyKey)
-    if (!run) {
-      const runtimeFormula = args.state.formulas.get(prepared.cellIndex)
-      if (runtimeFormula === undefined) {
-        return
-      }
-      run = {
-        sheetId: prepared.sheetId,
-        templateId,
-        shapeKey: initialFormulaFamilyShapeKey(runtimeFormula),
-        axis: 'row',
-        fixedIndex: prepared.col,
-        start: prepared.row,
-        step: 0,
-        lastIndex: prepared.row,
-        ordered: true,
-        cellIndices: [],
-      }
-      runs.set(familyKey, run)
-    } else {
-      const nextStep = prepared.row - run.lastIndex
-      let breaksOrder = false
-      if (run.cellIndices.length === 1) {
-        run.step = nextStep
-      } else if (run.step !== nextStep) {
-        breaksOrder = true
-      }
-      if (prepared.row <= run.lastIndex || prepared.col !== run.fixedIndex) {
-        breaksOrder = true
-      }
-      if (breaksOrder) {
-        if (!run.rows) {
-          const priorStep = run.cellIndices.length <= 1 ? 1 : run.step
-          const start = run.start
-          run.rows = Array.from({ length: run.cellIndices.length }, (_value, index) => start + priorStep * index)
-        }
-        run.ordered = false
-      }
-      run.lastIndex = prepared.row
-    }
-    run.cellIndices.push(prepared.cellIndex)
-    run.rows?.push(prepared.row)
-  }
+    prepared: Parameters<typeof noteDeferredFormulaFamilyRunMemberNow>[0]['prepared'],
+  ): void => noteDeferredFormulaFamilyRunMemberNow({ runs, formulas: args.state.formulas, prepared })
 
-  const registerDeferredFormulaFamilyRun = (run: DeferredInitialFormulaFamilyRun): void => {
-    const step = run.cellIndices.length <= 1 ? 1 : run.step
-    if (
-      run.ordered &&
-      step > 0 &&
-      args.registerFreshFormulaFamilyRun({
-        sheetId: run.sheetId,
-        templateId: run.templateId,
-        shapeKey: run.shapeKey,
-        axis: run.axis,
-        fixedIndex: run.fixedIndex,
-        start: run.start,
-        step,
-        cellIndices: run.cellIndices,
-      })
-    ) {
-      return
-    }
-    args.upsertFormulaFamilyRun({
-      sheetId: run.sheetId,
-      templateId: run.templateId,
-      shapeKey: run.shapeKey,
-      members: materializeDeferredFormulaFamilyRunMembers(run),
+  const registerDeferredFormulaFamilyRun = (run: DeferredInitialFormulaFamilyRun): void =>
+    registerDeferredFormulaFamilyRunNow({
+      run,
+      registerFreshFormulaFamilyRun: args.registerFreshFormulaFamilyRun,
+      upsertFormulaFamilyRun: args.upsertFormulaFamilyRun,
     })
-  }
 
   const canEvaluateInitialDirectFormula = (cellIndex: number): boolean => {
     return canEvaluateInitialDirectRuntimeFormula(args.state.formulas.get(cellIndex))

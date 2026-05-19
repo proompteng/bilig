@@ -43,6 +43,17 @@ export interface WasmDirectScalarValueBatchLayout {
   outErrors: Uint16Array
 }
 
+export interface WasmDenseNumericRowAggregateBatchLayout {
+  aggregateKind: number
+  values: Float64Array
+  rowCount: number
+  prefixColCount: number
+  startColOffset: number
+  aggregateColCount: number
+  resultOffset: number
+  outNumbers: Float64Array
+}
+
 const OUTPUT_STRING_BASE = 2147483648
 
 function decodeSpillValue(tag: number, rawValue: number, strings: StringPool, outputStrings: readonly string[]): CellValue {
@@ -252,6 +263,23 @@ export class WasmKernelFacade {
       layout.outTags,
       layout.outNumbers,
       layout.outErrors,
+    )
+    return true
+  }
+
+  evalDenseNumericRowAggregateBatch(layout: WasmDenseNumericRowAggregateBatchLayout): boolean {
+    if (!this.kernel) {
+      return false
+    }
+    this.kernel.evalDenseNumericRowAggregateBatch(
+      layout.aggregateKind,
+      layout.values,
+      layout.rowCount,
+      layout.prefixColCount,
+      layout.startColOffset,
+      layout.aggregateColCount,
+      layout.resultOffset,
+      layout.outNumbers,
     )
     return true
   }

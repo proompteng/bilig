@@ -24,6 +24,7 @@ import {
   tryTranslateFreshMatrixDirectAggregateTemplate,
   type FreshMatrixDirectAggregateTemplate,
 } from './operation-fresh-direct-aggregate-matrix-helpers.js'
+import { tryEvaluateNativeFreshDirectAggregateMatrixResults } from './operation-fresh-direct-aggregate-native-batch.js'
 
 const EMPTY_CHANGED_CELLS = new Uint32Array(0)
 const FRESH_DIRECT_AGGREGATE_FORMULA_BATCH_MIN_SIZE = 32
@@ -31,6 +32,7 @@ const FRESH_DIRECT_AGGREGATE_FORMULA_SCAN_LIMIT = 4096
 type FastPathState = Pick<
   EngineRuntimeState,
   | 'workbook'
+  | 'wasm'
   | 'ranges'
   | 'strings'
   | 'events'
@@ -61,6 +63,8 @@ interface FreshDirectAggregateFormulaEntry {
   readonly resultOffset: number | undefined
   readonly result: DirectScalarCurrentOperand
 }
+
+type FreshDirectAggregateFormulaEntrySeed = Omit<FreshDirectAggregateFormulaEntry, 'result'>
 
 interface ContiguousSingleColumnFormulaBatch {
   readonly rowStart: number
@@ -667,7 +671,7 @@ function collectFreshDirectAggregateMatrixBatch(
   }
 
   const formulaCol = firstMutation.col + inputColCount
-  const formulaEntries: FreshDirectAggregateFormulaEntry[] = []
+  const formulaEntrySeeds: FreshDirectAggregateFormulaEntrySeed[] = []
   let directAggregateTemplate: FreshMatrixDirectAggregateTemplate | undefined
   for (let refIndex = firstFormulaRefIndex; refIndex < refs.length; refIndex += 1) {
     const ref = refs[refIndex]!
@@ -744,17 +748,7 @@ function collectFreshDirectAggregateMatrixBatch(
         templateId,
       })
     }
-    const result = evaluateFreshDirectAggregateMatrixRow({
-      aggregateKind: aggregate.aggregateKind,
-      colEnd: range.endCol,
-      colStart: range.startCol,
-      inputColCount,
-      matrixColStart: firstMutation.col,
-      resultOffset: aggregate.resultOffset,
-      rowOffset,
-      values,
-    })
-    formulaEntries.push({
+    formulaEntrySeeds.push({
       row: mutation.row,
       col: mutation.col,
       source: mutation.formula,
@@ -766,9 +760,14 @@ function collectFreshDirectAggregateMatrixBatch(
       aggregateColStart: range.startCol,
       aggregateColEnd: range.endCol,
       resultOffset: normalizeFreshMatrixDirectAggregateOffset(aggregate.resultOffset),
-      result,
     })
   }
+  const formulaEntries = materializeFreshDirectAggregateFormulaEntries(args, {
+    inputColCount,
+    matrixColStart: firstMutation.col,
+    seeds: formulaEntrySeeds,
+    values,
+  })
 
   return {
     sheet,
@@ -781,6 +780,37 @@ function collectFreshDirectAggregateMatrixBatch(
     values,
     formulaEntries,
   }
+}
+
+function materializeFreshDirectAggregateFormulaEntries(
+  args: OperationFreshDirectAggregateFormulaBatchFastPathArgs,
+  input: {
+    readonly inputColCount: number
+    readonly matrixColStart: number
+    readonly seeds: readonly FreshDirectAggregateFormulaEntrySeed[]
+    readonly values: Float64Array
+  },
+): FreshDirectAggregateFormulaEntry[] {
+  const nativeResults = tryEvaluateNativeFreshDirectAggregateMatrixResults(args, input)
+  if (nativeResults !== undefined) {
+    return input.seeds.map((seed, index) => ({
+      ...seed,
+      result: { kind: 'number', value: nativeResults[index]! },
+    }))
+  }
+  return input.seeds.map((seed, rowOffset) => ({
+    ...seed,
+    result: evaluateFreshDirectAggregateMatrixRow({
+      aggregateKind: seed.aggregateKind,
+      colEnd: seed.aggregateColEnd,
+      colStart: seed.aggregateColStart,
+      inputColCount: input.inputColCount,
+      matrixColStart: input.matrixColStart,
+      resultOffset: seed.resultOffset,
+      rowOffset,
+      values: input.values,
+    }),
+  }))
 }
 
 function writeFreshNumericLiteralToCellStore(
