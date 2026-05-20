@@ -56,6 +56,7 @@ const greaterThan = 62
 const doubleQuote = 34
 const singleQuote = 39
 const emptyBytes = new Uint8Array(0)
+type StreamedMetadataElement = 'mergeCells' | 'tableParts'
 
 export interface LargeSimpleWorksheetStreamScan {
   readonly cellScan: ImportedWorksheetCellScan
@@ -135,7 +136,7 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
   private readonly deferSharedStrings: boolean
   private readonly retainMetadataXml: boolean
-  private activeMergeCells = false
+  private activeMetadataElement: StreamedMetadataElement | null = null
 
   constructor(
     private readonly sheetIndex: number,
@@ -175,7 +176,7 @@ class LargeSimpleWorksheetChunkScanner {
       return null
     }
     this.process(true)
-    if (this.activeMergeCells) {
+    if (this.activeMetadataElement !== null) {
       this.failed = true
     }
     this.compact()
@@ -269,8 +270,8 @@ class LargeSimpleWorksheetChunkScanner {
 
   private process(final: boolean): void {
     while (!this.failed && this.index < this.buffer.byteLength) {
-      if (this.activeMergeCells) {
-        if (!this.processActiveMergeCells(final)) {
+      if (this.activeMetadataElement !== null) {
+        if (!this.processActiveMetadataElement(final)) {
           return
         }
         continue
@@ -472,10 +473,10 @@ class LargeSimpleWorksheetChunkScanner {
       this.index = tagEnd + 1
       return true
     }
-    if (localName === 'mergeCells') {
-      this.activeMergeCells = true
+    if (localName === 'mergeCells' || localName === 'tableParts') {
+      this.activeMetadataElement = localName
       this.index = tagEnd + 1
-      if (!this.processActiveMergeCells(final)) {
+      if (!this.processActiveMetadataElement(final)) {
         if (final) {
           this.failed = true
         }
@@ -593,7 +594,11 @@ class LargeSimpleWorksheetChunkScanner {
     }
   }
 
-  private processActiveMergeCells(final: boolean): boolean {
+  private processActiveMetadataElement(final: boolean): boolean {
+    const activeElement = this.activeMetadataElement
+    if (activeElement === null) {
+      return true
+    }
     while (this.index < this.buffer.byteLength) {
       if (this.buffer[this.index] !== lessThan) {
         this.index += 1
@@ -616,13 +621,13 @@ class LargeSimpleWorksheetChunkScanner {
         }
         return false
       }
-      if (closing && tag.localName === 'mergeCells') {
-        this.activeMergeCells = false
+      if (closing && tag.localName === activeElement) {
+        this.activeMetadataElement = null
         this.index = tagEnd + 1
         return true
       }
-      if (!closing && tag.localName === 'mergeCell') {
-        this.collectMergeCellTag(tag.endIndex, tagEnd)
+      if (!closing) {
+        this.collectActiveMetadataTag(activeElement, tag.localName, tag.endIndex, tagEnd)
       }
       this.index = tagEnd + 1
     }
@@ -632,6 +637,24 @@ class LargeSimpleWorksheetChunkScanner {
       this.index = this.buffer.byteLength
     }
     return false
+  }
+
+  private collectActiveMetadataTag(activeElement: StreamedMetadataElement, localName: string, nameEnd: number, tagEnd: number): void {
+    if (activeElement === 'mergeCells' && localName === 'mergeCell') {
+      this.collectMergeCellTag(nameEnd, tagEnd)
+      return
+    }
+    if (activeElement === 'tableParts' && localName === 'tablePart') {
+      const relationshipId =
+        readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 'r:id') ?? readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 'id')
+      if (relationshipId) {
+        this.tableCount += 1
+        if (this.retainMetadataXml) {
+          this.tableRelationshipIds ??= []
+          this.tableRelationshipIds.push(relationshipId)
+        }
+      }
+    }
   }
 
   private collectMergeCellTag(nameEnd: number, tagEnd: number): void {
