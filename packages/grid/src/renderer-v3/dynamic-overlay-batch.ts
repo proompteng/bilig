@@ -1,3 +1,4 @@
+import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import type { GridGeometrySnapshot, GridPaneKind } from '../gridGeometry.js'
 import { parseGpuColor, type GridGpuRect } from '../gridGpuPrimitives.js'
 import type { HeaderSelection } from '../gridPointer.js'
@@ -197,6 +198,7 @@ function appendSelectionOverlay(input: {
   }
   const hasAxisSelection = (input.gridSelection?.columns.length ?? 0) > 0 || (input.gridSelection?.rows.length ?? 0) > 0
   const borderColor = parseGpuColor(workbookThemeColors.accent)
+  const selectionFillColor = parseGpuColor('rgba(33, 86, 58, 0.08)')
   if (hasAxisSelection) {
     const activeCell = input.gridSelection?.current?.cell ?? [input.selectionRange.x, input.selectionRange.y]
     for (const activeRect of input.geometry.rangeScreenRects({ x: activeCell[0], y: activeCell[1], width: 1, height: 1 })) {
@@ -204,8 +206,23 @@ function appendSelectionOverlay(input: {
     }
     return
   }
+  const isMultiCellSelection = input.selectionRange.width > 1 || input.selectionRange.height > 1
+  if (isMultiCellSelection) {
+    appendSelectionFillRects({
+      color: selectionFillColor,
+      fillRects: input.fillRects,
+      geometry: input.geometry,
+      range: input.selectionRange,
+    })
+  }
   for (const rect of input.geometry.rangeScreenRects(input.selectionRange)) {
     appendBorderRects(input.borderRects, rect, borderColor, 1)
+  }
+  const activeCell = input.gridSelection?.current?.cell ?? null
+  if (activeCell && isMultiCellSelection && cellInRange(activeCell, input.selectionRange)) {
+    for (const activeRect of input.geometry.rangeScreenRects({ x: activeCell[0], y: activeCell[1], width: 1, height: 1 })) {
+      appendBorderRects(input.borderRects, activeRect, borderColor, 1)
+    }
   }
   if (input.showFillHandle) {
     const handle = input.geometry.fillHandleScreenRect(input.selectionRange)
@@ -242,6 +259,62 @@ function appendAxisSelectionOverlay(input: {
 
   appendSelectedColumnHeaderFills({ color: headerFillColor, fillRects: input.fillRects, geometry: input.geometry, ranges: columnRanges })
   appendSelectedRowHeaderFills({ color: headerFillColor, fillRects: input.fillRects, geometry: input.geometry, ranges: rowRanges })
+
+  const selectionFillColor = parseGpuColor('rgba(33, 86, 58, 0.08)')
+  if ((input.gridSelection?.columns.length ?? 0) > 0) {
+    appendAxisBodySelectionFills({
+      color: selectionFillColor,
+      fillRects: input.fillRects,
+      geometry: input.geometry,
+      ranges: columnRanges,
+      axis: 'column',
+    })
+  }
+  if ((input.gridSelection?.rows.length ?? 0) > 0) {
+    appendAxisBodySelectionFills({
+      color: selectionFillColor,
+      fillRects: input.fillRects,
+      geometry: input.geometry,
+      ranges: rowRanges,
+      axis: 'row',
+    })
+  }
+}
+
+function appendSelectionFillRects(input: {
+  readonly geometry: GridGeometrySnapshot
+  readonly range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
+  readonly color: GridGpuRect['color']
+  readonly fillRects: GridGpuRect[]
+}): void {
+  for (const rect of input.geometry.rangeScreenRects(input.range)) {
+    const fill = insetRect(rect, 1, 1)
+    if (fill.width > 0 && fill.height > 0) {
+      input.fillRects.push({ ...fill, color: input.color })
+    }
+  }
+}
+
+function appendAxisBodySelectionFills(input: {
+  readonly geometry: GridGeometrySnapshot
+  readonly ranges: readonly AxisSelectionRange[]
+  readonly axis: 'column' | 'row'
+  readonly color: GridGpuRect['color']
+  readonly fillRects: GridGpuRect[]
+}): void {
+  for (const range of input.ranges) {
+    const start = Math.max(0, range.start)
+    const endExclusive = Math.max(start + 1, Math.min(input.axis === 'column' ? MAX_COLS : MAX_ROWS, range.endExclusive))
+    appendSelectionFillRects({
+      color: input.color,
+      fillRects: input.fillRects,
+      geometry: input.geometry,
+      range:
+        input.axis === 'column'
+          ? { x: start, y: 0, width: endExclusive - start, height: MAX_ROWS }
+          : { x: 0, y: start, width: MAX_COLS, height: endExclusive - start },
+    })
+  }
 }
 
 function appendSelectedColumnHeaderFills(input: {
@@ -532,6 +605,10 @@ function insetRect(rect: Rectangle, insetX: number, insetY: number): Rectangle {
     width: Math.max(0, rect.width - insetX * 2),
     height: Math.max(0, rect.height - insetY * 2),
   }
+}
+
+function cellInRange(cell: Item, range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): boolean {
+  return cell[0] >= range.x && cell[0] < range.x + range.width && cell[1] >= range.y && cell[1] < range.y + range.height
 }
 
 function appendBorderRects(target: GridGpuRect[], rect: Rectangle, color: GridGpuRect['color'], thickness: number): void {

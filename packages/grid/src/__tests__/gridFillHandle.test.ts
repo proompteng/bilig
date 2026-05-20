@@ -87,10 +87,10 @@ describe('gridFillHandle', () => {
         getCellBounds: (col, row) => (col === 2 && row === 4 ? { x: 250, y: 320, width: 80, height: 24 } : undefined),
       }),
     ).toEqual({
-      x: 224,
-      y: 138,
-      width: 12,
-      height: 12,
+      x: 225,
+      y: 139,
+      width: 10,
+      height: 10,
     })
   })
 

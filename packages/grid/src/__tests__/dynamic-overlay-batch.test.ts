@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest'
 import { createGridAxisWorldIndex } from '../gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from '../gridGeometry.js'
 import { getGridMetrics } from '../gridMetrics.js'
-import { createColumnSliceSelection } from '../gridSelection.js'
+import { createColumnSliceSelection, createRowSliceSelection } from '../gridSelection.js'
 import {
   DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3,
   DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3,
@@ -43,6 +43,7 @@ describe('dynamic overlay batch v3', () => {
     expect(overlay.surfaceSize).toEqual({ height: 220, width: 520 })
     expect(readOverlayRects(overlay)).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ x: 147, y: 45, width: 148, height: 28 }),
         expect.objectContaining({ x: 146, y: 44, width: 150, height: 1 }),
         expect.objectContaining({ x: 146, y: 44, width: 1, height: 30 }),
         expect.objectContaining({ x: 292.5, y: 70.5, width: 7, height: 7 }),
@@ -97,7 +98,7 @@ describe('dynamic overlay batch v3', () => {
         expect.objectContaining({ x: 196, y: 21, width: 100, height: 3 }),
       ]),
     )
-    expect(readOverlayRects(overlay)).not.toEqual(
+    expect(readOverlayRects(overlay)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ x: 147, y: 25, width: 248, height: 18 }),
         expect.objectContaining({ x: 147, y: 45, width: 248, height: 174 }),
@@ -145,6 +146,39 @@ describe('dynamic overlay batch v3', () => {
       expect.arrayContaining([
         expect.objectContaining({ x: 335, y: 0, width: 1, height: 220 }),
         expect.objectContaining({ x: 0, y: 88, width: 520, height: 1 }),
+      ]),
+    )
+  })
+
+  test('draws row-selection body highlights through the dynamic overlay', () => {
+    const metrics = getGridMetrics()
+    const geometry = createGridGeometrySnapshotFromAxes({
+      columns: createGridAxisWorldIndex({ axisLength: 20, defaultSize: 100 }),
+      dpr: 2,
+      freezeCols: 0,
+      freezeRows: 0,
+      gridMetrics: metrics,
+      hostHeight: 220,
+      hostWidth: 520,
+      rows: createGridAxisWorldIndex({ axisLength: 20, defaultSize: 20 }),
+      scrollLeft: 0,
+      scrollTop: 0,
+      sheetName: 'Sheet1',
+      updatedAt: 100,
+    })
+
+    const overlay = buildDynamicGridOverlayBatchV3({
+      geometry,
+      gridSelection: createRowSliceSelection(1, 2, 4),
+      selectedCell: [1, 2],
+      selectionRange: { x: 1, y: 2, width: 1, height: 3 },
+      showFillHandle: false,
+    })
+
+    expect(readOverlayRects(overlay)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ x: 47, y: 65, width: 472, height: 58 }),
+        expect.objectContaining({ x: 146, y: 64, width: 100, height: 1 }),
       ]),
     )
   })
