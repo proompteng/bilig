@@ -2,6 +2,16 @@ import { Buffer } from 'node:buffer'
 import { TextDecoder } from 'node:util'
 import { createInflateRaw, inflateRawSync } from 'node:zlib'
 
+import {
+  forEachInflatedXlsxZipEntryChunk,
+  getZipText,
+  readXlsxZipEntriesLazyFromByteSource,
+  readXlsxZipEntryMetadata,
+  releaseLazyXlsxZipSource,
+  type XlsxZipByteSource,
+  type XlsxZipEntries,
+  type XlsxZipEntryMetadata,
+} from '../packages/excel-import/src/xlsx-zip.js'
 import type { WorkbookExternalWorkbookReferenceSnapshot } from '../packages/protocol/src/types.js'
 import { WorksheetDataValidationSupportScanner } from './public-workbook-corpus-xlsx-data-validation-footprint.ts'
 import type { WorkbookFootprint } from './public-workbook-corpus-workbook.ts'
@@ -23,6 +33,12 @@ interface ParsedRelationship {
 interface ParsedSheet {
   readonly name: string
   readonly path: string | null
+}
+
+interface WorkbookPackageEntry {
+  readonly path: string
+  readonly compressionMethod: number
+  readonly compressedSize: number
 }
 
 interface WorksheetFootprint {
@@ -91,9 +107,38 @@ export async function inspectXlsxWorkbookFootprintLowMemoryAsync(bytes: Uint8Arr
   return buildWorkbookFootprint(bytes, fileName, context, totals, dimensions)
 }
 
+export function inspectXlsxWorkbookFootprintLowMemoryFromByteSource(source: XlsxZipByteSource, fileName: string): WorkbookFootprint | null {
+  const zip = readXlsxZipEntriesLazyFromByteSource(source)
+  const entryMetadata = readXlsxZipEntryMetadata(source)
+  if (!zip || !entryMetadata) {
+    return null
+  }
+  try {
+    const context = readWorkbookPackageContextFromZip(zip, entryMetadata)
+    const dimensions: WorkbookFootprint['workbookMetadata']['dimensions'] = []
+    const totals = emptyWorksheetFootprint()
+
+    for (const sheet of context.sheets) {
+      const footprint = sheet.path ? inspectWorksheetZipEntryFromLazyZip(zip, sheet.path) : emptyWorksheetFootprint()
+      addWorksheetFootprint(totals, footprint)
+      dimensions.push(worksheetDimension(sheet.name, footprint))
+    }
+
+    return buildWorkbookFootprintFromContext({
+      fileName,
+      context,
+      totals,
+      dimensions,
+      readPartText: (path) => getZipText(zip, path),
+    })
+  } finally {
+    releaseLazyXlsxZipSource(zip)
+  }
+}
+
 function readWorkbookPackageContext(bytes: Uint8Array): {
-  readonly entries: readonly ZipEntryInfo[]
-  readonly entriesByPath: ReadonlyMap<string, ZipEntryInfo>
+  readonly entries: readonly WorkbookPackageEntry[]
+  readonly entriesByPath: ReadonlyMap<string, WorkbookPackageEntry>
   readonly workbookRelationships: readonly ParsedRelationship[]
   readonly workbookXml: string
   readonly sheets: readonly ParsedSheet[]
@@ -102,6 +147,28 @@ function readWorkbookPackageContext(bytes: Uint8Array): {
   const entriesByPath = new Map(entries.map((entry) => [entry.path, entry]))
   const workbookXml = readZipEntryText(bytes, entriesByPath.get('xl/workbook.xml')) ?? ''
   const workbookRelationships = parseRelationships(readZipEntryText(bytes, entriesByPath.get('xl/_rels/workbook.xml.rels')))
+  const sheets = readWorkbookSheets(workbookXml, workbookRelationships, entries)
+  return { entries, entriesByPath, workbookRelationships, workbookXml, sheets }
+}
+
+function readWorkbookPackageContextFromZip(
+  zip: XlsxZipEntries,
+  entryMetadata: readonly XlsxZipEntryMetadata[],
+): {
+  readonly entries: readonly WorkbookPackageEntry[]
+  readonly entriesByPath: ReadonlyMap<string, WorkbookPackageEntry>
+  readonly workbookRelationships: readonly ParsedRelationship[]
+  readonly workbookXml: string
+  readonly sheets: readonly ParsedSheet[]
+} {
+  const entries = entryMetadata.map((entry) => ({
+    path: entry.path,
+    compressionMethod: entry.compressionMethod,
+    compressedSize: entry.compressedSize,
+  }))
+  const entriesByPath = new Map(entries.map((entry) => [entry.path, entry]))
+  const workbookXml = getZipText(zip, 'xl/workbook.xml') ?? ''
+  const workbookRelationships = parseRelationships(getZipText(zip, 'xl/_rels/workbook.xml.rels'))
   const sheets = readWorkbookSheets(workbookXml, workbookRelationships, entries)
   return { entries, entriesByPath, workbookRelationships, workbookXml, sheets }
 }
@@ -119,44 +186,64 @@ function buildWorkbookFootprint(
   totals: WorksheetFootprint,
   dimensions: WorkbookFootprint['workbookMetadata']['dimensions'],
 ): WorkbookFootprint {
+  return buildWorkbookFootprintFromContext({
+    fileName,
+    context,
+    totals,
+    dimensions,
+    readPartText: (path) => readZipEntryText(bytes, context.entriesByPath.get(path)),
+  })
+}
+
+function buildWorkbookFootprintFromContext(args: {
+  readonly fileName: string
+  readonly context: {
+    readonly entries: readonly WorkbookPackageEntry[]
+    readonly entriesByPath: ReadonlyMap<string, WorkbookPackageEntry>
+    readonly workbookRelationships: readonly ParsedRelationship[]
+    readonly workbookXml: string
+    readonly sheets: readonly ParsedSheet[]
+  }
+  readonly totals: WorksheetFootprint
+  readonly dimensions: WorkbookFootprint['workbookMetadata']['dimensions']
+  readonly readPartText: (path: string) => string | null
+}): WorkbookFootprint {
   return {
     featureCounts: {
-      sheetCount: context.sheets.length,
-      cellCount: totals.cellCount,
-      formulaCellCount: totals.formulaCellCount,
-      valueCellCount: totals.valueCellCount,
-      definedNameCount: countElementStarts(context.workbookXml, 'definedName'),
-      tableCount: countZipEntries(context.entries, /^xl\/tables\/table[1-9][0-9]*\.xml$/u),
-      chartCount: countZipEntries(context.entries, /^xl\/charts\/chart[1-9][0-9]*\.xml$/u),
-      pivotCount: countZipEntries(context.entries, /^xl\/pivotTables\/pivotTable[1-9][0-9]*\.xml$/u),
-      mergeCount: totals.mergeCount,
+      sheetCount: args.context.sheets.length,
+      cellCount: args.totals.cellCount,
+      formulaCellCount: args.totals.formulaCellCount,
+      valueCellCount: args.totals.valueCellCount,
+      definedNameCount: countElementStarts(args.context.workbookXml, 'definedName'),
+      tableCount: countZipEntries(args.context.entries, /^xl\/tables\/table[1-9][0-9]*\.xml$/u),
+      chartCount: countZipEntries(args.context.entries, /^xl\/charts\/chart[1-9][0-9]*\.xml$/u),
+      pivotCount: countZipEntries(args.context.entries, /^xl\/pivotTables\/pivotTable[1-9][0-9]*\.xml$/u),
+      mergeCount: args.totals.mergeCount,
       styleRangeCount: 0,
-      conditionalFormatCount: totals.conditionalFormatCount,
-      dataValidationCount: totals.dataValidationCount,
-      macroPayloadCount: context.entriesByPath.has('xl/vbaProject.bin') ? 1 : 0,
+      conditionalFormatCount: args.totals.conditionalFormatCount,
+      dataValidationCount: args.totals.dataValidationCount,
+      macroPayloadCount: args.context.entriesByPath.has('xl/vbaProject.bin') ? 1 : 0,
       warningCount: 0,
     },
     workbookMetadata: {
-      workbookName: fileName.replace(/\.(xlsx|xlsm|csv)$/iu, '') || fileName,
-      sheetNames: context.sheets.map((sheet) => sheet.name),
-      dimensions,
+      workbookName: args.fileName.replace(/\.(xlsx|xlsm|csv)$/iu, '') || args.fileName,
+      sheetNames: args.context.sheets.map((sheet) => sheet.name),
+      dimensions: args.dimensions,
     },
     externalWorkbookReferences: readExternalWorkbookReferences(
-      bytes,
-      context.entries,
-      context.entriesByPath,
-      context.workbookXml,
-      context.workbookRelationships,
+      args.readPartText,
+      args.context.entries,
+      args.context.workbookXml,
+      args.context.workbookRelationships,
     ),
-    largeSimpleXlsxImport: inspectLargeSimpleXlsxImportCompatibility(bytes, context, totals),
+    largeSimpleXlsxImport: inspectLargeSimpleXlsxImportCompatibility(args.context, args.totals),
   }
 }
 
 function inspectLargeSimpleXlsxImportCompatibility(
-  bytes: Uint8Array,
   context: {
-    readonly entries: readonly ZipEntryInfo[]
-    readonly entriesByPath: ReadonlyMap<string, ZipEntryInfo>
+    readonly entries: readonly WorkbookPackageEntry[]
+    readonly entriesByPath: ReadonlyMap<string, WorkbookPackageEntry>
     readonly workbookXml: string
   },
   totals: WorksheetFootprint,
@@ -309,7 +396,7 @@ function readZipEntryText(bytes: Uint8Array, entry: ZipEntryInfo | undefined): s
 function readWorkbookSheets(
   workbookXml: string,
   workbookRelationships: readonly ParsedRelationship[],
-  entries: readonly ZipEntryInfo[],
+  entries: readonly WorkbookPackageEntry[],
 ): ParsedSheet[] {
   const worksheetRelationships = new Map(
     workbookRelationships
@@ -351,6 +438,12 @@ async function inspectWorksheetZipEntryLowMemory(bytes: Uint8Array, entry: ZipEn
     return inspectDeflatedWorksheetXmlBytes(payload.compressed)
   }
   throw new Error(`Unsupported XLSX zip compression method ${String(payload.compressionMethod)} for ${payload.path}`)
+}
+
+function inspectWorksheetZipEntryFromLazyZip(zip: XlsxZipEntries, path: string): WorksheetFootprint {
+  const scanner = new WorksheetXmlByteFootprintScanner()
+  const found = forEachInflatedXlsxZipEntryChunk(zip, path, (chunk) => scanner.push(chunk))
+  return found ? scanner.finish() : emptyWorksheetFootprint()
 }
 
 function inspectDeflatedWorksheetXmlBytes(compressed: Uint8Array): Promise<WorksheetFootprint> {
@@ -524,9 +617,8 @@ class WorksheetElementStartCounter {
 }
 
 function readExternalWorkbookReferences(
-  bytes: Uint8Array,
-  entries: readonly ZipEntryInfo[],
-  entriesByPath: ReadonlyMap<string, ZipEntryInfo>,
+  readPartText: (path: string) => string | null,
+  entries: readonly WorkbookPackageEntry[],
   workbookXml: string,
   workbookRelationships: readonly ParsedRelationship[],
 ): readonly WorkbookExternalWorkbookReferenceSnapshot[] {
@@ -535,11 +627,11 @@ function readExternalWorkbookReferences(
   return [...linkTargets.entries()]
     .toSorted((left, right) => left[0] - right[0])
     .flatMap(([bookIndex, path]) => {
-      const xml = readZipEntryText(bytes, entriesByPath.get(path))
+      const xml = readPartText(path)
       if (!xml) {
         return []
       }
-      const relationships = parseRelationships(readZipEntryText(bytes, entriesByPath.get(externalLinkRelationshipsPartPath(path))))
+      const relationships = parseRelationships(readPartText(externalLinkRelationshipsPartPath(path)))
       const externalBookRelationshipId =
         readXmlAttribute(elementTags(xml, 'externalBook')[0] ?? '', 'r:id') ??
         readXmlAttribute(elementTags(xml, 'externalBook')[0] ?? '', 'id')
@@ -645,7 +737,7 @@ function workbookNameFromExternalTarget(target: string): string | undefined {
   }
 }
 
-function countZipEntries(entries: readonly ZipEntryInfo[], pattern: RegExp): number {
+function countZipEntries(entries: readonly WorkbookPackageEntry[], pattern: RegExp): number {
   return entries.filter((entry) => pattern.test(entry.path)).length
 }
 

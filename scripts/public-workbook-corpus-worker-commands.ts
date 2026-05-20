@@ -7,11 +7,13 @@ import { readXlsxZipEntriesLazyFromByteSource } from '../packages/excel-import/s
 import { startSelfRssGuard } from './public-workbook-corpus-process.ts'
 import {
   fingerprintLargeSimpleDataOnlyWorkbookSource,
+  fingerprintFormulaFreeWorkbookFootprint,
   fingerprintWorkbookBytes,
   inspectWorkbookFootprintForWorker,
   type WorkbookFootprint,
 } from './public-workbook-corpus-workbook.ts'
 import { FileBackedXlsxZipByteSource, isZipWorkbookSource } from './public-workbook-corpus-xlsx-byte-source.ts'
+import { inspectXlsxWorkbookFootprintLowMemoryFromByteSource } from './public-workbook-corpus-xlsx-footprint.ts'
 
 export async function writeFingerprintArtifactResult(args: {
   readonly filePath: string
@@ -42,7 +44,7 @@ export function writeFingerprintArtifactWorkerResult(args: {
     }
     const filePath = resolve(args.filePath)
     const workbookFingerprint =
-      tryFingerprintLargeSimpleWorkbookFromFile(filePath, args.fileName) ?? fingerprintWorkbookBytes(readFileSync(filePath), args.fileName)
+      tryFingerprintWorkbookFromFile(filePath, args.fileName) ?? fingerprintWorkbookBytes(readFileSync(filePath), args.fileName)
     process.stdout.write(`${JSON.stringify({ workbookFingerprint })}\n`)
   } catch (error) {
     process.stderr.write(`${formatWorkerError(error)}\n`)
@@ -52,10 +54,31 @@ export function writeFingerprintArtifactWorkerResult(args: {
   }
 }
 
+function tryFingerprintWorkbookFromFile(filePath: string, fileName: string): string | null {
+  return tryFingerprintLargeSimpleWorkbookFromFile(filePath, fileName) ?? tryFingerprintFormulaFreeWorkbookFromFile(filePath, fileName)
+}
+
 function tryFingerprintLargeSimpleWorkbookFromFile(filePath: string, fileName: string): string | null {
   const source = new FileBackedXlsxZipByteSource(filePath)
   try {
     return isZipWorkbookSource(source) ? fingerprintLargeSimpleDataOnlyWorkbookSource(source, fileName) : null
+  } catch {
+    return null
+  } finally {
+    source.release()
+  }
+}
+
+function tryFingerprintFormulaFreeWorkbookFromFile(filePath: string, fileName: string): string | null {
+  const source = new FileBackedXlsxZipByteSource(filePath)
+  try {
+    if (!isZipWorkbookSource(source)) {
+      return null
+    }
+    const footprint = inspectXlsxWorkbookFootprintLowMemoryFromByteSource(source, fileName)
+    return footprint ? fingerprintFormulaFreeWorkbookFootprint(footprint) : null
+  } catch {
+    return null
   } finally {
     source.release()
   }
@@ -93,6 +116,10 @@ function tryInspectLargeSimpleWorkbookFootprintFromFile(filePath: string, fileNa
   try {
     if (!isZipWorkbookSource(source)) {
       return null
+    }
+    const sourceFootprint = inspectXlsxWorkbookFootprintLowMemoryFromByteSource(source, fileName)
+    if (sourceFootprint) {
+      return sourceFootprint
     }
     const zip = readXlsxZipEntriesLazyFromByteSource(source)
     if (!zip) {

@@ -226,8 +226,15 @@ export function fingerprintWorkbookBytes(bytes: Uint8Array, fileName: string): s
   if (headlessFingerprint) {
     return headlessFingerprint
   }
+  const preflightFootprint = tryInspectWorkbookFootprint(bytes, fileName)
+  if (preflightFootprint) {
+    const footprintFingerprint = fingerprintFormulaFreeWorkbookFootprint(preflightFootprint)
+    if (footprintFingerprint) {
+      return footprintFingerprint
+    }
+  }
   const imported = importXlsx(bytes, fileName)
-  const footprint = inspectWorkbookFootprint(bytes, fileName)
+  const footprint = preflightFootprint ?? inspectWorkbookFootprint(bytes, fileName)
   const importedCounts = countWorkbookFeatures(imported.snapshot, imported.warnings)
   const counts = {
     ...importedCounts,
@@ -241,6 +248,29 @@ export function fingerprintWorkbookBytes(bytes: Uint8Array, fileName: string): s
       .toSorted(),
   )
   return sha256HexSync(Buffer.from(JSON.stringify({ counts, metadata, formulaShapes })))
+}
+
+function tryInspectWorkbookFootprint(bytes: Uint8Array, fileName: string): WorkbookFootprint | null {
+  try {
+    return inspectWorkbookFootprint(bytes, fileName)
+  } catch {
+    return null
+  }
+}
+
+export function fingerprintFormulaFreeWorkbookFootprint(footprint: WorkbookFootprint): string | null {
+  if (footprint.featureCounts.formulaCellCount > 0 || footprint.externalWorkbookReferences.length > 0) {
+    return null
+  }
+  return sha256HexSync(
+    Buffer.from(
+      JSON.stringify({
+        counts: footprint.featureCounts,
+        metadata: footprint.workbookMetadata,
+        formulaShapes: [],
+      }),
+    ),
+  )
 }
 
 export function fingerprintLargeSimpleDataOnlyWorkbookSource(source: XlsxZipByteSource, fileName: string): string | null {
