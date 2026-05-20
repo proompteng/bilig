@@ -116,6 +116,43 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     restoreViewportTarget: props.restoreViewportTarget,
   })
   const renderRevisionSnapshot = props.engine.getRenderRevisionSnapshot?.()
+  const committedSelectionCol = props.isEditingCell ? renderState.editorCell.col : renderState.selectedCell.col
+  const committedSelectionRow = props.isEditingCell ? renderState.editorCell.row : renderState.selectedCell.row
+  const committedCellSelection = useMemo(
+    () => createGridSelection(committedSelectionCol, committedSelectionRow),
+    [committedSelectionCol, committedSelectionRow],
+  )
+  const hasPendingLocalSelection = renderState.gridRuntimeHost.input.hasPendingLocalSelection({
+    currentSelection: renderState.gridSelection,
+    externalSnapshot: props.selectionSnapshot,
+    sheetName: props.sheetName,
+  })
+  const displayGridSelection = resolveWorkbookGridSurfaceDisplaySelection({
+    activeHeaderDrag: renderState.activeHeaderDrag,
+    committedCellSelection,
+    hasPendingLocalSelection,
+    isEditingCell: props.isEditingCell,
+    isFillHandleDragging: renderState.isFillHandleDragging,
+    isRangeMoveDragging: renderState.isRangeMoveDragging,
+    renderGridSelection: renderState.gridSelection,
+    renderSelectionRange: renderState.selectionRange,
+    selectedCell: [committedSelectionCol, committedSelectionRow],
+  })
+  const displaySelectionCell = resolveWorkbookGridSurfaceDisplayCell({
+    committedCell: [committedSelectionCol, committedSelectionRow],
+    displayGridSelection,
+  })
+  const displaySelectionCol = displaySelectionCell[0]
+  const displaySelectionRow = displaySelectionCell[1]
+  const displaySelectionRange = displayGridSelection.current?.range ?? null
+  const displayTextOcclusionRanges = useMemo(
+    () =>
+      resolveWorkbookGridSurfaceTextOcclusionRanges({
+        gridSelection: displayGridSelection,
+        selectionRange: displaySelectionRange,
+      }),
+    [displayGridSelection, displaySelectionRange],
+  )
   const interactions = useWorkbookGridInteractions({
     engine: props.engine,
     sheetName: props.sheetName,
@@ -150,6 +187,9 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onToggleBooleanCell: props.onToggleBooleanCell,
     onRowHeightChange: props.onRowHeightChange,
     selectedCellSnapshot: props.selectedCellSnapshot,
+    interactionGridSelection: displayGridSelection,
+    interactionSelectionCell: displaySelectionCell,
+    interactionSelectionRange: displaySelectionRange,
     renderState,
   })
   const focusGrid = renderState.focusGrid
@@ -188,43 +228,6 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   }, [focusGrid, props.isEditingCell, props.selectedAddr, props.sheetName])
   const visibleRange = renderState.visibleRegion.range
   const getCellLocalBounds = renderState.getCellLocalBounds
-  const committedSelectionCol = props.isEditingCell ? renderState.editorCell.col : renderState.selectedCell.col
-  const committedSelectionRow = props.isEditingCell ? renderState.editorCell.row : renderState.selectedCell.row
-  const committedCellSelection = useMemo(
-    () => createGridSelection(committedSelectionCol, committedSelectionRow),
-    [committedSelectionCol, committedSelectionRow],
-  )
-  const hasPendingLocalSelection = renderState.gridRuntimeHost.input.hasPendingLocalSelection({
-    currentSelection: renderState.gridSelection,
-    externalSnapshot: props.selectionSnapshot,
-    sheetName: props.sheetName,
-  })
-  const displayGridSelection = resolveWorkbookGridSurfaceDisplaySelection({
-    activeHeaderDrag: renderState.activeHeaderDrag,
-    committedCellSelection,
-    hasPendingLocalSelection,
-    isEditingCell: props.isEditingCell,
-    isFillHandleDragging: renderState.isFillHandleDragging,
-    isRangeMoveDragging: renderState.isRangeMoveDragging,
-    renderGridSelection: renderState.gridSelection,
-    renderSelectionRange: renderState.selectionRange,
-    selectedCell: [committedSelectionCol, committedSelectionRow],
-  })
-  const displaySelectionCell = resolveWorkbookGridSurfaceDisplayCell({
-    committedCell: [committedSelectionCol, committedSelectionRow],
-    displayGridSelection,
-  })
-  const displaySelectionCol = displaySelectionCell[0]
-  const displaySelectionRow = displaySelectionCell[1]
-  const displaySelectionRange = displayGridSelection.current?.range ?? null
-  const displayTextOcclusionRanges = useMemo(
-    () =>
-      resolveWorkbookGridSurfaceTextOcclusionRanges({
-        gridSelection: displayGridSelection,
-        selectionRange: displaySelectionRange,
-      }),
-    [displayGridSelection, displaySelectionRange],
-  )
   const renderHostElement = renderState.hostElement
   const getLiveGeometrySnapshot = renderState.getLiveGeometrySnapshot
   const activeHeaderDrag = renderState.activeHeaderDrag

@@ -272,7 +272,7 @@ describe('WorkbookPaneRendererV3', () => {
     expect(resolveWorkbookPanePresentedRevisionV3('idle', 14)).toBeNull()
   })
 
-  test('keeps the Canvas2D proof layer until the current TypeGPU frame presents', () => {
+  test('uses the Canvas2D proof layer only until a visible TypeGPU frame has presented', () => {
     expect(
       shouldMountWorkbookCanvasProofLayerV3({
         backendStatus: 'ready',
@@ -306,7 +306,7 @@ describe('WorkbookPaneRendererV3', () => {
         headerPaneCount: 1,
         tilePaneCount: 1,
       }),
-    ).toBe(true)
+    ).toBe(false)
     expect(
       shouldMountWorkbookCanvasProofLayerV3({
         backendStatus: 'ready',

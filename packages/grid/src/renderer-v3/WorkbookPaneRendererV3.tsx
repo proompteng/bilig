@@ -286,6 +286,9 @@ export function shouldMountWorkbookCanvasProofLayerV3(input: {
     return true
   }
   const hasVisiblePaneContent = hasWorkbookPaneVisibleContentV3(input)
+  if (input.hasPresentedVisibleFrame) {
+    return false
+  }
   if (input.frameProofStatus === 'pending') {
     return hasVisiblePaneContent
   }

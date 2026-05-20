@@ -21,7 +21,7 @@ import {
 import { beginWorkbookGridRangeMove } from './gridRangeMoveInteractions.js'
 import { beginWorkbookGridFillHandleDrag } from './gridFillHandleInteractions.js'
 import type { GridInputController } from './runtime/gridInputController.js'
-import type { GridSelection, Item } from './gridTypes.js'
+import type { GridSelection, Item, Rectangle } from './gridTypes.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 import type { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
@@ -54,6 +54,8 @@ export function useWorkbookGridHostPointerHandlers(input: {
   readonly onFillRange: WorkbookGridSurfaceProps['onFillRange']
   readonly onMoveRange: WorkbookGridSurfaceProps['onMoveRange']
   readonly pointerResolvers: ReturnType<typeof useWorkbookGridPointerResolvers>
+  readonly gridSelection: GridSelection
+  readonly selectionRange: Rectangle | null
   readonly renderState: ReturnType<typeof useWorkbookGridRenderState>
 }) {
   const {
@@ -69,6 +71,8 @@ export function useWorkbookGridHostPointerHandlers(input: {
     onFillRange,
     onMoveRange,
     pointerResolvers,
+    gridSelection,
+    selectionRange,
     renderState,
   } = input
   const {
@@ -86,15 +90,12 @@ export function useWorkbookGridHostPointerHandlers(input: {
     getPreviewRowHeight,
     getVisibleRegion,
     gridMetrics,
-    gridSelection,
     hostElement,
     isFillHandleDragging,
     isRangeMoveDragging,
     previewColumnWidth,
     previewRowHeight,
     rowHeights,
-    selectedCell,
-    selectionRange,
     setActiveHeaderDrag,
     setActiveResizeColumn,
     setActiveResizeRow,
@@ -633,7 +634,7 @@ export function useWorkbookGridHostPointerHandlers(input: {
         postDragSelectionExpiryRef,
         resolveHeaderSelectionForPointerDrag,
         resolvePointerCell,
-        selectedCell: [selectedCell.col, selectedCell.row],
+        selectedCell: activeSelectionCell,
         setGridSelection,
         visibleRegion,
       })

@@ -25,7 +25,7 @@ import {
 } from './gridInteractionCommands.js'
 import { handleWorkbookGridKeyDownCapture } from './gridKeyboardCapture.js'
 import { createGridSelection } from './gridSelection.js'
-import type { GridSelection, Item } from './gridTypes.js'
+import type { GridSelection, Item, Rectangle } from './gridTypes.js'
 import type { EditMovement, EditSelectionBehavior, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 import { useWorkbookGridContextMenu } from './useWorkbookGridContextMenu.js'
 import { useWorkbookGridHostPointerHandlers } from './useWorkbookGridHostPointerHandlers.js'
@@ -71,6 +71,9 @@ export function useWorkbookGridInteractions(
     sheetName: string
     selectedAddr: string
     selectedCellSnapshot: WorkbookGridSurfaceProps['selectedCellSnapshot']
+    interactionGridSelection: GridSelection
+    interactionSelectionCell: Item
+    interactionSelectionRange: Rectangle | null
     renderState: ReturnType<typeof useWorkbookGridRenderState>
   },
 ) {
@@ -105,6 +108,9 @@ export function useWorkbookGridInteractions(
     sheetName,
     selectedAddr,
     getCellEditorSeed,
+    interactionGridSelection,
+    interactionSelectionCell,
+    interactionSelectionRange,
     renderState,
   } = input
   const {
@@ -114,19 +120,18 @@ export function useWorkbookGridInteractions(
     getCellScreenBounds,
     getVisibleRegion,
     gridMetrics,
-    gridSelection,
     gridRuntimeHost,
     hostRef,
     isFillHandleDragging,
     previewColumnWidth,
-    selectedCell,
-    selectionRange,
     setGridSelection,
   } = renderState
-  const activeSelectionCell = useMemo<Item>(
-    () => gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row],
-    [gridSelection.current, selectedCell.col, selectedCell.row],
-  )
+  const gridSelection = interactionGridSelection
+  const selectionRange = interactionSelectionRange
+  const activeSelectionCell = interactionSelectionCell
+  const activeSelectionCol = activeSelectionCell[0]
+  const activeSelectionRow = activeSelectionCell[1]
+  const activeSelectedCell = useMemo(() => ({ col: activeSelectionCol, row: activeSelectionRow }), [activeSelectionCol, activeSelectionRow])
   const inputController = gridRuntimeHost.input
   const interactionState = inputController.interactionState
   const {
@@ -138,7 +143,7 @@ export function useWorkbookGridInteractions(
   } = inputController
   const pointerResolvers = useWorkbookGridPointerResolvers({
     hostRef,
-    selectedCell: { col: activeSelectionCell[0], row: activeSelectionCell[1] },
+    selectedCell: activeSelectedCell,
     gridSelection,
     getGeometrySnapshot: renderState.getLiveGeometrySnapshot,
   })
@@ -268,7 +273,7 @@ export function useWorkbookGridInteractions(
   const allowsRangeMove = Boolean(
     selectionRange && gridSelection.columns.length === 0 && gridSelection.rows.length === 0 && !fillPreviewRange && !isFillHandleDragging,
   )
-  const getCurrentGridSelection = useCallback(() => gridRuntimeHost.interactionOverlays.snapshot().gridSelection, [gridRuntimeHost])
+  const getCurrentGridSelection = useCallback(() => gridSelection, [gridSelection])
   const applyClipboardValues = useCallback(
     (target: Item, values: readonly (readonly string[])[], options?: { readonly pasteValuesOnly?: boolean | undefined }) => {
       applyGridClipboardValues({
@@ -325,7 +330,7 @@ export function useWorkbookGridInteractions(
     pendingClipboardCopySequenceRef,
     pendingKeyboardPasteSequenceRef,
     pendingTypeSeedRef,
-    selectedCell: { col: activeSelectionCell[0], row: activeSelectionCell[1] },
+    selectedCell: activeSelectedCell,
     setGridSelection,
     sheetName,
     suppressNextNativePasteRef,
@@ -335,7 +340,7 @@ export function useWorkbookGridInteractions(
   })
   const contextMenu = useWorkbookGridContextMenu({
     focusGrid,
-    getGridSelection: () => gridRuntimeHost.interactionOverlays.snapshot().gridSelection,
+    getGridSelection: getCurrentGridSelection,
     getVisibleRegion,
     hiddenColumnsByIndex: hiddenColumns,
     hiddenRowsByIndex: hiddenRows,
@@ -393,6 +398,8 @@ export function useWorkbookGridInteractions(
     onFillRange,
     onMoveRange,
     pointerResolvers,
+    gridSelection,
+    selectionRange,
     renderState,
   })
 
@@ -474,7 +481,7 @@ export function useWorkbookGridInteractions(
         event,
         gridSelection: getCurrentGridSelection(),
         pendingKeyboardPasteSequenceRef,
-        selectedCell,
+        selectedCell: activeSelectedCell,
         suppressNextNativePasteRef,
       })
     },
