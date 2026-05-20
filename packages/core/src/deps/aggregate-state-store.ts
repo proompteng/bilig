@@ -82,7 +82,7 @@ interface AggregatePageIndexEntry {
   readonly columnVersion: number
   readonly structureVersion: number
   readonly sheetColumnVersions: Uint32Array
-  readonly pages: ReadonlyMap<number, AggregatePageSummary>
+  readonly pages: Map<number, AggregatePageSummary>
 }
 
 interface AggregatePageSummary {
@@ -265,6 +265,24 @@ function summarizePage(page: RuntimeColumnPage): AggregatePageSummary {
   }
 }
 
+function getOrSummarizePage(
+  index: AggregatePageIndexEntry,
+  owner: RuntimeColumnOwner,
+  pageRowStart: number,
+): AggregatePageSummary | undefined {
+  const cached = index.pages.get(pageRowStart)
+  if (cached) {
+    return cached
+  }
+  const page = owner.pages.get(pageRowStart)
+  if (!page) {
+    return undefined
+  }
+  const summary = summarizePage(page)
+  index.pages.set(pageRowStart, summary)
+  return summary
+}
+
 function scanPageRows(
   target: MutableAggregateColumnWindowSummary,
   page: RuntimeColumnPage | undefined,
@@ -373,7 +391,10 @@ export function createAggregateStateStore(args: {
     return typeof direct === 'function' ? direct.call(args.runtimeColumnStore, request) : undefined
   }
 
-  const getOrBuildPageIndex = (request: { sheetName: string; col: number }): AggregatePageIndexEntry | undefined => {
+  const getOrBuildPageIndex = (request: {
+    sheetName: string
+    col: number
+  }): { readonly index: AggregatePageIndexEntry; readonly owner: RuntimeColumnOwner } | undefined => {
     const owner = getColumnOwner(request)
     if (!owner) {
       return undefined
@@ -386,11 +407,7 @@ export function createAggregateStateStore(args: {
       existing.structureVersion === owner.structureVersion &&
       existing.sheetColumnVersions === owner.sheetColumnVersions
     ) {
-      return existing
-    }
-    const pages = new Map<number, AggregatePageSummary>()
-    for (const [pageRowStart, page] of owner.pages) {
-      pages.set(pageRowStart, summarizePage(page))
+      return { index: existing, owner }
     }
     const next: AggregatePageIndexEntry = {
       sheetName: request.sheetName,
@@ -398,10 +415,10 @@ export function createAggregateStateStore(args: {
       columnVersion: owner.columnVersion,
       structureVersion: owner.structureVersion,
       sheetColumnVersions: owner.sheetColumnVersions,
-      pages,
+      pages: new Map(),
     }
     pageIndexCache.set(key, next)
-    return next
+    return { index: next, owner }
   }
 
   const summarizeColumnWindow = (request: {
@@ -421,18 +438,18 @@ export function createAggregateStateStore(args: {
         edgeCellScans: 0,
       }
     }
-    const index = getOrBuildPageIndex({ sheetName: request.sheetName, col: request.col })
-    const owner = getColumnOwner({ sheetName: request.sheetName, col: request.col })
-    if (!index || !owner) {
+    const pageIndex = getOrBuildPageIndex({ sheetName: request.sheetName, col: request.col })
+    if (!pageIndex) {
       return undefined
     }
+    const { index, owner } = pageIndex
     const summary = emptyWindowSummary()
     let row = request.rowStart
     while (row <= request.rowEnd) {
       const pageRowStart = Math.floor(row / BLOCK_ROWS) * BLOCK_ROWS
       const pageRowEnd = Math.min(request.rowEnd, pageRowStart + BLOCK_ROWS - 1)
       if (row === pageRowStart && pageRowEnd === pageRowStart + BLOCK_ROWS - 1) {
-        addPageSummary(summary, index.pages.get(pageRowStart))
+        addPageSummary(summary, getOrSummarizePage(index, owner, pageRowStart))
         summary.fullPageHits += 1
       } else {
         scanPageRows(summary, owner.pages.get(pageRowStart), row - pageRowStart, pageRowEnd - pageRowStart)

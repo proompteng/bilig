@@ -4,9 +4,11 @@ import { createAggregateStateStore } from '../deps/aggregate-state-store.js'
 import type { SingleColumnRegionNode } from '../deps/region-node-store.js'
 import type {
   EngineRuntimeColumnStoreService,
+  RuntimeColumnPage,
   RuntimeColumnSlice,
   RuntimeColumnView,
 } from '../engine/services/runtime-column-store-service.js'
+import { BLOCK_ROWS } from '../sheet-grid.js'
 import { WorkbookStore } from '../workbook-store.js'
 
 function createWorkbookVersions(columnVersion: number, structureVersion: number) {
@@ -118,6 +120,39 @@ function makeRuntimeColumnSlice(args: {
   }
 }
 
+function makeTrackedRuntimeColumnPage(args: {
+  readonly readPage: () => void
+  readonly value: number
+  readonly rowStart: number
+}): RuntimeColumnPage {
+  const tags = new Uint8Array(BLOCK_ROWS)
+  tags.fill(ValueTag.Number)
+  const numbers = new Float64Array(BLOCK_ROWS)
+  numbers.fill(args.value)
+  const stringIds = new Uint32Array(BLOCK_ROWS)
+  const errors = new Uint16Array(BLOCK_ROWS)
+  return {
+    rowStart: args.rowStart,
+    nonEmptyCount: BLOCK_ROWS,
+    get tags() {
+      args.readPage()
+      return tags
+    },
+    get numbers() {
+      args.readPage()
+      return numbers
+    },
+    get stringIds() {
+      args.readPage()
+      return stringIds
+    },
+    get errors() {
+      args.readPage()
+      return errors
+    },
+  }
+}
+
 function createStore(args: { workbook: WorkbookStore; runtimeColumnStore: EngineRuntimeColumnStoreService; rowEnd: number }) {
   return createAggregateStateStore({
     workbook: args.workbook,
@@ -129,6 +164,68 @@ function createStore(args: { workbook: WorkbookStore; runtimeColumnStore: Engine
 }
 
 describe('AggregateStateStore', () => {
+  it('summarizes only pages touched by aggregate windows', () => {
+    const { workbook, sheet } = createWorkbookVersions(7, 1)
+    const pageReads = new Map<number, number>()
+    const pages = new Map<number, RuntimeColumnPage>()
+    for (let pageIndex = 0; pageIndex < 8; pageIndex += 1) {
+      const rowStart = pageIndex * BLOCK_ROWS
+      pageReads.set(rowStart, 0)
+      pages.set(
+        rowStart,
+        makeTrackedRuntimeColumnPage({
+          rowStart,
+          value: pageIndex + 1,
+          readPage: () => pageReads.set(rowStart, (pageReads.get(rowStart) ?? 0) + 1),
+        }),
+      )
+    }
+    const getColumnOwner = vi.fn(() => ({
+      sheetName: 'Sheet1',
+      col: 0,
+      columnVersion: sheet.columnVersions[0] ?? 0,
+      structureVersion: sheet.structureVersion,
+      sheetColumnVersions: sheet.columnVersions,
+      pages,
+    }))
+    const store = createStore({
+      workbook,
+      rowEnd: BLOCK_ROWS * 8 - 1,
+      runtimeColumnStore: {
+        getColumnOwner,
+        getColumnView: vi.fn(),
+        getColumnSlice: vi.fn(),
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        normalizeStringId: () => '',
+        normalizeLookupText: () => '',
+      },
+    })
+
+    const windowStart = BLOCK_ROWS * 4
+    const summary = store.summarizeColumnWindow({
+      sheetName: 'Sheet1',
+      rowStart: windowStart,
+      rowEnd: windowStart + BLOCK_ROWS - 1,
+      col: 0,
+    })
+
+    expect(summary).toMatchObject({
+      sum: BLOCK_ROWS * 5,
+      count: BLOCK_ROWS,
+      averageCount: BLOCK_ROWS,
+      fullPageHits: 1,
+      edgeCellScans: 0,
+    })
+    expect(getColumnOwner).toHaveBeenCalledTimes(1)
+    expect(pageReads.get(windowStart)).toBeGreaterThan(0)
+    for (const [rowStart, readCount] of pageReads) {
+      if (rowStart !== windowStart) {
+        expect(readCount).toBe(0)
+      }
+    }
+  })
+
   it('builds direct column-view prefixes across numeric, error, string, empty, and unknown tags', () => {
     const { workbook } = createWorkbookVersions(4, 2)
     const rawTags = [ValueTag.Number, ValueTag.Boolean, ValueTag.Empty, ValueTag.Error, ValueTag.String, ValueTag.Empty, 99]
