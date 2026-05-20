@@ -828,7 +828,7 @@ jobs:
           git commit -m "chore(release): runtime packages v${TARGET_VERSION}"
 
           for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
+            if SKIP_SIMPLE_GIT_HOOKS=1 git push origin HEAD:main; then
               break
             fi
             if [[ "${attempt}" == "3" ]]; then
@@ -963,7 +963,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git tag -a "${TAG_NAME}" -m "Libraries v${TARGET_VERSION}" HEAD
-          git push origin "refs/tags/${TAG_NAME}"
+          SKIP_SIMPLE_GIT_HOOKS=1 git push origin "refs/tags/${TAG_NAME}"
 
           tag_sha="$(git rev-parse "refs/tags/${TAG_NAME}")"
           for attempt in $(seq 1 30); do
