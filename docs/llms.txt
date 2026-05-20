@@ -5,10 +5,10 @@
 
 site: https://proompteng.github.io/bilig/
 repository: https://github.com/proompteng/bilig
-npm workpaper package: https://www.npmjs.com/package/bilig-workpaper
-npm xlsx recalculation package: https://www.npmjs.com/package/xlsx-formula-recalc
-npm SheetJS recalculation package: https://www.npmjs.com/package/sheetjs-formula-recalc
-npm ExcelJS recalculation package: https://www.npmjs.com/package/exceljs-formula-recalc
+npm workpaper package: https://www.npmjs.com/package/@bilig/workpaper
+npm xlsx recalculation package: https://www.npmjs.com/package/@bilig/xlsx-formula-recalc
+npm SheetJS recalculation package: https://www.npmjs.com/package/@bilig/sheetjs-formula-recalc
+npm ExcelJS recalculation package: https://www.npmjs.com/package/@bilig/exceljs-formula-recalc
 npm full runtime package: https://www.npmjs.com/package/@bilig/headless
 remote MCP endpoint: https://bilig.proompteng.ai/mcp
 agent instructions: https://proompteng.github.io/bilig/AGENTS.md
@@ -26,13 +26,13 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 
 ## package chooser
 
-- Use `bilig-workpaper` for formula workbook state inside a Node service,
+- Use `@bilig/workpaper` for formula workbook state inside a Node service,
   queue worker, route handler, test, or agent tool.
-- Use `xlsx-formula-recalc` when XLSX inputs changed in Node and formula
+- Use `@bilig/xlsx-formula-recalc` when XLSX inputs changed in Node and formula
   outputs must be recalculated before returning. Start with this command:
-  `npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx --set Inputs!B2=48 --read Summary!B7 --out pricing.recalculated.xlsx --json`.
-- Use `exceljs-formula-recalc` when an existing ExcelJS workbook needs fresh
-  formula results instead of stale cached values.
+  `npx --package @bilig/xlsx-formula-recalc xlsx-recalc pricing.xlsx --set Inputs!B2=48 --read Summary!B7 --out pricing.recalculated.xlsx --json`.
+- Use `@bilig/exceljs-formula-recalc` when an existing ExcelJS workbook needs
+  fresh formula results instead of stale cached values.
 - Use `@bilig/headless` when the caller needs lower-level WorkPaper subpaths,
   agent metadata, the MCP binary, or provenance docs.
 
@@ -55,11 +55,11 @@ npm exec --package @bilig/headless@0.38.2 -- bilig-formula-clinic ./reduced.xlsx
 For direct XLSX recalculation from a project or one-off command:
 
 ```sh
-npm install xlsx-formula-recalc
-npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx --set Inputs!B2=48 --read Summary!B7 --out pricing.recalculated.xlsx --json
+npm install @bilig/xlsx-formula-recalc
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc pricing.xlsx --set Inputs!B2=48 --read Summary!B7 --out pricing.recalculated.xlsx --json
 ```
 
-For Node or TypeScript, import `@bilig/headless` directly. Prove the edit by
+For Node or TypeScript, import `@bilig/workpaper` directly. Prove the edit by
 reading the relevant range, writing one small input or formula, reading the
 dependent calculated output, exporting or serializing the WorkPaper document,
 restoring it, and confirming the restored value matches. Return `editedCell`,
@@ -196,7 +196,7 @@ mkdir bilig-headless-eval
 cd bilig-headless-eval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts
 npx tsx quickstart.ts
@@ -305,7 +305,7 @@ npm exec --package @bilig/headless@0.38.2 -- bilig-workpaper-mcp --workpaper ./p
   https://proompteng.github.io/bilig/sheetjs-formula-result-not-updating-node.html
   https://github.com/proompteng/bilig/blob/main/docs/sheetjs-formula-result-not-updating-node.md
   covers the exact SheetJS / xlsx stale cached formula result failure and
-  points to the live `sheetjs-formula-recalc` package plus the cross-library
+  points to the live `@bilig/sheetjs-formula-recalc` package plus the cross-library
   bridge proof.
 - ExcelJS formula recalculation in Node.js:
   https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
@@ -384,8 +384,8 @@ npm exec --package @bilig/headless@0.38.2 -- bilig-workpaper-mcp --workpaper ./p
 - SheetJS stale formula readback fix:
   https://proompteng.github.io/bilig/sheetjs-formula-result-not-updating-node.html
   https://github.com/proompteng/bilig/blob/main/docs/sheetjs-formula-result-not-updating-node.md
-  https://www.npmjs.com/package/sheetjs-formula-recalc
-  npx --package sheetjs-formula-recalc sheetjs-recalc --demo --json
+  https://www.npmjs.com/package/@bilig/sheetjs-formula-recalc
+  npx --package @bilig/sheetjs-formula-recalc sheetjs-recalc --demo --json
 - curlable XLSX recalculation proof:
   https://proompteng.github.io/bilig/xlsx-recalculation-proof.html
   https://proompteng.github.io/bilig/xlsx-recalculation-proof.ts

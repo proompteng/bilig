@@ -22,7 +22,7 @@ for Excel to calculate later.
 A realistic server-side loop looks like this:
 
 1. Load or generate a pricing, payout, quote, or validation workbook.
-2. Pass the bytes to `xlsx-formula-recalc`.
+2. Pass the bytes to `@bilig/xlsx-formula-recalc`.
 3. Write request inputs into known cells.
 4. Read the recalculated formula outputs before returning a response.
 5. Export the edited workbook back to `.xlsx`.
@@ -35,13 +35,13 @@ looked right" and "the workbook artifact still works after the XLSX boundary."
 ## Install the narrow package
 
 ```sh
-npm install xlsx-formula-recalc
+npm install @bilig/xlsx-formula-recalc
 ```
 
 For a one-off CLI run without adding it to a project:
 
 ```sh
-npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc --demo --json
 ```
 
 The demo creates a tiny workbook, edits input cells, recalculates `Summary!B2`,
@@ -50,7 +50,7 @@ writes `bilig-formula-recalc-demo.xlsx`, and prints `verified: true`.
 For an existing workbook:
 
 ```sh
-npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc pricing.xlsx \
   --set Inputs!B2=48 \
   --set Inputs!B3=1500 \
   --read Summary!B7 \
@@ -78,7 +78,7 @@ npm start
 ```
 
 The example builds a pricing workbook, exports `pricing-model-source.xlsx`,
-passes it through `xlsx-formula-recalc`, changes input cells, reads a
+passes it through `@bilig/xlsx-formula-recalc`, changes input cells, reads a
 recalculated approval decision, exports `pricing-model-edited.xlsx`, and
 reimports the edited workbook.
 
@@ -111,7 +111,7 @@ answer immediately:
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises'
-import { recalculateXlsx } from 'xlsx-formula-recalc'
+import { recalculateXlsx } from '@bilig/xlsx-formula-recalc'
 
 const result = recalculateXlsx(await readFile('pricing-model-source.xlsx'), {
   fileName: 'pricing-model-source.xlsx',
@@ -136,7 +136,7 @@ Use ExcelJS or SheetJS first when the job is workbook-file manipulation:
 styling, rows, sheets, images, tables, streaming writes, or broad spreadsheet
 format interchange.
 
-Use `xlsx-formula-recalc` when the Node process must own the recalculated answer
+Use `@bilig/xlsx-formula-recalc` when the Node process must own the recalculated answer
 before it accepts, rejects, queues, or persists a workflow. Use
 `@bilig/headless/xlsx` directly only when you need the lower-level WorkPaper
 snapshot boundary.

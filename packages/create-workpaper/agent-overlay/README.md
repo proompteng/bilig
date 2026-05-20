@@ -1,6 +1,6 @@
 # `__PROJECT_NAME__`
 
-Agent-ready formula WorkPaper starter built with `@bilig/headless`.
+Agent-ready formula WorkPaper starter built with `@bilig/workpaper`.
 
 ```sh
 npm install

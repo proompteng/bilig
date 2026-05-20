@@ -11,9 +11,11 @@ const remoteMcpServerCard = 'https://bilig.proompteng.ai/.well-known/mcp/server-
 const repositoryUrl = 'https://github.com/proompteng/bilig'
 const skillName = 'bilig-workpaper'
 const headlessPackageVersion = parsePackageVersion(await readFile(join(repoRoot, 'packages', 'headless', 'package.json'), 'utf8'))
-const workpaperPackageVersion = parsePackageVersion(await readFile(join(repoRoot, 'packages', 'bilig', 'package.json'), 'utf8'))
+const workpaperPackageVersion = parsePackageVersion(await readFile(join(repoRoot, 'packages', 'workpaper', 'package.json'), 'utf8'))
+const unscopedWorkpaperPackageVersion = parsePackageVersion(await readFile(join(repoRoot, 'packages', 'bilig', 'package.json'), 'utf8'))
 const headlessPackageSpec = `@bilig/headless@${headlessPackageVersion}`
-const workpaperPackageSpec = `bilig-workpaper@${workpaperPackageVersion}`
+const workpaperPackageSpec = `@bilig/workpaper@${workpaperPackageVersion}`
+const unscopedWorkpaperPackageSpec = `bilig-workpaper@${unscopedWorkpaperPackageVersion}`
 const mcpbReleaseTag = `libraries-v${headlessPackageVersion}`
 const mcpbReleaseAssetUrl = `${repositoryUrl}/releases/download/${mcpbReleaseTag}/bilig-workpaper.mcpb`
 const mcpbReleaseChecksumUrl = `${mcpbReleaseAssetUrl}.sha256`
@@ -72,7 +74,7 @@ Use this file when an AI coding agent, MCP client, or tool host needs workbook f
 1. Read \`${siteRoot}/llms.txt\` for the compact map.
 2. Read \`${siteRoot}/llms-full.txt\` when you need enough context to implement a workflow without searching the whole site.
 3. Read \`${siteRoot}/skill.txt\` when your agent supports skill manifests.
-4. Start the MCP server or import \`@bilig/headless\` directly.
+4. Start the MCP server or import \`@bilig/workpaper\` directly.
 
 Remote MCP clients that support Streamable HTTP can smoke-test the stateless
 demo endpoint at \`${remoteMcpEndpoint}\`. Directory scanners that inspect the
@@ -103,10 +105,10 @@ Do not claim success from a write call alone. The proof is computed readback plu
 ## Fast Commands
 
 \`\`\`sh
-npm exec --package ${headlessPackageSpec} -- bilig-agent-challenge
-npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge
-npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
-npm exec --package ${headlessPackageSpec} -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
+npm exec --package ${workpaperPackageSpec} -- bilig-agent-challenge
+npm exec --package ${workpaperPackageSpec} -- bilig-mcp-challenge
+npm exec --package ${workpaperPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package ${workpaperPackageSpec} -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"
 \`\`\`
 
 Claude Desktop users can install the released MCPB bundle from:
@@ -263,7 +265,7 @@ Deeper docs:
 const skillDocument = `---
 name: bilig-workpaper
 version: 0.1.0
-description: Use @bilig/headless WorkPaper state for workbook formulas, agent spreadsheet tools, MCP file-backed or remote demo editing, and XLSX formula bug reports without driving spreadsheet UI.
+description: Use @bilig/workpaper WorkPaper state for workbook formulas, agent spreadsheet tools, MCP file-backed or remote demo editing, and XLSX formula bug reports without driving spreadsheet UI.
 tags:
   - ai-agents
   - spreadsheet-automation
@@ -304,7 +306,7 @@ Before wiring a client, an agent can prove the direct WorkPaper loop with:
 \`\`\`json
 {
   "command": "npm",
-  "args": ["exec", "--package", "${headlessPackageSpec}", "--", "bilig-agent-challenge"]
+  "args": ["exec", "--package", "${workpaperPackageSpec}", "--", "bilig-agent-challenge"]
 }
 \`\`\`
 
@@ -313,7 +315,7 @@ For the actual file-backed MCP path, run the package-owned challenge first:
 \`\`\`json
 {
   "command": "npm",
-  "args": ["exec", "--package", "${headlessPackageSpec}", "--", "bilig-mcp-challenge"]
+  "args": ["exec", "--package", "${workpaperPackageSpec}", "--", "bilig-mcp-challenge"]
 }
 \`\`\`
 
@@ -323,7 +325,7 @@ For the actual file-backed MCP path, run the package-owned challenge first:
   "args": [
     "exec",
     "--package",
-    "${headlessPackageSpec}",
+    "${workpaperPackageSpec}",
     "--",
     "bilig-workpaper-mcp",
     "--workpaper",
@@ -360,10 +362,10 @@ stdio command when the workflow must persist a project WorkPaper JSON file.
 
 ## Second Choice: Direct TypeScript
 
-Use \`@bilig/headless\` directly when workbook logic belongs in a service, queue worker, test, or route:
+Use \`@bilig/workpaper\` directly when workbook logic belongs in a service, queue worker, test, or route:
 
 \`\`\`ts
-import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
+import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/workpaper'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
@@ -397,7 +399,7 @@ When the user has a reduced XLSX formula/import bug, generate a local report thr
 \`\`\`json
 {
   "command": "npm",
-  "args": ["exec", "--package", "${headlessPackageSpec}", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
+  "args": ["exec", "--package", "${workpaperPackageSpec}", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
 }
 \`\`\`
 
@@ -432,11 +434,11 @@ const workpaperPackageAgentInstructions = headlessPackageAgentInstructions
   .replace('# @bilig/headless agent notes', '# bilig-workpaper agent notes')
   .replace('agent inspecting `node_modules/@bilig/headless`', 'agent inspecting `node_modules/bilig-workpaper`')
   .replace(/@bilig\/headless/g, 'bilig-workpaper')
-  .replaceAll(headlessPackageSpec, workpaperPackageSpec)
+  .replaceAll(headlessPackageSpec, unscopedWorkpaperPackageSpec)
 
 const workpaperPackageSkillDocument = skillDocument
-  .replace(/@bilig\/headless/g, 'bilig-workpaper')
-  .replaceAll(headlessPackageSpec, workpaperPackageSpec)
+  .replace(/@bilig\/workpaper/g, 'bilig-workpaper')
+  .replaceAll(workpaperPackageSpec, unscopedWorkpaperPackageSpec)
   .replace(
     `## First Choice: MCP
 
@@ -542,7 +544,7 @@ function skillIndexJson(basePath: 'agent-skills' | 'skills'): string {
           name: skillName,
           title: 'Bilig WorkPaper agent workbook formulas',
           description:
-            'Use @bilig/headless WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.',
+            'Use @bilig/workpaper WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.',
           url: `${siteRoot}/.well-known/${basePath}/${skillName}/SKILL.txt`,
           source_url: `${repositoryUrl}/blob/main/docs/.well-known/${basePath}/${skillName}/SKILL.txt`,
           tags: skillTags,
@@ -577,7 +579,7 @@ function agentJsonManifest(): string {
           url: `${siteRoot}/.well-known/agent-skills/${skillName}/SKILL.txt`,
           index_url: `${siteRoot}/.well-known/agent-skills/index.json`,
           description:
-            'Use @bilig/headless WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.',
+            'Use @bilig/workpaper WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.',
         },
       ],
       mcp: {
@@ -598,7 +600,7 @@ function agentJsonManifest(): string {
         args: [
           'exec',
           '--package',
-          headlessPackageSpec,
+          workpaperPackageSpec,
           '--',
           'bilig-workpaper-mcp',
           '--workpaper',
@@ -627,9 +629,9 @@ function agentJsonManifest(): string {
         {
           name: 'workpaper-formula-runtime',
           type: 'npm-library',
-          package: '@bilig/headless',
+          package: '@bilig/workpaper',
           runtime: 'Node.js >=22',
-          install: 'npm install @bilig/headless',
+          install: 'npm install @bilig/workpaper',
           docs: `${siteRoot}/try-bilig-headless-in-node.html`,
         },
         {
@@ -637,7 +639,7 @@ function agentJsonManifest(): string {
           type: 'mcp-stdio-server',
           docs: `${siteRoot}/mcp-workpaper-tool-server.html`,
           server_card: `${siteRoot}/.well-known/mcp/server-card.json`,
-          challenge_command: `npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge`,
+          challenge_command: `npm exec --package ${workpaperPackageSpec} -- bilig-mcp-challenge`,
         },
         {
           name: 'claude-desktop-mcpb',
@@ -660,7 +662,7 @@ function agentJsonManifest(): string {
         {
           name: 'formula-clinic',
           type: 'local-cli',
-          command: `npm exec --package ${headlessPackageSpec} -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"`,
+          command: `npm exec --package ${workpaperPackageSpec} -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"`,
           docs: `${siteRoot}/formula-bug-clinic.html`,
         },
       ],
@@ -722,7 +724,7 @@ async function buildLlmsFull(): Promise<string> {
     '',
     `Repository: ${repositoryUrl}`,
     `Site: ${siteRoot}/`,
-    `npm: https://www.npmjs.com/package/@bilig/headless`,
+    `npm: https://www.npmjs.com/package/@bilig/workpaper`,
     `Agent instructions: ${siteRoot}/AGENTS.md`,
     `Skill manifest: ${siteRoot}/skill.txt`,
     `Compact index: ${siteRoot}/llms.txt`,
@@ -753,7 +755,7 @@ async function generatedTargets(): Promise<ReadonlyArray<readonly [string, strin
   const llmsFull = await buildLlmsFull()
   const agentJson = agentJsonManifest()
   const mcpServerCard = mcpServerCardManifest({
-    headlessPackageSpec,
+    headlessPackageSpec: workpaperPackageSpec,
     headlessPackageVersion,
     remoteMcpEndpoint,
     repositoryUrl,
@@ -776,6 +778,8 @@ async function generatedTargets(): Promise<ReadonlyArray<readonly [string, strin
     ['docs/.well-known/mcp.json', mcpServerCard],
     ['docs/.well-known/mcp-server-card.json', mcpServerCard],
     ['skills/bilig-workpaper/SKILL.md', skillDocument],
+    ['packages/workpaper/SKILL.md', skillDocument],
+    ['packages/workpaper/AGENTS.md', docsAgentInstructions],
     ['packages/headless/SKILL.md', skillDocument],
     ['packages/headless/AGENTS.md', headlessPackageAgentInstructions],
     ['packages/bilig/SKILL.md', workpaperPackageSkillDocument],

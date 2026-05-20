@@ -1,6 +1,6 @@
 # Agent Instructions
 
-Use `@bilig/headless` as the source of truth for workbook logic in this
+Use `@bilig/workpaper` as the source of truth for workbook logic in this
 project. Do not open Excel, LibreOffice, Google Sheets, or a browser grid for
 primary formula work unless a human explicitly asks for visual review.
 

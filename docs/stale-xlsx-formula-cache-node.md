@@ -1,7 +1,7 @@
 ---
 title: Fix stale XLSX formula values in Node.js
 published: true
-description: Explain why Node XLSX readers return old cached formula values after input edits, and when to use Excel, Graph, xlsx-calc, HyperFormula, or @bilig/headless.
+description: Explain why Node XLSX readers return old cached formula values after input edits, and when to use Excel, Graph, xlsx-calc, HyperFormula, or @bilig/workpaper.
 tags: typescript, node, excel, xlsx, formulas, recalculation
 canonical_url: https://proompteng.github.io/bilig/stale-xlsx-formula-cache-node.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -31,14 +31,14 @@ If the backend makes a decision from the number, calculate before you read.
 
 For exact Excel behavior, use Excel, LibreOffice, or Microsoft Graph. For a JS
 runtime, test `xlsx-calc` or HyperFormula against your actual workbook. Use
-`@bilig/headless` when the service can own the workbook state locally and needs
+`@bilig/workpaper` when the service can own the workbook state locally and needs
 formula readback, JSON persistence, and restore tests.
 
 If you already have an XLSX file and just need fresh values before returning,
 start with the narrow file-level command:
 
 ```sh
-npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc quote.xlsx \
   --set Inputs!B2=42 \
   --read Summary!B7 \
   --out quote.recalculated.xlsx \
@@ -70,7 +70,7 @@ needs the answer now.
 ## Local WorkPaper shape
 
 ```ts
-import { WorkPaper } from '@bilig/headless'
+import { WorkPaper } from '@bilig/workpaper'
 
 const workbook = new WorkPaper()
 const inputs = workbook.addSheet('Inputs')
@@ -112,7 +112,7 @@ For a real service, keep the boundary boring:
 | Must match desktop Excel or add-ins                  | Excel or LibreOffice automation      |
 | SheetJS-shaped workbook with supported formulas      | `xlsx-calc`                          |
 | Broad JS formula engine needed                       | HyperFormula                         |
-| Service-owned formula state and restore proof needed | `@bilig/headless`                    |
+| Service-owned formula state and restore proof needed | `@bilig/workpaper`                    |
 
 ## Related
 

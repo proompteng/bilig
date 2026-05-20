@@ -17,7 +17,7 @@ cell in Node, and now the cached formula result is wrong.
 object and the formulas you use are in its supported set, the API is simple:
 edit cells, call `XLSX_CALC(workbook)`, read the values.
 
-Use `@bilig/headless` when the spreadsheet is not just a file. The usual case
+Use `@bilig/workpaper` when the spreadsheet is not just a file. The usual case
 is a backend decision path: quote approval, payout checks, import validation,
 or an agent tool that needs to write inputs, recalculate, read outputs, and
 save a state it can test again later.
@@ -29,15 +29,15 @@ save a state it can test again later.
 | Recalculate a supported formula set on a SheetJS workbook object | `xlsx-calc`        |
 | Read and write lots of spreadsheet file formats                  | SheetJS            |
 | Build styled `.xlsx` files                                       | ExcelJS or SheetJS |
-| Keep a formula workbook as service state                         | `@bilig/headless`  |
-| Read recalculated outputs before accepting a request             | `@bilig/headless`  |
-| Persist JSON state and still import or export XLSX at the edge   | `@bilig/headless`  |
+| Keep a formula workbook as service state                         | `@bilig/workpaper`  |
+| Read recalculated outputs before accepting a request             | `@bilig/workpaper`  |
+| Persist JSON state and still import or export XLSX at the edge   | `@bilig/workpaper`  |
 
 If you only need to refresh an existing XLSX file before your service returns,
 try the file-level package before migrating workbook state:
 
 ```sh
-npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc pricing.xlsx \
   --set Inputs!B2=48 \
   --read Summary!B7 \
   --out pricing.recalculated.xlsx \
@@ -51,8 +51,8 @@ object. Bilig is a workbook runtime with import/export at the edges.
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises'
-import { WorkPaper } from '@bilig/headless'
-import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
+import { exportXlsx, importXlsx } from '@bilig/workpaper/xlsx'
 
 const source = await readFile('pricing-model.xlsx')
 const imported = importXlsx(source, 'pricing-model.xlsx')

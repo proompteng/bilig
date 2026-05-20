@@ -69,12 +69,12 @@ export const homepageRequiredLinks = [
 
 export const llmsRequiredLinks = [
   'repository: https://github.com/proompteng/bilig',
-  'npm workpaper package: https://www.npmjs.com/package/bilig-workpaper',
-  'npm xlsx recalculation package: https://www.npmjs.com/package/xlsx-formula-recalc',
-  'npm SheetJS recalculation package: https://www.npmjs.com/package/sheetjs-formula-recalc',
-  'npm ExcelJS recalculation package: https://www.npmjs.com/package/exceljs-formula-recalc',
+  'npm workpaper package: https://www.npmjs.com/package/@bilig/workpaper',
+  'npm xlsx recalculation package: https://www.npmjs.com/package/@bilig/xlsx-formula-recalc',
+  'npm SheetJS recalculation package: https://www.npmjs.com/package/@bilig/sheetjs-formula-recalc',
+  'npm ExcelJS recalculation package: https://www.npmjs.com/package/@bilig/exceljs-formula-recalc',
   'npm full runtime package: https://www.npmjs.com/package/@bilig/headless',
-  'npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx',
+  'npx --package @bilig/xlsx-formula-recalc xlsx-recalc pricing.xlsx',
   'pnpm --dir bilig/examples/headless-workpaper run agent:tool-call',
   'pnpm --dir bilig/examples/headless-workpaper run agent:openai-agents-sdk',
   'pnpm --dir bilig/examples/headless-workpaper run agent:framework-adapters',

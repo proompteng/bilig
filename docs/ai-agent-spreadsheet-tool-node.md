@@ -14,9 +14,9 @@ recalculate, read the dependent formula values, and save a proof object.
 
 Bilig has two entry points for that:
 
-- `bilig-workpaper` or `@bilig/headless` when the workbook can live as
+- `@bilig/workpaper` or `@bilig/workpaper` when the workbook can live as
   WorkPaper JSON inside the service or agent tool.
-- `xlsx-formula-recalc` or `exceljs-formula-recalc` when the user already has
+- `@bilig/xlsx-formula-recalc` or `@bilig/exceljs-formula-recalc` when the user already has
   an `.xlsx` pipeline and the immediate bug is stale formula results after
   editing inputs in Node.
 
@@ -44,7 +44,7 @@ not a hidden spreadsheet process.
 If you do not want a generated project yet:
 
 ```sh
-npm exec --package @bilig/headless@latest -- bilig-agent-challenge
+npm exec --package @bilig/workpaper@latest -- bilig-agent-challenge
 ```
 
 That command is intentionally small. It proves the minimum loop an agent needs:
@@ -83,8 +83,8 @@ formula outputs or sending the workbook.
 For raw XLSX bytes:
 
 ```sh
-npm install xlsx-formula-recalc
-npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \
+npm install @bilig/xlsx-formula-recalc
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc quote.xlsx \
   --set Inputs!B2=48 \
   --read Summary!B7 \
   --out quote.recalculated.xlsx \
@@ -94,8 +94,8 @@ npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \
 For ExcelJS:
 
 ```sh
-npm install exceljs exceljs-formula-recalc
-npx --package exceljs-formula-recalc exceljs-recalc --demo --json
+npm install exceljs @bilig/exceljs-formula-recalc
+npx --package @bilig/exceljs-formula-recalc exceljs-recalc --demo --json
 ```
 
 Use this path for the common support-ticket shape: "my Node service changed

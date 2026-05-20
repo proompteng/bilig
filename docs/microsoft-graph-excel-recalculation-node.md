@@ -1,7 +1,7 @@
 ---
 title: Microsoft Graph Excel recalculation vs local Node WorkPaper
 published: true
-description: Decide when a Node service should use Microsoft Graph Excel calculation, LibreOffice automation, or @bilig/headless for formula-backed workbook outputs.
+description: Decide when a Node service should use Microsoft Graph Excel calculation, LibreOffice automation, or @bilig/workpaper for formula-backed workbook outputs.
 tags: typescript, node, excel, microsoft-graph, xlsx, formulas
 canonical_url: https://proompteng.github.io/bilig/microsoft-graph-excel-recalculation-node.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -27,7 +27,7 @@ is acceptable.
 Use LibreOffice or desktop Excel automation when the workbook depends on desktop
 Excel behavior, add-ins, or manual Excel compatibility checks.
 
-Use `@bilig/headless` when the workbook is service-owned state: write stable
+Use `@bilig/workpaper` when the workbook is service-owned state: write stable
 input cells, recalculate in Node, read output cells, persist JSON, and optionally
 import or export XLSX at the boundary.
 
@@ -63,8 +63,8 @@ Ask this before choosing the runtime:
 | Must match Excel Online calculation behavior                  | Microsoft Graph                 |
 | Workbook is already in SharePoint or OneDrive                 | Microsoft Graph                 |
 | Needs desktop Excel, add-ins, or macro-adjacent behavior      | Excel or LibreOffice automation |
-| Needs a local deterministic Node decision path                | `@bilig/headless`               |
-| Needs JSON persistence and restore tests                      | `@bilig/headless`               |
+| Needs a local deterministic Node decision path                | `@bilig/workpaper`               |
+| Needs JSON persistence and restore tests                      | `@bilig/workpaper`               |
 | Needs broad mature formula coverage more than WorkPaper state | HyperFormula                    |
 | Needs XLSX read/write/styling, not calculation ownership      | SheetJS or ExcelJS              |
 
@@ -76,8 +76,8 @@ calculate new formula results for you.
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises'
-import { WorkPaper } from '@bilig/headless'
-import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
+import { exportXlsx, importXlsx } from '@bilig/workpaper/xlsx'
 
 const imported = importXlsx(await readFile('quote-model.xlsx'), 'quote-model.xlsx')
 const workbook = WorkPaper.buildFromSnapshot(imported.snapshot)

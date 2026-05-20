@@ -16,7 +16,7 @@ and prints `verified: true`.
 After the smoke proof passes, it also prints a star/bookmark link for the GitHub
 repo: <https://github.com/proompteng/bilig/stargazers>.
 
-Use this when you want to evaluate `@bilig/headless` from a blank directory
+Use this when you want to evaluate `@bilig/workpaper` from a blank directory
 without cloning the full monorepo.
 
 For agent and MCP evaluation, generate the agent-ready starter:

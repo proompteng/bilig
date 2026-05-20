@@ -1,7 +1,7 @@
 ---
 title: Try Bilig WorkPaper in Node
 published: true
-description: Try bilig-workpaper from an empty Node.js directory, edit one workbook input, read the calculated value, and verify JSON restore.
+description: Try @bilig/workpaper from an empty Node.js directory, edit one workbook input, read the calculated value, and verify JSON restore.
 tags: typescript, node, spreadsheet, formulas, opensource
 canonical_url: https://proompteng.github.io/bilig/try-bilig-headless-in-node.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -24,7 +24,7 @@ mkdir bilig-headless-eval
 cd bilig-headless-eval
 npm init -y
 npm pkg set type=module
-npm install bilig-workpaper
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts
 npx tsx quickstart.ts
@@ -105,7 +105,7 @@ compatibility pages before adopting it.
 ## Next paths
 
 - [GitHub repository](https://github.com/proompteng/bilig)
-- [bilig-workpaper npm package](https://www.npmjs.com/package/bilig-workpaper)
+- [@bilig/workpaper npm package](https://www.npmjs.com/package/@bilig/workpaper)
 - [@bilig/headless npm package](https://www.npmjs.com/package/@bilig/headless)
 - [Five Node.js workbook automation examples](workbook-automation-examples-node.md)
 - [Node.js spreadsheet formula engine guide](node-spreadsheet-formula-engine.md)

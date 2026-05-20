@@ -49,11 +49,11 @@ write.
 
 If the rest of the pipeline already uses `xlsx-populate`, keep it there. Treat
 it as the authoring step, then hand the resulting XLSX bytes to
-`xlsx-formula-recalc` before the service reads output cells.
+`@bilig/xlsx-formula-recalc` before the service reads output cells.
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises'
-import { recalculateXlsx } from 'xlsx-formula-recalc'
+import { recalculateXlsx } from '@bilig/xlsx-formula-recalc'
 
 // This can also be the Buffer returned by an xlsx-populate output call.
 const source = await readFile('quote.xlsx')
@@ -73,7 +73,7 @@ await writeFile('quote.recalculated.xlsx', result.xlsx)
 For a file-level repair step:
 
 ```sh
-npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc quote.xlsx \
   --set Inputs!B2=42 \
   --set Inputs!B3=1500 \
   --read Summary!B7 \
@@ -129,7 +129,7 @@ Use `xlsx-populate` when the job is primarily XLSX file generation or editing.
 Use Excel, LibreOffice, or Microsoft Graph when the result must match Excel and
 the operational cost of a spreadsheet host is acceptable.
 
-Use `@bilig/headless` when the workbook is service-owned business logic and the
+Use `@bilig/workpaper` when the workbook is service-owned business logic and the
 backend needs:
 
 - input writes through an API;
@@ -141,7 +141,7 @@ backend needs:
 ## WorkPaper version of the flow
 
 ```ts
-import { WorkPaper } from '@bilig/headless'
+import { WorkPaper } from '@bilig/workpaper'
 
 const workbook = new WorkPaper()
 const sheet = workbook.addSheet('Quote')
@@ -180,8 +180,8 @@ blank WorkPaper:
 
 ```ts
 import { readFile } from 'node:fs/promises'
-import { WorkPaper } from '@bilig/headless'
-import { importXlsx } from '@bilig/headless/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
+import { importXlsx } from '@bilig/workpaper/xlsx'
 
 const imported = importXlsx(await readFile('quote-template.xlsx'), 'quote-template.xlsx')
 const workbook = WorkPaper.buildFromSnapshot(imported.snapshot)

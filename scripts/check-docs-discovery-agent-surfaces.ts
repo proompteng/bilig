@@ -182,9 +182,9 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
     'title: AI spreadsheet agent tool for Node.js',
     'description: Build an AI agent spreadsheet tool that edits workbook inputs, recalculates formulas, verifies readback, and persists state without driving Excel or screenshots.',
     'npm create @bilig/workpaper@latest pricing-agent -- --agent',
-    'npm exec --package @bilig/headless@latest -- bilig-agent-challenge',
-    'npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx',
-    'npx --package exceljs-formula-recalc exceljs-recalc --demo --json',
+    'npm exec --package @bilig/workpaper@latest -- bilig-agent-challenge',
+    'npx --package @bilig/xlsx-formula-recalc xlsx-recalc quote.xlsx',
+    'npx --package @bilig/exceljs-formula-recalc exceljs-recalc --demo --json',
     'OpenAI Agents SDK function tools',
     'LangChain.js tools and LangGraph.js `ToolNode`',
     'Star or bookmark Bilig',
@@ -563,12 +563,12 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
   for (const required of [
     'title: ExcelJS formula recalculation in Node.js',
     'canonical_url: https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html',
-    'npm install exceljs exceljs-formula-recalc',
-    "import { recalculateExceljsWorkbook } from 'exceljs-formula-recalc'",
+    'npm install exceljs @bilig/exceljs-formula-recalc',
+    "import { recalculateExceljsWorkbook } from '@bilig/exceljs-formula-recalc'",
     'ExcelJS formula result not updating',
     'get computed value of Excel sheet cell in Node.js',
-    'Use `exceljs-formula-recalc` for an ExcelJS workbook that needs fresh formula',
-    'Do not choose `@bilig/headless` only to generate styled XLSX files',
+    'Use `@bilig/exceljs-formula-recalc` for an ExcelJS workbook that needs fresh formula',
+    'Do not choose `@bilig/workpaper` only to generate styled XLSX files',
     'star the repository',
   ] as const) {
     requireIncludes(exceljsFormulaRecalculationNode, required, 'docs/exceljs-formula-recalculation-node.md')
@@ -629,14 +629,14 @@ export async function requireAgentPublicSurfaceDiscovery(input: {
   for (const required of [
     'title: XLSX formula recalculation in Node.js',
     'canonical_url: https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html',
-    'npm install xlsx-formula-recalc',
-    'npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx',
+    'npm install @bilig/xlsx-formula-recalc',
+    'npx --package @bilig/xlsx-formula-recalc xlsx-recalc pricing.xlsx',
     'cd bilig/examples/xlsx-recalculation-node',
     '"exportedReimportMatchesAfter": true',
     '"formulasSurvivedXlsxRoundTrip": true',
-    "import { recalculateXlsx } from 'xlsx-formula-recalc'",
+    "import { recalculateXlsx } from '@bilig/xlsx-formula-recalc'",
     'Use ExcelJS or SheetJS first when the job is workbook-file manipulation',
-    'Use `xlsx-formula-recalc` when the Node process must own the recalculated answer',
+    'Use `@bilig/xlsx-formula-recalc` when the Node process must own the recalculated answer',
     'star the repository',
   ] as const) {
     requireIncludes(xlsxFormulaRecalculationNode, required, 'docs/xlsx-formula-recalculation-node.md')

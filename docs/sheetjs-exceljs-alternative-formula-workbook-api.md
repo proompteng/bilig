@@ -1,7 +1,7 @@
 ---
 title: SheetJS and ExcelJS alternative for formula-backed workbook APIs
 published: true
-description: Decide when SheetJS, ExcelJS, xlsx-populate, xlsx-formula-recalc, exceljs-formula-recalc, or @bilig/headless is the right fit for stale formula results and verified Node.js workbook execution.
+description: Decide when SheetJS, ExcelJS, xlsx-populate, xlsx-formula-recalc, exceljs-formula-recalc, or @bilig/workpaper is the right fit for stale formula results and verified Node.js workbook execution.
 tags: typescript, node, spreadsheet, formulas, xlsx, opensource
 canonical_url: https://proompteng.github.io/bilig/sheetjs-exceljs-alternative-formula-workbook-api.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -29,11 +29,11 @@ SheetJS, `xlsx-populate`, and ExcelJS are strong tools for workbook-file
 workflows. `bilig` is not trying to replace that whole layer. The useful Bilig
 slice is narrower:
 
-- `xlsx-formula-recalc` refreshes formulas from raw XLSX bytes produced by
+- `@bilig/xlsx-formula-recalc` refreshes formulas from raw XLSX bytes produced by
   SheetJS, `xlsx-populate`, template builders, or file uploads.
-- `exceljs-formula-recalc` keeps ExcelJS as the workbook authoring layer and
+- `@bilig/exceljs-formula-recalc` keeps ExcelJS as the workbook authoring layer and
   adds recalculated readback for ExcelJS workflows.
-- `@bilig/headless` gives a Node service or coding agent a WorkPaper object it
+- `@bilig/workpaper` gives a Node service or coding agent a WorkPaper object it
   can build, mutate, evaluate, persist, restore, and verify without opening
   Excel or a browser grid.
 
@@ -44,13 +44,13 @@ Use SheetJS when you need broad spreadsheet-file parsing and export.
 Use ExcelJS when you need to create or edit XLSX workbooks with workbook-file
 features such as sheets, rows, styles, and formula records.
 
-Use `xlsx-formula-recalc` when a Node service already has XLSX bytes and must
+Use `@bilig/xlsx-formula-recalc` when a Node service already has XLSX bytes and must
 read fresh formula values after changing inputs.
 
-Use `exceljs-formula-recalc` when the workbook is already moving through
+Use `@bilig/exceljs-formula-recalc` when the workbook is already moving through
 ExcelJS and the missing piece is in-process formula readback.
 
-Use `@bilig/headless` when the service must own the formula-backed workbook as
+Use `@bilig/workpaper` when the service must own the formula-backed workbook as
 runtime state, persist it as JSON, restore it, and verify recalculated values in
 the same process.
 
@@ -74,13 +74,13 @@ Those are reasonable design choices for file-centric libraries. They become a
 problem only when your app needs to change an input, recalculate dependent
 cells, and reject a workflow when computed readback does not match.
 
-That is the place to evaluate `@bilig/headless`.
+That is the place to evaluate `@bilig/workpaper`.
 
 For the more common file-boundary problem, evaluate the narrow packages first:
 
 ```sh
-npx --package xlsx-formula-recalc xlsx-recalc --demo --json
-npx --package exceljs-formula-recalc exceljs-recalc --demo --json
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc --demo --json
+npx --package @bilig/exceljs-formula-recalc exceljs-recalc --demo --json
 ```
 
 Both demos print `verified: true` when the service changes input cells and
@@ -113,19 +113,19 @@ formula result is stale."
 | Parse many spreadsheet file formats into JavaScript data | SheetJS | It is built around file-format import/export and a common spreadsheet object model. |
 | Generate XLSX reports with workbook structure and styling | ExcelJS | It focuses on reading, manipulating, and writing XLSX workbook files. |
 | Store formulas in a workbook file and let Excel calculate later | SheetJS or ExcelJS | Both can represent formula text and cached or supplied values in workbook data. |
-| Recalculate a SheetJS / `xlsx` pipeline after changing inputs | `xlsx-formula-recalc` | It accepts the XLSX bytes already produced by SheetJS and returns fresh formula readback plus exported bytes. |
-| Recalculate raw XLSX bytes after changing inputs | `xlsx-formula-recalc` | It accepts the XLSX bytes already produced by SheetJS, `xlsx-populate`, or template tools and returns fresh readback plus exported bytes. |
-| Recalculate an existing ExcelJS workbook after changing inputs | `exceljs-formula-recalc` | It preserves the ExcelJS authoring boundary and patches requested formula cells with fresh results. |
-| Recalculate formulas inside a Node service after changing inputs | `@bilig/headless` or `bilig-workpaper` | It exposes a WorkPaper runtime with formula readback, JSON persistence, and restore verification after edits. |
-| Give a coding agent a spreadsheet tool it can mutate and verify | `@bilig/headless` | The maintained examples prove writeback, dependent formulas, persistence, and restore. |
+| Recalculate a SheetJS / `xlsx` pipeline after changing inputs | `@bilig/xlsx-formula-recalc` | It accepts the XLSX bytes already produced by SheetJS and returns fresh formula readback plus exported bytes. |
+| Recalculate raw XLSX bytes after changing inputs | `@bilig/xlsx-formula-recalc` | It accepts the XLSX bytes already produced by SheetJS, `xlsx-populate`, or template tools and returns fresh readback plus exported bytes. |
+| Recalculate an existing ExcelJS workbook after changing inputs | `@bilig/exceljs-formula-recalc` | It preserves the ExcelJS authoring boundary and patches requested formula cells with fresh results. |
+| Recalculate formulas inside a Node service after changing inputs | `@bilig/workpaper` or `@bilig/workpaper` | It exposes a WorkPaper runtime with formula readback, JSON persistence, and restore verification after edits. |
+| Give a coding agent a spreadsheet tool it can mutate and verify | `@bilig/workpaper` | The maintained examples prove writeback, dependent formulas, persistence, and restore. |
 
 ## Use The Narrow Bridge First
 
 If the `.xlsx` file already exists, start here:
 
 ```sh
-npm install xlsx-formula-recalc
-npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
+npm install @bilig/xlsx-formula-recalc
+npx --package @bilig/xlsx-formula-recalc xlsx-recalc pricing.xlsx \
   --set Inputs!B2=48 \
   --set Inputs!B3=1500 \
   --read Summary!B7 \
@@ -136,8 +136,8 @@ npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
 If the workbook already lives in ExcelJS, keep ExcelJS:
 
 ```sh
-npm install exceljs exceljs-formula-recalc
-npx --package exceljs-formula-recalc exceljs-recalc --demo --json
+npm install exceljs @bilig/exceljs-formula-recalc
+npx --package @bilig/exceljs-formula-recalc exceljs-recalc --demo --json
 ```
 
 If you want one checkout-level proof across the common incumbents, run the
@@ -153,7 +153,7 @@ npm --prefix examples/recalc-bridge-workflows run smoke
 ```
 
 That is the conversion path for most file-library users. Reach for
-`@bilig/headless` only when the workbook itself becomes service-owned runtime
+`@bilig/workpaper` only when the workbook itself becomes service-owned runtime
 state rather than a file artifact.
 
 ## TypeScript WorkPaper Evaluation Path
@@ -165,7 +165,7 @@ mkdir bilig-headless-eval
 cd bilig-headless-eval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 ```
 
@@ -178,7 +178,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 type NumericCell = {
   value: number
@@ -256,9 +256,9 @@ The maintained repository example adds more workflows:
 ```sh
 git clone https://github.com/proompteng/bilig.git
 cd bilig
-pnpm --dir examples/headless-workpaper install --ignore-workspace
-pnpm --dir examples/headless-workpaper run agent:tool-call
-pnpm --dir examples/headless-workpaper run agent:verify
+pnpm --dir examples/workpaper-workpaper install --ignore-workspace
+pnpm --dir examples/workpaper-workpaper run agent:tool-call
+pnpm --dir examples/workpaper-workpaper run agent:verify
 ```
 
 The agent tool-call loop changes input cells, reads dependent formula outputs,
@@ -271,9 +271,9 @@ Use file libraries at the boundary and Bilig for the runtime model:
 
 1. Use SheetJS, `xlsx-populate`, or ExcelJS where the product is an `.xlsx`
    file.
-2. Use `xlsx-formula-recalc` or `exceljs-formula-recalc` when the file workflow
+2. Use `@bilig/xlsx-formula-recalc` or `@bilig/exceljs-formula-recalc` when the file workflow
    needs fresh formula readback inside Node.
-3. Use `@bilig/headless` where the product is trusted computed workbook state.
+3. Use `@bilig/workpaper` where the product is trusted computed workbook state.
 4. Keep compatibility tests around the boundary so import/export and formula
    runtime behavior are not confused.
 
@@ -298,11 +298,11 @@ support channel today.
 - [`docs/exceljs-formula-recalculation-node.md`](exceljs-formula-recalculation-node.md)
 - [`docs/stale-xlsx-formula-cache-node.md`](stale-xlsx-formula-cache-node.md)
 - [`examples/recalc-bridge-workflows`](https://github.com/proompteng/bilig/tree/main/examples/recalc-bridge-workflows)
-- [`docs/headless-spreadsheet-engine-comparison.md`](headless-spreadsheet-engine-comparison.md)
+- [`docs/workpaper-spreadsheet-engine-comparison.md`](headless-spreadsheet-engine-comparison.md)
 - [`docs/agent-spreadsheet-tool-call-loop.md`](agent-spreadsheet-tool-call-loop.md)
 - [`docs/persisting-formula-backed-workpaper-documents-in-node.md`](persisting-formula-backed-workpaper-documents-in-node.md)
 - [`docs/where-bilig-is-not-excel-compatible-yet.md`](where-bilig-is-not-excel-compatible-yet.md)
-- [`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper)
+- [`examples/workpaper-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/workpaper-workpaper)
 
 ## Sources
 

@@ -77,9 +77,9 @@ const {
 const headlessPackageSpec = `@bilig/headless@${headlessPackageVersion}`
 const mcpbReleaseAssetUrl = `https://github.com/proompteng/bilig/releases/download/libraries-v${headlessPackageVersion}/bilig-workpaper.mcpb`
 const mcpbReleaseChecksumUrl = `${mcpbReleaseAssetUrl}.sha256`
-const xlsxRecalcCli = 'npx --package xlsx-formula-recalc xlsx-recalc'
-const liveSheetjsRecalcCli = 'npx --package sheetjs-formula-recalc sheetjs-recalc'
-const liveSheetjsRecalcPackage = 'sheetjs-formula-recalc'
+const xlsxRecalcCli = 'npx --package @bilig/xlsx-formula-recalc xlsx-recalc'
+const liveSheetjsRecalcCli = 'npx --package @bilig/sheetjs-formula-recalc sheetjs-recalc'
+const liveSheetjsRecalcPackage = '@bilig/sheetjs-formula-recalc'
 
 const headlessSpreadsheetEngineNodeServicesAgents = await readFile(
   join(docsRoot, 'headless-spreadsheet-engine-node-services-agents.md'),
@@ -140,9 +140,9 @@ requirePackageKeywords(
   ],
   'packages/headless/package.json',
 )
-requireIncludes(index, '"downloadUrl": "https://www.npmjs.com/package/bilig-workpaper"', 'docs/index.html')
-requireIncludes(index, '"https://www.npmjs.com/package/xlsx-formula-recalc"', 'docs/index.html')
-requireIncludes(index, '"https://www.npmjs.com/package/exceljs-formula-recalc"', 'docs/index.html')
+requireIncludes(index, '"downloadUrl": "https://www.npmjs.com/package/@bilig/workpaper"', 'docs/index.html')
+requireIncludes(index, '"https://www.npmjs.com/package/@bilig/xlsx-formula-recalc"', 'docs/index.html')
+requireIncludes(index, '"https://www.npmjs.com/package/@bilig/exceljs-formula-recalc"', 'docs/index.html')
 requireIncludes(index, '<h2 id="packages-title">Install the package that matches the job.</h2>', 'docs/index.html')
 requireIncludes(index, 'highest-traffic entry', 'docs/index.html')
 requireIncludes(index, xlsxRecalcCli, 'docs/index.html')
@@ -245,7 +245,7 @@ for (const required of [
   'An `.xlsx` can store both the formula text',
   'Run a formula runtime before reading',
   xlsxRecalcCli,
-  '`@bilig/headless` when the service can own the workbook state locally',
+  '`@bilig/workpaper` when the service can own the workbook state locally',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
   requireIncludes(staleXlsxFormulaCacheNode, required, 'docs/stale-xlsx-formula-cache-node.md')
@@ -279,7 +279,7 @@ for (const required of [
   'POST /me/drive/items/{id}/workbook/application/calculate',
   'Files.ReadWrite',
   'application permissions are not supported for that API',
-  'Use `@bilig/headless` when the workbook is service-owned state',
+  'Use `@bilig/workpaper` when the workbook is service-owned state',
   'https://learn.microsoft.com/en-us/graph/api/workbookapplication-calculate',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
@@ -705,8 +705,8 @@ requireIncludes(
 )
 requireIncludes(llms, xlsxRecalcCli, 'docs/llms.txt')
 requireIncludes(llms, liveSheetjsRecalcCli, 'docs/llms.txt')
-requireIncludes(llms, 'https://www.npmjs.com/package/xlsx-formula-recalc', 'docs/llms.txt')
-requireIncludes(llms, 'https://www.npmjs.com/package/sheetjs-formula-recalc', 'docs/llms.txt')
+requireIncludes(llms, 'https://www.npmjs.com/package/@bilig/xlsx-formula-recalc', 'docs/llms.txt')
+requireIncludes(llms, 'https://www.npmjs.com/package/@bilig/sheetjs-formula-recalc', 'docs/llms.txt')
 requireIncludes(index, 'xlsx-recalc --demo --json', 'docs/index.html')
 requireIncludes(index, 'sheetjs-recalc --demo --json', 'docs/index.html')
 requireIncludes(index, 'sheetjs-formula-result-not-updating-node.html', 'docs/index.html')

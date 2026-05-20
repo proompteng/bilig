@@ -1,7 +1,7 @@
 ---
 name: bilig-workpaper
 version: 0.1.0
-description: Use @bilig/headless WorkPaper state for workbook formulas, agent spreadsheet tools, MCP file-backed or remote demo editing, and XLSX formula bug reports without driving spreadsheet UI.
+description: Use @bilig/workpaper WorkPaper state for workbook formulas, agent spreadsheet tools, MCP file-backed or remote demo editing, and XLSX formula bug reports without driving spreadsheet UI.
 tags:
   - ai-agents
   - spreadsheet-automation
@@ -42,7 +42,7 @@ Before wiring a client, an agent can prove the direct WorkPaper loop with:
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.38.2", "--", "bilig-agent-challenge"]
+  "args": ["exec", "--package", "@bilig/workpaper@0.38.2", "--", "bilig-agent-challenge"]
 }
 ```
 
@@ -51,7 +51,7 @@ For the actual file-backed MCP path, run the package-owned challenge first:
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.38.2", "--", "bilig-mcp-challenge"]
+  "args": ["exec", "--package", "@bilig/workpaper@0.38.2", "--", "bilig-mcp-challenge"]
 }
 ```
 
@@ -61,7 +61,7 @@ For the actual file-backed MCP path, run the package-owned challenge first:
   "args": [
     "exec",
     "--package",
-    "@bilig/headless@0.38.2",
+    "@bilig/workpaper@0.38.2",
     "--",
     "bilig-workpaper-mcp",
     "--workpaper",
@@ -98,10 +98,10 @@ stdio command when the workflow must persist a project WorkPaper JSON file.
 
 ## Second Choice: Direct TypeScript
 
-Use `@bilig/headless` directly when workbook logic belongs in a service, queue worker, test, or route:
+Use `@bilig/workpaper` directly when workbook logic belongs in a service, queue worker, test, or route:
 
 ```ts
-import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
+import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/workpaper'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
@@ -135,7 +135,7 @@ When the user has a reduced XLSX formula/import bug, generate a local report thr
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/headless@0.38.2", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
+  "args": ["exec", "--package", "@bilig/workpaper@0.38.2", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
 }
 ```
 

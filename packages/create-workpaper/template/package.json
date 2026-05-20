@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bilig/headless": "latest"
+    "@bilig/workpaper": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",

@@ -4,7 +4,7 @@
     {
       "name": "bilig-workpaper",
       "title": "Bilig WorkPaper agent workbook formulas",
-      "description": "Use @bilig/headless WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.",
+      "description": "Use @bilig/workpaper WorkPaper state, MCP tools, and formula-clinic reports instead of spreadsheet UI automation when an agent needs formula readback.",
       "url": "https://proompteng.github.io/bilig/.well-known/agent-skills/bilig-workpaper/SKILL.txt",
       "source_url": "https://github.com/proompteng/bilig/blob/main/docs/.well-known/agent-skills/bilig-workpaper/SKILL.txt",
       "tags": ["ai-agents", "spreadsheet-automation", "formulas", "xlsx", "mcp", "typescript"]

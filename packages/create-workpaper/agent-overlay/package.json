@@ -11,7 +11,7 @@
     "mcp:server": "bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable"
   },
   "dependencies": {
-    "@bilig/headless": "latest"
+    "@bilig/workpaper": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",

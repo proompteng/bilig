@@ -1,6 +1,6 @@
 # `__PROJECT_NAME__`
 
-Formula-backed quote approval API built with `@bilig/headless`.
+Formula-backed quote approval API built with `@bilig/workpaper`.
 
 ```sh
 npm install
