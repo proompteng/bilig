@@ -38,6 +38,7 @@ import {
   prepareLargeSimpleStyleIndexes,
   shouldDeferLargeSimpleStyleCoordinates,
 } from './xlsx-large-simple-style-coordinate-rescan.js'
+import { collectLargeSimpleImportGarbage } from './xlsx-large-simple-garbage.js'
 import { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import {
@@ -377,6 +378,7 @@ export function tryImportLargeSimpleXlsx(
     retainedMetadataScan = streamedMetadataScan
     cellScan.arena.collectSharedStringIndexes(referencedSharedStringIndexes)
     phaseRecorder.finish('worksheet-scan', worksheetScanStart)
+    collectLargeSimpleImportGarbage()
     const metadataParsingStart = phaseRecorder.start()
     let worksheetXml: string | undefined
     let metadataInput: LargeSimpleSheetMetadataInput = {}
@@ -516,6 +518,7 @@ export function tryImportLargeSimpleXlsx(
   referencedSharedStringIndexes.clear()
   fallbackSharedStrings = null
   phaseRecorder.finish('shared-string-resolution', sharedStringResolutionStart)
+  collectLargeSimpleImportGarbage()
   const styleParsingStart = phaseRecorder.start()
   const requiredStyleIndexes = new Set<number>()
   for (const scanned of scannedWorksheets) {

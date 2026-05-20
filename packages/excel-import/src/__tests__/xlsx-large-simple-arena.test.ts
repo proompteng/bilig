@@ -132,6 +132,80 @@ describe('large simple XLSX import arena', () => {
     expect([...lazyCells]).toEqual([{ address: 'A1', value: 'Shared label', formula: 'A1&""' }])
   })
 
+  it('keeps large shared-string rich-text artifacts lazy', () => {
+    const arena = new ImportedWorkbookArena()
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 0, sharedStringIndex: 0 })
+    arena.addSharedStringCell({ sheetIndex: 0, row: 1, column: 0, sharedStringIndex: 1 })
+
+    const richTextCells = arena.retainSharedStringReferences(
+      [
+        { text: 'First rich', rich: true, xml: '<si><r><t>First rich</t></r></si>' },
+        { text: 'Second rich', rich: true, xml: '<si><r><t>Second rich</t></r></si>' },
+      ],
+      { lazyRichTextCellThreshold: 1 },
+    )
+
+    expect(Array.isArray(richTextCells)).toBe(true)
+    expect(richTextCells).toHaveLength(2)
+    expect(richTextCells?.[0]).toEqual({
+      address: 'A1',
+      text: 'First rich',
+      storage: 'sharedString',
+      xml: '<si><r><t>First rich</t></r></si>',
+    })
+    expect(richTextCells?.at(-1)).toEqual({
+      address: 'A2',
+      text: 'Second rich',
+      storage: 'sharedString',
+      xml: '<si><r><t>Second rich</t></r></si>',
+    })
+    expect(richTextCells?.map((cell) => cell.address)).toEqual(['A1', 'A2'])
+    const toJSON = Reflect.get(richTextCells ?? [], 'toJSON')
+    expect(typeof toJSON === 'function' ? toJSON.call(richTextCells) : null).toEqual([...richTextCells!])
+  })
+
+  it('packs deferred shared-string indexes into numeric storage for mixed large sheets', () => {
+    const arena = new ImportedWorkbookArena()
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 0, sharedStringIndex: 1 })
+    arena.addCell({ sheetIndex: 0, row: 0, column: 1, value: 42 })
+
+    expect(arena.snapshot().stringIds).toBeUndefined()
+    expect(arena.snapshot().numberValues).toEqual(new Float64Array([1, 42]))
+
+    expect(
+      arena.retainSharedStringReferences([
+        { text: 'unused', rich: false },
+        { text: 'Packed shared label', rich: false },
+      ]),
+    ).toEqual([])
+    expect(arena.materializeSheetCells(0)).toEqual([
+      { address: 'A1', value: 'Packed shared label' },
+      { address: 'B1', value: 42 },
+    ])
+  })
+
+  it('keeps earlier shared-string indexes readable when string cells prevent packing', () => {
+    const arena = new ImportedWorkbookArena()
+    arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 'Inline' })
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 1, sharedStringIndex: 1 })
+    arena.addCell({ sheetIndex: 0, row: 0, column: 2, value: 42 })
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 3, sharedStringIndex: 2 })
+
+    expect(
+      arena.retainSharedStringReferences([
+        { text: 'unused', rich: false },
+        { text: 'First shared', rich: false },
+        { text: 'Second shared', rich: false },
+      ]),
+    ).toEqual([])
+    expect(arena.materializeSheetCells(0)).toEqual([
+      { address: 'A1', value: 'Inline' },
+      { address: 'B1', value: 'First shared' },
+      { address: 'C1', value: 42 },
+      { address: 'D1', value: 'Second shared' },
+    ])
+  })
+
   it('uses scalar sheet ownership for single-sheet arenas and falls back only for mixed ownership', () => {
     const arena = new ImportedWorkbookArena()
     arena.addCell({ sheetIndex: 4, row: 0, column: 0, value: 1 })

@@ -1,5 +1,7 @@
 import type { LiteralInput, WorkbookRichTextCellSnapshot, WorkbookSnapshot } from '@bilig/protocol'
 import { toDisplayText } from './workbook-import-helpers.js'
+import { filledUint32Array, growFloat64Array, growUint8Array, growUint16Array, growUint32Array } from './xlsx-large-simple-array-storage.js'
+import { createLazyWorkbookRichTextCells } from './xlsx-large-simple-lazy-rich-text-cells.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import type { ImportedWorksheetStyleIndexArena } from './xlsx-large-simple-style-index-arena.js'
@@ -16,6 +18,7 @@ const valueKindSharedStringRef = 5
 const previewRowCount = 8
 const previewColumnCount = 6
 const previewCellCount = previewRowCount * previewColumnCount
+const lazyRichTextCellThreshold = 10_000
 
 export interface ImportedWorksheetArenaCellInput {
   readonly sheetIndex: number
@@ -79,6 +82,9 @@ export class ImportedWorkbookArena {
   private readonly formulas: string[] = []
   private readonly formulaIdsByValue = new Map<string, number>()
   private sharedStrings: readonly LargeSimpleSharedStringEntry[] | undefined
+  private stringValueCount = 0
+  private sharedStringRefCount = 0
+  private sharedStringRefsInNumberValues = false
   private readonly previewValues: (LiteralInput | undefined)[] = Array.from({ length: previewCellCount })
   private readonly previewValueSet = new Uint8Array(previewCellCount)
   private readonly stringDedupeMode: ImportedWorkbookArenaDedupeMode
@@ -142,7 +148,7 @@ export class ImportedWorkbookArena {
     this.ensureCapacity(this.length + 1)
     const index = this.appendCell(input.sheetIndex, input.row, input.column)
     this.valueKinds[index] = valueKindSharedStringRef
-    this.ensureStringIdStorage()[index] = input.sharedStringIndex
+    this.storeSharedStringIndex(index, input.sharedStringIndex)
     return index
   }
 
@@ -365,7 +371,7 @@ export class ImportedWorkbookArena {
       if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
         continue
       }
-      const sharedStringIndex = this.stringIds?.[index] ?? noPoolId
+      const sharedStringIndex = this.sharedStringIndexAt(index)
       if (sharedStringIndex !== noPoolId) {
         output.add(sharedStringIndex)
       }
@@ -378,12 +384,13 @@ export class ImportedWorkbookArena {
       if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
         continue
       }
-      const sharedStringIndex = this.stringIds?.[index] ?? noPoolId
+      const sharedStringIndex = this.sharedStringIndexAt(index)
       const entry = sharedStringIndex === noPoolId ? undefined : sharedStrings[sharedStringIndex]
       if (!entry) {
         return null
       }
       this.valueKinds[index] = valueKindString
+      this.stringValueCount += 1
       const stringIds = this.ensureStringIdStorage()
       stringIds[index] = this.internString(entry.text)
       const row = this.rowAt(index)
@@ -404,14 +411,18 @@ export class ImportedWorkbookArena {
     return richTextCells
   }
 
-  retainSharedStringReferences(sharedStrings: readonly LargeSimpleSharedStringEntry[]): WorkbookRichTextCellSnapshot[] | null {
-    const richTextCells: WorkbookRichTextCellSnapshot[] = []
+  retainSharedStringReferences(
+    sharedStrings: readonly LargeSimpleSharedStringEntry[],
+    options: { readonly lazyRichTextCellThreshold?: number } = {},
+  ): WorkbookRichTextCellSnapshot[] | null {
+    let richTextCellIndexes: Uint32Array<ArrayBuffer> | undefined
+    let richTextCellCount = 0
     this.sharedStrings = sharedStrings
     for (let index = 0; index < this.length; index += 1) {
       if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
         continue
       }
-      const sharedStringIndex = this.stringIds?.[index] ?? noPoolId
+      const sharedStringIndex = this.sharedStringIndexAt(index)
       const entry = sharedStringIndex === noPoolId ? undefined : sharedStrings[sharedStringIndex]
       if (!entry) {
         return null
@@ -422,15 +433,27 @@ export class ImportedWorkbookArena {
         this.setPreviewValue(row, column, entry.text)
       }
       if (entry.rich) {
-        richTextCells.push({
-          address: encodeCellAddress(row, column),
-          text: entry.text,
-          storage: 'sharedString',
-          xml: entry.xml ?? '',
-        })
+        if (!richTextCellIndexes) {
+          richTextCellIndexes = new Uint32Array(1024)
+        } else if (richTextCellCount >= richTextCellIndexes.length) {
+          richTextCellIndexes = growUint32Array(richTextCellIndexes, richTextCellIndexes.length * 2)
+        }
+        richTextCellIndexes[richTextCellCount] = index
+        richTextCellCount += 1
       }
     }
-    return richTextCells
+    const threshold = Math.max(0, Math.trunc(options.lazyRichTextCellThreshold ?? lazyRichTextCellThreshold))
+    if (richTextCellCount <= threshold) {
+      const richTextCells: WorkbookRichTextCellSnapshot[] = []
+      for (let index = 0; index < richTextCellCount; index += 1) {
+        richTextCells.push(this.materializeSharedStringRichTextCell(richTextCellIndexes?.[index] ?? -1))
+      }
+      return richTextCells
+    }
+    const lazyIndexes = richTextCellIndexes?.slice(0, richTextCellCount) ?? new Uint32Array(0)
+    return createLazyWorkbookRichTextCells(lazyIndexes.length, (index) =>
+      this.materializeSharedStringRichTextCell(lazyIndexes[index] ?? -1),
+    )
   }
 
   snapshot(): ImportedWorkbookArenaSnapshot {
@@ -471,6 +494,9 @@ export class ImportedWorkbookArena {
     this.formulaDedupeKeys.length = 0
     this.formulaDedupeEvictionIndex = 0
     this.sharedStrings = undefined
+    this.stringValueCount = 0
+    this.sharedStringRefCount = 0
+    this.sharedStringRefsInNumberValues = false
     this.previewValues.fill(undefined)
     this.previewValueSet.fill(0)
   }
@@ -545,6 +571,7 @@ export class ImportedWorkbookArena {
       return
     }
     this.valueKinds[index] = valueKindString
+    this.stringValueCount += 1
     this.ensureStringIdStorage()[index] = this.internString(value)
   }
 
@@ -558,7 +585,7 @@ export class ImportedWorkbookArena {
         return stringId === noPoolId ? undefined : this.strings[stringId]
       }
       case valueKindSharedStringRef: {
-        const sharedStringIndex = this.stringIds?.[index] ?? noPoolId
+        const sharedStringIndex = this.sharedStringIndexAt(index)
         return sharedStringIndex === noPoolId ? undefined : this.sharedStrings?.[sharedStringIndex]?.text
       }
       case valueKindBoolean:
@@ -610,6 +637,17 @@ export class ImportedWorkbookArena {
       }
     }
     return count
+  }
+
+  private materializeSharedStringRichTextCell(index: number): WorkbookRichTextCellSnapshot {
+    const sharedStringIndex = this.sharedStringIndexAt(index)
+    const entry = sharedStringIndex === noPoolId ? undefined : this.sharedStrings?.[sharedStringIndex]
+    return {
+      address: encodeCellAddress(this.rowAt(index), this.columnAt(index)),
+      text: entry?.text ?? '',
+      storage: 'sharedString',
+      xml: entry?.xml ?? '',
+    }
   }
 
   private lazySheetCellIndexes(sheetIndex: number): Uint32Array | number {
@@ -680,6 +718,8 @@ export class ImportedWorkbookArena {
       return this.numberValues
     }
     this.numberValues = new Float64Array(this.valueKinds.length)
+    this.numberValues.fill(Number.NaN)
+    this.moveSharedStringIndexesToNumberValues()
     return this.numberValues
   }
 
@@ -697,6 +737,39 @@ export class ImportedWorkbookArena {
     }
     this.booleanValues = new Uint8Array(this.valueKinds.length)
     return this.booleanValues
+  }
+
+  private storeSharedStringIndex(index: number, sharedStringIndex: number): void {
+    this.sharedStringRefCount += 1
+    if (this.numberValues) {
+      this.sharedStringRefsInNumberValues = true
+      this.numberValues[index] = sharedStringIndex
+      return
+    }
+    this.ensureStringIdStorage()[index] = sharedStringIndex
+  }
+
+  private sharedStringIndexAt(index: number): number {
+    if (this.sharedStringRefsInNumberValues) {
+      const value = this.numberValues?.[index]
+      if (value !== undefined && !Number.isNaN(value)) {
+        return Math.trunc(value)
+      }
+    }
+    return this.stringIds?.[index] ?? noPoolId
+  }
+
+  private moveSharedStringIndexesToNumberValues(): void {
+    if (!this.numberValues || !this.stringIds || this.sharedStringRefCount === 0 || this.stringValueCount > 0) {
+      return
+    }
+    for (let index = 0; index < this.length; index += 1) {
+      if ((this.valueKinds[index] ?? valueKindEmpty) === valueKindSharedStringRef) {
+        this.numberValues[index] = this.stringIds[index] ?? noPoolId
+      }
+    }
+    this.stringIds = undefined
+    this.sharedStringRefsInNumberValues = true
   }
 
   private internString(value: string): number {
@@ -867,39 +940,6 @@ export interface ImportedWorksheetCellScan {
     readonly endRow: number
     readonly endColumn: number
   } | null
-}
-
-function filledUint32Array(length: number, value: number): Uint32Array<ArrayBuffer> {
-  const output = new Uint32Array(length)
-  output.fill(value)
-  return output
-}
-
-function growUint8Array(source: Uint8Array<ArrayBuffer>, nextCapacity: number): Uint8Array<ArrayBuffer> {
-  const output = new Uint8Array(nextCapacity)
-  output.set(source)
-  return output
-}
-
-function growUint32Array(source: Uint32Array<ArrayBuffer>, nextCapacity: number, fillValue?: number): Uint32Array<ArrayBuffer> {
-  const output = new Uint32Array(nextCapacity)
-  output.set(source)
-  if (fillValue !== undefined && nextCapacity > source.length) {
-    output.fill(fillValue, source.length)
-  }
-  return output
-}
-
-function growUint16Array(source: Uint16Array<ArrayBuffer>, nextCapacity: number): Uint16Array<ArrayBuffer> {
-  const output = new Uint16Array(nextCapacity)
-  output.set(source)
-  return output
-}
-
-function growFloat64Array(source: Float64Array<ArrayBuffer>, nextCapacity: number): Float64Array<ArrayBuffer> {
-  const output = new Float64Array(nextCapacity)
-  output.set(source)
-  return output
 }
 
 function isPreviewCell(row: number, column: number): boolean {
