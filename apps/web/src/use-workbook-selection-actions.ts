@@ -143,7 +143,10 @@ export function applyOptimisticCopyRange(
   }
 
   if (height * width > MAX_MATERIALIZED_OPTIMISTIC_RANGE_CELLS) {
-    return applyVisibleOptimisticCopyRange(viewportStore, source, target, sourceBounds, targetBounds)
+    return (
+      applyOptimisticCopyRangeOverlay(viewportStore, source, target, sourceBounds, targetBounds) ??
+      applyVisibleOptimisticCopyRange(viewportStore, source, target, sourceBounds, targetBounds)
+    )
   }
 
   const previousSnapshots: CellSnapshot[] = []
@@ -414,6 +417,63 @@ function applyVisibleOptimisticCopyRange(
     stagedSnapshots.set(optimisticSnapshotKey(targetSnapshot.sheetName, targetSnapshot.address), next)
     return next
   })
+}
+
+function applyOptimisticCopyRangeOverlay(
+  viewportStore: OptimisticViewportStore,
+  source: CellRangeRef,
+  target: CellRangeRef,
+  sourceBounds: ReturnType<typeof normalizeCellRange>,
+  targetBounds: ReturnType<typeof normalizeCellRange>,
+): (() => void) | null {
+  const peekSourceCell = viewportStore.peekBaseCell
+    ? (sheetName: string, address: string) => viewportStore.peekBaseCell?.(sheetName, address)
+    : viewportStore.peekCell
+      ? (sheetName: string, address: string) => viewportStore.peekCell?.(sheetName, address)
+      : null
+  if (!viewportStore.beginOptimisticRangeOverlay || !peekSourceCell) {
+    return null
+  }
+  const sourceSnapshots = collectKnownProjectedSourceSnapshots(viewportStore, source)
+  const sourceIntersectsTarget = rangesIntersect(source, sourceBounds, target, targetBounds)
+  return viewportStore.beginOptimisticRangeOverlay(target, (targetSnapshot) => {
+    const targetPosition = parseCellAddress(targetSnapshot.address, targetSnapshot.sheetName)
+    const sourceAddress = formatAddress(
+      sourceBounds.startRow + (targetPosition.row - targetBounds.startRow),
+      sourceBounds.startCol + (targetPosition.col - targetBounds.startCol),
+    )
+    const sourceSnapshot =
+      sourceSnapshots.get(optimisticSnapshotKey(source.sheetName, sourceAddress)) ??
+      (sourceIntersectsTarget ? peekSourceCell(source.sheetName, sourceAddress) : viewportStore.peekCell?.(source.sheetName, sourceAddress))
+    if (!sourceSnapshot) {
+      return targetSnapshot
+    }
+    return createCopiedOptimisticSnapshot(viewportStore, sourceSnapshot, sourceAddress, targetSnapshot, new Map())
+  })
+}
+
+function collectKnownProjectedSourceSnapshots(viewportStore: OptimisticViewportStore, source: CellRangeRef): Map<string, CellSnapshot> {
+  const snapshots = new Map<string, CellSnapshot>()
+  viewportStore.forEachCachedOrVisibleCellSnapshotInRange?.(source, (snapshot) => {
+    const projectedSnapshot = viewportStore.peekCell?.(snapshot.sheetName, snapshot.address) ?? snapshot
+    snapshots.set(optimisticSnapshotKey(projectedSnapshot.sheetName, projectedSnapshot.address), projectedSnapshot)
+  })
+  return snapshots
+}
+
+function rangesIntersect(
+  source: CellRangeRef,
+  sourceBounds: ReturnType<typeof normalizeCellRange>,
+  target: CellRangeRef,
+  targetBounds: ReturnType<typeof normalizeCellRange>,
+): boolean {
+  return (
+    source.sheetName === target.sheetName &&
+    sourceBounds.startRow <= targetBounds.endRow &&
+    sourceBounds.endRow >= targetBounds.startRow &&
+    sourceBounds.startCol <= targetBounds.endCol &&
+    sourceBounds.endCol >= targetBounds.startCol
+  )
 }
 
 function applyVisibleOptimisticFillRange(

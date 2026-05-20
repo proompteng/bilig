@@ -57,4 +57,11 @@ describe('gridInternalClipboard', () => {
       ]),
     ).toBe(false)
   })
+
+  test('matches system clipboard text with trimmed trailing blank rows from an internal range', () => {
+    const clipboard = buildInternalClipboardRange({ x: 1, y: 2, width: 1, height: 5 }, [[''], ['kept'], [''], [''], ['']])
+
+    expect(matchesInternalClipboardPaste(clipboard, [[''], ['kept']])).toBe(true)
+    expect(matchesInternalClipboardPaste(clipboard, [[''], ['changed']])).toBe(false)
+  })
 })

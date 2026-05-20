@@ -354,6 +354,38 @@ describe('gridClipboardKeyboardController', () => {
     expect(onPaste).not.toHaveBeenCalled()
   })
 
+  test('routes trimmed internal clipboard data through copy-range operations', () => {
+    const onCopyRange = vi.fn()
+    const onMoveRange = vi.fn()
+    const onPaste = vi.fn()
+    const internalClipboardRef = {
+      current: {
+        operation: 'copy' as const,
+        sourceStartAddress: 'B1',
+        sourceEndAddress: 'B5',
+        signature: '\u001ekeep\u001e\u001e\u001e',
+        plainText: '\nkeep\n\n\n',
+        valuesOnlyPlainText: '\nkeep\n\n\n',
+        rowCount: 5,
+        colCount: 1,
+      },
+    }
+
+    applyGridClipboardValues({
+      internalClipboardRef,
+      onCopyRange,
+      onMoveRange,
+      onPaste,
+      sheetName: 'Sheet1',
+      target: [3, 0],
+      values: [[''], ['keep']],
+    })
+
+    expect(onCopyRange).toHaveBeenCalledWith('B1', 'B5', 'D1', 'D5')
+    expect(onMoveRange).not.toHaveBeenCalled()
+    expect(onPaste).not.toHaveBeenCalled()
+  })
+
   test('routes values-only paste through plain paste even when it matches an internal copied range', () => {
     const onCopyRange = vi.fn()
     const onMoveRange = vi.fn()

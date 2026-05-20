@@ -602,6 +602,130 @@ describe('use workbook selection action helpers', () => {
     expect(cells.get('Sheet1:D2')?.styleId).toBeUndefined()
   })
 
+  it('uses a range overlay for huge copy targets so future viewports inherit known source presentation', () => {
+    const cells = new Map<string, CellSnapshot>([
+      [
+        'Sheet1:B15000',
+        {
+          ...emptyCell('Sheet1', 'B15000'),
+          formula: 'A15000*2',
+          format: '0.00',
+          numberFormatId: 'fmt-source',
+          styleId: 'style-source',
+          value: { tag: ValueTag.Number, value: 12 },
+          version: 4,
+        },
+      ],
+    ])
+    let overlayApply: ((snapshot: CellSnapshot) => CellSnapshot) | null = null
+    let rollbackCalled = false
+    const viewportStore = {
+      beginOptimisticRangeOverlay(range: CellRangeRef, apply: (snapshot: CellSnapshot) => CellSnapshot) {
+        expect(range).toMatchObject({ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' })
+        overlayApply = apply
+        return () => {
+          rollbackCalled = true
+        }
+      },
+      forEachCachedOrVisibleCellSnapshotInRange(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void) {
+        expect(range).toMatchObject({ sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B20000' })
+        const rawSource = cells.get('Sheet1:B15000') ?? emptyCell('Sheet1', 'B15000')
+        listener({ ...rawSource, format: undefined, numberFormatId: undefined, styleId: undefined })
+      },
+      peekBaseCell(sheetName: string, address: string) {
+        const snapshot = cells.get(`${sheetName}:${address}`)
+        return snapshot ? { ...snapshot, styleId: undefined } : undefined
+      },
+      peekCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`)
+      },
+      getCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`) ?? emptyCell(sheetName, address)
+      },
+      setCellSnapshot(snapshot: CellSnapshot) {
+        cells.set(`${snapshot.sheetName}:${snapshot.address}`, snapshot)
+      },
+    }
+
+    const rollback = applyOptimisticCopyRange(
+      viewportStore,
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B20000' },
+      { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' },
+    )
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(overlayApply).toEqual(expect.any(Function))
+    const futureTarget = overlayApply?.(emptyCell('Sheet1', 'D15000'))
+    expect(futureTarget).toMatchObject({
+      formula: 'C15000*2',
+      format: '0.00',
+      numberFormatId: 'fmt-source',
+      styleId: 'style-source',
+      value: { tag: ValueTag.Number, value: 0 },
+    })
+    rollback?.()
+    expect(rollbackCalled).toBe(true)
+  })
+
+  it('resolves huge overlapping copy overlays from pre-overlay source snapshots', () => {
+    const cells = new Map<string, CellSnapshot>([
+      [
+        'Sheet1:B1',
+        {
+          ...emptyCell('Sheet1', 'B1'),
+          input: 'first-source',
+          styleId: 'style-first',
+          value: { tag: ValueTag.String, value: 'first-source' },
+          version: 2,
+        },
+      ],
+      [
+        'Sheet1:B2',
+        {
+          ...emptyCell('Sheet1', 'B2'),
+          input: 'second-source',
+          styleId: 'style-second',
+          value: { tag: ValueTag.String, value: 'second-source' },
+          version: 3,
+        },
+      ],
+    ])
+    let overlayApply: ((snapshot: CellSnapshot) => CellSnapshot) | null = null
+    const viewportStore = {
+      beginOptimisticRangeOverlay(_range: CellRangeRef, apply: (snapshot: CellSnapshot) => CellSnapshot) {
+        overlayApply = apply
+        return () => undefined
+      },
+      peekBaseCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`)
+      },
+      peekCell(sheetName: string, address: string) {
+        const base = cells.get(`${sheetName}:${address}`)
+        return overlayApply && base ? overlayApply(base) : base
+      },
+      getCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`) ?? emptyCell(sheetName, address)
+      },
+      setCellSnapshot(snapshot: CellSnapshot) {
+        cells.set(`${snapshot.sheetName}:${snapshot.address}`, snapshot)
+      },
+    }
+
+    const rollback = applyOptimisticCopyRange(
+      viewportStore,
+      { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B20000' },
+      { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'B20001' },
+    )
+
+    expect(rollback).toEqual(expect.any(Function))
+    const futureTarget = overlayApply?.(emptyCell('Sheet1', 'B3'))
+    expect(futureTarget).toMatchObject({
+      input: 'second-source',
+      styleId: 'style-second',
+      value: { tag: ValueTag.String, value: 'second-source' },
+    })
+  })
+
   it('does not ghost empty source presentation into huge copy targets when the mapped source is offscreen', () => {
     const cells = new Map<string, CellSnapshot>([
       [
@@ -617,7 +741,20 @@ describe('use workbook selection action helpers', () => {
     ])
     const writes: CellSnapshot[] = []
     const viewportStore = {
+      beginOptimisticRangeOverlay(range: CellRangeRef, apply: (snapshot: CellSnapshot) => CellSnapshot) {
+        expect(range).toMatchObject({ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' })
+        const current = cells.get('Sheet1:D15000') ?? emptyCell('Sheet1', 'D15000')
+        const next = apply(current)
+        if (next !== current) {
+          writes.push(next)
+          cells.set(`${next.sheetName}:${next.address}`, next)
+        }
+        return () => undefined
+      },
       forEachCachedOrVisibleCellSnapshotInRange(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void) {
+        if (range.startAddress === 'B1') {
+          return
+        }
         expect(range).toMatchObject({ startAddress: 'D1', endAddress: 'D20000' })
         listener(cells.get('Sheet1:D15000') ?? emptyCell('Sheet1', 'D15000'))
       },
@@ -639,13 +776,15 @@ describe('use workbook selection action helpers', () => {
       { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'D20000' },
     )
 
-    expect(rollback).toBeNull()
+    expect(rollback).toEqual(expect.any(Function))
     expect(writes).toEqual([])
     expect(cells.get('Sheet1:D15000')).toMatchObject({
       input: 'keep-visible-target',
       styleId: 'style-visible-target',
       value: { tag: ValueTag.String, value: 'keep-visible-target' },
     })
+    rollback?.()
+    expect(writes).toEqual([])
   })
 
   it('fills visible cells for huge ranges without materializing offscreen targets', () => {

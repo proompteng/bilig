@@ -140,6 +140,10 @@ export class ProjectedViewportStore implements GridEngineLike {
       : undefined
   }
 
+  peekBaseCell(sheetName: string, address: string): CellSnapshot | undefined {
+    return this.cellCache.peekCell(sheetName, address)
+  }
+
   getColumnWidths(sheetName: string): Readonly<Record<number, number>> {
     return this.axisStore.getColumnWidths(sheetName)
   }

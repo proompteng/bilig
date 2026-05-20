@@ -38,9 +38,37 @@ export function matchesInternalClipboardPaste(
   if (!internalClipboard || values.length === 0 || values[0]?.length === 0) {
     return false
   }
-  return (
+  if (
     internalClipboard.signature === serializeClipboardMatrix(values) &&
     internalClipboard.rowCount === values.length &&
     internalClipboard.colCount === (values[0]?.length ?? 0)
-  )
+  ) {
+    return true
+  }
+  if (values.length > internalClipboard.rowCount || values.some((row) => row.length !== internalClipboard.colCount)) {
+    return false
+  }
+  const internalValues = deserializeClipboardSignature(internalClipboard.signature)
+  if (internalValues.length !== internalClipboard.rowCount || internalValues.some((row) => row.length !== internalClipboard.colCount)) {
+    return false
+  }
+  for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
+    const row = values[rowIndex] ?? []
+    const internalRow = internalValues[rowIndex] ?? []
+    for (let colIndex = 0; colIndex < internalClipboard.colCount; colIndex += 1) {
+      if ((row[colIndex] ?? '') !== (internalRow[colIndex] ?? '')) {
+        return false
+      }
+    }
+  }
+  for (let rowIndex = values.length; rowIndex < internalValues.length; rowIndex += 1) {
+    if (!internalValues[rowIndex]?.every((value) => value.length === 0)) {
+      return false
+    }
+  }
+  return true
+}
+
+function deserializeClipboardSignature(signature: string): readonly (readonly string[])[] {
+  return signature.split('\u001e').map((row) => row.split('\u001f'))
 }

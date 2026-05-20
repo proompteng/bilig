@@ -8,6 +8,7 @@ export interface OptimisticViewportStore {
   beginOptimisticRangeOverlay?(range: CellRangeRef, apply: (snapshot: CellSnapshot) => CellSnapshot): (() => void) | null
   forEachCachedOrVisibleCellSnapshotInRange?(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void): void
   forEachCellSnapshotInRange?(range: CellRangeRef, listener: (snapshot: CellSnapshot) => void): void
+  peekBaseCell?(sheetName: string, address: string): CellSnapshot | undefined
   peekCell?(sheetName: string, address: string): CellSnapshot | undefined
   getCell(sheetName: string, address: string): CellSnapshot
   setCellSnapshot(snapshot: CellSnapshot): void
