@@ -146,6 +146,50 @@ describe('EngineRecalcService', () => {
     expect(engine.getPerformanceCounters().nativeDirectScalarRecalcEvaluations).toBe(0)
   })
 
+  it('batches large direct uniform lookup full recalculation through the native lookup kernel', async () => {
+    const lookupRowCount = 256
+    const formulaRowCount = 80
+    const engine = new SpreadsheetEngine({ workbookName: 'recalc-native-direct-lookup' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    for (let row = 1; row <= lookupRowCount; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+    for (let row = 1; row <= formulaRowCount; row += 1) {
+      engine.setCellValue('Sheet1', `D${row}`, row)
+    }
+    for (let row = 1; row <= formulaRowCount; row += 1) {
+      engine.setCellFormula('Sheet1', `B${row}`, `MATCH(D${row},$A$1:$A$${lookupRowCount},0)`)
+    }
+    for (let row = 1; row <= formulaRowCount; row += 1) {
+      engine.setCellFormula('Sheet1', `C${row}`, `B${row}+10`)
+    }
+
+    for (let row = 1; row <= formulaRowCount; row += 1) {
+      const cellIndex = engine.workbook.ensureCell('Sheet1', `D${row}`)
+      engine.workbook.cellStore.setValue(cellIndex, { tag: ValueTag.Number, value: row + 1 })
+    }
+
+    engine.resetPerformanceCounters()
+    const changed = Effect.runSync(getRecalcService(engine).recalculateNow())
+    const counters = engine.getPerformanceCounters() as Record<string, number | undefined> & {
+      readonly nativeDirectLookupRecalcEvaluations?: number
+    }
+
+    expect(changed).toContain(engine.workbook.getCellIndex('Sheet1', `B${formulaRowCount}`))
+    expect(changed).toContain(engine.workbook.getCellIndex('Sheet1', `C${formulaRowCount}`))
+    expect(engine.getCellValue('Sheet1', `B${formulaRowCount}`)).toEqual({
+      tag: ValueTag.Number,
+      value: formulaRowCount + 1,
+    })
+    expect(engine.getCellValue('Sheet1', `C${formulaRowCount}`)).toEqual({
+      tag: ValueTag.Number,
+      value: formulaRowCount + 11,
+    })
+    expect(counters.nativeDirectLookupRecalcEvaluations).toBeGreaterThanOrEqual(formulaRowCount)
+  })
+
   it('preserves imported cached unsupported formula values during full recalculation', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'recalc-imported-unsupported-cache' })
     await engine.ready()

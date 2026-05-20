@@ -48,6 +48,7 @@ const oracleAggregateCounterKeys = [
   'nativeDirectScalarInitialEvaluations',
   'nativeDirectScalarRecalcEvaluations',
   'nativeDirectLookupInitialEvaluations',
+  'nativeDirectLookupRecalcEvaluations',
   'nativeDirectCriteriaAggregateEvaluations',
   'nativeDirectCriteriaPredicateAggregateEvaluations',
   'directCriteriaMatchCacheHits',
