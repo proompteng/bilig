@@ -382,7 +382,7 @@ npm exec --package @bilig/headless@0.36.2 -- bilig-workpaper-mcp --workpaper ./p
   https://proompteng.github.io/bilig/sheetjs-formula-result-not-updating-node.html
   https://github.com/proompteng/bilig/blob/main/docs/sheetjs-formula-result-not-updating-node.md
   https://www.npmjs.com/package/xlsx-formula-recalc
-  npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+  npx --package xlsx-formula-recalc sheetjs-recalc --demo --json
 - curlable XLSX recalculation proof:
   https://proompteng.github.io/bilig/xlsx-recalculation-proof.html
   https://proompteng.github.io/bilig/xlsx-recalculation-proof.ts

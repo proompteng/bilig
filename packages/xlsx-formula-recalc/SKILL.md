@@ -11,6 +11,12 @@ npx --package xlsx-formula-recalc xlsx-recalc --demo --json
 ```
 
 The demo should print `verified: true` and a `Summary!B2` value of `72000`.
+For SheetJS / `xlsx` stale-formula issues, use the SheetJS-named binary from the
+same package:
+
+```sh
+npx --package xlsx-formula-recalc sheetjs-recalc --demo --json
+```
 
 ## Real Workbook
 

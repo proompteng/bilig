@@ -33,6 +33,7 @@
     "directory": "packages/xlsx-formula-recalc"
   },
   "bin": {
+    "sheetjs-recalc": "./dist/sheetjs-cli.js",
     "xlsx-recalc": "./dist/cli.js"
   },
   "files": [

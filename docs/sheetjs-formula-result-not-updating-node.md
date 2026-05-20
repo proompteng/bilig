@@ -42,13 +42,13 @@ npm install xlsx-formula-recalc
 One-off proof:
 
 ```sh
-npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+npx --package xlsx-formula-recalc sheetjs-recalc --demo --json
 ```
 
 For a real workbook:
 
 ```sh
-npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
+npx --package xlsx-formula-recalc sheetjs-recalc pricing.xlsx \
   --set Inputs!B2=48 \
   --set Inputs!B3=1500 \
   --read Summary!B7 \

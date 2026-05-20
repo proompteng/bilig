@@ -62,6 +62,8 @@ before returning, use the file-level recalculation package before evaluating
 the broader WorkPaper runtime:
 
 ```sh
+npx --package xlsx-formula-recalc sheetjs-recalc --demo --json
+
 npx --package xlsx-formula-recalc xlsx-recalc --demo --json
 
 npx --package xlsx-formula-recalc xlsx-recalc quote.xlsx \

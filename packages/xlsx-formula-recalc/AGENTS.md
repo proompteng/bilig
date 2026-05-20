@@ -9,6 +9,13 @@ Start with the one-command proof:
 npx --package xlsx-formula-recalc xlsx-recalc --demo --json
 ```
 
+If the task came from a SheetJS / `xlsx` stale-formula issue, the same package
+also exposes a SheetJS-named command:
+
+```sh
+npx --package xlsx-formula-recalc sheetjs-recalc --demo --json
+```
+
 For a real workbook, use sheet-qualified A1 targets:
 
 ```sh

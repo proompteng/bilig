@@ -231,13 +231,15 @@
               <span>highest-traffic entry</span>
               <strong>SheetJS or XLSX inputs changed and formulas are stale?</strong>
               <p>
-                Start with the live XLSX recalculation command before moving to a full workbook runtime. The bridge example covers SheetJS,
-                xlsx-populate, and ExcelJS with one workbook.
+                Start with the SheetJS-named command from the live XLSX recalculation package before moving to a full workbook runtime. The
+                bridge example covers SheetJS, xlsx-populate, and ExcelJS with one workbook.
               </p>
             </div>
-            <pre><code>npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+            <pre><code>npx --package xlsx-formula-recalc sheetjs-recalc --demo --json
 
-npx --package xlsx-formula-recalc xlsx-recalc pricing.xlsx \
+npx --package xlsx-formula-recalc xlsx-recalc --demo --json
+
+npx --package xlsx-formula-recalc sheetjs-recalc pricing.xlsx \
   --set Inputs!B2=48 \
   --read Summary!B7 \
   --out pricing.recalculated.xlsx \

@@ -59,6 +59,8 @@ export function recalculateXlsx(input: Uint8Array | ArrayBuffer | Buffer, option
   }
 }
 
+export const recalculateSheetjsWorkbook = recalculateXlsx
+
 export function parseQualifiedCellTarget(workbook: WorkPaperInstance, target: string): WorkPaperCellAddress {
   const parsed = parseQualifiedA1(target)
   const sheet = workbook.getSheetId(parsed.sheetName)

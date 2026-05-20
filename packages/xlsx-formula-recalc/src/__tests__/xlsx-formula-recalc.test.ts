@@ -1,7 +1,8 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 
-import { WorkPaper, exportXlsx, importXlsx, parseQualifiedA1, recalculateXlsx } from '../index.js'
+import { runXlsxFormulaRecalcCli } from '../cli-api.js'
+import { WorkPaper, exportXlsx, importXlsx, parseQualifiedA1, recalculateSheetjsWorkbook, recalculateXlsx } from '../index.js'
 
 describe('xlsx-formula-recalc', () => {
   it('edits XLSX inputs, recalculates formulas, and exports a reimportable workbook', () => {
@@ -78,6 +79,38 @@ describe('xlsx-formula-recalc', () => {
       row: 11,
       col: 27,
     })
+  })
+
+  it('exposes a SheetJS-named API and CLI alias from the live xlsx package', () => {
+    const sourceWorkbook = WorkPaper.buildFromSheets({
+      Inputs: [
+        ['Metric', 'Value'],
+        ['Units', 40],
+        ['Price', 1200],
+      ],
+      Summary: [
+        ['Metric', 'Value'],
+        ['Revenue', '=Inputs!B2*Inputs!B3'],
+      ],
+    })
+    const sourceBytes = exportXlsx(sourceWorkbook.exportSnapshot())
+    sourceWorkbook.dispose()
+
+    const result = recalculateSheetjsWorkbook(sourceBytes, {
+      edits: [{ target: 'Inputs!B2', value: 48 }],
+      reads: ['Summary!B2'],
+    })
+    expect(readNumber(result.reads['Summary!B2'])).toBe(57_600)
+
+    let help = ''
+    const exitCode = runXlsxFormulaRecalcCli(['--help'], {
+      commandName: 'sheetjs-recalc',
+      stdout: (text) => {
+        help += text
+      },
+    })
+    expect(exitCode).toBe(0)
+    expect(help).toContain('Usage: sheetjs-recalc')
   })
 })
 
