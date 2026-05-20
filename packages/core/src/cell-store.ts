@@ -102,12 +102,22 @@ export class CellStore {
     this.errors.fill(ErrorCode.None, firstIndex, firstIndex + count)
     this.flags.fill(CellFlags.Materialized, firstIndex, firstIndex + count)
 
+    if (colCount <= 16) {
+      for (let row = 0; row < rowCount; row += 1) {
+        const rowBase = firstIndex + row * colCount
+        this.rows.fill(rowStart + row, rowBase, rowBase + colCount)
+        for (let col = 0; col < colCount; col += 1) {
+          this.cols[rowBase + col] = colStart + col
+        }
+      }
+      return firstIndex
+    }
+
+    const colPattern = materializeDenseColumnPattern(colStart, colCount)
     for (let row = 0; row < rowCount; row += 1) {
       const rowBase = firstIndex + row * colCount
       this.rows.fill(rowStart + row, rowBase, rowBase + colCount)
-      for (let col = 0; col < colCount; col += 1) {
-        this.cols[rowBase + col] = colStart + col
-      }
+      this.cols.set(colPattern, rowBase)
     }
     return firstIndex
   }
@@ -220,4 +230,12 @@ function grow(
   const next = new Float64Array(capacity)
   next.set(buffer)
   return next
+}
+
+function materializeDenseColumnPattern(colStart: number, colCount: number): Uint16Array {
+  const pattern = new Uint16Array(colCount)
+  for (let col = 0; col < colCount; col += 1) {
+    pattern[col] = colStart + col
+  }
+  return pattern
 }

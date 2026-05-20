@@ -21,6 +21,21 @@ describe('CellStore', () => {
     expect(store.cycleGroupIds[1]).toBe(-1)
   })
 
+  it('allocates dense row-major cells with repeated physical column coordinates', () => {
+    const store = new CellStore(1)
+
+    const first = store.allocateDenseRowMajorAtReserved(3, 4, 3, 30, 4)
+
+    expect(first).toBe(0)
+    expect(store.size).toBe(12)
+    expect(Array.from(store.sheetIds.slice(0, 12))).toEqual(Array(12).fill(3))
+    expect(Array.from(store.rows.slice(0, 12))).toEqual([4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6])
+    expect(Array.from(store.cols.slice(0, 12))).toEqual([30, 31, 32, 33, 30, 31, 32, 33, 30, 31, 32, 33])
+    expect(Array.from(store.tags.slice(0, 12))).toEqual(Array(12).fill(ValueTag.Empty))
+    expect(Array.from(store.errors.slice(0, 12))).toEqual(Array(12).fill(ErrorCode.None))
+    expect(Array.from(store.flags.slice(0, 12))).toEqual(Array(12).fill(CellFlags.Materialized))
+  })
+
   it('roundtrips values and reset clears all runtime arrays', () => {
     const store = new CellStore(2)
     const numberIndex = store.allocate(1, 0, 0)
