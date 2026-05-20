@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.38.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.37.2
+- Manual override: no
+
+## Features
+- feat(runtime): add scoped Bilig npm packages (b2b1a825)
+
+## Fixes
+- perf(core): chunk initial direct scalar runs (5cef046e)
+
 ## 0.37.2
 
 - Release type: patch
