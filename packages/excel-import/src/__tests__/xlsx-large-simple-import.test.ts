@@ -182,6 +182,29 @@ describe('large simple XLSX import fast path', () => {
     ).toThrow(XlsxImportSizeLimitExceededError)
   })
 
+  it('retries data-only large workbook import before SheetJS fallback when metadata preservation rejects', () => {
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1:A1"/>',
+        '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>',
+        '<hyperlinks><hyperlink ref="A1:A2000" location="Target"/></hyperlinks>',
+        '</worksheet>',
+      ].join(''),
+      extraEntries: {
+        'docProps/padding.bin': deterministicBytes(1_200_000),
+      },
+    })
+
+    const imported = importXlsx(bytes, 'data-only-retry.xlsx')
+
+    expect(imported.stats?.phaseTelemetry.map((entry) => entry.phase)).toContain('public-snapshot-materialization')
+    expect(imported.snapshot.sheets[0]?.cells).toEqual([{ address: 'A1', value: 1 }])
+    expect(imported.snapshot.sheets[0]?.metadata?.hyperlinks).toBeUndefined()
+  })
+
   it('falls back when shared string cells reference a missing sharedStrings part', () => {
     const bytes = buildLargeSimpleWorkbook({
       includeSharedStrings: false,

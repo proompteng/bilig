@@ -81,6 +81,14 @@ import {
   workbookDefinedNamesReferenceExternalWorkbook,
 } from './xlsx-import-warnings.js'
 import { compareCellAddresses, readImportedLiteralCellValue, readImportedNumberFormat } from './xlsx-import-cell-values.js'
+import {
+  assertXlsxInspectionWithinMaterializationLimits,
+  denseSheetJsByteThreshold,
+  largeCalcChainStreamingFormulaThreshold,
+  resolveXlsxImportLimits,
+  shouldRetryDataOnlyLargeSimpleImport,
+  type XlsxImportOptions,
+} from './xlsx-import-limits.js'
 import { tryInspectLargeSimpleXlsxHeadless, type LargeSimpleXlsxHeadlessInspectResult } from './xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from './xlsx-large-simple-import.js'
 import { shouldBypassLargeSimpleByteThresholdForPackageArtifacts } from './xlsx-large-simple-package-artifact-threshold.js'
@@ -110,9 +118,11 @@ export {
   volatileFormulasWarning,
 } from './xlsx-import-warnings.js'
 export { readImportedXlsxCellStyle } from './xlsx-import-cell-styles.js'
+export { XlsxImportSizeLimitExceededError } from './xlsx-import-limits.js'
 export type { ImportedWorkbookSheetPreview } from './workbook-import-helpers.js'
 export type { ImportedWorkbookPreview } from './workbook-import-preview.js'
 export type { ImportedWorkbook } from './workbook-import-result.js'
+export type { XlsxImportLimits, XlsxImportOptions } from './xlsx-import-limits.js'
 export {
   CSV_CONTENT_TYPE,
   EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES,
@@ -126,51 +136,16 @@ export {
 export type { ExcelWorkbookImportContentType, WorkbookImportContentType } from './workbook-import-content-types.js'
 
 const largeWorkbookStyleCandidateThreshold = 100_000
-const denseSheetJsByteThreshold = 1_000_000
 const largeCalcChainStreamingByteThreshold = 5_000_000
-const largeCalcChainStreamingFormulaThreshold = 50_000
 const sheetJsBlankStyleStripMinCellCount = 1_000
 const denseSheetJsMaxColumnCount = 128
 
 export type CsvImportOptions = CsvParseOptions
 export type XlsxHeadlessInspectResult = LargeSimpleXlsxHeadlessInspectResult
 
-export interface XlsxImportLimits {
-  maxMaterializedCells?: number
-  maxMaterializedFormulaCells?: number
-}
-
-export interface XlsxImportOptions {
-  limits?: XlsxImportLimits | false
-}
-
 export interface WorkbookImportFileOptions {
   csv?: CsvImportOptions
   xlsx?: XlsxImportOptions
-}
-
-export class XlsxImportSizeLimitExceededError extends Error {
-  readonly limits: Required<XlsxImportLimits>
-  readonly stats: LargeSimpleXlsxHeadlessInspectResult['stats']
-  readonly reason: 'cell-count' | 'formula-cell-count'
-
-  constructor(args: {
-    reason: 'cell-count' | 'formula-cell-count'
-    limits: Required<XlsxImportLimits>
-    stats: LargeSimpleXlsxHeadlessInspectResult['stats']
-  }) {
-    const observed = args.reason === 'cell-count' ? args.stats.cellCount : args.stats.formulaCellCount
-    const limit = args.reason === 'cell-count' ? args.limits.maxMaterializedCells : args.limits.maxMaterializedFormulaCells
-    super(
-      `XLSX import exceeds the materialized ${args.reason === 'cell-count' ? 'cell' : 'formula cell'} limit ` +
-        `(${observed.toLocaleString('en-US')} > ${limit.toLocaleString('en-US')}). ` +
-        'Use inspectXlsx() for bounded metadata, raise importXlsx limits explicitly, or split the workbook before materializing it.',
-    )
-    this.name = 'XlsxImportSizeLimitExceededError'
-    this.reason = args.reason
-    this.limits = args.limits
-    this.stats = args.stats
-  }
 }
 
 export class InvalidXlsxZipContainerError extends Error {
@@ -285,31 +260,6 @@ function readValidXlsxZipContainer(bytes: Uint8Array, mode: 'eager' | 'lazy' = '
   }
 }
 
-function resolveXlsxImportLimits(options: XlsxImportOptions): Required<XlsxImportLimits> | null {
-  if (options.limits === false || options.limits === undefined) {
-    return null
-  }
-  return {
-    maxMaterializedCells: options.limits.maxMaterializedCells ?? Number.POSITIVE_INFINITY,
-    maxMaterializedFormulaCells: options.limits.maxMaterializedFormulaCells ?? Number.POSITIVE_INFINITY,
-  }
-}
-
-function assertXlsxInspectionWithinMaterializationLimits(
-  inspection: LargeSimpleXlsxHeadlessInspectResult | null,
-  limits: Required<XlsxImportLimits> | null,
-): void {
-  if (!inspection || !limits) {
-    return
-  }
-  if (inspection.stats.cellCount > limits.maxMaterializedCells) {
-    throw new XlsxImportSizeLimitExceededError({ reason: 'cell-count', limits, stats: inspection.stats })
-  }
-  if (inspection.stats.formulaCellCount > limits.maxMaterializedFormulaCells) {
-    throw new XlsxImportSizeLimitExceededError({ reason: 'formula-cell-count', limits, stats: inspection.stats })
-  }
-}
-
 function inspectLargeSimpleXlsxSource(
   data: Uint8Array,
   fileName: string,
@@ -321,6 +271,17 @@ function inspectLargeSimpleXlsxSource(
     ...(options.minByteLength !== undefined ? { minByteLength: options.minByteLength } : {}),
     releaseZipSource: true,
   })
+}
+
+function hasFullImporterOnlyPackageMetadata(workbookZip: Unzipped): boolean {
+  return Object.keys(workbookZip).some(
+    (path) =>
+      path === 'docProps/custom.xml' ||
+      path.startsWith('xl/comments') ||
+      path.startsWith('xl/threadedComments/') ||
+      path.endsWith('.vml') ||
+      path.includes('/printerSettings/'),
+  )
 }
 
 function importSheetJsWorkbook(
@@ -891,7 +852,8 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string, op
   const inspectionOptions = options.limits ? { minByteLength: 0 } : undefined
   const workbookZip = readValidXlsxZipContainer(ownedSource.bytes, 'lazy')
   const hasCalcChain = Object.hasOwn(workbookZip, 'xl/calcChain.xml')
-  const bypassLargeSimpleByteThreshold = shouldBypassLargeSimpleByteThresholdForPackageArtifacts(workbookZip)
+  const bypassLargeSimpleByteThreshold =
+    shouldBypassLargeSimpleByteThresholdForPackageArtifacts(workbookZip) && !hasFullImporterOnlyPackageMetadata(workbookZip)
   const inspection =
     limits || (hasCalcChain && sourceByteLength >= denseSheetJsByteThreshold)
       ? inspectLargeSimpleXlsxSource(ownedSource.bytes, fileName, inspectionOptions)
@@ -900,21 +862,40 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string, op
   const hasLargeCalcChainFormulaSet = hasCalcChain && (inspection?.stats.formulaCellCount ?? 0) >= largeCalcChainStreamingFormulaThreshold
   const allowCachedUnsupportedFormulaText =
     hasCalcChain && (sourceByteLength >= largeCalcChainStreamingByteThreshold || hasLargeCalcChainFormulaSet)
-  const largeSimpleImport =
-    hasCalcChain &&
-    sourceByteLength < largeCalcChainStreamingByteThreshold &&
-    !hasLargeCalcChainFormulaSet &&
-    !bypassLargeSimpleByteThreshold
-      ? null
-      : tryImportLargeSimpleXlsx({ byteLength: sourceByteLength }, fileName, workbookZip, {
-          ...(options.limits || bypassLargeSimpleByteThreshold ? { minByteLength: 0 } : {}),
-          allowUnsupportedFormulaText: allowCachedUnsupportedFormulaText,
-          allowUnsupportedCellMetadata: allowCachedUnsupportedFormulaText,
-          releaseArenaAfterMaterialization: true,
-          releaseZipSource: true,
-          maxMaterializedLazyPackageArtifactBytes: 8 * 1024 * 1024,
-          releaseOwnedSourceBytes: () => releaseOwnedXlsxSourceBytes(ownedSource, (releasedBytes) => (bytes = releasedBytes)),
-        })
+  const shouldTryLargeSimpleImport =
+    !hasCalcChain ||
+    sourceByteLength >= largeCalcChainStreamingByteThreshold ||
+    hasLargeCalcChainFormulaSet ||
+    bypassLargeSimpleByteThreshold
+  const releaseOwnedSourceBytesForMaterializedPackageArtifacts =
+    bypassLargeSimpleByteThreshold && sourceByteLength < denseSheetJsByteThreshold
+      ? () => releaseOwnedXlsxSourceBytes(ownedSource, (releasedBytes) => (bytes = releasedBytes))
+      : undefined
+  const largeSimpleImportOptions = {
+    ...(options.limits || bypassLargeSimpleByteThreshold ? { minByteLength: 0 } : {}),
+    allowUnsupportedFormulaText: allowCachedUnsupportedFormulaText,
+    allowUnsupportedCellMetadata: allowCachedUnsupportedFormulaText,
+    releaseArenaAfterMaterialization: true,
+    releaseZipSource: true,
+    maxMaterializedLazyPackageArtifactBytes: 8 * 1024 * 1024,
+    ...(releaseOwnedSourceBytesForMaterializedPackageArtifacts
+      ? { releaseOwnedSourceBytes: releaseOwnedSourceBytesForMaterializedPackageArtifacts }
+      : {}),
+  }
+  let largeSimpleImport = shouldTryLargeSimpleImport
+    ? tryImportLargeSimpleXlsx({ byteLength: sourceByteLength }, fileName, workbookZip, largeSimpleImportOptions)
+    : null
+  if (!largeSimpleImport && shouldRetryDataOnlyLargeSimpleImport(inspection, sourceByteLength, allowCachedUnsupportedFormulaText)) {
+    largeSimpleImport = tryImportLargeSimpleXlsx(
+      { byteLength: sourceByteLength },
+      fileName,
+      readValidXlsxZipContainer(ownedSource.bytes, 'lazy'),
+      {
+        ...largeSimpleImportOptions,
+        materializeMetadata: false,
+      },
+    )
+  }
   if (largeSimpleImport) {
     if (ownedSource.bytes.byteLength > 0) attachImportedXlsxSourceBytes(largeSimpleImport.snapshot, ownedSource.bytes)
     return largeSimpleImport

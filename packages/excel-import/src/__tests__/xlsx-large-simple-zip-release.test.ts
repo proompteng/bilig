@@ -83,7 +83,7 @@ describe('large simple XLSX import ZIP ownership', () => {
     expect(ownedBytes.byteLength).toBe(0)
   })
 
-  it('releases public import source bytes instead of attaching an untouched export copy', () => {
+  it('retains public import source bytes for unchanged export fast path', () => {
     const bytes = buildSharedStringWorkbook({
       'customXml/item1.xml': strToU8('<root><value>preserved data model artifact</value></root>'),
       'docProps/padding.bin': deterministicBytes(1_200_000),
@@ -100,11 +100,11 @@ describe('large simple XLSX import ZIP ownership', () => {
     ])
     expect(releasePhase).toMatchObject({
       zipSourceBytesAfterRelease: 0,
-      ownedSourceBytesAfterRelease: 0,
     })
-    expect(releasePhase?.ownedSourceBytesBeforeRelease).toBeGreaterThan(1_000_000)
+    expect(releasePhase?.ownedSourceBytesBeforeRelease).toBeUndefined()
     expect(imported.snapshot.workbook.metadata?.dataModelArtifacts?.parts[0]?.dataBase64).toBeTruthy()
-    expect(unzipSync(exported)['docProps/padding.bin']).toBeUndefined()
+    expect(exported).toStrictEqual(bytes)
+    expect(unzipSync(exported)['docProps/padding.bin']).toBeDefined()
     expect(unzipSync(exported)['customXml/item1.xml']).toBeDefined()
     expect(roundTripped.snapshot.sheets[0]?.cells.map(({ address, value }) => ({ address, value }))).toEqual(
       imported.snapshot.sheets[0]?.cells.map(({ address, value }) => ({ address, value })),

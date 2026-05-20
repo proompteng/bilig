@@ -1,13 +1,19 @@
 import type { ImportedWorkbook } from './workbook-import-result.js'
-import { importXlsx, XlsxImportSizeLimitExceededError, type XlsxImportLimits, type XlsxImportOptions } from './index.js'
+import { importXlsx } from './index.js'
+import {
+  assertXlsxInspectionWithinMaterializationLimits,
+  denseSheetJsByteThreshold,
+  largeCalcChainStreamingFormulaThreshold,
+  resolveXlsxImportLimits,
+  shouldRetryDataOnlyLargeSimpleImport,
+  type XlsxImportOptions,
+} from './xlsx-import-limits.js'
 import { tryInspectLargeSimpleXlsxHeadless } from './xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from './xlsx-large-simple-import.js'
 import { attachImportedXlsxSourceReader } from './xlsx-source-bytes.js'
 import { readXlsxZipEntriesLazyFromByteSource, type XlsxZipByteSource } from './xlsx-zip.js'
 
-const denseSheetJsByteThreshold = 1_000_000
 const largeCalcChainStreamingByteThreshold = 5_000_000
-const largeCalcChainStreamingFormulaThreshold = 50_000
 
 export function importXlsxFromZipByteSource(
   source: XlsxZipByteSource,
@@ -30,15 +36,26 @@ export function importXlsxFromZipByteSource(
     hasCalcChain && (source.byteLength >= largeCalcChainStreamingByteThreshold || hasLargeCalcChainFormulaSet)
   const shouldTryLargeSimpleImport =
     !hasCalcChain || source.byteLength >= largeCalcChainStreamingByteThreshold || hasLargeCalcChainFormulaSet
-  const largeSimpleImport = !shouldTryLargeSimpleImport
+  const largeSimpleImportOptions = {
+    ...(options.limits ? { minByteLength: 0 } : {}),
+    allowUnsupportedFormulaText: allowCachedUnsupportedFormulaText,
+    allowUnsupportedCellMetadata: allowCachedUnsupportedFormulaText,
+    releaseArenaAfterMaterialization: true,
+    releaseZipSource: true,
+    maxMaterializedLazyPackageArtifactBytes: 8 * 1024 * 1024,
+  }
+  let largeSimpleImport = !shouldTryLargeSimpleImport
     ? null
-    : tryImportLargeSimpleXlsx({ byteLength: source.byteLength }, fileName, workbookZip, {
-        ...(options.limits ? { minByteLength: 0 } : {}),
-        allowUnsupportedFormulaText: allowCachedUnsupportedFormulaText,
-        allowUnsupportedCellMetadata: allowCachedUnsupportedFormulaText,
-        releaseArenaAfterMaterialization: true,
-        releaseZipSource: true,
-      })
+    : tryImportLargeSimpleXlsx({ byteLength: source.byteLength }, fileName, workbookZip, largeSimpleImportOptions)
+  if (!largeSimpleImport && shouldRetryDataOnlyLargeSimpleImport(inspection, source.byteLength, allowCachedUnsupportedFormulaText)) {
+    const retryZip = readXlsxZipEntriesLazyFromByteSource(borrowXlsxZipByteSource(source))
+    largeSimpleImport = retryZip
+      ? tryImportLargeSimpleXlsx({ byteLength: source.byteLength }, fileName, retryZip, {
+          ...largeSimpleImportOptions,
+          materializeMetadata: false,
+        })
+      : null
+  }
   if (largeSimpleImport) {
     attachImportedXlsxSourceReader(largeSimpleImport.snapshot, {
       byteLength: source.byteLength,
@@ -62,31 +79,6 @@ function inspectLargeSimpleXlsxSource(
         releaseZipSource: true,
       })
     : null
-}
-
-function resolveXlsxImportLimits(options: XlsxImportOptions): Required<XlsxImportLimits> | null {
-  if (options.limits === false || options.limits === undefined) {
-    return null
-  }
-  return {
-    maxMaterializedCells: options.limits.maxMaterializedCells ?? Number.POSITIVE_INFINITY,
-    maxMaterializedFormulaCells: options.limits.maxMaterializedFormulaCells ?? Number.POSITIVE_INFINITY,
-  }
-}
-
-function assertXlsxInspectionWithinMaterializationLimits(
-  inspection: ReturnType<typeof tryInspectLargeSimpleXlsxHeadless>,
-  limits: Required<XlsxImportLimits> | null,
-): void {
-  if (!inspection || !limits) {
-    return
-  }
-  if (inspection.stats.cellCount > limits.maxMaterializedCells) {
-    throw new XlsxImportSizeLimitExceededError({ reason: 'cell-count', limits, stats: inspection.stats })
-  }
-  if (inspection.stats.formulaCellCount > limits.maxMaterializedFormulaCells) {
-    throw new XlsxImportSizeLimitExceededError({ reason: 'formula-cell-count', limits, stats: inspection.stats })
-  }
 }
 
 function readAllSourceBytes(source: XlsxZipByteSource): Uint8Array {
