@@ -665,7 +665,18 @@ function buildParsedWorksheet(
     ...(input.printPageSetup ? { printPageSetup: input.printPageSetup } : {}),
     ...(cellScan.richTextCells.length > 0 ? { richTextArtifacts: { cells: cellScan.richTextCells } } : {}),
   }
+  const preview = createSheetPreview({
+    name: sheetName,
+    rowCount: cellScan.rowCount,
+    columnCount: cellScan.columnCount,
+    nonEmptyCellCount: cellScan.cellCount,
+    readCellText: (row, column) => cellScan.arena.readPreviewText(row, column),
+  })
   const cells = options.materializeCells ? cellScan.arena.materializeSheetCells(cellScan.sheetIndex) : []
+  if (options.releaseArenaAfterMaterialization === true) {
+    cellScan.arena.release()
+    cellScan.styleIndexes.release()
+  }
   const sheet: WorkbookSnapshot['sheets'][number] = {
     id: order + 1,
     name: sheetName,
@@ -673,15 +684,9 @@ function buildParsedWorksheet(
     ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     cells,
   }
-  const parsed: ParsedWorksheet = {
+  return {
     sheet,
-    preview: createSheetPreview({
-      name: sheetName,
-      rowCount: cellScan.rowCount,
-      columnCount: cellScan.columnCount,
-      nonEmptyCellCount: cellScan.cellCount,
-      readCellText: (row, column) => cellScan.arena.readPreviewText(row, column),
-    }),
+    preview,
     stats: {
       cellCount: cellScan.cellCount,
       formulaCellCount: cellScan.formulaCellCount,
@@ -699,11 +704,6 @@ function buildParsedWorksheet(
       },
     },
   }
-  if (options.releaseArenaAfterMaterialization === true) {
-    cellScan.arena.release()
-    cellScan.styleIndexes.release()
-  }
-  return parsed
 }
 
 function drawingRelationshipIdForScannedWorksheet(scanned: ScannedWorksheet): string | undefined {

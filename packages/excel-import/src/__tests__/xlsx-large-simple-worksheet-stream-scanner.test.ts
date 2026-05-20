@@ -88,6 +88,16 @@ describe('large simple worksheet stream scanners', () => {
     ])
   })
 
+  it('reserves materialized arena capacity from bounded dense worksheet dimensions', () => {
+    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(denseDimensionWorksheetXml()), 0, {
+      hasSharedStrings: false,
+    })
+
+    expect(scan?.cellScan.cellCount).toBe(10_000)
+    expect(scan?.cellScan.arena.allocatedCellCapacity).toBe(10_000)
+    expect(scan?.cellScan.arena.materializeSheetCells(0).at(-1)).toEqual({ address: 'J1000', value: 10_000 })
+  })
+
   it('streams large split merge metadata in materialized scans without retaining metadata bodies', () => {
     const retainedBufferLengths: number[] = []
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitLargeMergeCellsWorksheetXml(), 0, {
@@ -310,6 +320,24 @@ function headlessMetadataWorksheetXml(): string {
     '</conditionalFormatting>',
     '<mergeCells count="2"><mergeCell ref="A1:B1"/><mergeCell ref="A2:B2"/></mergeCells>',
     '<tableParts count="2"><tablePart r:id="rIdTable1"/><tablePart r:id="rIdTable2"/></tableParts>',
+    '</worksheet>',
+  ].join('')
+}
+
+function denseDimensionWorksheetXml(): string {
+  const rows: string[] = []
+  for (let row = 1; row <= 1_000; row += 1) {
+    const cells: string[] = []
+    for (let column = 0; column < 10; column += 1) {
+      const address = `${String.fromCharCode(65 + column)}${String(row)}`
+      cells.push(`<c r="${address}"><v>${String((row - 1) * 10 + column + 1)}</v></c>`)
+    }
+    rows.push(`<row r="${String(row)}">${cells.join('')}</row>`)
+  }
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1:J1000"/>',
+    `<sheetData>${rows.join('')}</sheetData>`,
     '</worksheet>',
   ].join('')
 }

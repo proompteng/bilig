@@ -4,6 +4,7 @@ import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-st
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 
 const initialCellCapacity = 1024
+const maxDoublingCapacity = 65_536
 const noPoolId = 0xffffffff
 const valueKindEmpty = 0
 const valueKindNumber = 1
@@ -54,6 +55,10 @@ export class ImportedWorksheetStyleIndexArena {
     return this.length
   }
 
+  get allocatedCapacity(): number {
+    return this.rows.length
+  }
+
   add(row: number, column: number, styleIndex: number): void {
     this.ensureCapacity(this.length + 1)
     const index = this.length
@@ -86,10 +91,7 @@ export class ImportedWorksheetStyleIndexArena {
     if (nextLength <= this.rows.length) {
       return
     }
-    let nextCapacity = this.rows.length
-    while (nextCapacity < nextLength) {
-      nextCapacity *= 2
-    }
+    const nextCapacity = nextTypedArrayCapacity(this.rows.length, nextLength, initialStyleIndexCapacity)
     this.rows = growUint32Array(this.rows, nextCapacity)
     this.columns = growUint16Array(this.columns, nextCapacity)
     this.styleIndexes = growUint32Array(this.styleIndexes, nextCapacity)
@@ -125,6 +127,10 @@ export class ImportedWorkbookArena {
     return this.sharedStringReferenceCount
   }
 
+  get allocatedCellCapacity(): number {
+    return this.rows.length
+  }
+
   addCell(input: ImportedWorksheetArenaCellInput): number {
     this.ensureCapacity(this.length + 1)
     const index = this.appendCell(input.sheetIndex, input.row, input.column)
@@ -136,6 +142,14 @@ export class ImportedWorkbookArena {
       }
     }
     return index
+  }
+
+  reserveCellCapacity(capacity: number): void {
+    const nextCapacity = Math.max(this.length, Math.floor(capacity))
+    if (nextCapacity <= this.rows.length) {
+      return
+    }
+    this.resizeCellStorage(nextCapacity)
   }
 
   addSharedStringCell(input: ImportedWorksheetArenaSharedStringCellInput): number {
@@ -451,10 +465,11 @@ export class ImportedWorkbookArena {
     if (nextLength <= this.rows.length) {
       return
     }
-    let nextCapacity = this.rows.length
-    while (nextCapacity < nextLength) {
-      nextCapacity *= 2
-    }
+    const nextCapacity = nextTypedArrayCapacity(this.rows.length, nextLength, initialCellCapacity)
+    this.resizeCellStorage(nextCapacity)
+  }
+
+  private resizeCellStorage(nextCapacity: number): void {
     if (this.sheetIndexes) {
       this.sheetIndexes = growUint32Array(this.sheetIndexes, nextCapacity)
     }
@@ -503,6 +518,18 @@ function filledUint32Array(length: number, value: number): Uint32Array<ArrayBuff
   const output = new Uint32Array(length)
   output.fill(value)
   return output
+}
+
+function nextTypedArrayCapacity(currentCapacity: number, nextLength: number, minimumCapacity: number): number {
+  let nextCapacity = Math.max(currentCapacity, minimumCapacity, 1)
+  while (nextCapacity < nextLength) {
+    if (nextCapacity < maxDoublingCapacity) {
+      nextCapacity *= 2
+    } else {
+      nextCapacity += Math.max(1, Math.ceil(nextCapacity / 4))
+    }
+  }
+  return nextCapacity
 }
 
 function growUint8Array(source: Uint8Array<ArrayBuffer>, nextCapacity: number): Uint8Array<ArrayBuffer> {

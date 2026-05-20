@@ -60,6 +60,7 @@ const greaterThan = 62
 const doubleQuote = 34
 const singleQuote = 39
 const emptyBytes = new Uint8Array(0)
+const maxDimensionArenaReserveCellCount = 1_000_000
 type StreamedMetadataElement = 'mergeCells' | 'tableParts'
 
 export interface LargeSimpleWorksheetStreamScan {
@@ -354,6 +355,10 @@ class LargeSimpleWorksheetChunkScanner {
     }
     this.rowCount = Math.max(this.rowCount, start.row + 1, end.row + 1)
     this.columnCount = Math.max(this.columnCount, start.column + 1, end.column + 1)
+    const dimensionCellCount = (end.row - start.row + 1) * (end.column - start.column + 1)
+    if (this.retainCells && dimensionCellCount > 0 && dimensionCellCount <= maxDimensionArenaReserveCellCount) {
+      this.arena.reserveCellCapacity(dimensionCellCount)
+    }
   }
 
   private collectRowMetadata(nameEnd: number, tagEnd: number): void {

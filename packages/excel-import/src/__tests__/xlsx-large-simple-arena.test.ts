@@ -94,6 +94,24 @@ describe('large simple XLSX import arena', () => {
     expect(arena.snapshot().formulaIds).toEqual(new Uint32Array([0, 0xffffffff, 0xffffffff]))
   })
 
+  it('keeps large arena typed-array capacity close to live cell count', () => {
+    const arena = new ImportedWorkbookArena()
+    const styleIndexes = new ImportedWorksheetStyleIndexArena()
+    const cellCount = 100_000
+
+    for (let row = 0; row < cellCount; row += 1) {
+      arena.addCell({ sheetIndex: 0, row, column: 0, value: row })
+      styleIndexes.add(row, 0, 1)
+    }
+
+    expect(arena.cellCount).toBe(cellCount)
+    expect(styleIndexes.count).toBe(cellCount)
+    expect(arena.allocatedCellCapacity).toBeLessThanOrEqual(Math.ceil(cellCount * 1.25))
+    expect(styleIndexes.allocatedCapacity).toBeLessThanOrEqual(Math.ceil(cellCount * 1.25))
+    expect(arena.allocatedCellCapacity).toBeLessThan(131_072)
+    expect(styleIndexes.allocatedCapacity).toBeLessThan(131_072)
+  })
+
   it('tracks shared-string references so non-shared sheets skip resolution work', () => {
     const numericOnlyArena = new ImportedWorkbookArena()
     numericOnlyArena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })
