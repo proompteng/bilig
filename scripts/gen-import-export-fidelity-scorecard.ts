@@ -18,6 +18,12 @@ import {
 } from './import-export-external-sheets-excel-comparison.ts'
 import { projectSupportedSnapshotSemantics } from './import-export-fidelity-projection.ts'
 import { parseImportExportFidelityScorecard, validateImportExportFidelityScorecard } from './import-export-fidelity-scorecard-validation.ts'
+import {
+  buildImportExportSemanticLedger,
+  importExportDeclinedRuntimeFeatures,
+  importExportUnsupportedFeatures,
+  type ImportExportSemanticLedgerEntry,
+} from './import-export-semantic-loss-ledger.ts'
 import { formatJsonForRepo } from './scorecard-format.ts'
 
 export { parseImportExportFidelityScorecard, validateImportExportFidelityScorecard }
@@ -54,6 +60,7 @@ export interface ImportExportFidelityScorecard {
     readonly externalGoogleSheetsEvidence: 'official-docs-comparison-artifact'
     readonly externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact'
   }
+  readonly semanticLedger: ImportExportSemanticLedgerEntry[]
   readonly cases: ImportExportFidelityCase[]
 }
 
@@ -102,8 +109,8 @@ const coveredFeatureOrder = [
   'xlsx.runtimeFeaturePolicyWarnings',
   ...externalImportExportComparisonCoveredFeatures,
 ] as const
-const unsupportedFeatures: readonly string[] = []
-const declinedRuntimeFeatures = ['xlsx.macros.execution'] as const
+const unsupportedFeatureDisclosures = importExportUnsupportedFeatures()
+const declinedRuntimeFeatureDisclosures = importExportDeclinedRuntimeFeatures()
 
 async function main(): Promise<void> {
   const isCheckMode = process.argv.includes('--check')
@@ -148,6 +155,7 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
   ]
   const coveredFeatureSet = new Set(cases.flatMap((entry) => entry.coveredFeatures))
   const coveredFeatures = coveredFeatureOrder.filter((feature) => coveredFeatureSet.has(feature))
+  const semanticLedger = buildImportExportSemanticLedger(coveredFeatures)
 
   return {
     schemaVersion: 1,
@@ -176,11 +184,12 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
         scorecardCase(cases, 'xlsx-snapshot-roundtrip-charts').passed &&
         scorecardCase(cases, 'xlsx-snapshot-roundtrip-pivots').passed,
       coveredFeatures,
-      unsupportedFeatures: [...unsupportedFeatures],
-      declinedRuntimeFeatures: [...declinedRuntimeFeatures],
+      unsupportedFeatures: [...importExportUnsupportedFeatures(semanticLedger)],
+      declinedRuntimeFeatures: [...importExportDeclinedRuntimeFeatures(semanticLedger)],
       externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
       externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
     },
+    semanticLedger: [...semanticLedger],
     cases,
   }
 }
@@ -644,8 +653,8 @@ function runXlsxRuntimeFeaturePolicyWarningCase(): ImportExportFidelityCase {
     direction: 'export-import',
     passed:
       JSON.stringify(imported.warnings) === JSON.stringify(expectedWarnings) &&
-      declinedRuntimeFeatures.length > 0 &&
-      unsupportedFeatures.length === 0,
+      declinedRuntimeFeatureDisclosures.length > 0 &&
+      unsupportedFeatureDisclosures.length === 0,
     coveredFeatures: ['xlsx.runtimeFeaturePolicyWarnings'],
     evidence:
       'Scorecard separates import/export compatibility from unsafe runtime execution surfaces: preserved manual calculation metadata emits the expected stale-cache warning, while native macro execution is disclosed as a declined runtime feature.',

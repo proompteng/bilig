@@ -111,6 +111,31 @@ describe('import/export fidelity scorecard', () => {
     ])
     expect(scorecard.summary.unsupportedFeatures).toEqual([])
     expect(scorecard.summary.declinedRuntimeFeatures).toEqual(['xlsx.macros.execution'])
+    expect(scorecard.semanticLedger).toContainEqual({
+      feature: 'xlsx.macros.execution',
+      disposition: 'declined-runtime',
+      reason: 'Bilig preserves macro payload metadata but intentionally never executes workbook macros.',
+    })
+    expect(scorecard.semanticLedger).toContainEqual({
+      feature: 'external.sheetsExcelImportExportComparison',
+      disposition: 'external',
+      reason: 'Tracked by the official Google Sheets and Microsoft Excel import/export comparison artifact.',
+    })
+    expect(scorecard.semanticLedger).toContainEqual({
+      feature: 'xlsx.values',
+      disposition: 'preserved',
+      reason: 'Preserved by required import/export fidelity case evidence.',
+    })
+  })
+
+  it('keeps unsupported and declined import/export semantics explicit', async () => {
+    const scorecard = await buildImportExportFidelityScorecard('test-generated')
+
+    expect(scorecard.summary.unsupportedFeatures).toEqual([])
+    expect(scorecard.summary.declinedRuntimeFeatures).toEqual(['xlsx.macros.execution'])
+    expect(new Set(scorecard.semanticLedger.map((entry) => entry.disposition))).toEqual(
+      new Set(['preserved', 'external', 'declined-runtime']),
+    )
   })
 
   it('rejects stale artifacts missing required fidelity cases', async () => {

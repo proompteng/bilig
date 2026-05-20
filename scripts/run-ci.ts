@@ -400,6 +400,7 @@ const generatedSourceChecks: readonly CiTask[] = [
   bunScript('agent discovery docs check', 'scripts/sync-agent-discovery-docs.ts', '--check'),
   tsxScript('docs discovery check', 'scripts/check-docs-discovery.ts'),
 ]
+const semanticFastGate = pnpm('semantic correctness fast gate', 'test:semantic:fast')
 
 try {
   assertLocalCiResourceGuardAllowsRun(rootDir)
@@ -423,6 +424,7 @@ try {
 
   // Keep generated-source checks serialized; later checks read artifacts validated by earlier ones.
   allCompleted.push(...(await runSequential('generated-source checks', generatedSourceChecks)))
+  allCompleted.push(...(await runSequential('semantic correctness checks', [semanticFastGate])))
 
   allCompleted.push(
     ...(await runSequential('static direct checks', [

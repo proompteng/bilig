@@ -1,4 +1,11 @@
 import type { ImportExportFidelityCase, ImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
+import {
+  buildImportExportSemanticLedger,
+  importExportDeclinedRuntimeFeatures,
+  importExportUnsupportedFeatures,
+  type ImportExportSemanticDisposition,
+  type ImportExportSemanticLedgerEntry,
+} from './import-export-semantic-loss-ledger.ts'
 
 const requiredCaseIds = [
   'csv-import-preview',
@@ -22,9 +29,6 @@ const requiredCaseIds = [
   'xlsx-runtime-feature-policy-warning',
   'external-sheets-excel-import-export-comparison',
 ] as const
-
-const unsupportedFeatures: readonly string[] = []
-const declinedRuntimeFeatures = ['xlsx.macros.execution'] as const
 
 export function parseImportExportFidelityScorecard(value: unknown): ImportExportFidelityScorecard {
   const record = toRecord(value, 'import/export fidelity scorecard')
@@ -62,6 +66,7 @@ export function parseImportExportFidelityScorecard(value: unknown): ImportExport
       externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'official-docs-comparison-artifact'),
       externalMicrosoftExcelEvidence: literalField(summary, 'externalMicrosoftExcelEvidence', 'official-docs-comparison-artifact'),
     },
+    semanticLedger: arrayField(record, 'semanticLedger', 'import/export fidelity semanticLedger').map(parseSemanticLedgerEntry),
     cases: arrayField(record, 'cases', 'import/export fidelity cases').map(parseImportExportFidelityCase),
   }
 }
@@ -86,6 +91,8 @@ export function validateImportExportFidelityScorecard(scorecard: ImportExportFid
     throw new Error('Import/export fidelity scorecard summary is missing required CSV/XLSX pass coverage')
   }
   validateSummaryCoveredFeatures(scorecard)
+  validateSemanticLedger(scorecard)
+  const unsupportedFeatures = importExportUnsupportedFeatures(scorecard.semanticLedger)
   for (const feature of unsupportedFeatures) {
     if (!scorecard.summary.unsupportedFeatures.includes(feature)) {
       throw new Error(`Import/export fidelity scorecard is missing unsupported feature disclosure: ${feature}`)
@@ -94,9 +101,23 @@ export function validateImportExportFidelityScorecard(scorecard: ImportExportFid
   if (scorecard.summary.unsupportedFeatures.length !== unsupportedFeatures.length) {
     throw new Error('Import/export fidelity scorecard reports unexpected unsupported import/export features')
   }
+  const declinedRuntimeFeatures = importExportDeclinedRuntimeFeatures(scorecard.semanticLedger)
   for (const feature of declinedRuntimeFeatures) {
     if (!scorecard.summary.declinedRuntimeFeatures.includes(feature)) {
       throw new Error(`Import/export fidelity scorecard is missing declined runtime feature disclosure: ${feature}`)
+    }
+  }
+}
+
+function validateSemanticLedger(scorecard: ImportExportFidelityScorecard): void {
+  const expectedLedger = buildImportExportSemanticLedger(scorecard.summary.coveredFeatures)
+  if (JSON.stringify(scorecard.semanticLedger) !== JSON.stringify(expectedLedger)) {
+    throw new Error('Import/export fidelity semantic ledger is stale against the current feature evidence')
+  }
+  const dispositions = new Set(scorecard.semanticLedger.map((entry) => entry.disposition))
+  for (const requiredDisposition of ['preserved', 'external', 'declined-runtime'] satisfies ImportExportSemanticDisposition[]) {
+    if (!dispositions.has(requiredDisposition)) {
+      throw new Error(`Import/export fidelity semantic ledger is missing ${requiredDisposition} entries`)
     }
   }
 }
@@ -136,6 +157,22 @@ function parseImportExportFidelityCase(value: unknown): ImportExportFidelityCase
     missingFeatures: stringArrayField(record, 'missingFeatures', 'import/export fidelity case missingFeatures'),
     evidence: stringField(record, 'evidence', 'import/export fidelity case evidence'),
   }
+}
+
+function parseSemanticLedgerEntry(value: unknown): ImportExportSemanticLedgerEntry {
+  const record = toRecord(value, 'import/export fidelity semantic ledger entry')
+  return {
+    feature: stringField(record, 'feature', 'import/export fidelity semantic ledger feature'),
+    disposition: parseSemanticDisposition(stringField(record, 'disposition', 'import/export fidelity semantic ledger disposition')),
+    reason: stringField(record, 'reason', 'import/export fidelity semantic ledger reason'),
+  }
+}
+
+function parseSemanticDisposition(value: string): ImportExportSemanticDisposition {
+  if (value === 'preserved' || value === 'unsupported' || value === 'external' || value === 'declined-runtime') {
+    return value
+  }
+  throw new Error(`Unexpected import/export semantic ledger disposition: ${value}`)
 }
 
 function parseFormat(value: string): ImportExportFidelityCase['format'] {

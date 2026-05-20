@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "import-export-fidelity",
-  "generatedAt": "2026-05-17T23:49:40.758Z",
+  "generatedAt": "2026-05-20T08:34:25.229Z",
   "source": {
     "artifactGenerator": "scripts/gen-import-export-fidelity-scorecard.ts",
     "implementationPackage": "packages/excel-import",
@@ -62,6 +62,223 @@
     "externalGoogleSheetsEvidence": "official-docs-comparison-artifact",
     "externalMicrosoftExcelEvidence": "official-docs-comparison-artifact"
   },
+  "semanticLedger": [
+    {
+      "feature": "csv.export",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "csv.import",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "csv.preview",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "csv.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "external.googleSheetsImportExportDocs",
+      "disposition": "external",
+      "reason": "Tracked by the official Google Sheets and Microsoft Excel import/export comparison artifact."
+    },
+    {
+      "feature": "external.microsoftExcelImportExportDocs",
+      "disposition": "external",
+      "reason": "Tracked by the official Google Sheets and Microsoft Excel import/export comparison artifact."
+    },
+    {
+      "feature": "external.sheetsExcelImportExportComparison",
+      "disposition": "external",
+      "reason": "Tracked by the official Google Sheets and Microsoft Excel import/export comparison artifact."
+    },
+    {
+      "feature": "xlsx.calculationSettings",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.calculationSettings.calcChainDiagnostics",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.charts.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.comments",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.conditionalFormats.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.dataValidations.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.definedNames",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.export",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.externalData.provenance",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.filters.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.formulaAudit.cacheStatus",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.formulaAudit.context",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.formulas",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.freezePanes.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.import",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.macros.codeNameRoundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.macros.detectedNoExecution",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.macros.execution",
+      "disposition": "declined-runtime",
+      "reason": "Bilig preserves macro payload metadata but intentionally never executes workbook macros."
+    },
+    {
+      "feature": "xlsx.macros.payloadRoundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.merges",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.multiSheet",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.numberFormats",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.pivots.cacheSemantics",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.pivots.externalCacheOnlySemantics",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.pivots.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.preview",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.protectedRanges.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.rowColumnDimensions",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.runtimeFeaturePolicyWarnings",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.sheetProtection.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.sorts.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.styles",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.tables.roundtrip",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.values",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    },
+    {
+      "feature": "xlsx.workbookProperties",
+      "disposition": "preserved",
+      "reason": "Preserved by required import/export fidelity case evidence."
+    }
+  ],
   "cases": [
     {
       "id": "csv-import-preview",

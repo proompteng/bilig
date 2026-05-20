@@ -34,6 +34,8 @@ describe('run-ci', () => {
 
     expect(source).toContain('const generatedSourceChecks: readonly CiTask[] = [')
     expect(source).toContain("await runSequential('generated-source checks', generatedSourceChecks)")
+    expect(source).toContain("const semanticFastGate = pnpm('semantic correctness fast gate', 'test:semantic:fast')")
+    expect(source).toContain("await runSequential('semantic correctness checks', [semanticFastGate])")
     expect(source).toContain("await runSequential('static package build prerequisites'")
     expect(source).toContain("bunScript('protocol check', 'scripts/gen-protocol.ts', '--check')")
     expect(source).toContain(
