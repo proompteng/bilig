@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.36.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.35.1
+- Manual override: no
+
+## Features
+- feat(recalc): add sheetjs formula recalc package (b27bbd1a)
+
+## Fixes
+- perf(core): trim formula initialization bookkeeping (3e58a650)
+
 ## 0.35.1
 
 - Release type: patch
