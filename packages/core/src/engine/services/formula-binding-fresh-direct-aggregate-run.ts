@@ -6,8 +6,8 @@ import { markFormulaCellBound } from './formula-binding-cell-flags.js'
 import { makeUnmanagedCompiledPlan } from './formula-binding-plan-helpers.js'
 import type {
   CreateEngineFormulaBindingServiceArgs,
+  FreshDirectAggregateFormulaBindingInput,
   FreshDirectAggregateFormulaBindingMember,
-  FreshDirectAggregateFormulaBindingRun,
 } from './formula-binding-service-types.js'
 import type { RuntimeDirectAggregateDescriptor, RuntimeFormula } from '../runtime-state.js'
 
@@ -22,73 +22,118 @@ export function bindFreshDirectAggregateFormulaRun(args: {
     ownerSheetName: string,
     compiled: Pick<RuntimeFormula['compiled'], 'deps' | 'parsedDeps'>,
   ) => void
-  readonly run: FreshDirectAggregateFormulaBindingRun
+  readonly run: FreshDirectAggregateFormulaBindingInput
 }): void {
+  if ('member' in args.run) {
+    assertFreshDirectAggregateFormulaCell(args.serviceArgs, args.run.cellIndex, args.run.member)
+    bindFreshDirectAggregateFormulaMember(
+      args.serviceArgs,
+      args.edgeArena,
+      args.formulaMemberCounts,
+      args.trackFormulaSheetIndexes,
+      args.run.sheetId,
+      args.run.ownerSheetName,
+      args.run.cellIndex,
+      args.run.member,
+    )
+    return
+  }
+
   if (args.run.cellIndices.length !== args.run.members.length) {
     throw new Error('Expected fresh direct aggregate formula cell index count to match member count')
   }
   for (let index = 0; index < args.run.members.length; index += 1) {
-    const member = args.run.members[index]!
-    const cellIndex = args.run.cellIndices[index]!
-    if ((args.serviceArgs.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0) {
-      throw new Error('Expected fresh direct aggregate formula cell')
-    }
-    if (
-      member.aggregateRowStart > member.aggregateRowEnd ||
-      member.aggregateColStart > member.aggregateColEnd ||
-      (member.aggregateRowStart <= member.row &&
-        member.row <= member.aggregateRowEnd &&
-        member.aggregateColStart <= member.col &&
-        member.col <= member.aggregateColEnd)
-    ) {
-      throw new Error('Expected non-recursive fresh direct aggregate formula')
-    }
+    assertFreshDirectAggregateFormulaCell(args.serviceArgs, args.run.cellIndices[index]!, args.run.members[index]!)
   }
 
   for (let index = 0; index < args.run.members.length; index += 1) {
-    const member = args.run.members[index]!
-    const cellIndex = args.run.cellIndices[index]!
-    const directAggregate = buildFreshDirectAggregateDescriptor(args.serviceArgs, args.run.ownerSheetName, member)
-    const runtimeFormula: RuntimeFormula = {
-      cellIndex,
-      formulaSlotId: 0,
-      planId: 0,
-      templateId: member.templateId,
-      source: member.source,
-      compiled: member.compiled,
-      plan: makeUnmanagedCompiledPlan(member.source, member.compiled, member.templateId),
-      dependencyIndices: EMPTY_U32,
-      dependencyEntities: args.edgeArena.empty(),
-      rangeDependencies: EMPTY_U32,
-      graphRangeDependencies: EMPTY_U32,
-      runtimeProgram: EMPTY_U32,
-      constants: member.compiled.constants,
-      structuralSourceTransform: undefined,
-      programOffset: 0,
-      programLength: 0,
-      constNumberOffset: 0,
-      constNumberLength: member.compiled.constants.length,
-      rangeListOffset: 0,
-      rangeListLength: 0,
-      directLookup: undefined,
-      directAggregate,
-      directScalar: undefined,
-      directCriteria: undefined,
-    }
-    const formulaSlotId = args.serviceArgs.state.formulas.set(cellIndex, runtimeFormula)
-    runtimeFormula.formulaSlotId = formulaSlotId
-    args.formulaMemberCounts.increment(args.run.sheetId, member.col)
-    markFormulaCellBound(args.serviceArgs.state.workbook.cellStore, cellIndex, member.compiled.mode)
-    appendDirectAggregateColumnReverseEdges(
-      args.serviceArgs.reverseState.reverseAggregateColumnEdges,
-      args.serviceArgs.state.workbook,
-      directAggregate,
-      cellIndex,
+    bindFreshDirectAggregateFormulaMember(
+      args.serviceArgs,
+      args.edgeArena,
+      args.formulaMemberCounts,
+      args.trackFormulaSheetIndexes,
+      args.run.sheetId,
+      args.run.ownerSheetName,
+      args.run.cellIndices[index]!,
+      args.run.members[index]!,
     )
-    args.trackFormulaSheetIndexes(cellIndex, args.run.ownerSheetName, member.compiled)
-    if (member.compiled.mode === FormulaMode.WasmFastPath && member.compiled.program.length > 0) {
-      args.serviceArgs.scheduleWasmProgramSync()
-    }
+  }
+}
+
+function assertFreshDirectAggregateFormulaCell(
+  serviceArgs: CreateEngineFormulaBindingServiceArgs,
+  cellIndex: number,
+  member: FreshDirectAggregateFormulaBindingMember,
+): void {
+  if ((serviceArgs.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0) {
+    throw new Error('Expected fresh direct aggregate formula cell')
+  }
+  if (
+    member.aggregateRowStart > member.aggregateRowEnd ||
+    member.aggregateColStart > member.aggregateColEnd ||
+    (member.aggregateRowStart <= member.row &&
+      member.row <= member.aggregateRowEnd &&
+      member.aggregateColStart <= member.col &&
+      member.col <= member.aggregateColEnd)
+  ) {
+    throw new Error('Expected non-recursive fresh direct aggregate formula')
+  }
+}
+
+function bindFreshDirectAggregateFormulaMember(
+  serviceArgs: CreateEngineFormulaBindingServiceArgs,
+  edgeArena: EdgeArena,
+  formulaMemberCounts: FormulaBindingMemberCounts,
+  trackFormulaSheetIndexes: (
+    cellIndex: number,
+    ownerSheetName: string,
+    compiled: Pick<RuntimeFormula['compiled'], 'deps' | 'parsedDeps'>,
+  ) => void,
+  sheetId: number,
+  ownerSheetName: string,
+  cellIndex: number,
+  member: FreshDirectAggregateFormulaBindingMember,
+): void {
+  const directAggregate = buildFreshDirectAggregateDescriptor(serviceArgs, ownerSheetName, member)
+  const runtimeFormula: RuntimeFormula = {
+    cellIndex,
+    formulaSlotId: 0,
+    planId: 0,
+    templateId: member.templateId,
+    source: member.source,
+    compiled: member.compiled,
+    plan: makeUnmanagedCompiledPlan(member.source, member.compiled, member.templateId),
+    dependencyIndices: EMPTY_U32,
+    dependencyEntities: edgeArena.empty(),
+    rangeDependencies: EMPTY_U32,
+    graphRangeDependencies: EMPTY_U32,
+    runtimeProgram: EMPTY_U32,
+    constants: member.compiled.constants,
+    structuralSourceTransform: undefined,
+    programOffset: 0,
+    programLength: 0,
+    constNumberOffset: 0,
+    constNumberLength: member.compiled.constants.length,
+    rangeListOffset: 0,
+    rangeListLength: 0,
+    directLookup: undefined,
+    directAggregate,
+    directScalar: undefined,
+    directCriteria: undefined,
+  }
+  const formulaSlotId = serviceArgs.state.formulas.set(cellIndex, runtimeFormula)
+  runtimeFormula.formulaSlotId = formulaSlotId
+  formulaMemberCounts.increment(sheetId, member.col)
+  markFormulaCellBound(serviceArgs.state.workbook.cellStore, cellIndex, member.compiled.mode)
+  appendDirectAggregateColumnReverseEdges(
+    serviceArgs.reverseState.reverseAggregateColumnEdges,
+    serviceArgs.state.workbook,
+    directAggregate,
+    cellIndex,
+  )
+  trackFormulaSheetIndexes(cellIndex, ownerSheetName, member.compiled)
+  if (member.compiled.mode === FormulaMode.WasmFastPath && member.compiled.program.length > 0) {
+    serviceArgs.scheduleWasmProgramSync()
   }
 }
 

@@ -9,8 +9,8 @@ import type { EngineMutationError } from '../errors.js'
 import type { EngineRuntimeState, U32 } from '../runtime-state.js'
 import type {
   FormulaOwnerPosition,
-  FreshDirectAggregateFormulaBindingRun,
-  FreshDirectScalarFormulaBindingRun,
+  FreshDirectAggregateFormulaBindingInput,
+  FreshDirectScalarFormulaBindingInput,
 } from './formula-binding-service-types.js'
 import type { DeferredInitialFormulaFamilyRun } from './formula-initialization-family-runs.js'
 import type { InitialFormulaEntryRefSource } from './formula-initialization-refs.js'
@@ -91,8 +91,8 @@ export interface EngineFormulaInitializationServiceArgs {
       readonly ownerPosition?: FormulaOwnerPosition
     },
   ) => boolean
-  readonly bindFreshDirectAggregateFormulaRun?: (run: FreshDirectAggregateFormulaBindingRun) => void
-  readonly bindFreshDirectScalarFormulaRun?: (run: FreshDirectScalarFormulaBindingRun) => void
+  readonly bindFreshDirectAggregateFormulaRun?: (run: FreshDirectAggregateFormulaBindingInput) => void
+  readonly bindFreshDirectScalarFormulaRun?: (run: FreshDirectScalarFormulaBindingInput) => void
   readonly upsertFormulaFamilyRun: (args: FormulaFamilyRunUpsertArgs) => void
   readonly registerFreshFormulaFamilyRun: (args: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
   readonly deferFormulaFamilyIndexRebuild?: () => void

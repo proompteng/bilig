@@ -38,16 +38,14 @@ function tryBindHydratedFreshDirectScalarFormula(
   serviceArgs.bindFreshDirectScalarFormulaRun({
     sheetId: ref.sheetId,
     ownerSheetName,
-    cellIndices: [cellIndex],
-    members: [
-      {
-        row: ref.row,
-        col: ref.col,
-        source: ref.source,
-        compiled: ref.compiled,
-        templateId: ref.templateId,
-      },
-    ],
+    cellIndex,
+    member: {
+      row: ref.row,
+      col: ref.col,
+      source: ref.source,
+      compiled: ref.compiled,
+      templateId: ref.templateId,
+    },
   })
   addEngineCounter(serviceArgs.state.counters, 'runtimeHydratedDirectScalarFastBindings')
   return true
@@ -75,8 +73,8 @@ function tryBindHydratedFreshDirectAggregateFormula(
   serviceArgs.bindFreshDirectAggregateFormulaRun({
     sheetId: ref.sheetId,
     ownerSheetName,
-    cellIndices: [cellIndex],
-    members: [member],
+    cellIndex,
+    member,
   })
   addEngineCounter(serviceArgs.state.counters, 'runtimeHydratedDirectAggregateFastBindings')
   return true

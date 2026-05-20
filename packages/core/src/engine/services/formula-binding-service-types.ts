@@ -59,8 +59,8 @@ export interface EngineFormulaBindingService {
     templateId?: number,
     options?: BindPreparedFormulaOptions,
   ) => boolean
-  readonly bindFreshDirectAggregateFormulaRunNow: (run: FreshDirectAggregateFormulaBindingRun) => void
-  readonly bindFreshDirectScalarFormulaRunNow: (run: FreshDirectScalarFormulaBindingRun) => void
+  readonly bindFreshDirectAggregateFormulaRunNow: (run: FreshDirectAggregateFormulaBindingInput) => void
+  readonly bindFreshDirectScalarFormulaRunNow: (run: FreshDirectScalarFormulaBindingInput) => void
   readonly rewriteFormulaSourcePreservingBindingNow: (cellIndex: number, ownerSheetName: string, source: string) => boolean
   readonly rewriteFormulaCompiledPreservingBindingNow: (
     cellIndex: number,
@@ -172,6 +172,15 @@ export interface FreshDirectAggregateFormulaBindingRun {
   readonly members: readonly FreshDirectAggregateFormulaBindingMember[]
 }
 
+export interface FreshDirectAggregateFormulaBinding {
+  readonly sheetId: number
+  readonly ownerSheetName: string
+  readonly cellIndex: number
+  readonly member: FreshDirectAggregateFormulaBindingMember
+}
+
+export type FreshDirectAggregateFormulaBindingInput = FreshDirectAggregateFormulaBindingRun | FreshDirectAggregateFormulaBinding
+
 export interface FreshDirectScalarFormulaBindingMember {
   readonly row: number
   readonly col: number
@@ -186,6 +195,15 @@ export interface FreshDirectScalarFormulaBindingRun {
   readonly cellIndices: readonly number[] | Uint32Array
   readonly members: readonly FreshDirectScalarFormulaBindingMember[]
 }
+
+export interface FreshDirectScalarFormulaBinding {
+  readonly sheetId: number
+  readonly ownerSheetName: string
+  readonly cellIndex: number
+  readonly member: FreshDirectScalarFormulaBindingMember
+}
+
+export type FreshDirectScalarFormulaBindingInput = FreshDirectScalarFormulaBindingRun | FreshDirectScalarFormulaBinding
 
 export interface CreateEngineFormulaBindingServiceArgs {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'ranges' | 'getUseColumnIndex'> & {
