@@ -4,21 +4,31 @@ import { Inflate } from 'fflate-stream'
 export type XlsxZipEntries = Unzipped
 export type XlsxZipSource = Uint8Array | XlsxZipEntries
 
+export interface XlsxZipByteSource {
+  readonly byteLength: number
+  readRange(start: number, end: number): Uint8Array
+  release?(): void
+}
+
 export function readXlsxZipEntries(source: XlsxZipSource): XlsxZipEntries {
   if (!(source instanceof Uint8Array)) {
     return source
   }
   const zip = unzipSync(source)
-  return shouldUseCentralDirectoryZipFallback(source, zip) ? unzipFromCentralDirectory(source) : zip
+  return shouldUseCentralDirectoryZipFallback(source, zip) ? (unzipFromCentralDirectory(byteSourceFromUint8Array(source)) ?? zip) : zip
 }
 
 export function readXlsxZipEntriesLazy(source: XlsxZipSource): XlsxZipEntries {
   if (!(source instanceof Uint8Array)) {
     return source
   }
+  return readXlsxZipEntriesLazyFromByteSource(byteSourceFromUint8Array(source)) ?? readXlsxZipEntries(source)
+}
+
+export function readXlsxZipEntriesLazyFromByteSource(source: XlsxZipByteSource): XlsxZipEntries | null {
   const entries = readCentralDirectoryEntries(source)
   if (!entries) {
-    return readXlsxZipEntries(source)
+    return null
   }
   const output: Unzipped = {}
   const metadata: XlsxZipCentralDirectorySource = {
@@ -64,13 +74,15 @@ export function releaseLazyXlsxZipSource(zip: XlsxZipEntries): boolean {
   if (!metadata?.source) {
     return false
   }
+  metadata.source.release?.()
   metadata.source = null
   return true
 }
 
 export function readLazyXlsxZipSource(zip: XlsxZipEntries): Uint8Array | undefined {
   const metadata = (zip as XlsxZipEntriesWithCentralDirectorySource)[xlsxZipCentralDirectorySourceSymbol]
-  return metadata?.source ?? undefined
+  const source = metadata?.source
+  return source && isUint8ArrayZipByteSource(source) ? source.bytes : undefined
 }
 
 export function readLazyXlsxZipSourceByteLength(zip: XlsxZipEntries): number | undefined {
@@ -97,8 +109,12 @@ interface CentralDirectoryEntry {
 }
 
 interface XlsxZipCentralDirectorySource {
-  source: Uint8Array | null
+  source: XlsxZipByteSource | null
   readonly entriesByPath: ReadonlyMap<string, CentralDirectoryEntry>
+}
+
+interface Uint8ArrayXlsxZipByteSource extends XlsxZipByteSource {
+  readonly bytes: Uint8Array
 }
 
 type XlsxZipEntriesWithCentralDirectorySource = XlsxZipEntries & {
@@ -110,10 +126,10 @@ function shouldUseCentralDirectoryZipFallback(source: Uint8Array, zip: XlsxZipEn
   return source.byteLength > 0 && entries.length > 0 && entries.every((entry) => entry.byteLength === 0)
 }
 
-function unzipFromCentralDirectory(source: Uint8Array): XlsxZipEntries {
+function unzipFromCentralDirectory(source: XlsxZipByteSource): XlsxZipEntries | null {
   const entries = readCentralDirectoryEntries(source)
   if (!entries) {
-    return unzipSync(source)
+    return null
   }
   const output: Unzipped = {}
   for (const entry of entries) {
@@ -122,13 +138,28 @@ function unzipFromCentralDirectory(source: Uint8Array): XlsxZipEntries {
   return output
 }
 
-function readCentralDirectoryEntries(source: Uint8Array): CentralDirectoryEntry[] | null {
+function byteSourceFromUint8Array(source: Uint8Array): Uint8ArrayXlsxZipByteSource {
+  return {
+    byteLength: source.byteLength,
+    bytes: source,
+    readRange(start, end) {
+      return source.subarray(start, end)
+    },
+  }
+}
+
+function isUint8ArrayZipByteSource(source: XlsxZipByteSource): source is Uint8ArrayXlsxZipByteSource {
+  return 'bytes' in source && source.bytes instanceof Uint8Array
+}
+
+function readCentralDirectoryEntries(source: XlsxZipByteSource): CentralDirectoryEntry[] | null {
   const endOfCentralDirectoryOffset = findEndOfCentralDirectoryOffset(source)
   if (endOfCentralDirectoryOffset === null) {
     return null
   }
-  const centralDirectoryOffset = readUint32(source, endOfCentralDirectoryOffset + 16)
-  const centralDirectorySize = readUint32(source, endOfCentralDirectoryOffset + 12)
+  const endOfCentralDirectory = source.readRange(endOfCentralDirectoryOffset, endOfCentralDirectoryOffset + 22)
+  const centralDirectoryOffset = readUint32(endOfCentralDirectory, 16)
+  const centralDirectorySize = readUint32(endOfCentralDirectory, 12)
   if (
     centralDirectoryOffset === zip64Sentinel ||
     centralDirectorySize === zip64Sentinel ||
@@ -136,17 +167,18 @@ function readCentralDirectoryEntries(source: Uint8Array): CentralDirectoryEntry[
   ) {
     return null
   }
+  const centralDirectory = source.readRange(centralDirectoryOffset, centralDirectoryOffset + centralDirectorySize)
 
   const entries: CentralDirectoryEntry[] = []
-  let offset = centralDirectoryOffset
-  const endOffset = centralDirectoryOffset + centralDirectorySize
-  while (offset + 46 <= endOffset && readUint32(source, offset) === centralDirectoryFileHeaderSignature) {
-    const compressionMethod = readUint16(source, offset + 10)
-    const compressedSize = readUint32(source, offset + 20)
-    const fileNameLength = readUint16(source, offset + 28)
-    const extraFieldLength = readUint16(source, offset + 30)
-    const fileCommentLength = readUint16(source, offset + 32)
-    const localHeaderOffset = readUint32(source, offset + 42)
+  let offset = 0
+  const endOffset = centralDirectory.byteLength
+  while (offset + 46 <= endOffset && readUint32(centralDirectory, offset) === centralDirectoryFileHeaderSignature) {
+    const compressionMethod = readUint16(centralDirectory, offset + 10)
+    const compressedSize = readUint32(centralDirectory, offset + 20)
+    const fileNameLength = readUint16(centralDirectory, offset + 28)
+    const extraFieldLength = readUint16(centralDirectory, offset + 30)
+    const fileCommentLength = readUint16(centralDirectory, offset + 32)
+    const localHeaderOffset = readUint32(centralDirectory, offset + 42)
     const fileNameStart = offset + 46
     const fileNameEnd = fileNameStart + fileNameLength
     const nextOffset = fileNameEnd + extraFieldLength + fileCommentLength
@@ -158,7 +190,7 @@ function readCentralDirectoryEntries(source: Uint8Array): CentralDirectoryEntry[
     ) {
       return null
     }
-    const path = normalizeZipPath(textDecoder.decode(source.subarray(fileNameStart, fileNameEnd)))
+    const path = normalizeZipPath(textDecoder.decode(centralDirectory.subarray(fileNameStart, fileNameEnd)))
     entries.push({ path, localHeaderOffset, compressedSize, compressionMethod })
     offset = nextOffset
   }
@@ -195,22 +227,23 @@ function defineLazyZipCentralDirectorySource(output: Unzipped, metadata: XlsxZip
 }
 
 function inflateCentralDirectoryEntry(
-  source: Uint8Array,
+  source: XlsxZipByteSource,
   localHeaderOffset: number,
   compressedSize: number,
   compressionMethod: number,
 ): Uint8Array {
-  if (readUint32(source, localHeaderOffset) !== localFileHeaderSignature) {
+  const localHeader = source.readRange(localHeaderOffset, localHeaderOffset + 30)
+  if (readUint32(localHeader, 0) !== localFileHeaderSignature) {
     throw new Error('Invalid XLSX local file header')
   }
-  const fileNameLength = readUint16(source, localHeaderOffset + 26)
-  const extraFieldLength = readUint16(source, localHeaderOffset + 28)
+  const fileNameLength = readUint16(localHeader, 26)
+  const extraFieldLength = readUint16(localHeader, 28)
   const dataStart = localHeaderOffset + 30 + fileNameLength + extraFieldLength
   const dataEnd = dataStart + compressedSize
   if (dataEnd > source.byteLength) {
     throw new Error('Invalid XLSX compressed data range')
   }
-  const compressed = source.subarray(dataStart, dataEnd)
+  const compressed = source.readRange(dataStart, dataEnd)
   if (compressionMethod === storedCompressionMethod) {
     return new Uint8Array(compressed)
   }
@@ -221,61 +254,68 @@ function inflateCentralDirectoryEntry(
 }
 
 function inflateCentralDirectoryEntryChunks(
-  source: Uint8Array,
+  source: XlsxZipByteSource,
   localHeaderOffset: number,
   compressedSize: number,
   compressionMethod: number,
   onChunk: (chunk: Uint8Array) => void,
   options: { readonly chunkSize: number },
 ): void {
-  if (readUint32(source, localHeaderOffset) !== localFileHeaderSignature) {
+  const localHeader = source.readRange(localHeaderOffset, localHeaderOffset + 30)
+  if (readUint32(localHeader, 0) !== localFileHeaderSignature) {
     throw new Error('Invalid XLSX local file header')
   }
-  const fileNameLength = readUint16(source, localHeaderOffset + 26)
-  const extraFieldLength = readUint16(source, localHeaderOffset + 28)
+  const fileNameLength = readUint16(localHeader, 26)
+  const extraFieldLength = readUint16(localHeader, 28)
   const dataStart = localHeaderOffset + 30 + fileNameLength + extraFieldLength
   const dataEnd = dataStart + compressedSize
   if (dataEnd > source.byteLength) {
     throw new Error('Invalid XLSX compressed data range')
   }
-  const compressed = source.subarray(dataStart, dataEnd)
   if (compressionMethod === storedCompressionMethod) {
-    forEachChunk(compressed, options.chunkSize, onChunk)
+    forEachSourceChunk(source, dataStart, dataEnd, options.chunkSize, onChunk)
     return
   }
   if (compressionMethod === deflatedCompressionMethod) {
     const inflate = new Inflate((chunk) => {
       onChunk(chunk)
     })
-    if (compressed.byteLength === 0) {
-      inflate.push(compressed, true)
+    if (compressedSize === 0) {
+      inflate.push(source.readRange(dataStart, dataEnd), true)
       return
     }
-    for (let offset = 0; offset < compressed.byteLength; offset += options.chunkSize) {
-      const end = Math.min(compressed.byteLength, offset + options.chunkSize)
-      inflate.push(compressed.subarray(offset, end), end === compressed.byteLength)
+    for (let offset = 0; offset < compressedSize; offset += options.chunkSize) {
+      const end = Math.min(compressedSize, offset + options.chunkSize)
+      inflate.push(source.readRange(dataStart + offset, dataStart + end), end === compressedSize)
     }
     return
   }
   throw new Error(`Unsupported XLSX compression method: ${String(compressionMethod)}`)
 }
 
-function forEachChunk(bytes: Uint8Array, chunkSize: number, onChunk: (chunk: Uint8Array) => void): void {
+function forEachSourceChunk(
+  source: XlsxZipByteSource,
+  start: number,
+  end: number,
+  chunkSize: number,
+  onChunk: (chunk: Uint8Array) => void,
+): void {
   const normalizedChunkSize = Math.max(1, Math.trunc(chunkSize))
-  if (bytes.byteLength === 0) {
-    onChunk(bytes)
+  if (start === end) {
+    onChunk(source.readRange(start, end))
     return
   }
-  for (let offset = 0; offset < bytes.byteLength; offset += normalizedChunkSize) {
-    onChunk(bytes.subarray(offset, Math.min(bytes.byteLength, offset + normalizedChunkSize)))
+  for (let offset = start; offset < end; offset += normalizedChunkSize) {
+    onChunk(source.readRange(offset, Math.min(end, offset + normalizedChunkSize)))
   }
 }
 
-function findEndOfCentralDirectoryOffset(source: Uint8Array): number | null {
-  const minOffset = Math.max(0, source.byteLength - maxEndOfCentralDirectorySearch)
-  for (let offset = source.byteLength - 22; offset >= minOffset; offset -= 1) {
-    if (readUint32(source, offset) === endOfCentralDirectorySignature) {
-      return offset
+function findEndOfCentralDirectoryOffset(source: XlsxZipByteSource): number | null {
+  const tailStart = Math.max(0, source.byteLength - maxEndOfCentralDirectorySearch)
+  const tail = source.readRange(tailStart, source.byteLength)
+  for (let offset = tail.byteLength - 22; offset >= 0; offset -= 1) {
+    if (readUint32(tail, offset) === endOfCentralDirectorySignature) {
+      return tailStart + offset
     }
   }
   return null

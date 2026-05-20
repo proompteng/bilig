@@ -979,19 +979,20 @@ function countLazyZipEntryStreams(zip: Record<string, Uint8Array>, path: string)
     throw new Error(`Missing lazy ZIP metadata for ${path}`)
   }
   const source = metadata.source
-  const fileNameLength = readLittleEndianUint16(source, entry.localHeaderOffset + 26)
-  const extraFieldLength = readLittleEndianUint16(source, entry.localHeaderOffset + 28)
+  const localHeader = source.readRange(entry.localHeaderOffset, entry.localHeaderOffset + 30)
+  const fileNameLength = readLittleEndianUint16(localHeader, 26)
+  const extraFieldLength = readLittleEndianUint16(localHeader, 28)
   const dataStart = entry.localHeaderOffset + 30 + fileNameLength + extraFieldLength
   const dataEnd = dataStart + entry.compressedSize
   let streamCount = 0
   metadata.source = new Proxy(source, {
     get(target, property) {
-      if (property === 'subarray') {
+      if (property === 'readRange') {
         return (start?: number, end?: number) => {
           if (start === dataStart && end === dataEnd) {
             streamCount += 1
           }
-          return target.subarray(start, end)
+          return target.readRange(start ?? 0, end ?? target.byteLength)
         }
       }
       const value = Reflect.get(target, property, target)
@@ -1003,7 +1004,7 @@ function countLazyZipEntryStreams(zip: Record<string, Uint8Array>, path: string)
 
 function readLazyZipMetadata(zip: Record<string, Uint8Array>):
   | {
-      source: Uint8Array
+      source: LazyZipByteSource
       readonly entriesByPath: ReadonlyMap<
         string,
         {
@@ -1023,7 +1024,7 @@ function readLazyZipMetadata(zip: Record<string, Uint8Array>):
 }
 
 function isLazyZipMetadata(value: unknown): value is {
-  source: Uint8Array
+  source: LazyZipByteSource
   readonly entriesByPath: ReadonlyMap<
     string,
     {
@@ -1036,10 +1037,22 @@ function isLazyZipMetadata(value: unknown): value is {
     typeof value === 'object' &&
     value !== null &&
     'source' in value &&
-    value.source instanceof Uint8Array &&
+    isLazyZipByteSource(value.source) &&
     'entriesByPath' in value &&
     value.entriesByPath instanceof Map
   )
+}
+
+interface LazyZipByteSource {
+  readonly byteLength: number
+  readRange(start: number, end: number): Uint8Array
+}
+
+function isLazyZipByteSource(value: unknown): value is LazyZipByteSource {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  return typeof Reflect.get(value, 'byteLength') === 'number' && typeof Reflect.get(value, 'readRange') === 'function'
 }
 
 function readLittleEndianUint16(source: Uint8Array, offset: number): number {

@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { parsePublicWorkbookArtifact, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
-import { tryInspectLargeSimpleXlsxHeadless } from '../packages/excel-import/src/xlsx-large-simple-headless-inspect.js'
+import {
+  tryInspectLargeSimpleXlsxHeadless,
+  type LargeSimpleXlsxHeadlessInspectResult,
+} from '../packages/excel-import/src/xlsx-large-simple-headless-inspect.js'
 import type { LargeSimpleXlsxImportStats } from '../packages/excel-import/src/xlsx-large-simple-import.js'
-import { releaseOwnedXlsxSourceBytes, type OwnedXlsxSourceBytes } from '../packages/excel-import/src/xlsx-owned-source-release.js'
-import { readXlsxZipEntriesLazy } from '../packages/excel-import/src/xlsx-zip.js'
+import { readXlsxZipEntriesLazyFromByteSource, type XlsxZipByteSource } from '../packages/excel-import/src/xlsx-zip.js'
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookFeatureCounts } from './public-workbook-corpus-types.ts'
 import { defaultSelfRssCheckIntervalMs, startSelfRssGuard } from './public-workbook-corpus-process.ts'
 import { readMegabytesArg, readNumberArg, readFlagArg, readStringArg } from './public-workbook-corpus-cli.ts'
@@ -60,26 +62,37 @@ function tryVerifyCompactLargeSimpleArtifact(
     return null
   }
   writeWorkerPhase('read-cache')
-  const ownedSource: OwnedXlsxSourceBytes = { bytes: readFileSync(cachePath) }
-  if (sha256Hex(ownedSource.bytes) !== artifact.sha256 || !isZipWorkbook(ownedSource.bytes)) {
-    return null
+  const source = new FileBackedXlsxZipByteSource(cachePath)
+  try {
+    if (sha256Hex(source) !== artifact.sha256 || !isZipWorkbook(source)) {
+      return null
+    }
+    collectGarbage()
+    const zip = readXlsxZipEntriesLazyFromByteSource(source)
+    if (!zip) {
+      return null
+    }
+    writeWorkerPhase('import-xlsx')
+    const imported = tryInspectLargeSimpleXlsxHeadless({ byteLength: source.byteLength }, artifact.fileName, zip, {
+      afterWorksheetScan: collectGarbage,
+      minByteLength: 0,
+      releaseZipSource: true,
+    })
+    if (!imported) {
+      return null
+    }
+    return buildCompactLargeSimpleCaseFromInspect(artifact, imported, runStructuralSmoke, maxCellCount)
+  } finally {
+    source.release()
   }
-  const sourceByteLength = ownedSource.bytes.byteLength
-  const zip = readXlsxZipEntriesLazy(ownedSource.bytes)
-  writeWorkerPhase('import-xlsx')
-  const imported = tryInspectLargeSimpleXlsxHeadless({ byteLength: sourceByteLength }, artifact.fileName, zip, {
-    afterWorksheetScan: collectGarbage,
-    minByteLength: 0,
-    releaseZipSource: true,
-    releaseOwnedSourceBytes: () => {
-      const evidence = releaseOwnedXlsxSourceBytes(ownedSource)
-      collectGarbage()
-      return evidence
-    },
-  })
-  if (!imported) {
-    return null
-  }
+}
+
+function buildCompactLargeSimpleCaseFromInspect(
+  artifact: PublicWorkbookArtifact,
+  imported: LargeSimpleXlsxHeadlessInspectResult,
+  runStructuralSmoke: boolean,
+  maxCellCount: number,
+): PublicWorkbookCorpusCase | null {
   const featureCounts = featureCountsFromLargeSimpleStats(imported.stats)
   if (
     featureCounts.cellCount <= 100_000 ||
@@ -186,11 +199,54 @@ function capVerifyMaxRssBytes(value: number): number {
   return normalizedValue
 }
 
-function sha256Hex(bytes: Uint8Array): string {
-  return createHash('sha256').update(bytes).digest('hex')
+class FileBackedXlsxZipByteSource implements XlsxZipByteSource {
+  readonly byteLength: number
+  private fd: number | null
+
+  constructor(path: string) {
+    this.fd = openSync(path, 'r')
+    this.byteLength = fstatSync(this.fd).size
+  }
+
+  readRange(start: number, end: number): Uint8Array {
+    if (this.fd === null) {
+      throw new Error('XLSX ZIP file source has been released')
+    }
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > this.byteLength) {
+      throw new Error('Invalid XLSX ZIP file byte range')
+    }
+    const output = Buffer.allocUnsafe(end - start)
+    let offset = 0
+    while (offset < output.byteLength) {
+      const bytesRead = readSync(this.fd, output, offset, output.byteLength - offset, start + offset)
+      if (bytesRead === 0) {
+        throw new Error('Unexpected end of XLSX ZIP file source')
+      }
+      offset += bytesRead
+    }
+    return output
+  }
+
+  release(): void {
+    if (this.fd === null) {
+      return
+    }
+    closeSync(this.fd)
+    this.fd = null
+  }
 }
 
-function isZipWorkbook(bytes: Uint8Array): boolean {
+function sha256Hex(source: XlsxZipByteSource): string {
+  const hash = createHash('sha256')
+  const chunkSize = 64 * 1024
+  for (let offset = 0; offset < source.byteLength; offset += chunkSize) {
+    hash.update(source.readRange(offset, Math.min(source.byteLength, offset + chunkSize)))
+  }
+  return hash.digest('hex')
+}
+
+function isZipWorkbook(source: XlsxZipByteSource): boolean {
+  const bytes = source.readRange(0, Math.min(4, source.byteLength))
   return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04
 }
 

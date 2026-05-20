@@ -9,7 +9,9 @@ import {
   readLazyXlsxZipSourceByteLength,
   readXlsxZipEntries,
   readXlsxZipEntriesLazy,
+  readXlsxZipEntriesLazyFromByteSource,
   releaseLazyXlsxZipSource,
+  type XlsxZipByteSource,
 } from '../xlsx-zip.js'
 
 describe('XLSX ZIP reader', () => {
@@ -47,7 +49,45 @@ describe('XLSX ZIP reader', () => {
     expect(forEachInflatedXlsxZipEntryChunk(zip, 'xl/workbook.xml', () => undefined)).toBe(false)
     expect(() => getZipText(zip, 'xl/workbook.xml')).toThrow(/released/u)
   })
+
+  it('streams lazy central-directory entries from a non-buffer byte source', () => {
+    const source = new CountingZipByteSource(buildStreamedZip('xl/workbook.xml', '<workbook><sheets/></workbook>'))
+    const zip = readXlsxZipEntriesLazyFromByteSource(source)
+    const chunks: Uint8Array[] = []
+
+    expect(zip).not.toBeNull()
+    expect(readLazyXlsxZipSource(zip!)).toBeUndefined()
+    expect(readLazyXlsxZipSourceByteLength(zip!)).toBe(source.byteLength)
+    expect(forEachInflatedXlsxZipEntryChunk(zip!, 'xl/workbook.xml', (chunk) => chunks.push(chunk))).toBe(true)
+    expect(Buffer.concat(chunks).toString()).toBe('<workbook><sheets/></workbook>')
+    expect(source.readRangeCount).toBeGreaterThan(0)
+    expect(releaseLazyXlsxZipSource(zip!)).toBe(true)
+    expect(source.released).toBe(true)
+    expect(readLazyXlsxZipSourceByteLength(zip!)).toBe(0)
+  })
 })
+
+class CountingZipByteSource implements XlsxZipByteSource {
+  readonly byteLength: number
+  readRangeCount = 0
+  released = false
+
+  constructor(private readonly data: Uint8Array) {
+    this.byteLength = data.byteLength
+  }
+
+  readRange(start: number, end: number): Uint8Array {
+    if (this.released) {
+      throw new Error('source released')
+    }
+    this.readRangeCount += 1
+    return this.data.subarray(start, end)
+  }
+
+  release(): void {
+    this.released = true
+  }
+}
 
 function buildStreamedZip(path: string, text: string): Uint8Array {
   const fileName = Buffer.from(path)
