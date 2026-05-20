@@ -36,6 +36,13 @@ export interface OperationDirectPostRecalcMarkerState {
   }
 }
 
+export function initialDirectScalarLinearDeltaClosureCapacity(scalarDeltaClosureLimit: number): number {
+  if (!Number.isFinite(scalarDeltaClosureLimit) || scalarDeltaClosureLimit <= 0) {
+    return 1
+  }
+  return Math.max(1, Math.trunc(scalarDeltaClosureLimit) + 1)
+}
+
 export function createOperationDirectPostRecalcMarkers(args: {
   readonly state: OperationDirectPostRecalcMarkerState
   readonly getSingleEntityDependent: (entityId: number) => number
@@ -387,7 +394,7 @@ export function createOperationDirectPostRecalcMarkers(args: {
     let oldNumber = oldRootNumber
     let newNumber = newRootNumber
     let closureCount = 0
-    let cellIndices = new Uint32Array(Math.min(128, Math.max(1, args.scalarDeltaClosureLimit + 1)))
+    let cellIndices = new Uint32Array(initialDirectScalarLinearDeltaClosureCapacity(args.scalarDeltaClosureLimit))
     let deltas: number[] | undefined
     let commonDelta: number | undefined
     let canUseValidatedTerminalWrites = true
