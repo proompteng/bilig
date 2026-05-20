@@ -4,6 +4,10 @@ type ImportedCellStyle = Omit<CellStyleRecord, 'id'>
 
 const elementTextCache = new Map<string, RegExp>()
 
+export interface LargeSimpleWorkbookStylesScanOptions {
+  readonly onRetainedBufferLength?: (length: number) => void
+}
+
 export function readLargeSimpleWorkbookStyles(
   stylesXml: string | null,
   requiredStyleIndexes: ReadonlySet<number>,
@@ -59,11 +63,12 @@ export function readLargeSimpleWorkbookStyles(
 export function readLargeSimpleWorkbookStylesFromChunks(
   readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
   requiredStyleIndexes: ReadonlySet<number>,
+  options: LargeSimpleWorkbookStylesScanOptions = {},
 ): Map<number, ImportedCellStyle> | null {
   if (requiredStyleIndexes.size === 0) {
     return new Map()
   }
-  const cellXfs = collectIndexedXmlElementsFromChunks(readChunks, 'cellXfs', 'xf', requiredStyleIndexes)
+  const cellXfs = collectIndexedXmlElementsFromChunks(readChunks, 'cellXfs', 'xf', requiredStyleIndexes, options)
   if (!cellXfs) {
     return null
   }
@@ -87,8 +92,8 @@ export function readLargeSimpleWorkbookStylesFromChunks(
       requiredFontIndexes.add(refs.fontId)
     }
   }
-  const fills = collectIndexedXmlElementsFromChunks(readChunks, 'fills', 'fill', requiredFillIndexes)
-  const fonts = collectIndexedXmlElementsFromChunks(readChunks, 'fonts', 'font', requiredFontIndexes)
+  const fills = collectIndexedXmlElementsFromChunks(readChunks, 'fills', 'fill', requiredFillIndexes, options)
+  const fonts = collectIndexedXmlElementsFromChunks(readChunks, 'fonts', 'font', requiredFontIndexes, options)
   if (!fills || !fonts) {
     return null
   }
@@ -253,11 +258,12 @@ function collectIndexedXmlElementsFromChunks(
   parentName: string,
   childName: string,
   requiredIndexes: ReadonlySet<number>,
+  options: LargeSimpleWorkbookStylesScanOptions,
 ): Map<number, string> | null {
   if (requiredIndexes.size === 0) {
     return new Map()
   }
-  const collector = new IndexedXmlElementCollector(parentName, childName, requiredIndexes)
+  const collector = new IndexedXmlElementCollector(parentName, childName, requiredIndexes, options)
   if (!readChunks((chunk) => collector.push(chunk))) {
     return null
   }
@@ -271,30 +277,42 @@ class IndexedXmlElementCollector {
   private inParent = false
   private childIndex = 0
   private failed = false
+  private skippingUnrequiredChild = false
   private readonly elements = new Map<number, string>()
 
   constructor(
     private readonly parentName: string,
     private readonly childName: string,
     private readonly requiredIndexes: ReadonlySet<number>,
+    private readonly options: LargeSimpleWorkbookStylesScanOptions,
   ) {}
 
   push(chunk: Uint8Array): void {
-    if (this.failed || chunk.byteLength === 0) {
+    if (this.failed || chunk.byteLength === 0 || this.isComplete()) {
       return
     }
     this.buffer += this.decoder.decode(chunk, { stream: true })
     this.process(false)
-    this.compact()
+    this.releaseBufferIfComplete()
+    if (!this.isComplete()) {
+      this.compact()
+    }
+    this.reportRetainedBufferLength()
   }
 
   finish(): Map<number, string> | null {
     if (this.failed) {
       return null
     }
-    this.buffer += this.decoder.decode()
-    this.process(true)
-    this.compact()
+    if (!this.isComplete()) {
+      this.buffer += this.decoder.decode()
+      this.process(true)
+    }
+    this.releaseBufferIfComplete()
+    if (!this.isComplete()) {
+      this.compact()
+    }
+    this.reportRetainedBufferLength()
     if (this.failed || this.elements.size !== this.requiredIndexes.size) {
       return null
     }
@@ -303,6 +321,12 @@ class IndexedXmlElementCollector {
 
   private process(final: boolean): void {
     while (!this.failed && this.elements.size < this.requiredIndexes.size) {
+      if (this.skippingUnrequiredChild) {
+        if (!this.finishSkippingUnrequiredChild(final)) {
+          return
+        }
+        continue
+      }
       if (!this.inParent) {
         const parent = findNextOpeningTag(this.buffer, this.index, this.parentName)
         if (!parent) {
@@ -360,7 +384,12 @@ class IndexedXmlElementCollector {
         if (final) {
           this.failed = true
         }
-        this.index = childStart
+        if (this.requiredIndexes.has(this.childIndex)) {
+          this.index = childStart
+        } else {
+          this.skippingUnrequiredChild = true
+          this.index = tagEnd + 1
+        }
         return
       }
       if (this.requiredIndexes.has(this.childIndex)) {
@@ -371,7 +400,41 @@ class IndexedXmlElementCollector {
     }
   }
 
+  private isComplete(): boolean {
+    return this.elements.size === this.requiredIndexes.size
+  }
+
+  private releaseBufferIfComplete(): void {
+    if (!this.isComplete()) {
+      return
+    }
+    this.buffer = ''
+    this.index = 0
+    this.skippingUnrequiredChild = false
+  }
+
+  private finishSkippingUnrequiredChild(final: boolean): boolean {
+    const childEnd = findClosingStringElementEnd(this.buffer, this.index, this.childName)
+    if (childEnd === null) {
+      if (final) {
+        this.failed = true
+      }
+      this.index = this.buffer.length
+      return false
+    }
+    this.childIndex += 1
+    this.index = childEnd
+    this.skippingUnrequiredChild = false
+    return true
+  }
+
   private compact(): void {
+    if (this.skippingUnrequiredChild) {
+      const retainLength = closingStringTagRetainLength(this.childName)
+      this.buffer = this.buffer.slice(Math.max(0, this.buffer.length - retainLength))
+      this.index = 0
+      return
+    }
     if (this.index === 0) {
       return
     }
@@ -383,6 +446,14 @@ class IndexedXmlElementCollector {
     this.buffer = this.buffer.slice(this.index)
     this.index = 0
   }
+
+  private reportRetainedBufferLength(): void {
+    this.options.onRetainedBufferLength?.(this.buffer.length)
+  }
+}
+
+function closingStringTagRetainLength(elementName: string): number {
+  return Math.max(256, elementName.length + 4)
 }
 
 function findNextParentBoundaryOrChild(
