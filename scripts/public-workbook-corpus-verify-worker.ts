@@ -8,7 +8,11 @@ import {
   type LargeSimpleXlsxHeadlessInspectResult,
 } from '../packages/excel-import/src/xlsx-large-simple-headless-inspect.js'
 import type { LargeSimpleXlsxImportStats } from '../packages/excel-import/src/xlsx-large-simple-import.js'
-import { readXlsxZipEntriesLazyFromByteSource, type XlsxZipByteSource } from '../packages/excel-import/src/xlsx-zip.js'
+import {
+  readXlsxZipEntryMetadata,
+  readXlsxZipEntriesLazyFromByteSource,
+  type XlsxZipByteSource,
+} from '../packages/excel-import/src/xlsx-zip.js'
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookFeatureCounts } from './public-workbook-corpus-types.ts'
 import { defaultSelfRssCheckIntervalMs, startSelfRssGuard } from './public-workbook-corpus-process.ts'
 import { readMegabytesArg, readNumberArg, readFlagArg, readStringArg } from './public-workbook-corpus-cli.ts'
@@ -19,6 +23,8 @@ const verificationWorkerPhasePrefix = 'bilig-public-workbook-verify-phase='
 const defaultVerifyTimeoutMs = 180_000
 const defaultVerifyMaxRssBytes = 1536 * 1024 * 1024
 const defaultVerifyMaxCellCount = 1_500_000
+const compactLargeSimplePreflightMinPackageBytes = 2 * 1024 * 1024
+const compactLargeSimplePreflightMinWorksheetCompressedBytes = 256 * 1024
 
 const verifyMaxRssBytes = capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes))
 const stopSelfRssGuard = startSelfRssGuard(verifyMaxRssBytes, 'Workbook verification worker')
@@ -69,6 +75,9 @@ function tryVerifyCompactLargeSimpleArtifact(
       return null
     }
     collectGarbage()
+    if (artifact.byteSize < compactLargeSimplePreflightMinPackageBytes && !hasCompactLargeSimpleWorksheetPayload(source)) {
+      return null
+    }
     const zip = readXlsxZipEntriesLazyFromByteSource(source)
     if (!zip) {
       return null
@@ -86,6 +95,18 @@ function tryVerifyCompactLargeSimpleArtifact(
   } finally {
     source.release()
   }
+}
+
+function hasCompactLargeSimpleWorksheetPayload(source: XlsxZipByteSource): boolean {
+  const entries = readXlsxZipEntryMetadata(source)
+  if (!entries) {
+    return true
+  }
+  const worksheetCompressedBytes = entries.reduce(
+    (sum, entry) => (/^xl\/worksheets\/[^/]+\.xml$/u.test(entry.path) ? sum + entry.compressedSize : sum),
+    0,
+  )
+  return worksheetCompressedBytes >= compactLargeSimplePreflightMinWorksheetCompressedBytes
 }
 
 function buildCompactLargeSimpleCaseFromInspect(

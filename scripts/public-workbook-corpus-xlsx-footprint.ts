@@ -170,7 +170,8 @@ function inspectLargeSimpleXlsxImportCompatibility(
   if (unsupportedPackagePaths.length > 0) {
     blockers.push(`unsupported-package-parts=${String(unsupportedPackagePaths.length)}`)
   }
-  const sharedStringsXml = readZipEntryText(bytes, context.entriesByPath.get('xl/sharedStrings.xml'))
+  const sharedStringsEntry = context.entriesByPath.get('xl/sharedStrings.xml')
+  const hasSharedStrings = sharedStringsEntry !== undefined && sharedStringsEntry.compressedSize > 0
   if (definedNamesReferenceExternalWorkbook(context.workbookXml)) {
     blockers.push('external-defined-name-reference')
   }
@@ -183,7 +184,7 @@ function inspectLargeSimpleXlsxImportCompatibility(
   if (totals.largeSimpleUnsupportedElementCount > 0) {
     blockers.push(`unsupported-worksheet-elements=${String(totals.largeSimpleUnsupportedElementCount)}`)
   }
-  if (!sharedStringsXml) {
+  if (!hasSharedStrings) {
     if (totals.sharedStringCellCount > 0) {
       blockers.push(`missing-shared-strings=${String(totals.sharedStringCellCount)}`)
     }

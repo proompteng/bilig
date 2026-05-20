@@ -19,9 +19,10 @@ import {
   readLargeSimpleFormulaTypeCode,
 } from './xlsx-large-simple-formula-records.js'
 import { readLargeSimpleSheetHyperlinkRefsFromBytes } from './xlsx-large-simple-hyperlinks.js'
+import { internLargeSimpleWorksheetMetadata } from './xlsx-large-simple-metadata-interning.js'
 import { appendLargeSimplePrintPageSetupElement, isLargeSimplePrintPageSetupElementName } from './xlsx-large-simple-printer-settings.js'
 import { rowTagHasMetadataAttribute } from './xlsx-large-simple-row-metadata-scan.js'
-import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena } from './xlsx-large-simple-arena.js'
 import {
   appendLargeSimpleColumnMetadataFromBytes,
   appendLargeSimpleRowMetadataTagFromBytes,
@@ -33,6 +34,7 @@ import {
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
+import type { LargeSimpleWorksheetStreamScan, LargeSimpleWorksheetStreamScanOptions } from './xlsx-large-simple-worksheet-stream-types.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 import {
   decodeAscii,
@@ -63,25 +65,10 @@ const emptyBytes = new Uint8Array(0)
 const maxDimensionArenaReserveCellCount = 1_000_000
 type StreamedMetadataElement = 'mergeCells' | 'tableParts'
 
-export interface LargeSimpleWorksheetStreamScan {
-  readonly cellScan: ImportedWorksheetCellScan
-  readonly metadataXml: string | undefined
-  readonly metadata: LargeSimpleWorksheetScannedMetadata | undefined
-}
-
 export function parseLargeSimpleWorksheetCellsFromChunks(
   readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
   sheetIndex: number,
-  options: {
-    readonly hasSharedStrings: boolean
-    readonly retainCells?: boolean
-    readonly sharedStrings?: readonly LargeSimpleSharedStringEntry[]
-    readonly deferSharedStrings?: boolean
-    readonly retainMetadataXml?: boolean
-    readonly sheetName?: string
-    readonly stringPool?: ImportedWorkbookStringPool
-    readonly onRetainedBufferLength?: (length: number) => void
-  },
+  options: LargeSimpleWorksheetStreamScanOptions,
 ): LargeSimpleWorksheetStreamScan | null {
   const scanner = new LargeSimpleWorksheetChunkScanner(sheetIndex, {
     hasSharedStrings: options.hasSharedStrings,
@@ -142,6 +129,7 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
   private readonly deferSharedStrings: boolean
   private readonly retainMetadataXml: boolean
+  private readonly stringPool: ImportedWorkbookStringPool | undefined
   private activeMetadataElement: StreamedMetadataElement | null = null
 
   constructor(
@@ -164,6 +152,7 @@ class LargeSimpleWorksheetChunkScanner {
     this.deferSharedStrings = options.deferSharedStrings
     this.retainMetadataXml = options.retainMetadataXml
     this.sheetName = options.sheetName
+    this.stringPool = options.stringPool
     this.reportRetainedBufferLength = () => options.onRetainedBufferLength?.(this.buffer.byteLength)
   }
 
@@ -216,7 +205,7 @@ class LargeSimpleWorksheetChunkScanner {
             : null,
       },
       metadataXml: this.metadataSnippets.length > 0 ? `<worksheet>${this.metadataSnippets.join('')}</worksheet>` : undefined,
-      metadata: this.buildMetadataScan(),
+      metadata: internLargeSimpleWorksheetMetadata(this.buildMetadataScan(), this.stringPool),
     }
   }
 

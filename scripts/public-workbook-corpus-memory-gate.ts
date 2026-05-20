@@ -324,19 +324,40 @@ function writeSyntheticWorkbookArtifact(
     readonly fileName: string
     readonly id: string
     readonly sourceId: string
-    readonly worksheetXml: string
+    readonly worksheetXml?: string
+    readonly sheets?: readonly {
+      readonly name: string
+      readonly path: string
+      readonly worksheetXml: string
+    }[]
+    readonly sharedStringsXml?: string
   },
 ): PublicWorkbookArtifact {
   const filesDir = join(cacheDir, 'files')
   mkdirSync(filesDir, { recursive: true })
+  const sheets = input.sheets ?? [{ name: 'Data', path: 'xl/worksheets/sheet1.xml', worksheetXml: input.worksheetXml ?? '' }]
   const bytes = zipSync({
-    'xl/workbook.xml': strToU8(
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    '[Content_Types].xml': strToU8(contentTypesXml(sheets, input.sharedStringsXml !== undefined)),
+    '_rels/.rels': strToU8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
     ),
-    'xl/_rels/workbook.xml.rels': strToU8(
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
-    ),
-    'xl/worksheets/sheet1.xml': strToU8(input.worksheetXml),
+    'xl/workbook.xml': strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>${sheets
+    .map((sheet, index) => `<sheet name="${sheet.name}" sheetId="${String(index + 1)}" r:id="rId${String(index + 1)}"/>`)
+    .join('')}</sheets>
+</workbook>`),
+    'xl/_rels/workbook.xml.rels': strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${sheets
+  .map(
+    (sheet, index) =>
+      `<Relationship Id="rId${String(index + 1)}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="${sheet.path.slice('xl/'.length)}"/>`,
+  )
+  .join('')}
+</Relationships>`),
+    ...(input.sharedStringsXml !== undefined ? { 'xl/sharedStrings.xml': strToU8(input.sharedStringsXml) } : {}),
+    ...Object.fromEntries(sheets.map((sheet) => [sheet.path, strToU8(sheet.worksheetXml)])),
   })
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   const cachePath = `files/${sha256}.xlsx`
@@ -356,6 +377,26 @@ function writeSyntheticWorkbookArtifact(
   }
   writeSyntheticManifest(cacheDir, artifact)
   return artifact
+}
+
+function contentTypesXml(sheets: readonly { readonly path: string }[], hasSharedStrings: boolean): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  ${sheets
+    .map(
+      (sheet) =>
+        `<Override PartName="/${sheet.path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+    )
+    .join('')}
+  ${
+    hasSharedStrings
+      ? '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
+      : ''
+  }
+</Types>`
 }
 
 function writeSyntheticManifest(cacheDir: string, artifact: PublicWorkbookArtifact): void {

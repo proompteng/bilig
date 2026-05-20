@@ -237,6 +237,25 @@ describe('large simple worksheet stream scanners', () => {
     })
   })
 
+  it('interns repeated typed metadata strings through the import string pool', () => {
+    const pool = new ImportedWorkbookStringPool()
+    const first = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(metadataWorksheetXml()), 0, {
+      hasSharedStrings: false,
+      sheetName: 'Data',
+      stringPool: pool,
+    })
+    const pooledCountAfterFirstScan = pool.count
+    const second = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(metadataWorksheetXml()), 1, {
+      hasSharedStrings: false,
+      sheetName: 'Data',
+      stringPool: pool,
+    })
+
+    expect(pooledCountAfterFirstScan).toBeGreaterThan(0)
+    expect(pool.count).toBe(pooledCountAfterFirstScan)
+    expect(second?.metadata).toEqual(first?.metadata)
+  })
+
   it('keeps raw conditional-format XML only when style artifacts are required', () => {
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(styledConditionalFormatWorksheetXml()), 0, {
       hasSharedStrings: false,

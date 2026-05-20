@@ -10,6 +10,12 @@ export interface XlsxZipByteSource {
   release?(): void
 }
 
+export interface XlsxZipEntryMetadata {
+  readonly path: string
+  readonly compressedSize: number
+  readonly compressionMethod: number
+}
+
 export function readXlsxZipEntries(source: XlsxZipSource): XlsxZipEntries {
   if (!(source instanceof Uint8Array)) {
     return source
@@ -40,6 +46,16 @@ export function readXlsxZipEntriesLazyFromByteSource(source: XlsxZipByteSource):
   }
   defineLazyZipCentralDirectorySource(output, metadata)
   return output
+}
+
+export function readXlsxZipEntryMetadata(source: XlsxZipByteSource): readonly XlsxZipEntryMetadata[] | null {
+  return (
+    readCentralDirectoryEntries(source)?.map((entry) => ({
+      path: entry.path,
+      compressedSize: entry.compressedSize,
+      compressionMethod: entry.compressionMethod,
+    })) ?? null
+  )
 }
 
 export function normalizeZipPath(path: string): string {
