@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.2
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.1
+- Manual override: no
+
+## Fixes
+- fix(xlsx): stream complex import artifacts (f7469d8c)
+
 ## 0.40.1
 
 - Release type: patch
