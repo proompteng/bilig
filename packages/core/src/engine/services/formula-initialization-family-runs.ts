@@ -1,5 +1,6 @@
 import type {
   FormulaFamilyFreshUniformRunRegistrationArgs,
+  FormulaFamilyRunAxis,
   FormulaFamilyMember,
   FormulaFamilyRunUpsertArgs,
   FormulaFamilyStore,
@@ -7,10 +8,11 @@ import type {
 } from '../../formula/formula-family-store.js'
 import type { RuntimeFormula } from '../runtime-state.js'
 import type { FormulaBindingFamilyShapeKeyCache } from './formula-binding-family-shape-key.js'
+import type { InitialFormulaEntryRefSource } from './formula-initialization-refs.js'
 import { initialFormulaFamilyShapeKey } from './formula-initialization-template-keys.js'
 
 export type DeferredInitialFormulaFamilyRun = Omit<FormulaFamilyRunUpsertArgs, 'members'> & {
-  axis: 'row'
+  axis: FormulaFamilyRunAxis
   fixedIndex: number
   start: number
   step: number
@@ -18,6 +20,7 @@ export type DeferredInitialFormulaFamilyRun = Omit<FormulaFamilyRunUpsertArgs, '
   ordered: boolean
   cellIndices: number[]
   rows?: number[]
+  cols?: number[]
 }
 
 export type DeferredInitialFormulaFamilyRunMap = Map<number, Map<number, Map<number, DeferredInitialFormulaFamilyRun>>>
@@ -93,9 +96,31 @@ export function materializeDeferredFormulaFamilyRunMembers(run: DeferredInitialF
   const step = run.cellIndices.length <= 1 ? 1 : run.step
   return run.cellIndices.map((cellIndex, index) => ({
     cellIndex,
-    row: run.ordered ? run.start + step * index : run.rows![index]!,
-    col: run.fixedIndex,
+    row: run.axis === 'row' ? (run.ordered ? run.start + step * index : run.rows![index]!) : run.fixedIndex,
+    col: run.axis === 'row' ? run.fixedIndex : run.ordered ? run.start + step * index : run.cols![index]!,
   }))
+}
+
+export function readFreshFormulaFamilyRunsFromRefs<Entry>(refs: InitialFormulaEntryRefSource<Entry>):
+  | {
+      readonly runs: readonly DeferredInitialFormulaFamilyRun[] | undefined
+      readonly fallbackCount: number
+    }
+  | undefined {
+  if (!hasFreshFormulaFamilyRuns(refs)) {
+    return undefined
+  }
+  return {
+    runs: refs.freshFormulaFamilyRuns,
+    fallbackCount: refs.freshFormulaFamilyRunFallbackCount ?? 0,
+  }
+}
+
+function hasFreshFormulaFamilyRuns(value: unknown): value is {
+  readonly freshFormulaFamilyRuns: readonly DeferredInitialFormulaFamilyRun[] | undefined
+  readonly freshFormulaFamilyRunFallbackCount?: number
+} {
+  return typeof value === 'object' && value !== null && 'freshFormulaFamilyRuns' in value
 }
 
 export function noteDeferredFormulaFamilyRunMember(args: {

@@ -59,6 +59,8 @@ describe('TemplateBank', () => {
     const trustedScalar = bank.resolveTrustedById(scalar.templateId, 'E3*2', 2, 5)
     const aggregate = bank.resolve('SUM(A2:A4)', 5, 3)
     const trustedAggregate = bank.resolveTrustedById(aggregate.templateId, 'SUM(A3:A5)', 6, 3)
+    const prefixAggregate = bank.resolve('SUM(A1:A1)', 0, 4)
+    const trustedPrefixAggregate = bank.resolveTrustedById(prefixAggregate.templateId, 'SUM(A1:A3)', 2, 4)
 
     expect(trustedScalar?.templateId).toBe(scalar.templateId)
     expect(trustedScalar?.compiled.astMatchesSource).toBe(false)
@@ -76,6 +78,22 @@ describe('TemplateBank', () => {
         endAddress: 'A5',
         startRow: 2,
         endRow: 4,
+        startCol: 0,
+        endCol: 0,
+      },
+    ])
+    expect(trustedPrefixAggregate?.templateId).toBe(prefixAggregate.templateId)
+    expect(trustedPrefixAggregate?.compiled.astMatchesSource).toBe(false)
+    expect(trustedPrefixAggregate?.compiled.symbolicRanges).toEqual(['A1:A3'])
+    expect(trustedPrefixAggregate?.compiled.parsedSymbolicRanges).toEqual([
+      {
+        kind: 'range',
+        refKind: 'cells',
+        address: 'A1:A3',
+        startAddress: 'A1',
+        endAddress: 'A3',
+        startRow: 0,
+        endRow: 2,
         startCol: 0,
         endCol: 0,
       },

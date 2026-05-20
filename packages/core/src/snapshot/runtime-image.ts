@@ -9,6 +9,7 @@ import type {
 } from '../cell-mutations-at.js'
 import { CellFlags } from '../cell-store.js'
 import { writeLiteralToCellStore } from '../engine-value-utils.js'
+import type { DeferredInitialFormulaFamilyRun } from '../engine/services/formula-initialization-family-runs.js'
 import type { InitialFormulaEntryRefSource } from '../engine/services/formula-initialization-refs.js'
 import type { FormulaInstanceSnapshot } from '../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../formula/template-bank.js'
@@ -21,6 +22,7 @@ import {
   materializeWrittenColumns,
   type WrittenColumnTracker,
 } from '../written-column-tracker.js'
+import { restoreAlignedRuntimeFormulaFamilyRuns, type RuntimeImageFormulaFamilyRunSnapshot } from './runtime-image-formula-family-runs.js'
 import { restoreVisualMetadata, restoreWorkbookStructure } from './runtime-image-metadata-restore.js'
 
 type WorkbookSnapshotCell = WorkbookSnapshot['sheets'][number]['cells'][number]
@@ -30,6 +32,7 @@ export interface RuntimeImage {
   readonly templateBank: readonly FormulaTemplateSnapshot[]
   readonly formulaInstances: readonly FormulaInstanceSnapshot[]
   readonly formulaValues: readonly RuntimeImageFormulaValueSnapshot[]
+  readonly formulaFamilyRuns?: readonly RuntimeImageFormulaFamilyRunSnapshot[]
   readonly sheetCells?: readonly RuntimeImageSheetCellsSnapshot[]
 }
 
@@ -275,6 +278,8 @@ class RestoredHydratedPreparedFormulaRefTable implements Iterable<HydratedPrepar
   readonly values: CellValue[]
   readonly preserveCachedValueOnFullRecalc: Uint8Array
   freshFormulaInstances: readonly FormulaInstanceSnapshot[] | undefined
+  freshFormulaFamilyRuns: readonly DeferredInitialFormulaFamilyRun[] | undefined
+  freshFormulaFamilyRunFallbackCount = 0
   private reusable: MutableHydratedPreparedRuntimeFormulaRef | undefined
   length = 0
 
@@ -644,6 +649,7 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
 
 export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): WorkbookRestoreResult {
   const orderedSheets = restoreWorkbookStructure(args)
+  const sheetIdsByName = new Map<string, number>()
 
   args.checkEvaluationBudget?.()
   args.hydrateTemplateBank(args.runtimeImage.templateBank)
@@ -687,6 +693,7 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
           throw new Error(`Missing runtime restore sheet: ${sheet.name}`)
         }
         const sheetId = sheetRecord.id
+        sheetIdsByName.set(sheet.name, sheetId)
         const sheetCellSnapshot = sheetCellsByName.get(sheet.name)
         const sheetCoords = sheetCellSnapshot?.coords
         const rowIds: string[] = []
@@ -901,6 +908,21 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
 
   if (hydratedPreparedFormulaRefs.length > 0 && args.initializeHydratedPreparedCellFormulasAt) {
     args.checkEvaluationBudget?.()
+    const restoredFormulaFamilyRuns =
+      hydratedPreparedFormulaRefs.freshFormulaInstances === undefined
+        ? undefined
+        : restoreAlignedRuntimeFormulaFamilyRuns({
+            runs: args.runtimeImage.formulaFamilyRuns,
+            sheetIdsByName,
+          })
+    if (restoredFormulaFamilyRuns !== undefined) {
+      if (restoredFormulaFamilyRuns.fallbackCount === 0 && restoredFormulaFamilyRuns.runs.length > 0) {
+        hydratedPreparedFormulaRefs.freshFormulaFamilyRuns = restoredFormulaFamilyRuns.runs
+      }
+      hydratedPreparedFormulaRefs.freshFormulaFamilyRunFallbackCount = restoredFormulaFamilyRuns.fallbackCount
+    } else if ((args.runtimeImage.formulaFamilyRuns?.length ?? 0) > 0) {
+      hydratedPreparedFormulaRefs.freshFormulaFamilyRunFallbackCount = args.runtimeImage.formulaFamilyRuns!.length
+    }
     args.initializeHydratedPreparedCellFormulasAt(hydratedPreparedFormulaRefs, hydratedPreparedFormulaRefs.length)
   }
   if (preparedFormulaRefs.length > 0 && args.initializePreparedCellFormulasAt) {

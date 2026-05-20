@@ -11,7 +11,11 @@ import {
 } from '@bilig/formula'
 import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 import { parseA1RowIndex } from './a1-row-number.js'
-import { translateSimpleDirectAggregateFormula, tryCompileSimpleDirectAggregateFormula } from './simple-direct-aggregate-compile.js'
+import {
+  translateAnchoredPrefixDirectAggregateFormula,
+  translateSimpleDirectAggregateFormula,
+  tryCompileSimpleDirectAggregateFormula,
+} from './simple-direct-aggregate-compile.js'
 import {
   translateSimpleDirectScalarFormula,
   translateTrustedSimpleDirectScalarFormula,
@@ -285,6 +289,12 @@ function resolveTrustedTemplateCompiled(
   }
   if (template.templateKey.startsWith('relative-aggregate:') || template.templateKey.startsWith('relative-aggregate-rect:')) {
     const translated = translateSimpleDirectAggregateFormula(template.compiled, rowDelta, colDelta, source)
+    if (translated) {
+      return translated
+    }
+  }
+  if (template.templateKey.startsWith('anchored-prefix-aggregate:')) {
+    const translated = translateAnchoredPrefixDirectAggregateFormula(template.compiled, ownerRow, colDelta, source)
     if (translated) {
       return translated
     }

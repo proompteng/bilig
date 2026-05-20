@@ -10,6 +10,34 @@ import { SpreadsheetEngine } from '../engine.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
 import { readRuntimeImage, readRuntimeSnapshot } from '../snapshot/runtime-image-codec.js'
 import { CellFlags } from '../cell-store.js'
+import type { FormulaFamilyStore } from '../formula/formula-family-store.js'
+
+function isFormulaFamilyStore(value: unknown): value is FormulaFamilyStore {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'getStats') === 'function' &&
+    typeof Reflect.get(value, 'listFamilies') === 'function'
+  )
+}
+
+function getFormulaFamilyStore(engine: SpreadsheetEngine): FormulaFamilyStore {
+  const runtime = Reflect.get(engine, 'runtime')
+  if (typeof runtime !== 'object' || runtime === null) {
+    throw new TypeError('Expected engine runtime')
+  }
+  const binding = Reflect.get(runtime, 'binding')
+  const getFormulaFamilyStatsNow =
+    typeof binding === 'object' && binding !== null ? Reflect.get(binding, 'getFormulaFamilyStatsNow') : undefined
+  if (typeof getFormulaFamilyStatsNow === 'function') {
+    getFormulaFamilyStatsNow.call(binding)
+  }
+  const formulaFamilies = Reflect.get(runtime, 'formulaFamilies')
+  if (!isFormulaFamilyStore(formulaFamilies)) {
+    throw new TypeError('Expected formula family store')
+  }
+  return formulaFamilies
+}
 
 describe('EngineSnapshotService', () => {
   it('ignores missing runtime image carriers', () => {
@@ -347,5 +375,42 @@ describe('EngineSnapshotService', () => {
     expect(restored.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 22 })
     expect(restored.getPerformanceCounters().snapshotOpsReplayed).toBe(0)
     expect(restored.exportSnapshot()).toEqual(snapshot)
+  })
+
+  it('exports runtime formula-family runs and restores the family index from them', async () => {
+    const source = new SpreadsheetEngine({
+      workbookName: 'snapshot-runtime-family-runs-source',
+      replicaId: 'snapshot-runtime-family-runs-source',
+    })
+    await source.ready()
+    source.createSheet('Sheet1')
+    for (let row = 1; row <= 24; row += 1) {
+      source.setCellValue('Sheet1', `A${row}`, row)
+      source.setCellValue('Sheet1', `B${row}`, row * 2)
+      source.setCellFormula('Sheet1', `C${row}`, `A${row}+B${row}`)
+      source.setCellFormula('Sheet1', `D${row}`, `C${row}*2`)
+      source.setCellFormula('Sheet1', `E${row}`, `SUM(A1:A${row})`)
+    }
+    const sourceFamilyStats = getFormulaFamilyStore(source).getStats()
+
+    const snapshot = source.exportSnapshot()
+    const runtimeImage = readRuntimeImage(snapshot)
+    expect(runtimeImage?.formulaFamilyRuns?.length).toBeGreaterThan(0)
+    expect(runtimeImage?.formulaFamilyRuns?.reduce((sum, run) => sum + run.cellIndices.length, 0)).toBe(sourceFamilyStats.memberCount)
+
+    const restored = new SpreadsheetEngine({
+      workbookName: 'snapshot-runtime-family-runs-restored',
+      replicaId: 'snapshot-runtime-family-runs-restored',
+    })
+    await restored.ready()
+    restored.resetPerformanceCounters()
+    restored.importSnapshot(snapshot)
+
+    expect(restored.getCellValue('Sheet1', 'D24')).toEqual({ tag: ValueTag.Number, value: 144 })
+    expect(restored.getCellValue('Sheet1', 'E24')).toEqual({ tag: ValueTag.Number, value: 300 })
+    expect(getFormulaFamilyStore(restored).getStats()).toEqual(sourceFamilyStats)
+    expect(restored.getPerformanceCounters().formulaFamilyRuntimeRunsRestored).toBe(runtimeImage?.formulaFamilyRuns?.length)
+    expect(restored.getPerformanceCounters().formulaFamilyRuntimeRunMembersRestored).toBe(sourceFamilyStats.memberCount)
+    expect(restored.getPerformanceCounters().formulaFamilyRuntimeRunFallbacks).toBe(0)
   })
 })

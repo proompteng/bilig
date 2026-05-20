@@ -10,6 +10,7 @@ import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../../f
 import { exportReplicaSnapshot as exportReplicaStateSnapshot, hydrateReplicaState } from '../../replica-state.js'
 import { attachRuntimeImage, readRuntimeImage } from '../../snapshot/runtime-image-codec.js'
 import { restoreWorkbookFromRuntimeImage, restoreWorkbookFromSnapshot, type RuntimeImage } from '../../snapshot/runtime-image.js'
+import type { RuntimeImageFormulaFamilyRunSnapshot } from '../../snapshot/runtime-image-formula-family-runs.js'
 import type { EngineRuntimeState, EngineReplicaSnapshot } from '../runtime-state.js'
 import { EngineSnapshotError } from '../errors.js'
 import type { WorkbookPivotRecord } from '../../workbook-store.js'
@@ -62,6 +63,7 @@ export function createEngineSnapshotService(args: {
   readonly resetWorkbook: (workbookName?: string) => void
   readonly exportTemplateBank?: () => readonly FormulaTemplateSnapshot[]
   readonly exportFormulaInstances?: () => readonly FormulaInstanceSnapshot[]
+  readonly exportFormulaFamilyRuns?: () => readonly RuntimeImageFormulaFamilyRunSnapshot[]
   readonly hydrateTemplateBank?: (templates: readonly FormulaTemplateSnapshot[]) => void
   readonly resolveTemplateById?: (templateId: number, source: string, row: number, col: number) => FormulaTemplateResolution | undefined
   readonly beginEvaluationBudget?: (startedAtMs: number) => void
@@ -269,6 +271,7 @@ export function createEngineSnapshotService(args: {
                 col: record.col,
                 value: args.getCellByIndex(record.cellIndex).value,
               })),
+              ...(args.exportFormulaFamilyRuns ? { formulaFamilyRuns: args.exportFormulaFamilyRuns() } : {}),
               sheetCells: runtimeImageSheetCells,
             } satisfies RuntimeImage)
           }

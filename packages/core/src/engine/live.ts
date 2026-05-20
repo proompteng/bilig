@@ -865,6 +865,25 @@ export function createEngineServiceRuntime(args: {
             },
           ]
         }),
+      exportFormulaFamilyRuns: () => {
+        binding.getFormulaFamilyStatsNow()
+        return formulaFamilies.listFamilies().flatMap((family) => {
+          const sheetName = args.state.workbook.getSheetNameById(family.sheetId)
+          if (!sheetName) {
+            return []
+          }
+          return family.runs.map((run) => ({
+            sheetName,
+            templateId: family.templateId,
+            shapeKey: family.shapeKey,
+            axis: run.axis,
+            fixedIndex: run.fixedIndex,
+            start: run.start,
+            step: run.step,
+            cellIndices: run.cellIndices,
+          }))
+        })
+      },
       hydrateTemplateBank: (templates) => formulaTemplates.hydrateTemplates(templates),
       resolveTemplateById: (templateId, source, row, col) => formulaTemplates.resolveTrustedByTemplateId(templateId, source, row, col),
       resolveTemplateForCell: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),

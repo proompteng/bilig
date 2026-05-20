@@ -12,6 +12,7 @@ import {
   createDeferredInitialFormulaFamilyRunMap,
   flushDeferredInitialFormulaFamilyRuns,
   noteDeferredFormulaFamilyRunMember as noteDeferredFormulaFamilyRunMemberNow,
+  readFreshFormulaFamilyRunsFromRefs,
   registerDeferredFormulaFamilyRunNow,
   type DeferredInitialFormulaFamilyRunMap,
   type DeferredInitialFormulaFamilyRun,
@@ -786,13 +787,28 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
       !hadExistingFormulas && (args.hydrateFreshFormulaInstances !== undefined || args.deferFormulaInstanceTableRebuild !== undefined)
     const alignedFreshFormulaInstances =
       !hadExistingFormulas && args.hydrateFreshFormulaInstances !== undefined ? readAlignedFreshFormulaInstancesFromRefs(refs) : undefined
+    const freshFormulaFamilyRuns = !hadExistingFormulas ? readFreshFormulaFamilyRunsFromRefs(refs) : undefined
+    const alignedFreshFormulaFamilyRuns = freshFormulaFamilyRuns?.runs
+    if (freshFormulaFamilyRuns?.fallbackCount) {
+      addEngineCounter(args.state.counters, 'formulaFamilyRuntimeRunFallbacks', freshFormulaFamilyRuns.fallbackCount)
+    }
+    if (alignedFreshFormulaFamilyRuns !== undefined) {
+      addEngineCounter(args.state.counters, 'formulaFamilyRuntimeRunsRestored', alignedFreshFormulaFamilyRuns.length)
+      addEngineCounter(
+        args.state.counters,
+        'formulaFamilyRuntimeRunMembersRestored',
+        alignedFreshFormulaFamilyRuns.reduce((sum, run) => sum + run.cellIndices.length, 0),
+      )
+    }
     const deferredFormulaInstances =
       !hadExistingFormulas && args.hydrateFreshFormulaInstances !== undefined && alignedFreshFormulaInstances === undefined ? [] : undefined
     const canCaptureDeferredFormulaFamilyRuns =
       !shouldDeferFormulaFamilyIndex ||
       (args.deferFormulaFamilyIndexRuns !== undefined && refs.length <= DEFERRED_FORMULA_FAMILY_RUN_CAPTURE_LIMIT)
     const deferredFormulaFamilyRuns =
-      hadExistingFormulas || !canCaptureDeferredFormulaFamilyRuns ? undefined : createDeferredInitialFormulaFamilyRunMap()
+      hadExistingFormulas || alignedFreshFormulaFamilyRuns !== undefined || !canCaptureDeferredFormulaFamilyRuns
+        ? undefined
+        : createDeferredInitialFormulaFamilyRunMap()
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
@@ -808,7 +824,8 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
             const ownerSheetName = resolveSheetName(ref.sheetId)
             topologyChanged =
               args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId, {
-                deferFamilyRegistration: shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined,
+                deferFamilyRegistration:
+                  shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined || alignedFreshFormulaFamilyRuns !== undefined,
                 preserveCachedValueOnFullRecalc: ref.preserveCachedValueOnFullRecalc === true,
                 deferFormulaInstanceRegistration: shouldDeferFormulaInstanceTable,
                 assumeFreshFormula: !hadExistingFormulas,
@@ -821,17 +838,19 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
               }) || topologyChanged
             const runtimeFormula = args.state.formulas.get(cellIndex)
             noteDeferredFormulaInstance(deferredFormulaInstances, { cellIndex, row: ref.row, col: ref.col, ownerSheetName }, runtimeFormula)
-            noteDeferredFormulaFamilyRunMember(
-              deferredFormulaFamilyRuns,
-              {
-                cellIndex,
-                sheetId: ref.sheetId,
-                row: ref.row,
-                col: ref.col,
-                ...(ref.templateId !== undefined ? { templateId: ref.templateId } : {}),
-              },
-              runtimeFormula,
-            )
+            if (alignedFreshFormulaFamilyRuns === undefined) {
+              noteDeferredFormulaFamilyRunMember(
+                deferredFormulaFamilyRuns,
+                {
+                  cellIndex,
+                  sheetId: ref.sheetId,
+                  row: ref.row,
+                  col: ref.col,
+                  ...(ref.templateId !== undefined ? { templateId: ref.templateId } : {}),
+                },
+                runtimeFormula,
+              )
+            }
             valueWriter.writeValueAt(cellIndex, ref.sheetId, ref.col, ref.value)
             if (canAssignTopoInBatch && pendingFormulaCells) {
               const hasPendingDependency =
@@ -851,14 +870,25 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
               pendingFormulaCells[cellIndex] = 0
             }
           }
-          flushDeferredInitialFormulaFamilyRuns({
-            runs: deferredFormulaFamilyRuns,
-            shouldDeferFormulaFamilyIndex,
-            deferFormulaFamilyIndexRuns: args.deferFormulaFamilyIndexRuns,
-            deferFormulaFamilyIndexRebuild: args.deferFormulaFamilyIndexRebuild,
-            registerFormulaFamilyRun: registerDeferredFormulaFamilyRun,
-            checkEvaluationBudget: args.checkEvaluationBudget,
-          })
+          if (alignedFreshFormulaFamilyRuns !== undefined) {
+            if (shouldDeferFormulaFamilyIndex) {
+              args.deferFormulaFamilyIndexRuns?.(alignedFreshFormulaFamilyRuns)
+            } else {
+              alignedFreshFormulaFamilyRuns.forEach((run) => {
+                args.checkEvaluationBudget()
+                registerDeferredFormulaFamilyRun(run)
+              })
+            }
+          } else {
+            flushDeferredInitialFormulaFamilyRuns({
+              runs: deferredFormulaFamilyRuns,
+              shouldDeferFormulaFamilyIndex,
+              deferFormulaFamilyIndexRuns: args.deferFormulaFamilyIndexRuns,
+              deferFormulaFamilyIndexRebuild: args.deferFormulaFamilyIndexRebuild,
+              registerFormulaFamilyRun: registerDeferredFormulaFamilyRun,
+              checkEvaluationBudget: args.checkEvaluationBudget,
+            })
+          }
           if (shouldDeferFormulaInstanceTable) {
             if (alignedFreshFormulaInstances !== undefined) {
               args.hydrateFreshFormulaInstances?.(alignedFreshFormulaInstances)

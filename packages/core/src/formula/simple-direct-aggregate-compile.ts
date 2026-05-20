@@ -279,3 +279,79 @@ export function translateSimpleDirectAggregateFormula(
     parsedSymbolicRanges: [translatedRange],
   }
 }
+
+export function translateAnchoredPrefixDirectAggregateFormula(
+  compiled: CompiledFormula,
+  ownerRow: number,
+  colDelta: number,
+  source: string,
+): CompiledFormula | undefined {
+  const candidate = compiled.directAggregateCandidate
+  const range = compiled.parsedSymbolicRanges?.[candidate?.symbolicRangeIndex ?? -1]
+  if (
+    candidate === undefined ||
+    range === undefined ||
+    compiled.parsedSymbolicRanges?.length !== 1 ||
+    compiled.symbolicRanges.length !== 1 ||
+    (compiled.parsedSymbolicRefs?.length ?? 0) !== 0 ||
+    compiled.symbolicRefs.length !== 0 ||
+    range.kind !== 'range' ||
+    range.refKind !== 'cells' ||
+    range.sheetName !== undefined ||
+    range.startRow !== 0 ||
+    range.startCol !== range.endCol
+  ) {
+    return undefined
+  }
+  const startCol = range.startCol + colDelta
+  const endCol = range.endCol + colDelta
+  if (ownerRow < 0 || startCol < 0 || endCol < startCol) {
+    return undefined
+  }
+
+  const startAddress = formatAddress(0, startCol)
+  const endAddress = formatAddress(ownerRow, endCol)
+  const address = `${startAddress}:${endAddress}`
+  const translatedRange: ParsedRangeReferenceInfo = {
+    ...range,
+    address,
+    startAddress,
+    endAddress,
+    startRow: 0,
+    endRow: ownerRow,
+    startCol,
+    endCol,
+  }
+  const rangeNode: FormulaNode = {
+    kind: 'RangeRef',
+    refKind: 'cells',
+    start: startAddress,
+    end: endAddress,
+  }
+  const aggregateNode: FormulaNode = {
+    kind: 'CallExpr',
+    callee: candidate.callee,
+    args: [rangeNode],
+  }
+  const ast: FormulaNode =
+    candidate.resultOffset === undefined
+      ? aggregateNode
+      : {
+          kind: 'BinaryExpr',
+          operator: '+',
+          left: aggregateNode,
+          right: { kind: 'NumberLiteral', value: candidate.resultOffset },
+        }
+
+  return {
+    ...compiled,
+    source,
+    ast,
+    optimizedAst: ast,
+    astMatchesSource: false,
+    deps: [address],
+    parsedDeps: [translatedRange satisfies ParsedDependencyReference],
+    symbolicRanges: [address],
+    parsedSymbolicRanges: [translatedRange],
+  }
+}
