@@ -6,13 +6,13 @@ import type {
   WorkbookConditionalFormatSnapshot,
   WorkbookRichTextCellSnapshot,
 } from '@bilig/protocol'
-import { needsConditionalFormatArtifactXml, readImportedSheetConditionalFormatsFromElementXml } from './xlsx-conditional-formats.js'
 import { readLargeSimpleAutoFiltersFromBytes } from './xlsx-large-simple-autofilter-byte-scan.js'
 import {
   readLargeSimpleCellValueFromTextRange,
   readLargeSimpleSharedStringIndexFromTextRange,
   type LargeSimpleXmlTextRange,
 } from './xlsx-large-simple-cell-value-scan.js'
+import { readLargeSimpleConditionalFormattingFromBytes } from './xlsx-large-simple-conditional-format-byte-scan.js'
 import {
   LargeSimpleFormulaRecords,
   parseLargeSimpleSharedFormulaIndex,
@@ -521,35 +521,29 @@ class LargeSimpleWorksheetChunkScanner {
       return true
     }
     if (localName === 'conditionalFormatting') {
-      this.conditionalFormatCount += Math.max(1, countOpeningTags(this.buffer, startIndex, endIndex, 'cfRule'))
-      const xml = decodeBytes(this.buffer, startIndex, endIndex)
-      if (this.sheetName && !needsConditionalFormatArtifactXml(xml)) {
-        const conditionalFormats = readImportedSheetConditionalFormatsFromElementXml({}, this.sheetName, [xml])
-        if (conditionalFormats && conditionalFormats.length > 0) {
-          this.conditionalFormats ??= []
-          this.conditionalFormats.push(...this.assignConditionalFormatIds(conditionalFormats))
-          return true
-        }
+      if (!this.sheetName) {
+        return false
       }
-      this.conditionalFormattingXml ??= []
-      this.conditionalFormattingXml.push(xml)
+      const scan = readLargeSimpleConditionalFormattingFromBytes(
+        this.sheetName,
+        this.buffer,
+        startIndex,
+        endIndex,
+        this.conditionalFormatIdCounter + 1,
+      )
+      this.conditionalFormatCount += scan.ruleCount
+      if (scan.conditionalFormats && scan.conditionalFormats.length > 0) {
+        this.conditionalFormats ??= []
+        this.conditionalFormats.push(...scan.conditionalFormats)
+        this.conditionalFormatIdCounter += scan.conditionalFormats.length
+      }
+      if (scan.artifactXml) {
+        this.conditionalFormattingXml ??= []
+        this.conditionalFormattingXml.push(scan.artifactXml)
+      }
       return true
     }
     return false
-  }
-
-  private assignConditionalFormatIds(
-    conditionalFormats: readonly WorkbookConditionalFormatSnapshot[],
-  ): WorkbookConditionalFormatSnapshot[] {
-    return conditionalFormats.map((format) => {
-      this.conditionalFormatIdCounter += 1
-      return {
-        ...format,
-        id: `xlsx-cf:${this.sheetName ?? format.range.sheetName}:${format.range.startAddress}:${format.range.endAddress}:${String(
-          this.conditionalFormatIdCounter,
-        )}`,
-      }
-    })
   }
 
   private countMetadataElement(localName: string, contentStart: number, contentEnd: number): void {
