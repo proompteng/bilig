@@ -96,6 +96,26 @@ describe('useWorkbookGridGeometryRuntime', () => {
       x: 10 + gridMetrics.rowMarkerWidth + 150 - 25,
       y: 40 + gridMetrics.headerHeight + 30 - 15,
     })
+    expect(latestState?.getCellLocalBounds(1, 3)).toEqual({
+      height: gridMetrics.rowHeight,
+      width: gridMetrics.columnWidth,
+      x: gridMetrics.rowMarkerWidth + 150 - 25,
+      y: gridMetrics.headerHeight + 30 + gridMetrics.rowHeight + 40 - 15,
+    })
+
+    latestState!.gridCameraStore.setSnapshot(latestState!.getLiveGeometrySnapshot())
+    expect(latestState?.getCellLocalBounds(1, 1)).toEqual({
+      height: 7,
+      width: gridMetrics.columnWidth - 25,
+      x: gridMetrics.rowMarkerWidth + 150,
+      y: gridMetrics.headerHeight + 30,
+    })
+    expect(latestState?.getCellLocalBounds(0, 1)).toEqual({
+      height: 7,
+      width: 150,
+      x: gridMetrics.rowMarkerWidth,
+      y: gridMetrics.headerHeight + 30,
+    })
     expect(latestState?.getLiveGeometrySnapshot()?.camera).toMatchObject({
       bodyViewportHeight: expect.any(Number),
       bodyViewportWidth: expect.any(Number),

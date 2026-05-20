@@ -152,7 +152,7 @@ export function useWorkbookGridGeometryRuntime(input: {
       if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
         return undefined
       }
-      const geometryRect = gridCameraStore.getSnapshot()?.cellScreenRect(col, row)
+      const geometryRect = gridCameraStore.getSnapshot()?.editorScreenRect(col, row)
       if (geometryRect) {
         return geometryRect
       }

@@ -378,6 +378,26 @@ test('@browser-ci web app keeps old fill-handle hit targets from intercepting ce
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D4')
 })
 
+test('@browser-ci web app hides fill handles when the selected cell is clipped behind headers', async ({ page }) => {
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-fill-handle-clipped-headers'))}&persist=0`)
+  await waitForWorkbookReady(page)
+
+  await clickProductCell(page, 1, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await expect(page.locator('[data-grid-selection-visual-role="fill-handle"]')).toHaveCount(1)
+  await expect(page.locator('[data-grid-fill-handle="true"]')).toBeVisible()
+
+  await page.getByTestId('grid-scroll-viewport').evaluate((viewport) => {
+    viewport.scrollLeft = 150
+    viewport.scrollTop = 60
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+  })
+
+  await expect(page.locator('[data-grid-selection-visual-role="fill-handle"]')).toHaveCount(0)
+  await expect(page.locator('[data-grid-fill-handle="true"]')).toBeHidden()
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+})
+
 test('@browser-ci web app keeps active cell chrome synchronized inside a keyboard-cycled range', async ({ page }) => {
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-range-keyboard-visual-geometry'))}&persist=0`)
   await waitForWorkbookReady(page)

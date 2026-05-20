@@ -212,4 +212,27 @@ describe('gridGeometry', () => {
       y: 96.5,
     })
   })
+
+  test('hides fill-handle geometry when the trailing cell is clipped behind headers', () => {
+    const metrics = getGridMetrics()
+    const columns = createGridAxisWorldIndex({ axisLength: 20, defaultSize: 100 })
+    const rows = createGridAxisWorldIndex({ axisLength: 20, defaultSize: 20 })
+    const geometry = createGridGeometrySnapshotFromAxes({
+      columns,
+      dpr: 1,
+      freezeCols: 0,
+      freezeRows: 0,
+      gridMetrics: metrics,
+      hostHeight: 140,
+      hostWidth: 320,
+      rows,
+      scrollLeft: 150,
+      scrollTop: 60,
+      sheetName: 'Sheet1',
+      updatedAt: 100,
+    })
+
+    expect(geometry.rangeScreenRects({ x: 0, y: 0, width: 1, height: 1 })).toEqual([])
+    expect(geometry.fillHandleScreenRect({ x: 0, y: 0, width: 1, height: 1 })).toBeNull()
+  })
 })

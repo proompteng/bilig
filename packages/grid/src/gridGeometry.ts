@@ -446,10 +446,12 @@ function resolveFillHandleScreenRect(input: {
 }): Rectangle | null {
   const col = Math.max(0, Math.min(MAX_COLS - 1, input.range.x + input.range.width - 1))
   const row = Math.max(0, Math.min(MAX_ROWS - 1, input.range.y + input.range.height - 1))
-  const anchor = resolveCellScreenRect({
+  const paneKind = resolveCellPaneKind(input.camera, col, row)
+  const anchor = resolveCellScreenRectForPane({
     camera: input.camera,
     col,
     columns: input.columns,
+    paneKind,
     row,
     rows: input.rows,
   })
@@ -458,7 +460,8 @@ function resolveFillHandleScreenRect(input: {
   }
   const size = GRID_FILL_HANDLE_VISUAL_SIZE
   const handle = rect(anchor.x + anchor.width - size / 2, anchor.y + anchor.height - size / 2, size, size)
-  return clipRect(handle, rect(0, 0, getHostWidth(input.camera), getHostHeight(input.camera)))
+  const pane = input.camera.panes.find((candidate) => candidate.kind === paneKind)
+  return pane ? clipRect(handle, pane.frame) : null
 }
 
 function hitTestHeaderScreenPoint(input: {
