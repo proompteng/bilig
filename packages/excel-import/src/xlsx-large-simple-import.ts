@@ -162,6 +162,7 @@ interface ScannedWorksheet {
   readonly metadataScan: LargeSimpleWorksheetScannedMetadata | undefined
   readonly metadataInput: LargeSimpleSheetMetadataInput
   readonly sharedStringIndexes: ReadonlySet<number>
+  readonly sharedStrings?: LargeSimpleSharedStrings
 }
 
 type LargeSimpleSheetMetadataInput = Pick<
@@ -187,6 +188,7 @@ const workbookRelationshipsPath = 'xl/_rels/workbook.xml.rels'
 const sharedStringsPath = 'xl/sharedStrings.xml'
 const stylesPath = 'xl/styles.xml'
 const unsupportedPackagePathPattern = /^xl\/(?:ctrlProps|threadedComments|vbaProject\.bin)/u
+const emptySharedStringIndexes: ReadonlySet<number> = new Set()
 export function tryImportLargeSimpleXlsx(
   source: LargeSimpleXlsxImportSource,
   fileName: string,
@@ -524,17 +526,29 @@ export function tryImportLargeSimpleXlsx(
     sharedStrings = referencedSharedStrings
   }
   delete zip[sharedStringsPath]
-  const sharedStringsByScannedWorksheetIndex = new Map<number, LargeSimpleSharedStrings>()
-  if (materializeCells && hasSharedStrings && referencedSharedStringIndexes.size > 0 && scannedWorksheets.length > 1) {
+  if (materializeCells && hasSharedStrings && referencedSharedStringIndexes.size > 0) {
     for (const [index, scanned] of scannedWorksheets.entries()) {
       if (!scanned || scanned.sharedStringIndexes.size === 0) {
+        continue
+      }
+      if (!hasReferencedLargeSimpleRichSharedStrings(sharedStrings, scanned.sharedStringIndexes)) {
+        if (scanned.cellScan.arena.resolveSharedStrings(sharedStrings) === null) {
+          return null
+        }
+        scannedWorksheets[index] = {
+          ...scanned,
+          sharedStringIndexes: emptySharedStringIndexes,
+        }
         continue
       }
       const sheetSharedStrings = createLargeSimpleSharedStringSubset(sharedStrings, scanned.sharedStringIndexes)
       if (sheetSharedStrings === null) {
         return null
       }
-      sharedStringsByScannedWorksheetIndex.set(index, sheetSharedStrings)
+      scannedWorksheets[index] = {
+        ...scanned,
+        sharedStrings: sheetSharedStrings,
+      }
     }
     sharedStrings = []
   }
@@ -645,17 +659,10 @@ export function tryImportLargeSimpleXlsx(
       continue
     }
     const snapshotMaterializationStart = phaseRecorder.start()
-    const retainSharedStringRefsForCells = materializeCells && hasSharedStrings
-    const sheetSharedStrings = sharedStringsByScannedWorksheetIndex.get(index) ?? sharedStrings
-    const resolvePlainSharedStringsIntoArena =
-      retainSharedStringRefsForCells &&
-      scanned.cellScan.cellCount > lazySheetCellMaterializationThreshold &&
-      !hasReferencedLargeSimpleRichSharedStrings(sheetSharedStrings, scanned.sharedStringIndexes)
-    const resolvedRichTextCells = retainSharedStringRefsForCells
-      ? resolvePlainSharedStringsIntoArena
-        ? scanned.cellScan.arena.resolveSharedStrings(sheetSharedStrings)
-        : scanned.cellScan.arena.retainSharedStringReferences(sheetSharedStrings)
-      : []
+    const resolvedRichTextCells =
+      materializeCells && hasSharedStrings && scanned.sharedStringIndexes.size > 0
+        ? scanned.cellScan.arena.retainSharedStringReferences(scanned.sharedStrings ?? sharedStrings)
+        : []
     if (resolvedRichTextCells === null) {
       return null
     }
@@ -698,7 +705,6 @@ export function tryImportLargeSimpleXlsx(
     )
     appendParsedWorksheet(parsed)
     scannedWorksheets[index] = undefined
-    sharedStringsByScannedWorksheetIndex.delete(index)
     phaseRecorder.finish('public-snapshot-materialization', snapshotMaterializationStart)
   }
   sharedStrings = []
