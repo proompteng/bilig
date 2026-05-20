@@ -301,6 +301,34 @@ importers:
         specifier: workspace:*
         version: link:../headless
 
+  packages/bilig-exceljs-formula-recalc:
+    dependencies:
+      '@bilig/xlsx-formula-recalc':
+        specifier: workspace:*
+        version: link:../bilig-xlsx-formula-recalc
+      exceljs-formula-recalc:
+        specifier: workspace:*
+        version: link:../exceljs-formula-recalc
+    devDependencies:
+      exceljs:
+        specifier: 4.4.0
+        version: 4.4.0
+
+  packages/bilig-sheetjs-formula-recalc:
+    dependencies:
+      '@bilig/xlsx-formula-recalc':
+        specifier: workspace:*
+        version: link:../bilig-xlsx-formula-recalc
+      sheetjs-formula-recalc:
+        specifier: workspace:*
+        version: link:../sheetjs-formula-recalc
+
+  packages/bilig-xlsx-formula-recalc:
+    dependencies:
+      xlsx-formula-recalc:
+        specifier: workspace:*
+        version: link:../xlsx-formula-recalc
+
   packages/binary-protocol:
     dependencies:
       '@bilig/protocol':
@@ -516,6 +544,15 @@ importers:
       '@bilig/workbook-domain':
         specifier: workspace:*
         version: link:../workbook-domain
+
+  packages/workpaper:
+    dependencies:
+      '@bilig/headless':
+        specifier: workspace:*
+        version: link:../headless
+      bilig-workpaper:
+        specifier: workspace:*
+        version: link:../bilig
 
   packages/xlsx-formula-recalc:
     dependencies:

@@ -14,10 +14,14 @@ on:
       - 'packages/wasm-kernel/**'
       - 'packages/excel-import/**'
       - 'packages/bilig/**'
+      - 'packages/workpaper/**'
       - 'packages/create-workpaper/**'
       - 'packages/xlsx-formula-recalc/**'
+      - 'packages/bilig-xlsx-formula-recalc/**'
       - 'packages/sheetjs-formula-recalc/**'
+      - 'packages/bilig-sheetjs-formula-recalc/**'
       - 'packages/exceljs-formula-recalc/**'
+      - 'packages/bilig-exceljs-formula-recalc/**'
       - 'packages/benchmarks/**'
       - 'packages/headless/CHANGELOG.md'
       - 'docs/public-api.md'
@@ -137,9 +141,13 @@ jobs:
           pnpm --filter @bilig/excel-import build
           pnpm --filter @bilig/headless build
           pnpm --filter bilig-workpaper build
+          pnpm --filter @bilig/workpaper build
           pnpm --filter xlsx-formula-recalc build
+          pnpm --filter @bilig/xlsx-formula-recalc build
           pnpm --filter sheetjs-formula-recalc build
+          pnpm --filter @bilig/sheetjs-formula-recalc build
           pnpm --filter exceljs-formula-recalc build
+          pnpm --filter @bilig/exceljs-formula-recalc build
 
       - name: Lint runtime package sources
         run: |
@@ -222,16 +230,24 @@ jobs:
             packages/excel-import
             packages/headless
             packages/bilig
+            packages/workpaper
             packages/xlsx-formula-recalc
+            packages/bilig-xlsx-formula-recalc
             packages/sheetjs-formula-recalc
+            packages/bilig-sheetjs-formula-recalc
             packages/exceljs-formula-recalc
+            packages/bilig-exceljs-formula-recalc
             packages/create-workpaper
           )
 
           for package_dir in "${package_dirs[@]}"; do
+            package_name="$(node -e "const fs = require('node:fs'); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).name)" "$package_dir/package.json")"
+            encoded_package_name="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$package_name")"
+            package_pack_dir="$GITHUB_WORKSPACE/build/npm-packages-runtime/${encoded_package_name}"
+            mkdir -p "$package_pack_dir"
             (
               cd "$package_dir"
-              pnpm pack --pack-destination "$GITHUB_WORKSPACE/build/npm-packages-runtime"
+              pnpm pack --pack-destination "$package_pack_dir"
             )
           done
 
@@ -239,7 +255,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: bilig-runtime-packages
-          path: build/npm-packages-runtime/*.tgz
+          path: build/npm-packages-runtime/**/*.tgz
           if-no-files-found: error
 
   plan_release:
@@ -687,9 +703,13 @@ jobs:
             'packages/excel-import/package.json',
             'packages/headless/package.json',
             'packages/bilig/package.json',
+            'packages/workpaper/package.json',
             'packages/xlsx-formula-recalc/package.json',
+            'packages/bilig-xlsx-formula-recalc/package.json',
             'packages/sheetjs-formula-recalc/package.json',
+            'packages/bilig-sheetjs-formula-recalc/package.json',
             'packages/exceljs-formula-recalc/package.json',
+            'packages/bilig-exceljs-formula-recalc/package.json',
             'packages/create-workpaper/package.json',
           ];
           const packages = packagePaths.map((packagePath) =>
@@ -739,9 +759,13 @@ jobs:
             packages/excel-import/package.json
             packages/headless/package.json
             packages/bilig/package.json
+            packages/workpaper/package.json
             packages/xlsx-formula-recalc/package.json
+            packages/bilig-xlsx-formula-recalc/package.json
             packages/sheetjs-formula-recalc/package.json
+            packages/bilig-sheetjs-formula-recalc/package.json
             packages/exceljs-formula-recalc/package.json
+            packages/bilig-exceljs-formula-recalc/package.json
             packages/create-workpaper/package.json
             packages/headless/AGENTS.md
             packages/headless/server.json
@@ -750,15 +774,19 @@ jobs:
             packages/bilig/AGENTS.md
             packages/bilig/SKILL.md
             packages/bilig/README.md
+            packages/workpaper/README.md
             packages/xlsx-formula-recalc/AGENTS.md
             packages/xlsx-formula-recalc/SKILL.md
             packages/xlsx-formula-recalc/README.md
+            packages/bilig-xlsx-formula-recalc/README.md
             packages/sheetjs-formula-recalc/AGENTS.md
             packages/sheetjs-formula-recalc/SKILL.md
             packages/sheetjs-formula-recalc/README.md
+            packages/bilig-sheetjs-formula-recalc/README.md
             packages/exceljs-formula-recalc/AGENTS.md
             packages/exceljs-formula-recalc/SKILL.md
             packages/exceljs-formula-recalc/README.md
+            packages/bilig-exceljs-formula-recalc/README.md
             packages/headless/CHANGELOG.md
             skills/bilig-workpaper/SKILL.md
           )
@@ -784,9 +812,13 @@ jobs:
           pnpm --filter @bilig/core build
           pnpm --filter @bilig/headless build
           pnpm --filter bilig-workpaper build
+          pnpm --filter @bilig/workpaper build
           pnpm --filter xlsx-formula-recalc build
+          pnpm --filter @bilig/xlsx-formula-recalc build
           pnpm --filter sheetjs-formula-recalc build
+          pnpm --filter @bilig/sheetjs-formula-recalc build
           pnpm --filter exceljs-formula-recalc build
+          pnpm --filter @bilig/exceljs-formula-recalc build
 
           bun scripts/sync-headless-package-footprint.ts
 
@@ -851,9 +883,13 @@ jobs:
           pnpm --filter @bilig/excel-import build
           pnpm --filter @bilig/headless build
           pnpm --filter bilig-workpaper build
+          pnpm --filter @bilig/workpaper build
           pnpm --filter xlsx-formula-recalc build
+          pnpm --filter @bilig/xlsx-formula-recalc build
           pnpm --filter sheetjs-formula-recalc build
+          pnpm --filter @bilig/sheetjs-formula-recalc build
           pnpm --filter exceljs-formula-recalc build
+          pnpm --filter @bilig/exceljs-formula-recalc build
 
       - name: Validate publishable runtime package set
         run: |

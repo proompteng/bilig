@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, cpSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, cpSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
@@ -75,7 +75,10 @@ try {
     syncStagedMcpServerMetadata(runtimePackage.name, stagedPackageDir, targetVersion)
     validateStagedRuntimePackageVersion(runtimePackage.name, stagedPackageDir, targetVersion)
 
-    runCommand('npm', ['pack', '--pack-destination', packDir], {
+    const packagePackDir = join(packDir, encodeURIComponent(runtimePackage.name))
+    mkdirSync(packagePackDir, { recursive: true })
+
+    runCommand('npm', ['pack', '--pack-destination', packagePackDir], {
       cwd: stagedPackageDir,
     })
   }
@@ -178,11 +181,10 @@ function rewriteInternalDependencyRanges(manifest: Record<string, unknown>, inte
 }
 
 function indexTarballs(targetDir: string) {
-  const tarballs = readdirSync(targetDir).filter((entry) => entry.endsWith('.tgz'))
-  const entriesByPackage = new Map()
+  const tarballs = listTarballsRecursive(targetDir)
+  const entriesByPackage = new Map<string, string>()
 
-  for (const tarballName of tarballs) {
-    const tarballPath = join(targetDir, tarballName)
+  for (const tarballPath of tarballs) {
     const packedManifest = JSON.parse(runTextCommand('tar', ['-xOf', tarballPath, 'package/package.json']))
     if (typeof packedManifest.name !== 'string' || typeof packedManifest.version !== 'string') {
       throw new Error(`Packed manifest is missing name/version in ${tarballPath}`)
@@ -191,6 +193,22 @@ function indexTarballs(targetDir: string) {
   }
 
   return entriesByPackage
+}
+
+function listTarballsRecursive(targetDir: string): string[] {
+  const tarballs: string[] = []
+  for (const entry of readdirSync(targetDir)) {
+    const entryPath = join(targetDir, entry)
+    const entryStat = statSync(entryPath)
+    if (entryStat.isDirectory()) {
+      tarballs.push(...listTarballsRecursive(entryPath))
+      continue
+    }
+    if (entry.endsWith('.tgz')) {
+      tarballs.push(entryPath)
+    }
+  }
+  return tarballs
 }
 
 function isVersionPublished(packageName: string, version: string) {

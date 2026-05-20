@@ -1,0 +1,72 @@
+{
+  "name": "@bilig/exceljs-formula-recalc",
+  "version": "0.37.2",
+  "description": "Scoped ExcelJS formula recalculation package for Node.js without Excel, LibreOffice, or browser automation.",
+  "keywords": [
+    "bilig",
+    "excel",
+    "excel-formulas",
+    "exceljs",
+    "exceljs-formulas",
+    "exceljs-recalc",
+    "formula-engine",
+    "formula-recalculation",
+    "node",
+    "spreadsheet",
+    "workbook",
+    "xlsx",
+    "xlsx-recalc"
+  ],
+  "homepage": "https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/bilig-exceljs-formula-recalc"
+  },
+  "bin": {
+    "exceljs-recalc": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "pnpm --dir ../.. --filter @bilig/xlsx-formula-recalc build && pnpm --dir ../.. --filter exceljs-formula-recalc build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bilig/xlsx-formula-recalc": "workspace:*",
+    "exceljs-formula-recalc": "workspace:*"
+  },
+  "devDependencies": {
+    "exceljs": "4.4.0"
+  },
+  "peerDependencies": {
+    "exceljs": ">=4.4.0"
+  },
+  "peerDependenciesMeta": {
+    "exceljs": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

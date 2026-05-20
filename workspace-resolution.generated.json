@@ -43,6 +43,10 @@
     "packageDir": "packages/excel-import",
     "sourceEntry": "packages/excel-import/src/index.ts"
   },
+  "@bilig/exceljs-formula-recalc": {
+    "packageDir": "packages/bilig-exceljs-formula-recalc",
+    "sourceEntry": "packages/bilig-exceljs-formula-recalc/src/index.ts"
+  },
   "@bilig/formula": {
     "packageDir": "packages/formula",
     "sourceEntry": "packages/formula/src/index.ts"
@@ -87,6 +91,10 @@
     "packageDir": "packages/runtime-kernel",
     "sourceEntry": "packages/runtime-kernel/src/index.ts"
   },
+  "@bilig/sheetjs-formula-recalc": {
+    "packageDir": "packages/bilig-sheetjs-formula-recalc",
+    "sourceEntry": "packages/bilig-sheetjs-formula-recalc/src/index.ts"
+  },
   "@bilig/storage-server": {
     "packageDir": "packages/storage-server",
     "sourceEntry": "packages/storage-server/src/index.ts"
@@ -106,6 +114,26 @@
   "@bilig/worker-transport": {
     "packageDir": "packages/worker-transport",
     "sourceEntry": "packages/worker-transport/src/index.ts"
+  },
+  "@bilig/workpaper": {
+    "packageDir": "packages/workpaper",
+    "sourceEntry": "packages/workpaper/src/index.ts"
+  },
+  "@bilig/workpaper/mcp": {
+    "packageDir": "packages/workpaper",
+    "sourceEntry": "packages/workpaper/src/mcp.ts"
+  },
+  "@bilig/workpaper/xlsx": {
+    "packageDir": "packages/workpaper",
+    "sourceEntry": "packages/workpaper/src/xlsx.ts"
+  },
+  "@bilig/xlsx-formula-recalc": {
+    "packageDir": "packages/bilig-xlsx-formula-recalc",
+    "sourceEntry": "packages/bilig-xlsx-formula-recalc/src/index.ts"
+  },
+  "@bilig/xlsx-formula-recalc/cli-api": {
+    "packageDir": "packages/bilig-xlsx-formula-recalc",
+    "sourceEntry": "packages/bilig-xlsx-formula-recalc/src/cli-api.ts"
   },
   "@bilig/zero-sync": {
     "packageDir": "packages/zero-sync",

@@ -83,19 +83,23 @@ function resolveKeepStageOrExit(): boolean {
 }
 
 function packRuntimePackages(runtimePackageSet: RuntimePackageManifest[]): string[] {
+  const tarballIndex = new Map<string, string>()
+
   for (const runtimePackage of runtimePackageSet) {
     const packageDir = join(rootDir, runtimePackage.dir)
-    runCommand('pnpm', ['pack', '--pack-destination', packDir], { cwd: packageDir })
-  }
+    const packagePackDir = join(packDir, encodeURIComponent(runtimePackage.name))
 
-  const tarballIndex = new Map<string, string>()
-  for (const tarballName of readdirSync(packDir).filter((entry) => entry.endsWith('.tgz'))) {
-    const tarballPath = join(packDir, tarballName)
-    const packedManifest = readPackedManifest(tarballPath)
-    if (!packedManifest.name || !packedManifest.version) {
-      throw new Error(`Packed tarball is missing name/version: ${tarballPath}`)
+    mkdirSync(packagePackDir, { recursive: true })
+    runCommand('pnpm', ['pack', '--pack-destination', packagePackDir], { cwd: packageDir })
+
+    for (const tarballName of readdirSync(packagePackDir).filter((entry) => entry.endsWith('.tgz'))) {
+      const tarballPath = join(packagePackDir, tarballName)
+      const packedManifest = readPackedManifest(tarballPath)
+      if (!packedManifest.name || !packedManifest.version) {
+        throw new Error(`Packed tarball is missing name/version: ${tarballPath}`)
+      }
+      tarballIndex.set(packedManifest.name, tarballPath)
     }
-    tarballIndex.set(packedManifest.name, tarballPath)
   }
 
   return runtimePackageSet.map((runtimePackage) => {
@@ -536,8 +540,8 @@ function writeBiligWorkpaperScript(projectDir: string): void {
   writeFileSync(
     join(projectDir, 'bilig-workpaper.ts'),
     [
-      'import { WorkPaper } from "bilig-workpaper";',
-      'import { exportXlsx, importXlsx } from "bilig-workpaper/xlsx";',
+      'import { WorkPaper } from "@bilig/workpaper";',
+      'import { exportXlsx, importXlsx } from "@bilig/workpaper/xlsx";',
       '',
       'const workbook = WorkPaper.buildFromSheets({',
       '  Inputs: [[',
@@ -584,7 +588,7 @@ function writeExceljsFormulaRecalcScript(projectDir: string): void {
     join(projectDir, 'exceljs-formula-recalc.ts'),
     [
       'import ExcelJS from "exceljs";',
-      'import { recalculateExceljsWorkbook } from "exceljs-formula-recalc";',
+      'import { recalculateExceljsWorkbook } from "@bilig/exceljs-formula-recalc";',
       '',
       'const workbook = new ExcelJS.Workbook();',
       'const inputs = workbook.addWorksheet("Inputs");',

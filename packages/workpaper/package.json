@@ -1,0 +1,77 @@
+{
+  "name": "@bilig/workpaper",
+  "version": "0.37.2",
+  "description": "Scoped Bilig WorkPaper runtime for Node.js services, agent tools, and server-side spreadsheet formulas.",
+  "keywords": [
+    "agent-tools",
+    "ai-agents",
+    "bilig",
+    "bilig-workpaper",
+    "excel",
+    "formula-engine",
+    "formula-recalculation",
+    "headless-spreadsheet",
+    "node",
+    "server-side-spreadsheet",
+    "spreadsheet",
+    "spreadsheet-automation",
+    "spreadsheet-engine",
+    "spreadsheet-formulas",
+    "workbook",
+    "workbook-api",
+    "workpaper",
+    "xlsx"
+  ],
+  "homepage": "https://proompteng.github.io/bilig/",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/workpaper"
+  },
+  "bin": {
+    "bilig-agent-challenge": "./dist/agent-workbook-challenge-bin.js",
+    "bilig-formula-clinic": "./dist/formula-clinic-bin.js",
+    "bilig-mcp-challenge": "./dist/mcp-challenge-bin.js",
+    "bilig-workpaper-mcp": "./dist/work-paper-mcp-stdio-bin.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
+    },
+    "./xlsx": {
+      "types": "./dist/xlsx.d.ts",
+      "import": "./dist/xlsx.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "pnpm --dir ../.. --filter bilig-workpaper build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bilig/headless": "workspace:*",
+    "bilig-workpaper": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

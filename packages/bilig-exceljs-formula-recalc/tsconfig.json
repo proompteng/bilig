@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.workspace-paths.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "references": [
+    {
+      "path": "../bilig-xlsx-formula-recalc"
+    },
+    {
+      "path": "../exceljs-formula-recalc"
+    }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["src/**/__tests__/**"]
+}
