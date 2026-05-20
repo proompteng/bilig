@@ -309,6 +309,45 @@ describe('SpreadsheetEngine formula initialization', () => {
     })
   })
 
+  it('uses native direct-scalar initialization beyond the JS direct limit', async () => {
+    const rowCount = 20_000
+    const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-native-direct-scalar-family' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    for (let row = 1; row <= rowCount; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+
+    engine.resetPerformanceCounters()
+    engine.initializeCellFormulasAt(
+      Array.from({ length: rowCount }, (_entry, row) => ({
+        sheetId,
+        mutation: {
+          kind: 'setCellFormula' as const,
+          row,
+          col: 1,
+          formula: `A${row + 1}*2+1`,
+        },
+      })),
+      rowCount,
+    )
+
+    expect(engine.getCellValue('Sheet1', `B${rowCount}`)).toEqual({
+      tag: ValueTag.Number,
+      value: rowCount * 2 + 1,
+    })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters()).toMatchObject({
+      directFormulaInitialEvaluations: rowCount,
+      nativeDirectScalarInitialEvaluations: rowCount,
+      nativeDirectAggregatePrefixEvaluations: 0,
+      directAggregatePrefixEvaluations: 0,
+      directAggregateScanEvaluations: 0,
+      regionQueryIndexBuilds: 0,
+    })
+  })
+
   it('materializes out-of-order anchored prefix aggregates during initial direct evaluation', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-out-of-order-prefix-aggregate' })
     await engine.ready()
@@ -506,6 +545,48 @@ describe('SpreadsheetEngine formula initialization', () => {
     expect(engine.getPerformanceCounters()).toMatchObject({
       directFormulaInitialEvaluations: refs.length,
       nativeDirectLookupInitialEvaluations: refs.length,
+    })
+  })
+
+  it('uses native uniform lookup initialization beyond the JS direct limit', async () => {
+    const lookupRows = 512
+    const formulaRows = 16_385
+    const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-native-lookup-over-limit' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    for (let row = 1; row <= lookupRows; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+    for (let row = 1; row <= formulaRows; row += 1) {
+      engine.setCellValue('Sheet1', `D${row}`, ((row - 1) % lookupRows) + 1)
+    }
+
+    engine.resetPerformanceCounters()
+    engine.initializeCellFormulasAt(
+      Array.from({ length: formulaRows }, (_entry, row) => ({
+        sheetId,
+        mutation: {
+          kind: 'setCellFormula' as const,
+          row,
+          col: 4,
+          formula: `MATCH(D${row + 1},A1:A${lookupRows},0)`,
+        },
+      })),
+      formulaRows,
+    )
+
+    expect(engine.getCellValue('Sheet1', `E${formulaRows}`)).toEqual({
+      tag: ValueTag.Number,
+      value: ((formulaRows - 1) % lookupRows) + 1,
+    })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters()).toMatchObject({
+      directFormulaInitialEvaluations: formulaRows,
+      nativeDirectLookupInitialEvaluations: formulaRows,
+      directAggregatePrefixEvaluations: 0,
+      directAggregateScanEvaluations: 0,
+      regionQueryIndexBuilds: 0,
     })
   })
 

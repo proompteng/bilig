@@ -160,6 +160,8 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
       let canUseInitialDirectEvaluation = false
       let allPreparedFormulasCanUseInitialDirectEvaluation = true
       let hasInitialPrefixAggregateCandidates = false
+      let canUseNativeInitialDirectScalarOverLimit = false
+      let canUseNativeInitialDirectLookupOverLimit = false
       let canUseNativeInitialPrefixAggregateOverLimit = false
       let inlineInitialDirectScalarWriter: InitialFormulaValueWriter | undefined
       let inlineInitialDirectScalarCellBuffer: Uint32Array | undefined = hadExistingFormulas
@@ -469,6 +471,16 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
           nativeInitialDirectScalarRowChainBatch !== undefined &&
           nativeInitialDirectScalarRowChainBatch.count === orderedPreparedCellCount &&
           orderedPreparedCellCount >= MIN_INITIAL_NATIVE_DIRECT_SCALAR_ROW_CHAIN_BATCH_SIZE
+        canUseNativeInitialDirectScalarOverLimit =
+          !hasInitialPrefixAggregateCandidates &&
+          nativeInitialDirectScalarBatch !== undefined &&
+          nativeInitialDirectScalarBatch.count === orderedPreparedCellCount &&
+          orderedPreparedCellCount > INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT
+        canUseNativeInitialDirectLookupOverLimit =
+          !hasInitialPrefixAggregateCandidates &&
+          nativeInitialDirectLookupBatch !== undefined &&
+          nativeInitialDirectLookupBatch.count === orderedPreparedCellCount &&
+          orderedPreparedCellCount > INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT
         canUseNativeInitialPrefixAggregateOverLimit =
           hasInitialPrefixAggregateCandidates &&
           orderedPreparedCellCount > INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT &&
@@ -480,6 +492,8 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
           allPreparedFormulasCanUseInitialDirectEvaluation &&
           (orderedPreparedCellCount <= INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT ||
             canUseNativeInitialDirectScalarRowChain ||
+            canUseNativeInitialDirectScalarOverLimit ||
+            canUseNativeInitialDirectLookupOverLimit ||
             canUseNativeInitialPrefixAggregateOverLimit) &&
           orderedPreparedCellCount === refs.length
         compileMs += performance.now() - compileStarted
@@ -528,6 +542,8 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
         args.prepareRegionQueryIndices()
       }
       let recalculated: U32
+      const allowInitialDirectEvaluationOverLimit =
+        canUseNativeInitialDirectScalarOverLimit || canUseNativeInitialDirectLookupOverLimit || canUseNativeInitialPrefixAggregateOverLimit
       if (
         useInitialDirectEvaluation &&
         nativeInitialDirectScalarRowChainBatch !== undefined &&
@@ -543,7 +559,7 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
           const direct = evaluateInitialDirectFormulas(args, orderedPreparedCellList(), {
             alreadyValidated: true,
             hasPrefixAggregateCandidates: hasInitialPrefixAggregateCandidates,
-            allowOverLimit: canUseNativeInitialPrefixAggregateOverLimit,
+            allowOverLimit: allowInitialDirectEvaluationOverLimit,
           })
           if (direct) {
             recalculated = direct
@@ -567,7 +583,7 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
           const direct = evaluateInitialDirectFormulas(args, orderedPreparedCellList(), {
             alreadyValidated: true,
             hasPrefixAggregateCandidates: hasInitialPrefixAggregateCandidates,
-            allowOverLimit: canUseNativeInitialPrefixAggregateOverLimit,
+            allowOverLimit: allowInitialDirectEvaluationOverLimit,
           })
           if (direct) {
             recalculated = direct
@@ -591,7 +607,7 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
           const direct = evaluateInitialDirectFormulas(args, orderedPreparedCellList(), {
             alreadyValidated: true,
             hasPrefixAggregateCandidates: hasInitialPrefixAggregateCandidates,
-            allowOverLimit: canUseNativeInitialPrefixAggregateOverLimit,
+            allowOverLimit: allowInitialDirectEvaluationOverLimit,
           })
           if (direct) {
             recalculated = direct
@@ -615,7 +631,7 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
         const direct = evaluateInitialDirectFormulas(args, orderedPreparedCellList(), {
           alreadyValidated: true,
           hasPrefixAggregateCandidates: hasInitialPrefixAggregateCandidates,
-          allowOverLimit: canUseNativeInitialPrefixAggregateOverLimit,
+          allowOverLimit: allowInitialDirectEvaluationOverLimit,
           ...(inlineInitialDirectScalarCellCount > 0
             ? {
                 preEvaluatedCellIndices: inlineInitialDirectScalarCellBuffer ?? targetCellIndices,

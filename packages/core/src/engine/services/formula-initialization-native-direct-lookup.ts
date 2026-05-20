@@ -11,7 +11,7 @@ const MATCH_MODE_ASCENDING = 1
 const MATCH_MODE_DESCENDING = 2
 
 export const MIN_INITIAL_NATIVE_DIRECT_LOOKUP_BATCH_SIZE = 256
-export const MAX_INITIAL_NATIVE_DIRECT_LOOKUP_BATCH_SIZE = 5000
+export const MAX_INITIAL_NATIVE_DIRECT_LOOKUP_BATCH_SIZE = 65_536
 
 interface InitialNativeDirectLookupBatchState {
   readonly workbook: EngineRuntimeState['workbook']

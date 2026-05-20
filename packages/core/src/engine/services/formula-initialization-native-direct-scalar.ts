@@ -10,7 +10,7 @@ const OP_DIV = 4
 const OP_ABS = 5
 const BATCH_REF_NONE = 0xffffffff
 export const MIN_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE = 8192
-export const MAX_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE = 12_288
+export const MAX_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE = 65_536
 
 interface InitialNativeDirectScalarBatchState {
   readonly workbook: EngineRuntimeState['workbook']
