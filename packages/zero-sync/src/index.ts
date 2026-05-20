@@ -39,6 +39,14 @@ export {
 export { executeZeroQueryTransform, zeroQueryTransformNames } from './query-transforms.js'
 export { loadRuntimeConfig, parseRuntimeConfig, type BiligRuntimeConfig } from './runtime-config.js'
 export {
+  cellCoordinatesWithinBounds,
+  intersectRangeBounds,
+  normalizeAddressBounds,
+  normalizeRangeBounds,
+  rangeBoundsForSheet,
+  type RangeBounds,
+} from './range-bounds.js'
+export {
   type BiligZeroQueryContext,
   schema,
   sheetIdDependentTableNames,

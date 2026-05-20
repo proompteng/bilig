@@ -1,5 +1,4 @@
 import { isEngineReplicaSnapshot, type EngineReplicaSnapshot } from '@bilig/core'
-import { parseCellAddress } from '@bilig/formula'
 import {
   isCellValue,
   isWorkbookSnapshot,
@@ -11,7 +10,9 @@ import {
   type WorkbookSnapshot,
 } from '@bilig/protocol'
 import {
+  cellCoordinatesWithinBounds,
   createEmptyWorkbookSnapshot as createSharedEmptyWorkbookSnapshot,
+  normalizeRangeBounds,
   type DirtyRegion,
   type WorkbookEventPayload,
 } from '@bilig/zero-sync'
@@ -25,6 +26,8 @@ import type {
   StyleSourceRow,
   WorkbookMetadataSourceRow,
 } from './projection.js'
+
+export { normalizeRangeBounds } from '@bilig/zero-sync'
 
 export type FocusedCellEventPayload = Extract<WorkbookEventPayload, { kind: 'setCellValue' | 'setCellFormula' | 'clearCell' }>
 
@@ -207,42 +210,12 @@ export function parseCellStyleRecord(value: unknown): CellStyleRecord | null {
   return sanitizeCellStyleRecord(value['id'], value)
 }
 
-export function normalizeRangeBounds(range: CellRangeRef): {
-  sheetName: string
-  rowStart: number
-  rowEnd: number
-  colStart: number
-  colEnd: number
-} {
-  const start = parseCellAddress(range.startAddress, range.sheetName)
-  const end = parseCellAddress(range.endAddress, range.sheetName)
-  return {
-    sheetName: range.sheetName,
-    rowStart: Math.min(start.row, end.row),
-    rowEnd: Math.max(start.row, end.row),
-    colStart: Math.min(start.col, end.col),
-    colEnd: Math.max(start.col, end.col),
-  }
-}
-
 export function cellEvalRowInRange(row: Pick<CellEvalRow, 'sheetName' | 'rowNum' | 'colNum'>, range: CellRangeRef): boolean {
   const bounds = normalizeRangeBounds(range)
-  return (
-    row.sheetName === bounds.sheetName &&
-    row.rowNum >= bounds.rowStart &&
-    row.rowNum <= bounds.rowEnd &&
-    row.colNum >= bounds.colStart &&
-    row.colNum <= bounds.colEnd
-  )
+  return row.sheetName === bounds.sheetName && cellCoordinatesWithinBounds(row.rowNum, row.colNum, bounds)
 }
 
 export function cellSourceRowInRange(row: Pick<CellSourceRow, 'sheetName' | 'rowNum' | 'colNum'>, range: CellRangeRef): boolean {
   const bounds = normalizeRangeBounds(range)
-  return (
-    row.sheetName === bounds.sheetName &&
-    row.rowNum >= bounds.rowStart &&
-    row.rowNum <= bounds.rowEnd &&
-    row.colNum >= bounds.colStart &&
-    row.colNum <= bounds.colEnd
-  )
+  return row.sheetName === bounds.sheetName && cellCoordinatesWithinBounds(row.rowNum, row.colNum, bounds)
 }

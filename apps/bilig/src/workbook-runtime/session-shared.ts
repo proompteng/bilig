@@ -20,7 +20,7 @@ let snapshotPublicationSequence = 0
 
 export const SNAPSHOT_ASSEMBLY_MAX_AGE_MS = 5 * 60_000
 export const SNAPSHOT_ASSEMBLY_MAX_CHUNKS = 4_096
-export const SNAPSHOT_ASSEMBLY_MAX_BYTES = 128 * 1024 * 1024
+const SNAPSHOT_ASSEMBLY_MAX_BYTES = 128 * 1024 * 1024
 
 export interface BrowserSubscriber {
   id: string

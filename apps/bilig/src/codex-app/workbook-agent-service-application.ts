@@ -42,7 +42,7 @@ export interface WorkbookAgentBundleApplicationContext {
 
 export type WorkbookAgentApplyAuthorityGuard = () => void
 
-export async function buildWorkbookAgentAuthoritativePreview(input: {
+async function buildWorkbookAgentAuthoritativePreview(input: {
   zeroSyncService: ZeroSyncService
   documentId: string
   bundle: WorkbookAgentCommandBundle

@@ -216,6 +216,60 @@ describe('projection helpers', () => {
     )
   })
 
+  it('does not project source rows from a different sheet than the requested range', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'doc-1',
+      replicaId: 'projection-cross-sheet-range-test',
+    })
+    await engine.ready()
+    engine.setCellValue('Sheet1', 'A1', 99)
+    engine.setRangeStyle({ sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' }, { fill: { backgroundColor: '#abcdef' } })
+    engine.setRangeNumberFormat({ sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' }, { kind: 'number', code: '$#,##0.00' })
+
+    const options = {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: 'owner-a',
+      updatedBy: 'user-a',
+      updatedAt: '2026-03-29T10:00:00.000Z',
+    } as const
+    const otherSheetRange = { sheetName: 'Other', startAddress: 'A1', endAddress: 'C3' } as const
+
+    expect(buildSheetCellSourceRows('doc-a', engine.exportSnapshot(), 'Sheet1', options, otherSheetRange)).toEqual([])
+    expect(buildSheetCellSourceRowsFromEngine('doc-a', engine, 'Sheet1', options, otherSheetRange)).toEqual([])
+  })
+
+  it('ignores snapshot formatting ranges that point at a different owning sheet', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'doc-1',
+      replicaId: 'projection-cross-sheet-metadata-test',
+    })
+    await engine.ready()
+    engine.setRangeStyle({ sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' }, { fill: { backgroundColor: '#abcdef' } })
+    engine.setRangeNumberFormat({ sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' }, { kind: 'number', code: '$#,##0.00' })
+
+    const poisonedSnapshot = engine.exportSnapshot()
+    const sheet = poisonedSnapshot.sheets.find((entry) => entry.name === 'Sheet1')
+    expect(sheet?.metadata?.styleRanges).toHaveLength(1)
+    expect(sheet?.metadata?.formatRanges).toHaveLength(1)
+    for (const entry of sheet?.metadata?.styleRanges ?? []) {
+      entry.range.sheetName = 'Other'
+    }
+    for (const entry of sheet?.metadata?.formatRanges ?? []) {
+      entry.range.sheetName = 'Other'
+    }
+
+    expect(
+      buildSheetCellSourceRows('doc-a', poisonedSnapshot, 'Sheet1', {
+        revision: 1,
+        calculatedRevision: 1,
+        ownerUserId: 'owner-a',
+        updatedBy: 'user-a',
+        updatedAt: '2026-03-29T10:00:00.000Z',
+      }),
+    ).toEqual([])
+  })
+
   it('does not leak runtime-only dependency cells into source projection after structural rewrites', async () => {
     const engine = new SpreadsheetEngine({
       workbookName: 'doc-1',

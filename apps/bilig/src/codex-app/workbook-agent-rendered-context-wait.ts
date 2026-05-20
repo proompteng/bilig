@@ -1,8 +1,8 @@
 import { WORKBOOK_AGENT_TOOL_NAMES, normalizeWorkbookAgentToolName } from '@bilig/agent-api'
 import type { WorkbookAgentThreadState } from './workbook-agent-service-shared.js'
 
-export const RENDERED_CONTEXT_WAIT_TIMEOUT_MS = 20_000
-export const RENDERED_CONTEXT_POLL_INTERVAL_MS = 50
+const RENDERED_CONTEXT_WAIT_TIMEOUT_MS = 20_000
+const RENDERED_CONTEXT_POLL_INTERVAL_MS = 50
 
 type WorkbookAgentUiContext = WorkbookAgentThreadState['durable']['context']
 
@@ -10,7 +10,7 @@ export function hasRenderedContext(context: WorkbookAgentUiContext): boolean {
   return context?.rendered !== undefined
 }
 
-export function renderedRevision(context: WorkbookAgentUiContext): number | null {
+function renderedRevision(context: WorkbookAgentUiContext): number | null {
   const capturedRevision = context?.rendered?.capturedRevision
   if (typeof capturedRevision === 'number' && Number.isSafeInteger(capturedRevision) && capturedRevision >= 0) {
     return capturedRevision

@@ -43,7 +43,7 @@ export function markWorkbookAgentTurnStarted(sessionState: WorkbookAgentThreadSt
   sessionState.live.lastError = null
 }
 
-export function clearWorkbookAgentTurnState(sessionState: WorkbookAgentThreadState, turnId: string): void {
+function clearWorkbookAgentTurnState(sessionState: WorkbookAgentThreadState, turnId: string): void {
   sessionState.live.promptByTurn.delete(turnId)
   sessionState.live.turnActorUserIdByTurn.delete(turnId)
   sessionState.live.turnContextByTurn.delete(turnId)
@@ -51,7 +51,7 @@ export function clearWorkbookAgentTurnState(sessionState: WorkbookAgentThreadSta
   sessionState.live.optimisticUserEntryIdByTurn.delete(turnId)
 }
 
-export function resolveWorkbookAgentRuntimeErrorTurnId(sessionState: WorkbookAgentThreadState): string | null {
+function resolveWorkbookAgentRuntimeErrorTurnId(sessionState: WorkbookAgentThreadState): string | null {
   if (sessionState.live.activeTurnId) {
     return sessionState.live.activeTurnId
   }

@@ -1,47 +1,14 @@
 import type { SpreadsheetEngine } from '@bilig/core'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import { ValueTag, type CellRangeRef } from '@bilig/protocol'
+import {
+  cellCoordinatesWithinBounds,
+  intersectRangeBounds,
+  normalizeRangeBounds,
+  rangeBoundsForSheet,
+  type RangeBounds,
+} from '@bilig/zero-sync'
 import type { CellEvalRow } from './projection.js'
-
-interface RangeBounds {
-  rowStart: number
-  rowEnd: number
-  colStart: number
-  colEnd: number
-}
-
-function normalizeRangeBounds(sheetName: string, startAddress: string, endAddress: string): RangeBounds {
-  const start = parseCellAddress(startAddress, sheetName)
-  const end = parseCellAddress(endAddress, sheetName)
-  return {
-    rowStart: Math.min(start.row, end.row),
-    rowEnd: Math.max(start.row, end.row),
-    colStart: Math.min(start.col, end.col),
-    colEnd: Math.max(start.col, end.col),
-  }
-}
-
-function intersectBounds(left: RangeBounds, right: RangeBounds): RangeBounds | null {
-  const rowStart = Math.max(left.rowStart, right.rowStart)
-  const rowEnd = Math.min(left.rowEnd, right.rowEnd)
-  const colStart = Math.max(left.colStart, right.colStart)
-  const colEnd = Math.min(left.colEnd, right.colEnd)
-  return rowStart <= rowEnd && colStart <= colEnd
-    ? {
-        rowStart,
-        rowEnd,
-        colStart,
-        colEnd,
-      }
-    : null
-}
-
-function addressWithinBounds(row: number, col: number, bounds?: RangeBounds): boolean {
-  if (!bounds) {
-    return true
-  }
-  return row >= bounds.rowStart && row <= bounds.rowEnd && col >= bounds.colStart && col <= bounds.colEnd
-}
 
 function addAddressesForBounds(addresses: Set<string>, bounds: RangeBounds): void {
   for (let row = bounds.rowStart; row <= bounds.rowEnd; row += 1) {
@@ -59,22 +26,28 @@ function collectCellEvalAddresses(engine: SpreadsheetEngine, sheetName: string, 
   }
 
   sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
-    if (addressWithinBounds(row, col, bounds)) {
+    if (cellCoordinatesWithinBounds(row, col, bounds)) {
       addresses.add(formatAddress(row, col))
     }
   })
 
   for (const range of engine.workbook.listStyleRanges(sheetName)) {
-    const rangeBounds = normalizeRangeBounds(sheetName, range.range.startAddress, range.range.endAddress)
-    const clippedBounds = bounds ? intersectBounds(rangeBounds, bounds) : rangeBounds
+    const rangeBounds = rangeBoundsForSheet(sheetName, range.range)
+    if (!rangeBounds) {
+      continue
+    }
+    const clippedBounds = bounds ? intersectRangeBounds(rangeBounds, bounds) : rangeBounds
     if (clippedBounds) {
       addAddressesForBounds(addresses, clippedBounds)
     }
   }
 
   for (const range of engine.workbook.listFormatRanges(sheetName)) {
-    const rangeBounds = normalizeRangeBounds(sheetName, range.range.startAddress, range.range.endAddress)
-    const clippedBounds = bounds ? intersectBounds(rangeBounds, bounds) : rangeBounds
+    const rangeBounds = rangeBoundsForSheet(sheetName, range.range)
+    if (!rangeBounds) {
+      continue
+    }
+    const clippedBounds = bounds ? intersectRangeBounds(rangeBounds, bounds) : rangeBounds
     if (clippedBounds) {
       addAddressesForBounds(addresses, clippedBounds)
     }
@@ -168,7 +141,7 @@ export function materializeCellEvalRangeProjection(
   updatedAt: string,
   range: CellRangeRef,
 ): CellEvalRow[] {
-  const bounds = normalizeRangeBounds(range.sheetName, range.startAddress, range.endAddress)
+  const bounds = normalizeRangeBounds(range)
   const entries: CellEvalRow[] = []
   for (const address of collectCellEvalAddresses(engine, range.sheetName, bounds)) {
     const row = materializeCellEvalRow(engine, documentId, revision, updatedAt, range.sheetName, address)

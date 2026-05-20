@@ -1,6 +1,7 @@
 import type { SpreadsheetEngine } from '@bilig/core'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import { ValueTag, type CellRangeRef, type CellStyleRecord, type CellValue, type WorkbookSnapshot } from '@bilig/protocol'
+import { cellCoordinatesWithinBounds, intersectRangeBounds, rangeBoundsForSheet } from '@bilig/zero-sync'
 
 export interface WorkbookSourceRow {
   id: string
@@ -465,50 +466,6 @@ function collectReferencedFormattingIds(engine: SpreadsheetEngine): {
   return { styleIds, formatIds }
 }
 
-function normalizeRangeBounds(
-  sheetName: string,
-  startAddress: string,
-  endAddress: string,
-): { rowStart: number; rowEnd: number; colStart: number; colEnd: number } {
-  const start = parseCellAddress(startAddress, sheetName)
-  const end = parseCellAddress(endAddress, sheetName)
-  return {
-    rowStart: Math.min(start.row, end.row),
-    rowEnd: Math.max(start.row, end.row),
-    colStart: Math.min(start.col, end.col),
-    colEnd: Math.max(start.col, end.col),
-  }
-}
-
-function intersectRangeBounds(
-  left: { rowStart: number; rowEnd: number; colStart: number; colEnd: number },
-  right: { rowStart: number; rowEnd: number; colStart: number; colEnd: number },
-): { rowStart: number; rowEnd: number; colStart: number; colEnd: number } | null {
-  const rowStart = Math.max(left.rowStart, right.rowStart)
-  const rowEnd = Math.min(left.rowEnd, right.rowEnd)
-  const colStart = Math.max(left.colStart, right.colStart)
-  const colEnd = Math.min(left.colEnd, right.colEnd)
-  return rowStart <= rowEnd && colStart <= colEnd
-    ? {
-        rowStart,
-        rowEnd,
-        colStart,
-        colEnd,
-      }
-    : null
-}
-
-function addressWithinBounds(
-  row: number,
-  col: number,
-  bounds?: { rowStart: number; rowEnd: number; colStart: number; colEnd: number },
-): boolean {
-  if (!bounds) {
-    return true
-  }
-  return row >= bounds.rowStart && row <= bounds.rowEnd && col >= bounds.colStart && col <= bounds.colEnd
-}
-
 function upsertCellSourceRow(
   rows: Map<string, CellSourceRow>,
   documentId: string,
@@ -553,19 +510,25 @@ export function buildSheetCellSourceRows(
     return []
   }
   const formatCodeById = new Map((snapshot.workbook.metadata?.formats ?? []).map((entry) => [entry.id, entry.code]))
-  const bounds = range ? normalizeRangeBounds(range.sheetName, range.startAddress, range.endAddress) : undefined
+  const bounds = rangeBoundsForSheet(sheetName, range)
+  if (bounds === null) {
+    return []
+  }
   const rows = new Map<string, CellSourceRow>()
 
   for (const cell of sheet.cells) {
     const parsed = parseCellAddress(cell.address, sheetName)
-    if (!addressWithinBounds(parsed.row, parsed.col, bounds)) {
+    if (!cellCoordinatesWithinBounds(parsed.row, parsed.col, bounds)) {
       continue
     }
     rows.set(cell.address, buildCellSourceRow(documentId, sheetName, cell, options))
   }
 
   for (const entry of sheet.metadata?.styleRanges ?? []) {
-    const rangeBounds = normalizeRangeBounds(sheetName, entry.range.startAddress, entry.range.endAddress)
+    const rangeBounds = rangeBoundsForSheet(sheetName, entry.range)
+    if (!rangeBounds) {
+      continue
+    }
     const clippedBounds = bounds ? intersectRangeBounds(rangeBounds, bounds) : rangeBounds
     if (!clippedBounds) {
       continue
@@ -578,7 +541,10 @@ export function buildSheetCellSourceRows(
   }
 
   for (const entry of sheet.metadata?.formatRanges ?? []) {
-    const rangeBounds = normalizeRangeBounds(sheetName, entry.range.startAddress, entry.range.endAddress)
+    const rangeBounds = rangeBoundsForSheet(sheetName, entry.range)
+    if (!rangeBounds) {
+      continue
+    }
     const clippedBounds = bounds ? intersectRangeBounds(rangeBounds, bounds) : rangeBounds
     if (!clippedBounds) {
       continue
@@ -607,11 +573,14 @@ export function buildSheetCellSourceRowsFromEngine(
   if (!sheet) {
     return []
   }
-  const bounds = range ? normalizeRangeBounds(range.sheetName, range.startAddress, range.endAddress) : undefined
+  const bounds = rangeBoundsForSheet(sheetName, range)
+  if (bounds === null) {
+    return []
+  }
   const rows = new Map<string, CellSourceRow>()
 
   sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
-    if (!addressWithinBounds(row, col, bounds)) {
+    if (!cellCoordinatesWithinBounds(row, col, bounds)) {
       return
     }
     const address = formatAddress(row, col)
@@ -630,7 +599,10 @@ export function buildSheetCellSourceRowsFromEngine(
   })
 
   for (const entry of engine.workbook.listStyleRanges(sheetName)) {
-    const rangeBounds = normalizeRangeBounds(sheetName, entry.range.startAddress, entry.range.endAddress)
+    const rangeBounds = rangeBoundsForSheet(sheetName, entry.range)
+    if (!rangeBounds) {
+      continue
+    }
     const clippedBounds = bounds ? intersectRangeBounds(rangeBounds, bounds) : rangeBounds
     if (!clippedBounds) {
       continue
@@ -643,7 +615,10 @@ export function buildSheetCellSourceRowsFromEngine(
   }
 
   for (const entry of engine.workbook.listFormatRanges(sheetName)) {
-    const rangeBounds = normalizeRangeBounds(sheetName, entry.range.startAddress, entry.range.endAddress)
+    const rangeBounds = rangeBoundsForSheet(sheetName, entry.range)
+    if (!rangeBounds) {
+      continue
+    }
     const clippedBounds = bounds ? intersectRangeBounds(rangeBounds, bounds) : rangeBounds
     if (!clippedBounds) {
       continue

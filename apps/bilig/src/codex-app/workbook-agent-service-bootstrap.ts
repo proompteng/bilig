@@ -139,7 +139,7 @@ export function createWorkbookAgentBootstrappedSessionState(input: {
   }
 }
 
-export function recoverStaleBootstrapWorkflowRuns(input: {
+function recoverStaleBootstrapWorkflowRuns(input: {
   readonly workflowRuns: readonly WorkbookAgentWorkflowRun[]
   readonly now: number
 }): WorkbookAgentBootstrapWorkflowRecovery {

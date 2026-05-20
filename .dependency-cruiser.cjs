@@ -32,7 +32,7 @@ module.exports = {
         orphan: true,
         path: '^(apps/(bilig|web)|packages/(agent-api|core|formula|grid|runtime-kernel|worker-transport))/src',
         pathNot:
-          '^(?:packages/agent-api/src/workbook-agent-bundle-types|packages/formula/src/(?:compiler-types|js-evaluator-types)|packages/core/src/engine/services/(?:formula-binding-service-types|formula-evaluation-service-types|formula-initialization-prefix-aggregates|formula-initialization-service-types|mutation-service-types|structure-service-types)|packages/grid/src/(?:workbookGridSurfaceTypes|gridPointer|grid-render-contract))[.]ts$',
+          '^(?:packages/agent-api/src/workbook-agent-bundle-types|packages/formula/src/(?:compiler-types|js-evaluator-types)|packages/core/src/engine/services/(?:formula-binding-service-types|formula-evaluation-service-types|formula-initialization-prefix-aggregates|formula-initialization-service-types|mutation-service-types|operation-batch-applier-types|operation-single-existing-literal-fast-path-types|structure-service-types)|packages/grid/src/(?:workbookGridSurfaceTypes|gridPointer|grid-render-contract))[.]ts$',
       },
       to: {},
     },
