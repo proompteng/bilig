@@ -592,6 +592,12 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry('dynamic-array:torow-basic', 'dynamic-array', '=TOROW(A1:B2)', 'implemented-wasm-production'),
   entry('dynamic-array:wraprows-basic', 'dynamic-array', '=WRAPROWS(A1:A4,2)', 'implemented-wasm-production'),
   entry('dynamic-array:wrapcols-basic', 'dynamic-array', '=WRAPCOLS(A1:A4,2)', 'implemented-wasm-production'),
+  entry('structured-reference:table-column-sum', 'structured-reference', '=SUM(SalesData[Amount])', 'implemented-wasm-production', {
+    scope: 'extended',
+    prerequisites: ['core:value-model', 'core:range-iterators', 'core:tables-model', 'core:structured-reference-model'],
+    notes:
+      'Workbook table metadata resolves structured column references to data-body ranges before native aggregate execution, excluding header and totals rows.',
+  }),
   entry('names:defined-name-range', 'names', '=SUM(MyRange)', 'implemented-wasm-production', {
     notes:
       'Range-valued workbook names now compile through metadata substitution and route onto the native aggregate path once the name resolves.',

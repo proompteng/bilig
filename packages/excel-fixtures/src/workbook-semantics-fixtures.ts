@@ -7,6 +7,7 @@ import type {
   ExcelFixtureFamily,
   ExcelFixtureInputCell,
   ExcelFixtureMultipleOperationsMock,
+  ExcelFixtureTable,
 } from './index.js'
 
 const excelFixtureIdPattern = /^[a-z][a-z0-9-]*:[a-z0-9-]+$/
@@ -51,6 +52,30 @@ function output(address: string, expected: ExcelFixtureExpectedOutput['expected'
   return note === undefined ? { address, expected } : { address, expected, note }
 }
 
+function table(
+  name: string,
+  startAddress: string,
+  endAddress: string,
+  columnNames: string[],
+  options: { sheetName?: string; headerRow?: boolean; totalsRow?: boolean; note?: string } = {},
+): ExcelFixtureTable {
+  const base: ExcelFixtureTable = {
+    name,
+    startAddress,
+    endAddress,
+    columnNames,
+    headerRow: options.headerRow ?? true,
+    totalsRow: options.totalsRow ?? false,
+  }
+  if (options.sheetName !== undefined) {
+    base.sheetName = options.sheetName
+  }
+  if (options.note !== undefined) {
+    base.note = options.note
+  }
+  return base
+}
+
 function fixture(
   family: ExcelFixtureFamily,
   slug: string,
@@ -58,7 +83,7 @@ function fixture(
   formula: string,
   inputs: ExcelFixtureInputCell[],
   outputs: ExcelFixtureExpectedOutput[],
-  options: { notes?: string; definedNames?: ExcelFixtureDefinedName[] } = {},
+  options: { notes?: string; definedNames?: ExcelFixtureDefinedName[]; tables?: ExcelFixtureTable[] } = {},
 ): ExcelFixtureCase {
   const base: ExcelFixtureCase = {
     id: createExcelFixtureId(family, slug),
@@ -74,6 +99,9 @@ function fixture(
   }
   if (options.definedNames !== undefined) {
     base.definedNames = options.definedNames
+  }
+  if (options.tables !== undefined) {
+    base.tables = options.tables
   }
   return base
 }
@@ -184,6 +212,27 @@ export const canonicalWorkbookSemanticsFixtures: readonly ExcelFixtureCase[] = [
     [output('A1', errorExpected(ErrorCode.Ref, '#REF!'))],
     {
       notes: 'Range-qualified sheet misses stay JS-authoritative until a later sheet creation can rebind them.',
+    },
+  ),
+  fixture(
+    'structured-reference',
+    'table-column-sum',
+    'Structured table references bind to the table data body range',
+    '=SUM(SalesData[Amount])',
+    [
+      input('A1', 'Region'),
+      input('B1', 'Amount'),
+      input('A2', 'East'),
+      input('B2', 12),
+      input('A3', 'West'),
+      input('B3', 25),
+      input('A4', 'Total'),
+      input('B4', 999, { note: 'Totals-row sentinel must not participate in the data-body structured reference.' }),
+    ],
+    [output('D1', numberExpected(37))],
+    {
+      tables: [table('SalesData', 'A1', 'B4', ['Region', 'Amount'], { totalsRow: true })],
+      notes: 'Workbook table metadata resolves SalesData[Amount] to B2:B3, excluding the header and totals row.',
     },
   ),
   fixture(

@@ -13,13 +13,22 @@
   "summary": {
     "allCommittedFormulaSemanticsCovered": true,
     "canonicalFormulaFixtureCount": 301,
-    "workbookSemanticsFixtureCount": 11,
+    "workbookSemanticsFixtureCount": 12,
     "executableStableFormulaFixtureCount": 298,
     "deterministicVolatileFixtureCount": 3,
-    "executableWorkbookSemanticsFixtureCount": 11,
+    "executableWorkbookSemanticsFixtureCount": 12,
     "dateTimeEdgeFixtureCount": 62,
     "coveredCanonicalFixtureCount": 301,
-    "coveredWorkbookSemanticsFixtureCount": 11,
+    "coveredWorkbookSemanticsFixtureCount": 12,
+    "workbookSemanticsCategoryCount": 6,
+    "coveredWorkbookSemanticsCategories": [
+      "defined-names",
+      "cross-sheet-references",
+      "structured-references",
+      "what-if-analysis",
+      "dynamic-array-spills",
+      "error-semantics"
+    ],
     "coveredFamilies": [
       "aggregation",
       "arithmetic",
@@ -355,7 +364,41 @@
       "lookup-reference:xlookup-advanced-return-modes",
       "names:defined-name-case-insensitive",
       "names:defined-name-missing",
-      "names:defined-name-multi-scalar-pack"
+      "names:defined-name-multi-scalar-pack",
+      "structured-reference:table-column-sum"
+    ],
+    "workbookSemanticsCategories": [
+      {
+        "category": "defined-names",
+        "fixtureIds": ["names:defined-name-case-insensitive", "names:defined-name-multi-scalar-pack"]
+      },
+      {
+        "category": "cross-sheet-references",
+        "fixtureIds": [
+          "aggregation:cross-sheet-empty-range-zero",
+          "aggregation:cross-sheet-range-sum",
+          "aggregation:missing-sheet-range-ref-error",
+          "arithmetic:cross-sheet-empty-cell-zero",
+          "arithmetic:cross-sheet-multiply",
+          "arithmetic:missing-sheet-ref-error"
+        ]
+      },
+      {
+        "category": "structured-references",
+        "fixtureIds": ["structured-reference:table-column-sum"]
+      },
+      {
+        "category": "what-if-analysis",
+        "fixtureIds": ["lookup-reference:multiple-operations-basic"]
+      },
+      {
+        "category": "dynamic-array-spills",
+        "fixtureIds": ["lookup-reference:xlookup-advanced-return-modes"]
+      },
+      {
+        "category": "error-semantics",
+        "fixtureIds": ["aggregation:missing-sheet-range-ref-error", "arithmetic:missing-sheet-ref-error", "names:defined-name-missing"]
+      }
     ],
     "dateTimeEdgeFixtureIds": [
       "date-time:coupdaybs-basic",

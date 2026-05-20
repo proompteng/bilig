@@ -7,11 +7,26 @@ import { pathToFileURL } from 'node:url'
 import {
   canonicalFormulaFixtures,
   canonicalWorkbookSemanticsFixtures,
+  type ExcelFixtureCase,
   excelDateTimeFixtureSuite,
 } from '../packages/excel-fixtures/src/index.ts'
 import { formulaCompatibilityRegistry, getCompatibilityEntry } from '../packages/formula/src/compatibility.ts'
-import { asObject, booleanField, literalField, numberField, readJsonObject, stringArrayField } from './json-scorecard-helpers.ts'
+import {
+  arrayField,
+  asObject,
+  booleanField,
+  literalField,
+  numberField,
+  readJsonObject,
+  stringArrayField,
+  stringField,
+} from './json-scorecard-helpers.ts'
 import { formatJsonForRepo } from './scorecard-format.ts'
+
+export interface WorkbookSemanticsCategoryCoverage {
+  readonly category: string
+  readonly fixtureIds: string[]
+}
 
 export interface CalculationSemanticsScorecard {
   readonly schemaVersion: 1
@@ -35,6 +50,8 @@ export interface CalculationSemanticsScorecard {
     readonly dateTimeEdgeFixtureCount: number
     readonly coveredCanonicalFixtureCount: number
     readonly coveredWorkbookSemanticsFixtureCount: number
+    readonly workbookSemanticsCategoryCount: number
+    readonly coveredWorkbookSemanticsCategories: string[]
     readonly coveredFamilies: string[]
     readonly missingCanonicalFixtureIds: string[]
     readonly missingWorkbookSemanticsFixtureIds: string[]
@@ -44,6 +61,7 @@ export interface CalculationSemanticsScorecard {
     readonly stableFormulaFixtureIds: string[]
     readonly deterministicVolatileFixtureIds: string[]
     readonly workbookSemanticsFixtureIds: string[]
+    readonly workbookSemanticsCategories: WorkbookSemanticsCategoryCoverage[]
     readonly dateTimeEdgeFixtureIds: string[]
   }
 }
@@ -52,6 +70,34 @@ const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'calculation-semantics-scorecard.json')
 const executableStatuses = new Set(['implemented-js', 'implemented-js-and-wasm-shadow', 'implemented-wasm-production'])
 const deterministicVolatileFixtureIdSet = new Set(['date-time:today-volatile', 'date-time:now-volatile', 'volatile:rand-basic'])
+const workbookSemanticsCategorySpecs = [
+  {
+    category: 'defined-names',
+    matches: (fixture: ExcelFixtureCase) => (fixture.definedNames?.length ?? 0) > 0,
+  },
+  {
+    category: 'cross-sheet-references',
+    matches: (fixture: ExcelFixtureCase) =>
+      fixture.formula.includes('!') ||
+      fixture.inputs.some((input) => input.sheetName !== undefined && input.sheetName !== fixture.sheetName),
+  },
+  {
+    category: 'structured-references',
+    matches: (fixture: ExcelFixtureCase) => (fixture.tables?.length ?? 0) > 0 || /\[[^\]]+\]/u.test(fixture.formula),
+  },
+  {
+    category: 'what-if-analysis',
+    matches: (fixture: ExcelFixtureCase) => fixture.multipleOperations !== undefined,
+  },
+  {
+    category: 'dynamic-array-spills',
+    matches: (fixture: ExcelFixtureCase) => fixture.outputs.length > 1,
+  },
+  {
+    category: 'error-semantics',
+    matches: (fixture: ExcelFixtureCase) => fixture.outputs.some((output) => output.expected.kind === 'error'),
+  },
+] as const
 
 function main(): void {
   const isCheckMode = process.argv.includes('--check')
@@ -102,6 +148,8 @@ export function buildCalculationSemanticsScorecard(generatedAt = 'checked-in-gen
     .filter((fixture) => executableStatuses.has(getCompatibilityEntry(fixture.id)?.status ?? 'unsupported'))
     .map((fixture) => fixture.id)
     .toSorted()
+  const workbookSemanticsCategories = buildWorkbookSemanticsCategoryCoverage(canonicalWorkbookSemanticsFixtures)
+  const coveredWorkbookSemanticsCategories = workbookSemanticsCategories.map((entry) => entry.category)
   const dateTimeEdgeFixtureIds = (excelDateTimeFixtureSuite.cases ?? [])
     .filter(isStableExecutableFormulaFixture)
     .map((fixture) => fixture.id)
@@ -148,6 +196,8 @@ export function buildCalculationSemanticsScorecard(generatedAt = 'checked-in-gen
       dateTimeEdgeFixtureCount: dateTimeEdgeFixtureIds.length,
       coveredCanonicalFixtureCount: coveredCanonicalFixtureIds.size,
       coveredWorkbookSemanticsFixtureCount: workbookSemanticsFixtureIds.length,
+      workbookSemanticsCategoryCount: workbookSemanticsCategories.length,
+      coveredWorkbookSemanticsCategories,
       coveredFamilies,
       missingCanonicalFixtureIds,
       missingWorkbookSemanticsFixtureIds,
@@ -157,6 +207,7 @@ export function buildCalculationSemanticsScorecard(generatedAt = 'checked-in-gen
       stableFormulaFixtureIds,
       deterministicVolatileFixtureIds,
       workbookSemanticsFixtureIds,
+      workbookSemanticsCategories,
       dateTimeEdgeFixtureIds,
     },
   }
@@ -192,6 +243,8 @@ export function parseCalculationSemanticsScorecard(value: Record<string, unknown
       dateTimeEdgeFixtureCount: numberField(summary, 'dateTimeEdgeFixtureCount'),
       coveredCanonicalFixtureCount: numberField(summary, 'coveredCanonicalFixtureCount'),
       coveredWorkbookSemanticsFixtureCount: numberField(summary, 'coveredWorkbookSemanticsFixtureCount'),
+      workbookSemanticsCategoryCount: numberField(summary, 'workbookSemanticsCategoryCount'),
+      coveredWorkbookSemanticsCategories: stringArrayField(summary, 'coveredWorkbookSemanticsCategories'),
       coveredFamilies: stringArrayField(summary, 'coveredFamilies'),
       missingCanonicalFixtureIds: stringArrayField(summary, 'missingCanonicalFixtureIds'),
       missingWorkbookSemanticsFixtureIds: stringArrayField(summary, 'missingWorkbookSemanticsFixtureIds'),
@@ -201,6 +254,7 @@ export function parseCalculationSemanticsScorecard(value: Record<string, unknown
       stableFormulaFixtureIds: stringArrayField(coverage, 'stableFormulaFixtureIds'),
       deterministicVolatileFixtureIds: stringArrayField(coverage, 'deterministicVolatileFixtureIds'),
       workbookSemanticsFixtureIds: stringArrayField(coverage, 'workbookSemanticsFixtureIds'),
+      workbookSemanticsCategories: workbookSemanticsCategoryCoverageArrayField(coverage, 'workbookSemanticsCategories'),
       dateTimeEdgeFixtureIds: stringArrayField(coverage, 'dateTimeEdgeFixtureIds'),
     },
   }
@@ -224,6 +278,31 @@ export function validateCalculationSemanticsScorecard(scorecard: CalculationSema
   if (!scorecard.coverage.stableFormulaFixtureIds.includes('lookup-reference:offset-basic')) {
     throw new Error('Calculation semantics scorecard must cover the canonical OFFSET fixture')
   }
+  if (!scorecard.summary.coveredWorkbookSemanticsCategories.includes('structured-references')) {
+    throw new Error('Calculation semantics scorecard must cover structured-reference workbook semantics')
+  }
+}
+
+function buildWorkbookSemanticsCategoryCoverage(fixtures: readonly ExcelFixtureCase[]): WorkbookSemanticsCategoryCoverage[] {
+  return workbookSemanticsCategorySpecs
+    .map((spec) => ({
+      category: spec.category,
+      fixtureIds: fixtures
+        .filter(spec.matches)
+        .map((fixture) => fixture.id)
+        .toSorted(),
+    }))
+    .filter((entry) => entry.fixtureIds.length > 0)
+}
+
+function workbookSemanticsCategoryCoverageArrayField(value: Record<string, unknown>, field: string): WorkbookSemanticsCategoryCoverage[] {
+  return arrayField(value, field).map((entry, index) => {
+    const category = asObject(entry, `${field}[${String(index)}]`)
+    return {
+      category: stringField(category, 'category'),
+      fixtureIds: stringArrayField(category, 'fixtureIds'),
+    }
+  })
 }
 
 function isStableExecutableFormulaFixture(fixture: { readonly family: string; readonly formula: string; readonly id: string }): boolean {

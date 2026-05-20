@@ -12,10 +12,18 @@ describe('calculation semantics scorecard', () => {
     const scorecard = buildCalculationSemanticsScorecard()
 
     expect(scorecard.summary.allCommittedFormulaSemanticsCovered).toBe(true)
-    expect(scorecard.summary.canonicalFormulaFixtureCount).toBe(300)
-    expect(scorecard.summary.coveredCanonicalFixtureCount).toBe(300)
-    expect(scorecard.summary.workbookSemanticsFixtureCount).toBe(11)
-    expect(scorecard.summary.coveredWorkbookSemanticsFixtureCount).toBe(11)
+    expect(scorecard.summary.canonicalFormulaFixtureCount).toBe(301)
+    expect(scorecard.summary.coveredCanonicalFixtureCount).toBe(301)
+    expect(scorecard.summary.workbookSemanticsFixtureCount).toBe(12)
+    expect(scorecard.summary.coveredWorkbookSemanticsFixtureCount).toBe(12)
+    expect(scorecard.summary.coveredWorkbookSemanticsCategories).toEqual([
+      'defined-names',
+      'cross-sheet-references',
+      'structured-references',
+      'what-if-analysis',
+      'dynamic-array-spills',
+      'error-semantics',
+    ])
     expect(scorecard.summary.missingCanonicalFixtureIds).toEqual([])
     expect(scorecard.summary.missingWorkbookSemanticsFixtureIds).toEqual([])
     expect(scorecard.summary.fixtureRegistryAligned).toBe(true)
