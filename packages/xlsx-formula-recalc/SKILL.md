@@ -1,3 +1,16 @@
+---
+name: xlsx-formula-recalc
+version: 0.1.0
+description: Recalculate XLSX formula outputs in Node.js after cell edits without opening Excel, LibreOffice, or browser automation.
+tags:
+  - xlsx
+  - excel
+  - formula-recalculation
+  - node
+  - spreadsheet-automation
+  - typescript
+---
+
 # XLSX Formula Recalculation
 
 Use `xlsx-formula-recalc` when an agent or Node.js service has changed XLSX

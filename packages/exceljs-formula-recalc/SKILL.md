@@ -1,3 +1,16 @@
+---
+name: exceljs-formula-recalc
+version: 0.1.0
+description: Recalculate formula outputs for ExcelJS workbook flows in Node.js after agents or services edit cells.
+tags:
+  - exceljs
+  - xlsx
+  - excel
+  - formula-recalculation
+  - node
+  - typescript
+---
+
 # ExcelJS Formula Recalculation
 
 Use `exceljs-formula-recalc` when an agent or Node.js service already uses

@@ -1,3 +1,16 @@
+---
+name: sheetjs-formula-recalc
+version: 0.1.0
+description: Add fresh formula readback to SheetJS and xlsx workflows after writing XLSX inputs in Node.js.
+tags:
+  - sheetjs
+  - xlsx
+  - excel
+  - formula-recalculation
+  - node
+  - typescript
+---
+
 # SheetJS Formula Recalculation
 
 Use `sheetjs-formula-recalc` when an agent or Node.js service has changed XLSX
