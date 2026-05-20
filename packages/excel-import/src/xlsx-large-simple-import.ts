@@ -244,7 +244,8 @@ export function tryImportLargeSimpleXlsx(
           workbookSheets.map((entry) => entry.name),
         )
       : null
-  const deduplicateInlineStrings = hasSharedStrings
+  const deduplicateInlineStrings = hasSharedStrings ? true : 'bounded'
+  const deduplicateFormulaStrings = 'bounded'
   let fallbackSharedStrings: readonly LargeSimpleSharedStringEntry[] | null | undefined = hasSharedStrings ? undefined : []
   delete zip[workbookPath]
   delete zip[workbookRelationshipsPath]
@@ -296,6 +297,7 @@ export function tryImportLargeSimpleXlsx(
           sheetName: entry.name,
           stringPool,
           deduplicateStrings: deduplicateInlineStrings,
+          deduplicateFormulas: deduplicateFormulaStrings,
           ...(options.allowUnsupportedFormulaText === undefined
             ? {}
             : { allowUnsupportedFormulaText: options.allowUnsupportedFormulaText }),
@@ -334,6 +336,7 @@ export function tryImportLargeSimpleXlsx(
         retainCells: materializeCells,
         stringPool,
         deduplicateStrings: deduplicateInlineStrings,
+        deduplicateFormulas: deduplicateFormulaStrings,
         ...(options.allowUnsupportedFormulaText === undefined ? {} : { allowUnsupportedFormulaText: options.allowUnsupportedFormulaText }),
       })
     }
@@ -821,6 +824,9 @@ function buildParsedWorksheet(
   }
   if (options.releaseArenaAfterMaterialization === true && !useLazyCells) {
     cellScan.arena.release()
+    cellScan.styleIndexes.release()
+  } else if (options.releaseArenaAfterMaterialization === true) {
+    cellScan.arena.releaseMaterializationScratch()
     cellScan.styleIndexes.release()
   }
   return parsed

@@ -18,7 +18,12 @@ import {
 import { readLargeSimpleSheetHyperlinkRefsFromBytes } from './xlsx-large-simple-hyperlinks.js'
 import { appendLargeSimplePrintPageSetupElement, isLargeSimplePrintPageSetupElementName } from './xlsx-large-simple-printer-settings.js'
 import { rowTagHasMetadataAttribute } from './xlsx-large-simple-row-metadata-scan.js'
-import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import {
+  ImportedWorkbookArena,
+  ImportedWorksheetStyleIndexArena,
+  type ImportedWorkbookArenaDedupeMode,
+  type ImportedWorksheetCellScan,
+} from './xlsx-large-simple-arena.js'
 import {
   appendLargeSimpleColumnMetadataFromBytes,
   appendLargeSimpleRowMetadataTagFromBytes,
@@ -81,7 +86,8 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     readonly retainMetadataXml?: boolean
     readonly sheetName?: string
     readonly stringPool?: ImportedWorkbookStringPool
-    readonly deduplicateStrings?: boolean
+    readonly deduplicateStrings?: ImportedWorkbookArenaDedupeMode
+    readonly deduplicateFormulas?: ImportedWorkbookArenaDedupeMode
     readonly allowUnsupportedFormulaText?: boolean
     readonly allowUnsupportedCellMetadata?: boolean
     readonly preserveBlankStyleCells?: boolean
@@ -97,6 +103,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     sheetName: options.sheetName,
     stringPool: options.stringPool,
     deduplicateStrings: options.deduplicateStrings,
+    deduplicateFormulas: options.deduplicateFormulas,
     allowUnsupportedFormulaText: options.allowUnsupportedFormulaText,
     allowUnsupportedCellMetadata: options.allowUnsupportedCellMetadata,
     preserveBlankStyleCells: options.preserveBlankStyleCells !== false,
@@ -165,7 +172,8 @@ class LargeSimpleWorksheetChunkScanner {
       readonly retainMetadataXml: boolean
       readonly sheetName: string | undefined
       readonly stringPool: ImportedWorkbookStringPool | undefined
-      readonly deduplicateStrings: boolean | undefined
+      readonly deduplicateStrings: ImportedWorkbookArenaDedupeMode | undefined
+      readonly deduplicateFormulas: ImportedWorkbookArenaDedupeMode | undefined
       readonly allowUnsupportedFormulaText: boolean | undefined
       readonly allowUnsupportedCellMetadata: boolean | undefined
       readonly preserveBlankStyleCells: boolean
@@ -176,10 +184,10 @@ class LargeSimpleWorksheetChunkScanner {
     this.allowUnsupportedCellMetadata = options.allowUnsupportedCellMetadata === true
     this.preserveBlankStyleCells = options.preserveBlankStyleCells
     this.formulas = new LargeSimpleFormulaRecords(this.allowUnsupportedFormulaText)
-    this.arena = new ImportedWorkbookArena(
-      options.stringPool,
-      options.deduplicateStrings === undefined ? {} : { deduplicateStrings: options.deduplicateStrings },
-    )
+    this.arena = new ImportedWorkbookArena(options.stringPool, {
+      ...(options.deduplicateStrings === undefined ? {} : { deduplicateStrings: options.deduplicateStrings }),
+      ...(options.deduplicateFormulas === undefined ? {} : { deduplicateFormulas: options.deduplicateFormulas }),
+    })
     this.hasSharedStrings = options.hasSharedStrings
     this.retainCells = options.retainCells
     this.sharedStrings = options.sharedStrings

@@ -54,8 +54,12 @@ export interface ImportedWorkbookLazySheetCells extends Array<WorkbookSheetCell>
 }
 
 export interface ImportedWorkbookArenaOptions {
-  readonly deduplicateStrings?: boolean
+  readonly deduplicateStrings?: ImportedWorkbookArenaDedupeMode
+  readonly deduplicateFormulas?: ImportedWorkbookArenaDedupeMode
+  readonly dedupeMaxEntries?: number
 }
+
+export type ImportedWorkbookArenaDedupeMode = boolean | 'bounded'
 
 export class ImportedWorksheetStyleIndexArena {
   private rows: Uint32Array<ArrayBuffer> = new Uint32Array(initialStyleIndexCapacity)
@@ -141,13 +145,21 @@ export class ImportedWorkbookArena {
   private readonly formulaIdsByValue = new Map<string, number>()
   private readonly previewValues: (LiteralInput | undefined)[] = Array.from({ length: previewCellCount })
   private readonly previewValueSet = new Uint8Array(previewCellCount)
-  private readonly deduplicateStrings: boolean
+  private readonly stringDedupeMode: ImportedWorkbookArenaDedupeMode
+  private readonly formulaDedupeMode: ImportedWorkbookArenaDedupeMode
+  private readonly dedupeMaxEntries: number
+  private readonly stringDedupeKeys: string[] = []
+  private stringDedupeEvictionIndex = 0
+  private readonly formulaDedupeKeys: string[] = []
+  private formulaDedupeEvictionIndex = 0
 
   constructor(
     private readonly stringPool?: ImportedWorkbookStringPool,
     options: ImportedWorkbookArenaOptions = {},
   ) {
-    this.deduplicateStrings = options.deduplicateStrings !== false
+    this.stringDedupeMode = options.deduplicateStrings ?? true
+    this.formulaDedupeMode = options.deduplicateFormulas ?? true
+    this.dedupeMaxEntries = Math.max(0, Math.trunc(options.dedupeMaxEntries ?? 8192))
   }
 
   get cellCount(): number {
@@ -461,8 +473,23 @@ export class ImportedWorkbookArena {
     this.length = 0
     this.strings.length = 0
     this.stringIdsByValue.clear()
+    this.stringDedupeKeys.length = 0
+    this.stringDedupeEvictionIndex = 0
     this.formulas.length = 0
     this.formulaIdsByValue.clear()
+    this.formulaDedupeKeys.length = 0
+    this.formulaDedupeEvictionIndex = 0
+    this.previewValues.fill(undefined)
+    this.previewValueSet.fill(0)
+  }
+
+  releaseMaterializationScratch(): void {
+    this.stringIdsByValue.clear()
+    this.stringDedupeKeys.length = 0
+    this.stringDedupeEvictionIndex = 0
+    this.formulaIdsByValue.clear()
+    this.formulaDedupeKeys.length = 0
+    this.formulaDedupeEvictionIndex = 0
     this.previewValues.fill(undefined)
     this.previewValueSet.fill(0)
   }
@@ -655,12 +682,12 @@ export class ImportedWorkbookArena {
   }
 
   private internString(value: string): number {
-    if (!this.deduplicateStrings) {
+    const interned = this.internValue(value, this.stringDedupeMode)
+    if (interned === null) {
       const next = this.strings.length
       this.strings.push(value)
       return next
     }
-    const interned = this.stringPool?.intern(value) ?? value
     const existing = this.stringIdsByValue.get(interned)
     if (existing !== undefined) {
       return existing
@@ -668,11 +695,19 @@ export class ImportedWorkbookArena {
     const next = this.strings.length
     this.strings.push(interned)
     this.stringIdsByValue.set(interned, next)
+    if (this.stringDedupeMode === 'bounded') {
+      this.rememberBoundedDedupeKey(this.stringIdsByValue, this.stringDedupeKeys, 'string', interned)
+    }
     return next
   }
 
   private internFormula(value: string): number {
-    const interned = this.stringPool?.intern(value) ?? value
+    const interned = this.internValue(value, this.formulaDedupeMode)
+    if (interned === null) {
+      const next = this.formulas.length
+      this.formulas.push(value)
+      return next
+    }
     const existing = this.formulaIdsByValue.get(interned)
     if (existing !== undefined) {
       return existing
@@ -680,7 +715,41 @@ export class ImportedWorkbookArena {
     const next = this.formulas.length
     this.formulas.push(interned)
     this.formulaIdsByValue.set(interned, next)
+    if (this.formulaDedupeMode === 'bounded') {
+      this.rememberBoundedDedupeKey(this.formulaIdsByValue, this.formulaDedupeKeys, 'formula', interned)
+    }
     return next
+  }
+
+  private internValue(value: string, mode: ImportedWorkbookArenaDedupeMode): string | null {
+    if (mode === false) {
+      return null
+    }
+    if (mode === 'bounded') {
+      return this.stringPool?.internBounded(value, this.dedupeMaxEntries) ?? value
+    }
+    return this.stringPool?.intern(value) ?? value
+  }
+
+  private rememberBoundedDedupeKey(map: Map<string, number>, keys: string[], kind: 'string' | 'formula', key: string): void {
+    keys.push(key)
+    let evictionIndex = kind === 'string' ? this.stringDedupeEvictionIndex : this.formulaDedupeEvictionIndex
+    while (keys.length - evictionIndex > this.dedupeMaxEntries) {
+      const evicted = keys[evictionIndex]
+      evictionIndex += 1
+      if (evicted !== undefined) {
+        map.delete(evicted)
+      }
+    }
+    if (evictionIndex > this.dedupeMaxEntries && evictionIndex * 2 > keys.length) {
+      keys.splice(0, evictionIndex)
+      evictionIndex = 0
+    }
+    if (kind === 'string') {
+      this.stringDedupeEvictionIndex = evictionIndex
+    } else {
+      this.formulaDedupeEvictionIndex = evictionIndex
+    }
   }
 
   private setPreviewValue(row: number, column: number, value: LiteralInput): void {

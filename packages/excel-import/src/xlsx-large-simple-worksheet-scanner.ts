@@ -8,7 +8,12 @@ import {
   parseLargeSimpleSharedFormulaIndex,
   readLargeSimpleFormulaTypeCode,
 } from './xlsx-large-simple-formula-records.js'
-import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import {
+  ImportedWorkbookArena,
+  ImportedWorksheetStyleIndexArena,
+  type ImportedWorkbookArenaDedupeMode,
+  type ImportedWorksheetCellScan,
+} from './xlsx-large-simple-arena.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 
@@ -43,15 +48,16 @@ export function parseLargeSimpleWorksheetCells(
   options: {
     readonly retainCells?: boolean
     readonly stringPool?: ImportedWorkbookStringPool
-    readonly deduplicateStrings?: boolean
+    readonly deduplicateStrings?: ImportedWorkbookArenaDedupeMode
+    readonly deduplicateFormulas?: ImportedWorkbookArenaDedupeMode
     readonly allowUnsupportedFormulaText?: boolean
     readonly preserveBlankStyleCells?: boolean
   } = {},
 ): ImportedWorksheetCellScan | null {
-  const arena = new ImportedWorkbookArena(
-    options.stringPool,
-    options.deduplicateStrings === undefined ? {} : { deduplicateStrings: options.deduplicateStrings },
-  )
+  const arena = new ImportedWorkbookArena(options.stringPool, {
+    ...(options.deduplicateStrings === undefined ? {} : { deduplicateStrings: options.deduplicateStrings }),
+    ...(options.deduplicateFormulas === undefined ? {} : { deduplicateFormulas: options.deduplicateFormulas }),
+  })
   const richTextCells: WorkbookRichTextCellSnapshot[] = []
   const styleIndexes = new ImportedWorksheetStyleIndexArena()
   const allowUnsupportedFormulaText = options.allowUnsupportedFormulaText === true

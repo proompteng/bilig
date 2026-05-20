@@ -62,6 +62,46 @@ describe('large simple XLSX import arena', () => {
     expect(pool.count).toBe(0)
   })
 
+  it('bounds repeated string and formula interning for large import arenas', () => {
+    const pool = new ImportedWorkbookStringPool()
+    const arena = new ImportedWorkbookArena(pool, {
+      deduplicateStrings: 'bounded',
+      deduplicateFormulas: 'bounded',
+      dedupeMaxEntries: 2,
+    })
+
+    const firstRepeated = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 'Repeated label' })
+    const secondRepeated = arena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 'Repeated label' })
+    arena.setFormula(firstRepeated, 'A1&"!"')
+    arena.setFormula(secondRepeated, 'A1&"!"')
+
+    expect(arena.snapshot().strings).toEqual(['Repeated label'])
+    expect(arena.snapshot().formulas).toEqual(['A1&"!"'])
+
+    arena.addCell({ sheetIndex: 0, row: 2, column: 0, value: 'Unique 1' })
+    arena.addCell({ sheetIndex: 0, row: 3, column: 0, value: 'Unique 2' })
+    arena.addCell({ sheetIndex: 0, row: 4, column: 0, value: 'Repeated label' })
+
+    expect(arena.snapshot().strings).toEqual(['Repeated label', 'Unique 1', 'Unique 2', 'Repeated label'])
+  })
+
+  it('releases preview and de-duplication scratch while lazy cells stay readable', () => {
+    const pool = new ImportedWorkbookStringPool()
+    const arena = new ImportedWorkbookArena(pool)
+    const cell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 'Alpha' })
+    arena.setFormula(cell, 'B1')
+    const lazyCells = arena.createLazySheetCells(0)
+
+    expect(arena.readPreviewText(0, 0)).toBe('Alpha')
+
+    arena.releaseMaterializationScratch()
+
+    expect(arena.readPreviewText(0, 0)).toBe('')
+    expect(lazyCells).toHaveLength(1)
+    expect(lazyCells[0]).toEqual({ address: 'A1', value: 'Alpha', formula: 'B1' })
+    expect([...lazyCells]).toEqual([{ address: 'A1', value: 'Alpha', formula: 'B1' }])
+  })
+
   it('uses scalar sheet ownership for single-sheet arenas and falls back only for mixed ownership', () => {
     const arena = new ImportedWorkbookArena()
     arena.addCell({ sheetIndex: 4, row: 0, column: 0, value: 1 })
