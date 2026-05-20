@@ -11,6 +11,8 @@ const CRITERIA_OP_GT: u8 = 2
 const CRITERIA_OP_GTE: u8 = 3
 const CRITERIA_OP_LT: u8 = 4
 const CRITERIA_OP_LTE: u8 = 5
+const CRITERIA_KIND_NUMBER: u8 = 0
+const CRITERIA_KIND_STRING_ID: u8 = 1
 
 function writeNumber(index: i32, value: f64, outTags: Uint8Array, outNumbers: Float64Array, outErrors: Uint16Array): void {
   outTags[index] = <u8>ValueTag.Number
@@ -42,21 +44,40 @@ function matchesNumericCriteria(valueTag: u8, value: f64, operator: u8, operand:
   return false
 }
 
+function matchesStringIdCriteria(valueTag: u8, stringId: u32, operator: u8, operandStringId: u32): bool {
+  return operator == CRITERIA_OP_EQ && valueTag == ValueTag.String && stringId == operandStringId
+}
+
 function rowMatchesAllCriteria(
   row: i32,
   rowCount: i32,
   criteriaOps: Uint8Array,
+  criteriaKinds: Uint8Array,
   criteriaValues: Float64Array,
+  criteriaStringIds: Uint32Array,
   criteriaTags: Uint8Array,
   criteriaNumbers: Float64Array,
+  criteriaStringIdsByRow: Uint32Array,
 ): bool {
   const pairCount = <i32>criteriaOps.length
-  if (criteriaValues.length < pairCount) {
+  if (criteriaKinds.length < pairCount || criteriaValues.length < pairCount || criteriaStringIds.length < pairCount) {
     return false
   }
   for (let pairIndex = 0; pairIndex < pairCount; pairIndex += 1) {
     const offset = pairIndex * rowCount + row
-    if (offset >= <i32>criteriaTags.length || offset >= <i32>criteriaNumbers.length) {
+    if (offset >= <i32>criteriaTags.length || offset >= <i32>criteriaNumbers.length || offset >= <i32>criteriaStringIdsByRow.length) {
+      return false
+    }
+    const criterionKind = criteriaKinds[pairIndex]
+    if (criterionKind == CRITERIA_KIND_STRING_ID) {
+      if (
+        !matchesStringIdCriteria(criteriaTags[offset], criteriaStringIdsByRow[offset], criteriaOps[pairIndex], criteriaStringIds[pairIndex])
+      ) {
+        return false
+      }
+      continue
+    }
+    if (criterionKind != CRITERIA_KIND_NUMBER) {
       return false
     }
     if (!matchesNumericCriteria(criteriaTags[offset], criteriaNumbers[offset], criteriaOps[pairIndex], criteriaValues[pairIndex])) {
@@ -70,9 +91,12 @@ export function evalDirectCriteriaPredicateAggregateBatch(
   aggregateKind: u8,
   rowCount: i32,
   criteriaOps: Uint8Array,
+  criteriaKinds: Uint8Array,
   criteriaValues: Float64Array,
+  criteriaStringIds: Uint32Array,
   criteriaTags: Uint8Array,
   criteriaNumbers: Float64Array,
+  criteriaStringIdsByRow: Uint32Array,
   aggregateTags: Uint8Array,
   aggregateNumbers: Float64Array,
   aggregateErrors: Uint16Array,
@@ -83,12 +107,22 @@ export function evalDirectCriteriaPredicateAggregateBatch(
   if (outTags.length == 0 || outNumbers.length == 0 || outErrors.length == 0) {
     return
   }
-  if (rowCount < 0 || criteriaOps.length == 0 || criteriaValues.length < criteriaOps.length) {
+  if (
+    rowCount < 0 ||
+    criteriaOps.length == 0 ||
+    criteriaKinds.length < criteriaOps.length ||
+    criteriaValues.length < criteriaOps.length ||
+    criteriaStringIds.length < criteriaOps.length
+  ) {
     writeError(0, <u16>ErrorCode.Value, outTags, outNumbers, outErrors)
     return
   }
   const expectedCriteriaLength = rowCount * <i32>criteriaOps.length
-  if (criteriaTags.length < expectedCriteriaLength || criteriaNumbers.length < expectedCriteriaLength) {
+  if (
+    criteriaTags.length < expectedCriteriaLength ||
+    criteriaNumbers.length < expectedCriteriaLength ||
+    criteriaStringIdsByRow.length < expectedCriteriaLength
+  ) {
     writeError(0, <u16>ErrorCode.Value, outTags, outNumbers, outErrors)
     return
   }
@@ -106,7 +140,19 @@ export function evalDirectCriteriaPredicateAggregateBatch(
   let maximum: f64 = -Infinity
 
   for (let row = 0; row < rowCount; row += 1) {
-    if (!rowMatchesAllCriteria(row, rowCount, criteriaOps, criteriaValues, criteriaTags, criteriaNumbers)) {
+    if (
+      !rowMatchesAllCriteria(
+        row,
+        rowCount,
+        criteriaOps,
+        criteriaKinds,
+        criteriaValues,
+        criteriaStringIds,
+        criteriaTags,
+        criteriaNumbers,
+        criteriaStringIdsByRow,
+      )
+    ) {
       continue
     }
     matchedCount += 1

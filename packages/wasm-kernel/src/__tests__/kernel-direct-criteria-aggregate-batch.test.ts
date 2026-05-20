@@ -7,6 +7,8 @@ const DIRECT_AGGREGATE_OP_AVERAGE = 2
 const DIRECT_AGGREGATE_OP_COUNT = 3
 const DIRECT_AGGREGATE_OP_MIN = 4
 const DIRECT_AGGREGATE_OP_MAX = 5
+const CRITERIA_KIND_NUMBER = 0
+const CRITERIA_KIND_STRING_ID = 1
 
 describe('wasm kernel direct criteria aggregate batch', () => {
   it('reduces matched row offsets with criteria aggregate semantics', async () => {
@@ -64,7 +66,9 @@ describe('wasm kernel direct criteria aggregate batch', () => {
       DIRECT_AGGREGATE_OP_SUM,
       6,
       Uint8Array.from([3, 0]),
+      Uint8Array.from([CRITERIA_KIND_NUMBER, CRITERIA_KIND_NUMBER]),
       Float64Array.from([3, 1]),
+      Uint32Array.from([0, 0]),
       Uint8Array.from([
         ValueTag.Number,
         ValueTag.Number,
@@ -80,6 +84,7 @@ describe('wasm kernel direct criteria aggregate batch', () => {
         ValueTag.Boolean,
       ]),
       Float64Array.from([1, 2, 3, 4, 5, 6, 1, 0, 1, 1, 0, 1]),
+      Uint32Array.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       Uint8Array.from([ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number]),
       Float64Array.from([10, 20, 30, 40, 50, 60]),
       Uint16Array.from([ErrorCode.None, ErrorCode.None, ErrorCode.None, ErrorCode.None, ErrorCode.None, ErrorCode.None]),
@@ -90,6 +95,55 @@ describe('wasm kernel direct criteria aggregate batch', () => {
 
     expect(outTags[0]).toBe(ValueTag.Number)
     expect(outNumbers[0]).toBe(130)
+    expect(outErrors[0]).toBe(ErrorCode.None)
+  })
+
+  it('matches string id criteria with numeric predicates in one native pass', async () => {
+    const kernel = await createKernel()
+    const outTags = new Uint8Array(1)
+    const outNumbers = new Float64Array(1)
+    const outErrors = new Uint16Array(1)
+    const targetStringId = 11
+
+    kernel.evalDirectCriteriaPredicateAggregateBatch(
+      DIRECT_AGGREGATE_OP_SUM,
+      6,
+      Uint8Array.from([0, 3, 0]),
+      Uint8Array.from([CRITERIA_KIND_STRING_ID, CRITERIA_KIND_NUMBER, CRITERIA_KIND_STRING_ID]),
+      Float64Array.from([0, 3, 0]),
+      Uint32Array.from([targetStringId, 0, 21]),
+      Uint8Array.from([
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+      ]),
+      Float64Array.from([0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0]),
+      Uint32Array.from([targetStringId, 12, targetStringId, targetStringId, 12, targetStringId, 0, 0, 0, 0, 0, 0, 21, 21, 22, 21, 21, 22]),
+      Uint8Array.from([ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number]),
+      Float64Array.from([10, 20, 30, 40, 50, 60]),
+      Uint16Array.from([ErrorCode.None, ErrorCode.None, ErrorCode.None, ErrorCode.None, ErrorCode.None, ErrorCode.None]),
+      outTags,
+      outNumbers,
+      outErrors,
+    )
+
+    expect(outTags[0]).toBe(ValueTag.Number)
+    expect(outNumbers[0]).toBe(40)
     expect(outErrors[0]).toBe(ErrorCode.None)
   })
 })

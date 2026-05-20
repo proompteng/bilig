@@ -110,9 +110,12 @@ export interface WasmDirectCriteriaPredicateAggregateBatchLayout {
   aggregateKind: number
   rowCount: number
   criteriaOps: Uint8Array
+  criteriaKinds: Uint8Array
   criteriaValues: Float64Array
+  criteriaStringIds: Uint32Array
   criteriaTags: Uint8Array
   criteriaNumbers: Float64Array
+  criteriaStringIdsByRow: Uint32Array
   aggregateTags: Uint8Array
   aggregateNumbers: Float64Array
   aggregateErrors: Uint16Array
@@ -466,9 +469,12 @@ export class WasmKernelFacade {
       layout.aggregateKind,
       layout.rowCount,
       layout.criteriaOps,
+      layout.criteriaKinds,
       layout.criteriaValues,
+      layout.criteriaStringIds,
       layout.criteriaTags,
       layout.criteriaNumbers,
+      layout.criteriaStringIdsByRow,
       layout.aggregateTags,
       layout.aggregateNumbers,
       layout.aggregateErrors,

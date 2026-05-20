@@ -181,6 +181,44 @@ describe('EngineFormulaEvaluationService', () => {
     expect(engine.getPerformanceCounters().directCriteriaMatchCacheHits).toBeGreaterThanOrEqual(1)
   })
 
+  it('uses native predicate aggregation for safe mixed string and numeric criteria', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-criteria-native-mixed-predicate' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const rowCount = 512
+    engine.setCellValue('Sheet1', 'A1', 'Group')
+    engine.setCellValue('Sheet1', 'B1', 'Amount')
+    engine.setCellValue('Sheet1', 'C1', 'Flag')
+    engine.setCellValue('Sheet1', 'D1', 'A')
+    engine.setCellValue('Sheet1', 'E1', 10)
+    let expectedCount = 0
+    let expectedSum = 0
+    for (let row = 2; row <= rowCount + 1; row += 1) {
+      const value = row - 1
+      engine.setCellValue('Sheet1', `A${row}`, value % 2 === 0 ? 'A' : 'B')
+      engine.setCellValue('Sheet1', `B${row}`, value)
+      engine.setCellValue('Sheet1', `C${row}`, value % 3 === 0 ? 'x' : 'y')
+      if (value % 2 === 0 && value >= 20 && value % 3 === 0) {
+        expectedCount += 1
+        expectedSum += value
+      }
+    }
+    engine.setCellFormula('Sheet1', 'F1', `COUNTIFS(A2:A${rowCount + 1},D1,B2:B${rowCount + 1},">="&E1,C2:C${rowCount + 1},"x")`)
+    engine.setCellFormula(
+      'Sheet1',
+      'G1',
+      `SUMIFS(B2:B${rowCount + 1},A2:A${rowCount + 1},D1,B2:B${rowCount + 1},">="&E1,C2:C${rowCount + 1},"x")`,
+    )
+
+    engine.resetPerformanceCounters()
+    engine.setCellValue('Sheet1', 'E1', 20)
+
+    expect(engine.getCellValue('Sheet1', 'F1')).toEqual({ tag: ValueTag.Number, value: expectedCount })
+    expect(engine.getCellValue('Sheet1', 'G1')).toEqual({ tag: ValueTag.Number, value: expectedSum })
+    expect(engine.getPerformanceCounters().nativeDirectCriteriaPredicateAggregateEvaluations).toBe(2)
+    expect(engine.getPerformanceCounters().directCriteriaMatchCacheHits).toBe(0)
+  })
+
   it('uses native matched-row reductions for large direct criteria aggregates', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-criteria-native-aggregate' })
     await engine.ready()

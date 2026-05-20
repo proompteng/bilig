@@ -45,6 +45,7 @@ import { tryEvaluateDirectAggregate } from './formula-evaluation-direct-aggregat
 import {
   tryEvaluateNativeDirectCriteriaMatchedAggregate,
   tryEvaluateNativeDirectCriteriaPredicateAggregate,
+  type NativeDirectCriteriaPredicateLayoutCache,
 } from './formula-evaluation-direct-criteria-native.js'
 import { createDirectCriteriaSharingContext } from './formula-evaluation-direct-criteria-sharing.js'
 import type { EngineFormulaEvaluationService } from './formula-evaluation-service-types.js'
@@ -73,6 +74,7 @@ export function createEngineFormulaEvaluationService(args: {
   const emptyChangedCellIndices: number[] = []
   const directCriteriaAggregateCache = new Map<string, CellValue>()
   const directCriteriaMatchCache = new Map<string, CriterionRangeMatch>()
+  const nativeDirectCriteriaPredicateLayoutCache: NativeDirectCriteriaPredicateLayoutCache = new Map()
   const rememberDirectCriteriaMatch = (key: string, value: CriterionRangeMatch): CriterionRangeMatch => {
     if (directCriteriaMatchCache.size >= DIRECT_CRITERIA_MATCH_CACHE_LIMIT) {
       const firstKey = directCriteriaMatchCache.keys().next().value
@@ -402,6 +404,8 @@ export function createEngineFormulaEvaluationService(args: {
         aggregateKind: directCriteria.aggregateKind,
         aggregateRange,
         criteriaPairs: resolvedPairs,
+        criteriaLayoutCache: nativeDirectCriteriaPredicateLayoutCache,
+        criteriaLayoutCacheKey: criteriaVersionKey,
         shouldUseSharedCriteriaCache: () => directCriteriaSharing.directCriteriaShareCount(criteriaVersionKey) > 1,
       },
     )

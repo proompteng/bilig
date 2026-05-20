@@ -133,9 +133,12 @@ export function evalDirectCriteriaPredicateAggregateBatchRaw(
   aggregateKind: number,
   rowCount: number,
   criteriaOps: Uint8Array,
+  criteriaKinds: Uint8Array,
   criteriaValues: Float64Array,
+  criteriaStringIds: Uint32Array,
   criteriaTags: Uint8Array,
   criteriaNumbers: Float64Array,
+  criteriaStringIdsByRow: Uint32Array,
   aggregateTags: Uint8Array,
   aggregateNumbers: Float64Array,
   aggregateErrors: Uint16Array,
@@ -179,9 +182,12 @@ export function evalDirectCriteriaPredicateAggregateBatchRaw(
   }
 
   const criteriaOpsPtr = lowerTypedArray(criteriaOps, uint8Spec)
+  const criteriaKindsPtr = lowerTypedArray(criteriaKinds, uint8Spec)
   const criteriaValuesPtr = lowerTypedArray(criteriaValues, float64Spec)
+  const criteriaStringIdsPtr = lowerTypedArray(criteriaStringIds, uint32Spec)
   const criteriaTagsPtr = lowerTypedArray(criteriaTags, uint8Spec)
   const criteriaNumbersPtr = lowerTypedArray(criteriaNumbers, float64Spec)
+  const criteriaStringIdsByRowPtr = lowerTypedArray(criteriaStringIdsByRow, uint32Spec)
   const aggregateTagsPtr = lowerTypedArray(aggregateTags, uint8Spec)
   const aggregateNumbersPtr = lowerTypedArray(aggregateNumbers, float64Spec)
   const aggregateErrorsPtr = lowerTypedArray(aggregateErrors, uint16Spec)
@@ -193,9 +199,12 @@ export function evalDirectCriteriaPredicateAggregateBatchRaw(
       aggregateKind,
       rowCount,
       criteriaOpsPtr,
+      criteriaKindsPtr,
       criteriaValuesPtr,
+      criteriaStringIdsPtr,
       criteriaTagsPtr,
       criteriaNumbersPtr,
+      criteriaStringIdsByRowPtr,
       aggregateTagsPtr,
       aggregateNumbersPtr,
       aggregateErrorsPtr,
@@ -208,9 +217,12 @@ export function evalDirectCriteriaPredicateAggregateBatchRaw(
     copyLoweredTypedArray(outErrorsPtr, outErrors, uint16Spec)
   } finally {
     raw.__unpin(criteriaOpsPtr)
+    raw.__unpin(criteriaKindsPtr)
     raw.__unpin(criteriaValuesPtr)
+    raw.__unpin(criteriaStringIdsPtr)
     raw.__unpin(criteriaTagsPtr)
     raw.__unpin(criteriaNumbersPtr)
+    raw.__unpin(criteriaStringIdsByRowPtr)
     raw.__unpin(aggregateTagsPtr)
     raw.__unpin(aggregateNumbersPtr)
     raw.__unpin(aggregateErrorsPtr)
