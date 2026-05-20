@@ -3,6 +3,7 @@ import {
   isSelectionMoveHandleHit,
   resolveSelectionBounds,
   resolveSelectionMoveAnchorCell,
+  resolveSelectionMoveAnchorCellFromPointerCell,
   resolveSelectionMoveCandidateCell,
 } from '../gridRangeMove.js'
 import type { Rectangle } from '../gridTypes.js'
@@ -37,6 +38,14 @@ describe('gridRangeMove', () => {
   test('reports selection-border hits through the shared helper', () => {
     expect(isSelectionMoveHandleHit(153, 48, { x: 1, y: 1, width: 2, height: 1 }, getCellBounds)).toBe(true)
     expect(isSelectionMoveHandleHit(202, 57, { x: 1, y: 1, width: 2, height: 2 }, getCellBounds)).toBe(false)
+  })
+
+  test('resolves range-move edge hits from the already-clipped pointer cell', () => {
+    expect(resolveSelectionMoveAnchorCellFromPointerCell(153, 48, { x: 1, y: 1, width: 2, height: 1 }, [1, 1], getCellBounds)).toEqual([
+      1, 1,
+    ])
+    expect(resolveSelectionMoveAnchorCellFromPointerCell(202, 57, { x: 1, y: 1, width: 2, height: 2 }, [1, 1], getCellBounds)).toBeNull()
+    expect(resolveSelectionMoveAnchorCellFromPointerCell(48, 30, { x: 1, y: 1, width: 2, height: 2 }, [0, 0], getCellBounds)).toBeNull()
   })
 
   test('resolves full selection bounds from the outer cells', () => {

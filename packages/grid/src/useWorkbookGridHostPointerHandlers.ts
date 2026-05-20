@@ -1,5 +1,5 @@
 import { useCallback, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
+import { resolveSelectionMoveAnchorCellFromPointerCell } from './gridRangeMove.js'
 import { sameGridHoverState, type GridHoverState } from './gridHover.js'
 import {
   finishGridResize,
@@ -451,8 +451,18 @@ export function useWorkbookGridHostPointerHandlers(input: {
         return
       }
 
-      if (allowsRangeMove) {
-        const rangeMoveAnchorCell = resolveSelectionMoveAnchorCell(event.clientX, event.clientY, selectionRange, getCellScreenBounds)
+      const headerSelection =
+        pointerGeometry === null ? null : resolveHeaderSelectionAtPointer(event.clientX, event.clientY, visibleRegion, pointerGeometry)
+      if (!headerSelection && allowsRangeMove) {
+        const pointerCell =
+          pointerGeometry === null ? null : resolvePointerCell(event.clientX, event.clientY, visibleRegion, pointerGeometry)
+        const rangeMoveAnchorCell = resolveSelectionMoveAnchorCellFromPointerCell(
+          event.clientX,
+          event.clientY,
+          selectionRange,
+          pointerCell,
+          getCellScreenBounds,
+        )
         if (rangeMoveAnchorCell) {
           event.preventDefault()
           event.stopPropagation()
@@ -467,8 +477,6 @@ export function useWorkbookGridHostPointerHandlers(input: {
         }
       }
 
-      const headerSelection =
-        pointerGeometry === null ? null : resolveHeaderSelectionAtPointer(event.clientX, event.clientY, visibleRegion, pointerGeometry)
       setActiveResizeColumn(null)
       setActiveResizeRow(null)
       setActiveHeaderDrag(headerSelection)

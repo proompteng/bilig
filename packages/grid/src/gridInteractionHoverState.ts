@@ -2,7 +2,7 @@ import type { GridGeometrySnapshot } from './gridGeometry.js'
 import type { GridMetrics } from './gridMetrics.js'
 import type { GridHoverState } from './gridHover.js'
 import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
-import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
+import { resolveSelectionMoveAnchorCellFromPointerCell } from './gridRangeMove.js'
 import type { Item, Rectangle } from './gridTypes.js'
 
 const DEFAULT_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'default' }
@@ -39,12 +39,6 @@ interface GridPointerResolutionInput {
     region?: VisibleRegionState,
     geometry?: GridGeometrySnapshot | null,
   ) => HeaderSelection | null
-  readonly resolvePointerCell: (
-    clientX: number,
-    clientY: number,
-    region?: VisibleRegionState,
-    geometry?: GridGeometrySnapshot | null,
-  ) => Item | null
 }
 
 function resolveResizeOrHeaderHoverState(input: GridPointerResolutionInput): GridHoverState | null {
@@ -77,16 +71,6 @@ function resolveResizeOrHeaderHoverState(input: GridPointerResolutionInput): Gri
     return { cell: null, header, cursor: 'pointer' }
   }
   return null
-}
-
-function resolveGridInteractionHoverState(input: GridPointerResolutionInput): GridHoverState {
-  const resizeOrHeader = resolveResizeOrHeaderHoverState(input)
-  if (resizeOrHeader) {
-    return resizeOrHeader
-  }
-
-  const cell = input.resolvePointerCell(input.clientX, input.clientY, input.visibleRegion, input.geometry)
-  return cell ? { cell, header: null, cursor: 'cell' } : DEFAULT_HOVER_STATE
 }
 
 export function resolveWorkbookGridHoverState(input: {
@@ -157,7 +141,6 @@ export function resolveWorkbookGridHoverState(input: {
     gridMetrics: input.gridMetrics,
     resolveColumnResizeTargetAtPointer: input.resolveColumnResizeTargetAtPointer,
     resolveHeaderSelectionAtPointer: input.resolveHeaderSelectionAtPointer,
-    resolvePointerCell: input.resolvePointerCell,
     resolveRowResizeTargetAtPointer: input.resolveRowResizeTargetAtPointer,
     rowHeights: input.rowHeights,
     visibleRegion,
@@ -166,24 +149,13 @@ export function resolveWorkbookGridHoverState(input: {
     return resizeOrHeader
   }
 
+  const cell = input.resolvePointerCell(input.clientX, input.clientY, visibleRegion, geometry)
   const rangeMoveAnchorCell =
     input.allowsRangeMove && input.selectionRange
-      ? resolveSelectionMoveAnchorCell(input.clientX, input.clientY, input.selectionRange, input.getCellScreenBounds)
+      ? resolveSelectionMoveAnchorCellFromPointerCell(input.clientX, input.clientY, input.selectionRange, cell, input.getCellScreenBounds)
       : null
   if (rangeMoveAnchorCell) {
     return RANGE_MOVE_HOVER_STATE
   }
-  return resolveGridInteractionHoverState({
-    clientX: input.clientX,
-    clientY: input.clientY,
-    columnWidths: input.columnWidths,
-    geometry,
-    gridMetrics: input.gridMetrics,
-    resolveColumnResizeTargetAtPointer: input.resolveColumnResizeTargetAtPointer,
-    resolveHeaderSelectionAtPointer: input.resolveHeaderSelectionAtPointer,
-    resolvePointerCell: input.resolvePointerCell,
-    resolveRowResizeTargetAtPointer: input.resolveRowResizeTargetAtPointer,
-    rowHeights: input.rowHeights,
-    visibleRegion,
-  })
+  return cell ? { cell, header: null, cursor: 'cell' } : DEFAULT_HOVER_STATE
 }

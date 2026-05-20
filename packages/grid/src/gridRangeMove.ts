@@ -73,7 +73,23 @@ export function resolveSelectionMoveAnchorCell(
   threshold = RANGE_MOVE_BORDER_THRESHOLD,
 ): Item | null {
   const pointerCell = resolveSelectionMoveCandidateCell(clientX, clientY, sourceRange, getCellBounds)
+  return resolveSelectionMoveAnchorCellFromPointerCell(clientX, clientY, sourceRange, pointerCell, getCellBounds, threshold)
+}
+
+export function resolveSelectionMoveAnchorCellFromPointerCell(
+  clientX: number,
+  clientY: number,
+  sourceRange: Rectangle | null | undefined,
+  pointerCell: Item | null | undefined,
+  getCellBounds: (col: number, row: number) => Rectangle | undefined,
+  threshold = RANGE_MOVE_BORDER_THRESHOLD,
+): Item | null {
   if (!sourceRange || !pointerCell) {
+    return null
+  }
+  const sourceRight = sourceRange.x + sourceRange.width - 1
+  const sourceBottom = sourceRange.y + sourceRange.height - 1
+  if (pointerCell[0] < sourceRange.x || pointerCell[0] > sourceRight || pointerCell[1] < sourceRange.y || pointerCell[1] > sourceBottom) {
     return null
   }
   const cellBounds = getCellBounds(pointerCell[0], pointerCell[1])
@@ -91,8 +107,6 @@ export function resolveSelectionMoveAnchorCell(
 
   const localX = clientX - cellBounds.x
   const localY = clientY - cellBounds.y
-  const sourceRight = sourceRange.x + sourceRange.width - 1
-  const sourceBottom = sourceRange.y + sourceRange.height - 1
   return (pointerCell[0] === sourceRange.x && localX < threshold) ||
     (pointerCell[0] === sourceRight && localX >= cellBounds.width - threshold) ||
     (pointerCell[1] === sourceRange.y && localY < threshold) ||

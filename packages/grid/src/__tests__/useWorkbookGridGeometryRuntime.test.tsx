@@ -85,21 +85,21 @@ describe('useWorkbookGridGeometryRuntime', () => {
       ty: 0,
     }
     expect(latestState?.getCellLocalBounds(1, 1)).toEqual({
-      height: gridMetrics.rowHeight,
-      width: gridMetrics.columnWidth,
-      x: gridMetrics.rowMarkerWidth + 150 - 25,
-      y: gridMetrics.headerHeight + 30 - 15,
+      height: 7,
+      width: gridMetrics.columnWidth - 25,
+      x: gridMetrics.rowMarkerWidth + 150,
+      y: gridMetrics.headerHeight + 30,
     })
     expect(latestState?.getCellScreenBounds(1, 1)).toEqual({
-      height: gridMetrics.rowHeight,
-      width: gridMetrics.columnWidth,
-      x: 10 + gridMetrics.rowMarkerWidth + 150 - 25,
-      y: 40 + gridMetrics.headerHeight + 30 - 15,
+      height: 7,
+      width: gridMetrics.columnWidth - 25,
+      x: 10 + gridMetrics.rowMarkerWidth + 150,
+      y: 40 + gridMetrics.headerHeight + 30,
     })
     expect(latestState?.getCellLocalBounds(1, 3)).toEqual({
       height: gridMetrics.rowHeight,
-      width: gridMetrics.columnWidth,
-      x: gridMetrics.rowMarkerWidth + 150 - 25,
+      width: gridMetrics.columnWidth - 25,
+      x: gridMetrics.rowMarkerWidth + 150,
       y: gridMetrics.headerHeight + 30 + gridMetrics.rowHeight + 40 - 15,
     })
 

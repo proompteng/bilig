@@ -147,33 +147,49 @@ export function useWorkbookGridGeometryRuntime(input: {
   const scrollTransformStore = scrollTransformStoreRef.current
   const gridCameraStore = gridCameraStoreRef.current
 
+  const createLiveGeometrySnapshot = useCallback((): GridGeometrySnapshot | null => {
+    const scrollViewport = scrollViewportRef.current
+    const scrollTransform = scrollTransformRef.current
+    const hostWidth = scrollViewport && scrollViewport.clientWidth > 0 ? scrollViewport.clientWidth : hostClientWidth
+    const hostHeight = scrollViewport && scrollViewport.clientHeight > 0 ? scrollViewport.clientHeight : hostClientHeight
+    if (hostWidth <= 0 || hostHeight <= 0) {
+      return null
+    }
+    return createGridGeometrySnapshotFromAxes({
+      columns: columnAxis,
+      dpr: typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1,
+      freezeCols,
+      freezeRows,
+      gridMetrics,
+      hostHeight,
+      hostWidth,
+      previousCamera: gridCameraStore.getSnapshot()?.camera ?? null,
+      rows: rowAxis,
+      scrollLeft: scrollViewport?.scrollLeft ?? scrollTransform.scrollLeft ?? 0,
+      scrollTop: scrollViewport?.scrollTop ?? scrollTransform.scrollTop ?? 0,
+      sheetName,
+    })
+  }, [
+    columnAxis,
+    freezeCols,
+    freezeRows,
+    gridCameraStore,
+    gridMetrics,
+    hostClientHeight,
+    hostClientWidth,
+    rowAxis,
+    scrollViewportRef,
+    sheetName,
+  ])
+
   const getCellLocalBounds = useCallback(
     (col: number, row: number): Rectangle | undefined => {
       if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
         return undefined
       }
-      const geometryRect = gridCameraStore.getSnapshot()?.editorScreenRect(col, row)
-      if (geometryRect) {
-        return geometryRect
-      }
-      const width = columnAxis.sizeOf(col)
-      const height = rowAxis.sizeOf(row)
-      if (width <= 0 || height <= 0 || columnAxis.isHidden(col) || rowAxis.isHidden(row)) {
-        return undefined
-      }
-      const scrollTransform = scrollTransformRef.current
-      const scrollLeft = scrollTransform.scrollLeft ?? 0
-      const scrollTop = scrollTransform.scrollTop ?? 0
-      const worldX = columnAxis.offsetOf(col)
-      const worldY = rowAxis.offsetOf(row)
-      return {
-        x: col < freezeCols ? gridMetrics.rowMarkerWidth + worldX : gridMetrics.rowMarkerWidth + worldX - scrollLeft,
-        y: row < freezeRows ? gridMetrics.headerHeight + worldY : gridMetrics.headerHeight + worldY - scrollTop,
-        width,
-        height,
-      }
+      return (gridCameraStore.getSnapshot() ?? createLiveGeometrySnapshot())?.editorScreenRect(col, row) ?? undefined
     },
-    [columnAxis, freezeCols, freezeRows, gridCameraStore, gridMetrics.headerHeight, gridMetrics.rowMarkerWidth, rowAxis],
+    [createLiveGeometrySnapshot, gridCameraStore],
   )
 
   const getCellScreenBounds = useCallback(
@@ -193,25 +209,8 @@ export function useWorkbookGridGeometryRuntime(input: {
     [getCellLocalBounds, hostRef],
   )
   const getLiveGeometrySnapshot = useCallback(() => {
-    const scrollViewport = scrollViewportRef.current
-    if (!scrollViewport) {
-      return gridCameraStore.getSnapshot()
-    }
-    return createGridGeometrySnapshotFromAxes({
-      columns: columnAxis,
-      dpr: window.devicePixelRatio || 1,
-      freezeCols,
-      freezeRows,
-      gridMetrics,
-      hostHeight: scrollViewport.clientHeight,
-      hostWidth: scrollViewport.clientWidth,
-      previousCamera: gridCameraStore.getSnapshot()?.camera ?? null,
-      rows: rowAxis,
-      scrollLeft: scrollViewport.scrollLeft,
-      scrollTop: scrollViewport.scrollTop,
-      sheetName,
-    })
-  }, [columnAxis, freezeCols, freezeRows, gridCameraStore, gridMetrics, rowAxis, scrollViewportRef, sheetName])
+    return createLiveGeometrySnapshot() ?? gridCameraStore.getSnapshot()
+  }, [createLiveGeometrySnapshot, gridCameraStore])
 
   return {
     columnAxis,

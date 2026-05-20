@@ -398,6 +398,80 @@ test('@browser-ci web app hides fill handles when the selected cell is clipped b
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
 })
 
+test('@browser-ci web app keeps scrolled selection chrome and hit targets clipped to the visible pane', async ({ page }) => {
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-scrolled-selection-chrome-clip'))}&persist=0`)
+  await waitForWorkbookReady(page)
+
+  await dragProductBodySelection(page, 1, 1, 3, 3)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:D4')
+
+  const scrollTop = 30
+  await page.getByTestId('grid-scroll-viewport').evaluate((viewport, nextScrollTop) => {
+    viewport.scrollTop = nextScrollTop
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+  }, scrollTop)
+
+  const grid = await page.getByTestId('sheet-grid').boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+  const rangeLeft = await getProductColumnLeft(page, 1)
+  const rangeRight = await getProductColumnLeft(page, 3)
+  const rangeRightWidth = await getProductColumnWidth(page, 3)
+  const rangeTop = await getProductRowTop(page, 1)
+  const rangeBottom = await getProductRowTop(page, 3)
+  const rangeBottomHeight = await getProductRowHeight(page, 3)
+  const unclippedTop = grid.y + PRODUCT_HEADER_HEIGHT + rangeTop - scrollTop
+  const unclippedBottom = grid.y + PRODUCT_HEADER_HEIGHT + rangeBottom + rangeBottomHeight - scrollTop
+  const clippedTop = Math.max(grid.y + PRODUCT_HEADER_HEIGHT, unclippedTop)
+  const clippedBottom = Math.min(grid.y + grid.height, unclippedBottom)
+  const expectedRange = {
+    x: grid.x + rangeLeft,
+    y: clippedTop,
+    width: rangeRight + rangeRightWidth - rangeLeft,
+    height: clippedBottom - clippedTop,
+  }
+  const expectedActive = {
+    x: grid.x + rangeLeft,
+    y: clippedTop,
+    width: await getProductColumnWidth(page, 1),
+    height: grid.y + PRODUCT_HEADER_HEIGHT + rangeTop + (await getProductRowHeight(page, 1)) - scrollTop - clippedTop,
+  }
+  const expectedVisualHandle = {
+    x: expectedRange.x + expectedRange.width - 3.5,
+    y: expectedRange.y + expectedRange.height - 3.5,
+    width: 7,
+    height: 7,
+  }
+  const expectedHitTarget = {
+    x: expectedRange.x + expectedRange.width - 5,
+    y: expectedRange.y + expectedRange.height - 5,
+    width: 10,
+    height: 10,
+  }
+
+  await expectVisualRectNear(
+    page.locator('[data-grid-selection-visual-role="selection-border"]'),
+    expectedRange,
+    'clipped selection border',
+  )
+  await expectVisualRectNear(
+    page.locator('[data-grid-selection-visual-role="active-border"]'),
+    expectedActive,
+    'clipped active cell border',
+  )
+  await expectVisualRectNear(page.locator('[data-grid-selection-visual-role="fill-handle"]'), expectedVisualHandle, 'clipped fill handle')
+  await expectVisualRectNear(page.locator('[data-grid-fill-handle="true"]'), expectedHitTarget, 'clipped fill handle hit target')
+
+  await page.getByTestId('sheet-grid').click({
+    position: {
+      x: rangeLeft + Math.floor((await getProductColumnWidth(page, 1)) / 2),
+      y: Math.floor(PRODUCT_HEADER_HEIGHT / 2),
+    },
+  })
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B:B')
+})
+
 test('@browser-ci web app keeps active cell chrome synchronized inside a keyboard-cycled range', async ({ page }) => {
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-range-keyboard-visual-geometry'))}&persist=0`)
   await waitForWorkbookReady(page)

@@ -164,6 +164,78 @@ describe('useWorkbookGridPointerResolvers', () => {
     })
   })
 
+  test('does not let a clipped selected cell steal header clicks', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const gridMetrics = getGridMetrics()
+    let latestResolvers: ReturnType<typeof useWorkbookGridPointerResolvers> | null = null
+
+    function Harness() {
+      const hostRef = useRef<HTMLDivElement | null>(null)
+      const liveGeometry = useMemo(
+        () =>
+          createGridGeometrySnapshotFromAxes({
+            columns: createGridAxisWorldIndex({ axisLength: 100, defaultSize: gridMetrics.columnWidth }),
+            dpr: 1,
+            gridMetrics,
+            hostHeight: 180,
+            hostWidth: 420,
+            rows: createGridAxisWorldIndex({ axisLength: 100, defaultSize: gridMetrics.rowHeight }),
+            scrollLeft: 0,
+            scrollTop: 10,
+            sheetName: 'Sheet1',
+            updatedAt: 100,
+          }),
+        [],
+      )
+      latestResolvers = useWorkbookGridPointerResolvers({
+        getGeometrySnapshot: () => liveGeometry,
+        gridSelection: createGridSelection(1, 0),
+        hostRef,
+        selectedCell: { col: 1, row: 0 },
+      })
+
+      return (
+        <div
+          ref={(node) => {
+            hostRef.current = node
+            if (node) {
+              node.getBoundingClientRect = () =>
+                ({
+                  bottom: 190,
+                  height: 180,
+                  left: 10,
+                  right: 430,
+                  top: 10,
+                  width: 420,
+                  x: 10,
+                  y: 10,
+                  toJSON: () => ({}),
+                }) as DOMRect
+            }
+          }}
+        />
+      )
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    const headerClientX = 10 + gridMetrics.rowMarkerWidth + gridMetrics.columnWidth + 20
+    const headerClientY = 10 + gridMetrics.headerHeight - 2
+    expect(latestResolvers?.resolvePointerCell(headerClientX, headerClientY)).toBeNull()
+    expect(latestResolvers?.resolveHeaderSelectionAtPointer(headerClientX, headerClientY)).toEqual({ kind: 'column', index: 1 })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   test('resolves header selections using host coordinates', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

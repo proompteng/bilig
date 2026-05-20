@@ -34,7 +34,7 @@ export function useWorkbookGridPointerResolvers(input: {
 
   const resolveSelectedCellBounds = useCallback(
     (geometry: GridGeometrySnapshot): (LocalPoint & { readonly width: number; readonly height: number }) | null => {
-      const selectedCellRect = geometry.cellScreenRect(selectedCell.col, selectedCell.row)
+      const selectedCellRect = geometry.editorScreenRect(selectedCell.col, selectedCell.row)
       return selectedCellRect
         ? { x: selectedCellRect.x, y: selectedCellRect.y, width: selectedCellRect.width, height: selectedCellRect.height }
         : null

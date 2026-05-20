@@ -58,6 +58,7 @@ describe('resolveWorkbookGridHoverState', () => {
       clientY: 41,
       allowsRangeMove: true,
       selectionRange: { x: 1, y: 1, width: 2, height: 2 },
+      resolvePointerCell: vi.fn(() => [1, 1] as const),
       getCellScreenBounds: vi.fn((col, row) =>
         col >= 1 && col <= 2 && row >= 1 && row <= 2
           ? {
@@ -99,6 +100,7 @@ describe('resolveWorkbookGridHoverState', () => {
       clientY: 50,
       allowsRangeMove: true,
       selectionRange: { x: 1, y: 1, width: 2, height: 2 },
+      resolvePointerCell: vi.fn(() => [1, 1] as const),
       getCellScreenBounds: vi.fn((col, row) =>
         col >= 1 && col <= 2 && row >= 1 && row <= 2
           ? {
@@ -111,7 +113,7 @@ describe('resolveWorkbookGridHoverState', () => {
       ),
     })
 
-    expect(state).toEqual({ cell: [2, 3], header: null, cursor: 'cell' })
+    expect(state).toEqual({ cell: [1, 1], header: null, cursor: 'cell' })
   })
 
   it('keeps regular cell hover in the center of an already-selected range so body drags can select ranges', () => {
@@ -121,6 +123,7 @@ describe('resolveWorkbookGridHoverState', () => {
       clientY: 50,
       allowsRangeMove: true,
       selectionRange: { x: 1, y: 1, width: 2, height: 2 },
+      resolvePointerCell: vi.fn(() => [2, 1] as const),
       getCellScreenBounds: vi.fn((col, row) =>
         col >= 1 && col <= 2 && row >= 1 && row <= 2
           ? {
@@ -133,7 +136,7 @@ describe('resolveWorkbookGridHoverState', () => {
       ),
     })
 
-    expect(state).toEqual({ cell: [2, 3], header: null, cursor: 'cell' })
+    expect(state).toEqual({ cell: [2, 1], header: null, cursor: 'cell' })
   })
 
   it('falls through to cell hover resolution', () => {
