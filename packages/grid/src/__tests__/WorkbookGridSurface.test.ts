@@ -181,6 +181,70 @@ describe('WorkbookGridSurface selection autoscroll', () => {
     ).toBe(committedSelection)
   })
 
+  test('rejects stale axis selections after the committed active cell changes', () => {
+    const committedSelection = createGridSelection(6, 7)
+    const staleColumnSelection = createColumnSliceSelection(2, 4, 0)
+    const staleRowSelection = createRowSliceSelection(0, 2, 4)
+
+    expect(
+      resolveWorkbookGridSurfaceDisplaySelection({
+        activeHeaderDrag: null,
+        committedCellSelection: committedSelection,
+        isEditingCell: false,
+        isFillHandleDragging: false,
+        isRangeMoveDragging: false,
+        renderGridSelection: staleColumnSelection,
+        renderSelectionRange: staleColumnSelection.current?.range,
+        selectedCell: [6, 7],
+      }),
+    ).toBe(committedSelection)
+
+    expect(
+      resolveWorkbookGridSurfaceDisplaySelection({
+        activeHeaderDrag: null,
+        committedCellSelection: committedSelection,
+        isEditingCell: false,
+        isFillHandleDragging: false,
+        isRangeMoveDragging: false,
+        renderGridSelection: staleRowSelection,
+        renderSelectionRange: staleRowSelection.current?.range,
+        selectedCell: [6, 7],
+      }),
+    ).toBe(committedSelection)
+  })
+
+  test('keeps live axis selections when the render active cell still matches the committed active cell', () => {
+    const committedSelection = createGridSelection(2, 7)
+    const columnSelection = createColumnSliceSelection(2, 4, 7)
+    const rowSelection = createRowSliceSelection(2, 7, 9)
+
+    expect(
+      resolveWorkbookGridSurfaceDisplaySelection({
+        activeHeaderDrag: null,
+        committedCellSelection: committedSelection,
+        isEditingCell: false,
+        isFillHandleDragging: false,
+        isRangeMoveDragging: false,
+        renderGridSelection: columnSelection,
+        renderSelectionRange: columnSelection.current?.range,
+        selectedCell: [2, 7],
+      }),
+    ).toBe(columnSelection)
+
+    expect(
+      resolveWorkbookGridSurfaceDisplaySelection({
+        activeHeaderDrag: null,
+        committedCellSelection: committedSelection,
+        isEditingCell: false,
+        isFillHandleDragging: false,
+        isRangeMoveDragging: false,
+        renderGridSelection: rowSelection,
+        renderSelectionRange: rowSelection.current?.range,
+        selectedCell: [2, 7],
+      }),
+    ).toBe(rowSelection)
+  })
+
   test('passes the visible range to native text occlusion for regular range selections', () => {
     const selection = createRangeSelection(createGridSelection(1, 1), [1, 1], [3, 4])
 

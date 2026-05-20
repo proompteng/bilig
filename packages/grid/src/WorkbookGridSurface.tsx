@@ -40,7 +40,6 @@ export function resolveWorkbookGridSurfaceDisplaySelection(input: {
   if (input.isFillHandleDragging || input.isRangeMoveDragging || input.activeHeaderDrag) {
     return input.renderGridSelection
   }
-  const hasAxisSelection = input.renderGridSelection.columns.length > 0 || input.renderGridSelection.rows.length > 0
   const currentCell = input.renderGridSelection.current?.cell ?? null
   const currentCellMatchesSelected = currentCell?.[0] === input.selectedCell[0] && currentCell[1] === input.selectedCell[1]
   const renderRangeContainsSelected =
@@ -50,10 +49,10 @@ export function resolveWorkbookGridSurfaceDisplaySelection(input: {
     input.selectedCell[0] < input.renderSelectionRange.x + input.renderSelectionRange.width &&
     input.selectedCell[1] >= input.renderSelectionRange.y &&
     input.selectedCell[1] < input.renderSelectionRange.y + input.renderSelectionRange.height
-  if (!hasAxisSelection && !currentCellMatchesSelected) {
+  if (!currentCellMatchesSelected) {
     return input.committedCellSelection
   }
-  if (!hasAxisSelection && currentCellMatchesSelected && !renderRangeContainsSelected) {
+  if (currentCellMatchesSelected && !renderRangeContainsSelected) {
     return input.committedCellSelection
   }
   const renderSelectionIsSingleCell =

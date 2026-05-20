@@ -77,6 +77,34 @@ test('web app supports row and column header drag selection', async ({ page }) =
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!2:4')
 })
 
+test('@browser-ci web app commits an in-cell edit before applying a header selection', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-header-click-away-edit')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0`)
+  await waitForWorkbookReady(page)
+
+  const draft = 'header-click-away-draft'
+  await clickProductCell(page, 1, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await page.getByTestId('sheet-grid-focus-target').focus()
+  await page.keyboard.type(draft)
+  await expect(page.getByTestId('cell-editor-input')).toHaveValue(draft)
+
+  const grid = page.getByTestId('sheet-grid')
+  await grid.click({
+    position: {
+      x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 2 + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
+      y: Math.floor(PRODUCT_HEADER_HEIGHT / 2),
+    },
+  })
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C:C')
+
+  await selectAddress(page, 'B2')
+  await expect(page.getByTestId('formula-input')).toHaveValue(draft)
+
+  await selectAddress(page, 'C1')
+  await expect(page.getByTestId('formula-input')).toHaveValue('')
+})
+
 test('web app deletes the selected row range from the header context menu', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-delete-selected-rows')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
