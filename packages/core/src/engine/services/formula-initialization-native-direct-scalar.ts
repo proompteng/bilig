@@ -9,8 +9,8 @@ const OP_MUL = 3
 const OP_DIV = 4
 const OP_ABS = 5
 const BATCH_REF_NONE = 0xffffffff
-export const MIN_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE = 1024
-export const MAX_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE = 2500
+export const MIN_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE = 8192
+export const MAX_INITIAL_NATIVE_DIRECT_SCALAR_BATCH_SIZE = 12_288
 
 interface InitialNativeDirectScalarBatchState {
   readonly workbook: EngineRuntimeState['workbook']
@@ -74,6 +74,9 @@ export function createInitialNativeDirectScalarBatch(args: {
           return true
         }
         const cellStore = args.state.workbook.cellStore
+        if (((cellStore.flags[operand.cellIndex] ?? 0) & CellFlags.HasFormula) !== 0) {
+          return false
+        }
         batchRefs[index] = BATCH_REF_NONE
         tags[index] = (cellStore.tags[operand.cellIndex] as ValueTag | undefined) ?? ValueTag.Empty
         values[index] = cellStore.numbers[operand.cellIndex] ?? 0
