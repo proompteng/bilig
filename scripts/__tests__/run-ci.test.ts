@@ -44,6 +44,9 @@ describe('run-ci', () => {
     expect(source).toContain(
       "withEnv(directPackageScript('correctness core', 'test:correctness:core'), { BILIG_VITEST_FILE_CHUNK_SIZE: '10' })",
     )
+    expect(source).toContain(
+      "withEnv(directPackageScript('correctness formula', 'test:correctness:formula'), { BILIG_VITEST_FILE_CHUNK_SIZE: '3' })",
+    )
     expect(source).toContain("BILIG_VITEST_FILE_CHUNK_SIZE: '10'")
     expect(source).toContain(
       "directPackageScript('financial public workbook corpus resume check', 'public-workbook-corpus:resume-financial:check')",

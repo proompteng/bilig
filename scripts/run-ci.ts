@@ -296,7 +296,7 @@ const browserLane: CiTask = {
 }
 const parallelFocusedCorrectnessLanes: readonly CiTask[] = [
   withEnv(directPackageScript('correctness core', 'test:correctness:core'), { BILIG_VITEST_FILE_CHUNK_SIZE: '10' }),
-  withEnv(directPackageScript('correctness formula', 'test:correctness:formula'), { BILIG_VITEST_FILE_CHUNK_SIZE: '1' }),
+  withEnv(directPackageScript('correctness formula', 'test:correctness:formula'), { BILIG_VITEST_FILE_CHUNK_SIZE: '3' }),
   directPackageScript('correctness server', 'test:correctness:server'),
   directPackageScript('correctness browser runtime', 'test:correctness:browser'),
 ]
