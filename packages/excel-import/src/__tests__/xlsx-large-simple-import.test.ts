@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { strToU8, unzipSync, zipSync } from 'fflate'
+import { readRuntimeImage } from '@bilig/core'
 
 import { importXlsx, inspectXlsx, XlsxImportSizeLimitExceededError } from '../index.js'
 import { tryImportLargeSimpleXlsx } from '../xlsx-large-simple-import.js'
@@ -100,6 +101,13 @@ describe('large simple XLSX import fast path', () => {
       rowCount: 2_000,
       columnCount: 3,
       nonEmptyCellCount: 6_000,
+    })
+    expect(readRuntimeImage(imported!.snapshot)?.sheetCells?.[0]).toMatchObject({
+      sheetName: 'Data',
+      coords: [],
+      coordinateOrder: 'dense-row-major',
+      dimensions: { width: 3, height: 2_000 },
+      cellCount: 6_000,
     })
   })
 

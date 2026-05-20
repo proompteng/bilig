@@ -614,7 +614,7 @@ describe('restoreWorkbookFromRuntimeImage', () => {
     allocateReserved.mockRestore()
   })
 
-  it('trusts dense row-major runtime-image coordinate order without rescanning coordinates', () => {
+  it('trusts compact dense row-major runtime-image coordinates', () => {
     const workbook = new WorkbookStore('runtime-image-dense-order')
     const allocateDenseRowMajorAtReserved = vi.spyOn(workbook.cellStore, 'allocateDenseRowMajorAtReserved')
     const snapshot: WorkbookSnapshot = {
@@ -648,12 +648,7 @@ describe('restoreWorkbookFromRuntimeImage', () => {
             cellCount: 4,
             coordinateOrder: 'dense-row-major',
             dimensions: { width: 2, height: 2 },
-            coords: [
-              { row: 99, col: 99 },
-              { row: 99, col: 98 },
-              { row: 98, col: 99 },
-              { row: 98, col: 98 },
-            ],
+            coords: [],
           },
         ],
       },

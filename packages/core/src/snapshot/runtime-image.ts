@@ -447,6 +447,7 @@ function getDenseRuntimeSheetRestorePlan(
   }
   const { width, height } = dimensions
   const cellCount = sheetCells.cellCount ?? sheetCells.coords.length
+  const hasDenseCoordinateOrder = sheetCells.coordinateOrder === 'dense-row-major'
   if (
     !Number.isInteger(width) ||
     !Number.isInteger(height) ||
@@ -457,7 +458,7 @@ function getDenseRuntimeSheetRestorePlan(
   ) {
     return undefined
   }
-  if (sheetCells.coordinateOrder === 'dense-row-major') {
+  if (hasDenseCoordinateOrder) {
     return { width, height }
   }
   if (sheetCells.coords.length !== sheet.cells.length) {
