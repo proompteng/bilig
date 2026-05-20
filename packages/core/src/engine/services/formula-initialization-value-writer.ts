@@ -1,12 +1,12 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { CellFlags } from '../../cell-store.js'
+import {
+  createWrittenColumnTracker,
+  markWrittenColumn,
+  materializeWrittenColumns,
+  type WrittenColumnTracker,
+} from '../../written-column-tracker.js'
 import type { EngineRuntimeState } from '../runtime-state.js'
-
-interface InitialWrittenColumnTracker {
-  smallColumns: number
-  columns?: Uint8Array
-  count: number
-}
 
 export interface InitialFormulaValueWriter {
   readonly writeValue: (cellIndex: number, value: CellValue) => void
@@ -16,74 +16,13 @@ export interface InitialFormulaValueWriter {
   readonly flush: () => void
 }
 
-function createInitialWrittenColumnTracker(): InitialWrittenColumnTracker {
-  return {
-    smallColumns: 0,
-    count: 0,
-  }
-}
-
-function markInitialWrittenColumn(tracker: InitialWrittenColumnTracker, col: number): void {
-  if (col < 30) {
-    const bit = 1 << col
-    if ((tracker.smallColumns & bit) !== 0) {
-      return
-    }
-    tracker.smallColumns |= bit
-    tracker.count += 1
-    return
-  }
-  let columns = tracker.columns
-  if (!columns) {
-    columns = new Uint8Array(Math.max(32, col + 1))
-    tracker.columns = columns
-  } else if (col >= columns.length) {
-    let nextLength = columns.length
-    while (nextLength <= col) {
-      nextLength *= 2
-    }
-    const nextColumns = new Uint8Array(nextLength)
-    nextColumns.set(columns)
-    columns = nextColumns
-    tracker.columns = columns
-  }
-  if (columns[col] !== 0) {
-    return
-  }
-  columns[col] = 1
-  tracker.count += 1
-}
-
-function materializeInitialWrittenColumns(tracker: InitialWrittenColumnTracker): Uint32Array {
-  const columns = new Uint32Array(tracker.count)
-  let writeIndex = 0
-  let smallColumns = tracker.smallColumns
-  while (smallColumns !== 0) {
-    const bit = smallColumns & -smallColumns
-    columns[writeIndex] = 31 - Math.clz32(bit)
-    writeIndex += 1
-    smallColumns &= smallColumns - 1
-  }
-  const largeColumns = tracker.columns
-  if (largeColumns) {
-    for (let col = 30; col < largeColumns.length; col += 1) {
-      if (largeColumns[col] === 0) {
-        continue
-      }
-      columns[writeIndex] = col
-      writeIndex += 1
-    }
-  }
-  return columns
-}
-
 export function createInitialFormulaValueWriter(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings'>
 }): InitialFormulaValueWriter {
   let singleSheetId: number | undefined
-  let singleSheetTracker: InitialWrittenColumnTracker | undefined
-  let writtenColumnsBySheetId: Map<number, InitialWrittenColumnTracker> | undefined
-  const promoteSingleSheetTracker = (): Map<number, InitialWrittenColumnTracker> => {
+  let singleSheetTracker: WrittenColumnTracker | undefined
+  let writtenColumnsBySheetId: Map<number, WrittenColumnTracker> | undefined
+  const promoteSingleSheetTracker = (): Map<number, WrittenColumnTracker> => {
     writtenColumnsBySheetId = new Map()
     if (singleSheetId !== undefined && singleSheetTracker !== undefined) {
       writtenColumnsBySheetId.set(singleSheetId, singleSheetTracker)
@@ -95,17 +34,17 @@ export function createInitialFormulaValueWriter(args: {
   const markKnownColumn = (sheetId: number, col: number): void => {
     if (!writtenColumnsBySheetId && (singleSheetId === undefined || singleSheetId === sheetId)) {
       singleSheetId = sheetId
-      singleSheetTracker ??= createInitialWrittenColumnTracker()
-      markInitialWrittenColumn(singleSheetTracker, col)
+      singleSheetTracker ??= createWrittenColumnTracker()
+      markWrittenColumn(singleSheetTracker, col)
       return
     }
     const trackers = writtenColumnsBySheetId ?? promoteSingleSheetTracker()
     let tracker = trackers.get(sheetId)
     if (!tracker) {
-      tracker = createInitialWrittenColumnTracker()
+      tracker = createWrittenColumnTracker()
       trackers.set(sheetId, tracker)
     }
-    markInitialWrittenColumn(tracker, col)
+    markWrittenColumn(tracker, col)
   }
   const markCellColumn = (cellIndex: number): void => {
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
@@ -157,13 +96,13 @@ export function createInitialFormulaValueWriter(args: {
     flush() {
       if (!writtenColumnsBySheetId) {
         if (singleSheetId !== undefined && singleSheetTracker !== undefined && singleSheetTracker.count > 0) {
-          args.state.workbook.notifyColumnsWritten(singleSheetId, materializeInitialWrittenColumns(singleSheetTracker))
+          args.state.workbook.notifyColumnsWritten(singleSheetId, materializeWrittenColumns(singleSheetTracker))
         }
         return
       }
       writtenColumnsBySheetId.forEach((tracker, sheetId) => {
         if (tracker.count > 0) {
-          args.state.workbook.notifyColumnsWritten(sheetId, materializeInitialWrittenColumns(tracker))
+          args.state.workbook.notifyColumnsWritten(sheetId, materializeWrittenColumns(tracker))
         }
       })
     },

@@ -8,6 +8,12 @@ import type {
   RuntimeFormula,
   U32,
 } from '../runtime-state.js'
+import {
+  createWrittenColumnTracker,
+  markWrittenColumn,
+  materializeWrittenColumns,
+  type WrittenColumnTracker,
+} from '../../written-column-tracker.js'
 
 const OP_ADD = 1
 const OP_SUB = 2
@@ -48,16 +54,16 @@ export function createRecalcNativeDirectScalarBatch(args: {
   const outNumbers = new Float64Array(capacity)
   const outErrors = new Uint16Array(capacity)
   const targetOrdinalByCellIndex = new Map<number, number>()
-  const columnsBySheetId = new Map<number, Set<number>>()
+  const columnsBySheetId = new Map<number, WrittenColumnTracker>()
   let count = 0
 
   const noteColumn = (sheetId: number, col: number): void => {
-    let columns = columnsBySheetId.get(sheetId)
-    if (!columns) {
-      columns = new Set()
-      columnsBySheetId.set(sheetId, columns)
+    let tracker = columnsBySheetId.get(sheetId)
+    if (!tracker) {
+      tracker = createWrittenColumnTracker()
+      columnsBySheetId.set(sheetId, tracker)
     }
-    columns.add(col)
+    markWrittenColumn(tracker, col)
   }
 
   const writeOperand = (
@@ -194,8 +200,8 @@ export function createRecalcNativeDirectScalarBatch(args: {
         cellStore.numbers[cellIndex] = tag === ValueTag.Number || tag === ValueTag.Boolean ? (outNumbers[index] ?? 0) : 0
         cellStore.versions[cellIndex] = (cellStore.versions[cellIndex] ?? 0) + 1
       }
-      columnsBySheetId.forEach((columns, sheetId) => {
-        args.state.workbook.notifyColumnsWritten(sheetId, Uint32Array.from([...columns].toSorted((left, right) => left - right)))
+      columnsBySheetId.forEach((tracker, sheetId) => {
+        args.state.workbook.notifyColumnsWritten(sheetId, materializeWrittenColumns(tracker))
       })
       addEngineCounter(args.state.counters, 'nativeDirectScalarRecalcEvaluations', count)
       return targetView
