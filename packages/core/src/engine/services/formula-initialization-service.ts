@@ -67,8 +67,6 @@ export type {
   PreparedFormulaInitializationRef,
 } from './formula-initialization-service-types.js'
 
-const DEFERRED_FORMULA_FAMILY_RUN_CAPTURE_LIMIT = 16_384
-
 export function createEngineFormulaInitializationService(args: EngineFormulaInitializationServiceArgs): EngineFormulaInitializationService {
   const sheetNameById = new Map<number, string>()
   const hasCycleMembersNow = (): boolean => {
@@ -180,9 +178,7 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
       const shouldDeferFormulaInstanceTable =
         !hadExistingFormulas && (args.hydrateFreshFormulaInstances !== undefined || args.deferFormulaInstanceTableRebuild !== undefined)
       const deferredFormulaInstances = !hadExistingFormulas && args.hydrateFreshFormulaInstances !== undefined ? [] : undefined
-      const canCaptureDeferredFormulaFamilyRuns =
-        !shouldDeferFormulaFamilyIndex ||
-        (args.deferFormulaFamilyIndexRuns !== undefined && refs.length <= DEFERRED_FORMULA_FAMILY_RUN_CAPTURE_LIMIT)
+      const canCaptureDeferredFormulaFamilyRuns = !shouldDeferFormulaFamilyIndex || args.deferFormulaFamilyIndexRuns !== undefined
       const deferredFormulaFamilyRuns =
         hadExistingFormulas || !canCaptureDeferredFormulaFamilyRuns ? undefined : createDeferredInitialFormulaFamilyRunMap()
       let freshFormulaChangedBufferMaterialized = hadExistingFormulas
@@ -773,9 +769,7 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
     }
     const deferredFormulaInstances =
       !hadExistingFormulas && args.hydrateFreshFormulaInstances !== undefined && alignedFreshFormulaInstances === undefined ? [] : undefined
-    const canCaptureDeferredFormulaFamilyRuns =
-      !shouldDeferFormulaFamilyIndex ||
-      (args.deferFormulaFamilyIndexRuns !== undefined && refs.length <= DEFERRED_FORMULA_FAMILY_RUN_CAPTURE_LIMIT)
+    const canCaptureDeferredFormulaFamilyRuns = !shouldDeferFormulaFamilyIndex || args.deferFormulaFamilyIndexRuns !== undefined
     const deferredFormulaFamilyRuns =
       hadExistingFormulas || alignedFreshFormulaFamilyRuns !== undefined || !canCaptureDeferredFormulaFamilyRuns
         ? undefined

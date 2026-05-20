@@ -50,6 +50,31 @@ function getFormulaFamilyStore(engine: SpreadsheetEngine): FormulaFamilyStore {
   return formulaFamilies
 }
 
+function readFormulaFamilyStatsWithoutHelperEnsure(engine: SpreadsheetEngine): ReturnType<FormulaFamilyStore['getStats']> {
+  const binding = getFormulaBindingNowService(engine)
+  const getFormulaFamilyStatsNow = Reflect.get(binding, 'getFormulaFamilyStatsNow')
+  if (typeof getFormulaFamilyStatsNow !== 'function') {
+    throw new TypeError('Expected formula family stats service')
+  }
+  return getFormulaFamilyStatsNow.call(binding)
+}
+
+interface RuntimeFormulaStoreForTest {
+  readonly forEach: (fn: (value: unknown, key: number) => void) => void
+}
+
+function isRuntimeFormulaStoreForTest(value: unknown): value is RuntimeFormulaStoreForTest {
+  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'forEach') === 'function'
+}
+
+function getRuntimeFormulaStore(engine: SpreadsheetEngine): RuntimeFormulaStoreForTest {
+  const formulas = Reflect.get(engine, 'formulas')
+  if (!isRuntimeFormulaStoreForTest(formulas)) {
+    throw new TypeError('Expected internal formula store')
+  }
+  return formulas
+}
+
 describe('SpreadsheetEngine formula initialization', () => {
   it('initializes formula refs without emitting watched events or batches', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize' })
@@ -477,6 +502,50 @@ describe('SpreadsheetEngine formula initialization', () => {
       rowCount,
     ])
   })
+
+  it(
+    'replays over-cap fresh formula family runs without a full family-index rebuild',
+    async () => {
+      const rowCount = 16_385
+      const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-over-cap-family-runs' })
+      await engine.ready()
+      engine.createSheet('Sheet1')
+      const sheetId = engine.workbook.getSheet('Sheet1')!.id
+      const store = getFormulaFamilyStore(engine)
+      const upsertFormula = vi.spyOn(store, 'upsertFormula')
+      const registerFreshUniformRun = vi.spyOn(store, 'registerFreshUniformRun')
+      const refs: EngineCellMutationRef[] = []
+      for (let row = 0; row < rowCount; row += 1) {
+        const rowNumber = row + 1
+        engine.setCellValue('Sheet1', `A${rowNumber}`, rowNumber)
+        refs.push({ sheetId, mutation: { kind: 'setCellFormula' as const, row, col: 1, formula: `A${rowNumber}+1` } })
+      }
+
+      try {
+        engine.initializeCellFormulasAt(refs, refs.length)
+
+        expect(upsertFormula).not.toHaveBeenCalled()
+        expect(registerFreshUniformRun).not.toHaveBeenCalled()
+        expect(engine.getCellValue('Sheet1', `B${rowCount}`)).toEqual({
+          tag: ValueTag.Number,
+          value: rowCount + 1,
+        })
+        const formulaForEach = vi.spyOn(getRuntimeFormulaStore(engine), 'forEach')
+        try {
+          expect(readFormulaFamilyStatsWithoutHelperEnsure(engine)).toEqual({ familyCount: 1, runCount: 1, memberCount: rowCount })
+          expect(formulaForEach).not.toHaveBeenCalled()
+          expect(registerFreshUniformRun).toHaveBeenCalledTimes(1)
+          expect(upsertFormula).not.toHaveBeenCalled()
+        } finally {
+          formulaForEach.mockRestore()
+        }
+      } finally {
+        upsertFormula.mockRestore()
+        registerFreshUniformRun.mockRestore()
+      }
+    },
+    OVER_DIRECT_LIMIT_TEST_TIMEOUT_MS,
+  )
 
   it('bulk-notifies initialized direct formula value columns instead of per-cell value writes', async () => {
     const rowCount = 8
