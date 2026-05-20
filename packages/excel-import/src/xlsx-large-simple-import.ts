@@ -33,6 +33,11 @@ import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-st
 import { shouldUseSharedStringlessFastPathBytes } from './xlsx-large-simple-shared-stringless-fast-path.js'
 import { buildLargeSimpleStyleRanges } from './xlsx-large-simple-style-ranges.js'
 import { readLargeSimpleWorkbookStylesFromChunks } from './xlsx-large-simple-styles.js'
+import {
+  maxPreallocatedWorksheetCells,
+  prepareLargeSimpleStyleIndexes,
+  shouldDeferLargeSimpleStyleCoordinates,
+} from './xlsx-large-simple-style-coordinate-rescan.js'
 import { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import {
@@ -57,6 +62,7 @@ import {
   readLargeSimpleMergeRanges,
   readLargeSimpleRowMetadata,
   readLargeSimpleSheetFormatPr,
+  withoutLargeSimpleConditionalFormattingXml,
   type LargeSimpleWorksheetScannedMetadata,
 } from './xlsx-large-simple-worksheet-metadata.js'
 import { readImportedPivotArtifacts } from './xlsx-pivot-artifacts.js'
@@ -67,7 +73,6 @@ import {
   getZipText,
   normalizeZipPath,
   readLazyXlsxZipSourceByteLength,
-  readXlsxZipEntryUncompressedSize,
   releaseLazyXlsxZipSource,
   type XlsxZipEntries,
 } from './xlsx-zip.js'
@@ -178,8 +183,6 @@ type LargeSimpleSheetMetadataInput = Pick<
 
 const defaultLargeSimpleXlsxByteThreshold = 1_000_000
 const lazySheetCellMaterializationThreshold = 100_000
-const maxDimensionCellPreallocation = 8_000_000
-const minXmlBytesPerPreallocatedCell = 16
 const workbookPath = 'xl/workbook.xml'
 const workbookRelationshipsPath = 'xl/_rels/workbook.xml.rels'
 const sharedStringsPath = 'xl/sharedStrings.xml'
@@ -309,12 +312,15 @@ export function tryImportLargeSimpleXlsx(
         delete zip[entry.path]
       }
     } else {
+      const deferStyleCoordinates = shouldDeferLargeSimpleStyleCoordinates(zip, entry.path, { materializeCells, hasStyles })
       const streamed = parseLargeSimpleWorksheetCellsFromChunks(
         (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
         order,
         {
           hasSharedStrings,
           retainCells: materializeCells,
+          retainStyleIndexes: materializeCells && hasStyles,
+          retainStyleCoordinates: materializeCells && hasStyles && !deferStyleCoordinates,
           sharedStrings: fallbackSharedStrings ?? [],
           deferSharedStrings: materializeCells && hasSharedStrings,
           retainMetadataXml: materializeMetadata,
@@ -436,7 +442,7 @@ export function tryImportLargeSimpleXlsx(
         },
         conditionalFormats,
       )
-      retainedMetadataScan = withoutConditionalFormattingXml(streamedMetadataScan)
+      retainedMetadataScan = withoutLargeSimpleConditionalFormattingXml(streamedMetadataScan)
     }
     if (materializeMetadata && streamedMetadataScan?.dataValidations && streamedMetadataScan.dataValidations.length > 0) {
       metadataInput = {
@@ -530,6 +536,15 @@ export function tryImportLargeSimpleXlsx(
     warnings.push('Some cell styles were ignored during XLSX import.')
   }
   requiredStyleIndexes.clear()
+  if (
+    !prepareLargeSimpleStyleIndexes(zip, worksheetEntries, scannedWorksheets, stylesByIndex, {
+      hasSharedStrings,
+      ...(options.allowUnsupportedFormulaText === undefined ? {} : { allowUnsupportedFormulaText: options.allowUnsupportedFormulaText }),
+      ...(options.allowUnsupportedCellMetadata === undefined ? {} : { allowUnsupportedCellMetadata: options.allowUnsupportedCellMetadata }),
+    })
+  ) {
+    return null
+  }
   delete zip[stylesPath]
   phaseRecorder.finish('style-parsing', styleParsingStart)
   const importedDrawingArtifacts =
@@ -783,23 +798,6 @@ export function tryImportLargeSimpleXlsx(
     }),
     stats,
   }
-}
-
-function withoutConditionalFormattingXml(
-  metadata: LargeSimpleWorksheetScannedMetadata | undefined,
-): LargeSimpleWorksheetScannedMetadata | undefined {
-  if (!metadata?.conditionalFormattingXml) {
-    return metadata
-  }
-  const { conditionalFormattingXml: _released, ...retained } = metadata
-  return Object.keys(retained).length > 0 ? retained : undefined
-}
-
-function maxPreallocatedWorksheetCells(zip: XlsxZipEntries, path: string): number {
-  const uncompressedSize = readXlsxZipEntryUncompressedSize(zip, path)
-  return uncompressedSize === undefined
-    ? 0
-    : Math.min(maxDimensionCellPreallocation, Math.floor(uncompressedSize / minXmlBytesPerPreallocatedCell))
 }
 
 function appendConditionalFormats(

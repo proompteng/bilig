@@ -53,6 +53,16 @@ export interface LargeSimpleWorksheetScannedMetadata {
   readonly tableRelationshipIds?: readonly string[]
 }
 
+export function withoutLargeSimpleConditionalFormattingXml(
+  metadata: LargeSimpleWorksheetScannedMetadata | undefined,
+): LargeSimpleWorksheetScannedMetadata | undefined {
+  if (!metadata?.conditionalFormattingXml) {
+    return metadata
+  }
+  const { conditionalFormattingXml: _released, ...retained } = metadata
+  return Object.keys(retained).length > 0 ? retained : undefined
+}
+
 export function readLargeSimpleMergeRanges(sheetName: string, worksheetXml: string): WorkbookMergeRangeSnapshot[] {
   const mergeCellsXml =
     /<(?:[A-Za-z_][\w.-]*:)?mergeCells\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?mergeCells)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/u.exec(

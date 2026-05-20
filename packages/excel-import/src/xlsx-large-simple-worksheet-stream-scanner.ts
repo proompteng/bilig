@@ -100,13 +100,17 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     readonly allowUnsupportedFormulaText?: boolean
     readonly allowUnsupportedCellMetadata?: boolean
     readonly preserveBlankStyleCells?: boolean
+    readonly retainStyleIndexes?: boolean
+    readonly retainStyleCoordinates?: boolean
     readonly maxDimensionCellPreallocation?: number
     readonly onRetainedBufferLength?: (length: number) => void
   },
 ): LargeSimpleWorksheetStreamScan | null {
+  const retainCells = options.retainCells !== false
+  const retainStyleIndexes = options.retainStyleIndexes ?? retainCells
   const scanner = new LargeSimpleWorksheetChunkScanner(sheetIndex, {
     hasSharedStrings: options.hasSharedStrings,
-    retainCells: options.retainCells !== false,
+    retainCells,
     sharedStrings: options.sharedStrings ?? [],
     deferSharedStrings: options.deferSharedStrings === true,
     retainMetadataXml: options.retainMetadataXml !== false,
@@ -117,6 +121,8 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     allowUnsupportedFormulaText: options.allowUnsupportedFormulaText,
     allowUnsupportedCellMetadata: options.allowUnsupportedCellMetadata,
     preserveBlankStyleCells: options.preserveBlankStyleCells !== false,
+    retainStyleIndexes,
+    retainStyleCoordinates: options.retainStyleCoordinates ?? retainStyleIndexes,
     maxDimensionCellPreallocation: options.maxDimensionCellPreallocation,
     onRetainedBufferLength: options.onRetainedBufferLength,
   })
@@ -180,6 +186,8 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly retainMetadataXml: boolean
   private readonly allowUnsupportedFormulaText: boolean
   private readonly preserveBlankStyleCells: boolean
+  private readonly retainStyleIndexes: boolean
+  private readonly retainStyleCoordinates: boolean
   private readonly maxDimensionCellPreallocation: number
   private dimensionCellPreallocationApplied = false
   private activeMetadataElement: StreamedMetadataElement | null = null
@@ -199,12 +207,16 @@ class LargeSimpleWorksheetChunkScanner {
       readonly allowUnsupportedFormulaText: boolean | undefined
       readonly allowUnsupportedCellMetadata: boolean | undefined
       readonly preserveBlankStyleCells: boolean
+      readonly retainStyleIndexes: boolean
+      readonly retainStyleCoordinates: boolean
       readonly maxDimensionCellPreallocation: number | undefined
       readonly onRetainedBufferLength: ((length: number) => void) | undefined
     },
   ) {
     this.allowUnsupportedFormulaText = options.allowUnsupportedFormulaText === true
     this.preserveBlankStyleCells = options.preserveBlankStyleCells
+    this.retainStyleIndexes = options.retainStyleIndexes
+    this.retainStyleCoordinates = options.retainStyleCoordinates
     this.maxDimensionCellPreallocation = Math.max(0, Math.trunc(options.maxDimensionCellPreallocation ?? 0))
     this.formulas = new LargeSimpleFormulaRecords(this.allowUnsupportedFormulaText)
     this.arena = new ImportedWorkbookArena(options.stringPool, {
@@ -475,7 +487,7 @@ class LargeSimpleWorksheetChunkScanner {
     this.nextImplicitColumn = column + 1
     this.collectCellMetadataRef(row, column, nameEnd, tagEnd)
     const cellType = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 't')
-    if ((!this.hasSharedStrings && cellType === 's') || (!this.retainCells && cellType === 'inlineStr')) {
+    if (!this.hasSharedStrings && cellType === 's') {
       this.failed = true
       return false
     }
@@ -542,8 +554,8 @@ class LargeSimpleWorksheetChunkScanner {
       if (formula && this.retainCells) {
         this.formulas.add(cellIndex, row, column, formula.typeCode, formula.sharedIndex, formula.rawFormula)
       }
-      if (this.retainCells && styleIndex !== null) {
-        this.styleIndexes.add(row, column, styleIndex)
+      if (styleIndex !== null) {
+        this.recordStyleIndex(row, column, styleIndex)
       }
       const richTextCell =
         this.retainCells && !deferSharedStringValue
@@ -554,8 +566,8 @@ class LargeSimpleWorksheetChunkScanner {
       }
     } else if (styleIndex !== null) {
       this.blankStyleCellCount += 1
-      if (this.retainCells && this.preserveBlankStyleCells) {
-        this.styleIndexes.add(row, column, styleIndex)
+      if (this.preserveBlankStyleCells) {
+        this.recordStyleIndex(row, column, styleIndex)
       }
     }
     this.index = selfClosing ? tagEnd + 1 : closing.end
@@ -570,6 +582,17 @@ class LargeSimpleWorksheetChunkScanner {
     return this.currentRow < 0 || this.nextImplicitColumn >= packedAddressColumnFactor
       ? null
       : this.currentRow * packedAddressColumnFactor + this.nextImplicitColumn
+  }
+
+  private recordStyleIndex(row: number, column: number, styleIndex: number): void {
+    if (!this.retainStyleIndexes) {
+      return
+    }
+    if (this.retainStyleCoordinates) {
+      this.styleIndexes.add(row, column, styleIndex)
+      return
+    }
+    this.styleIndexes.addRequiredStyleIndex(styleIndex)
   }
 
   private collectCellMetadataRef(row: number, column: number, nameEnd: number, tagEnd: number): void {

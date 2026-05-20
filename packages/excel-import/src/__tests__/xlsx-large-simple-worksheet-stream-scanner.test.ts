@@ -61,6 +61,45 @@ describe('large simple worksheet stream scanners', () => {
     ])
   })
 
+  it('can defer style coordinates while retaining required style indexes', () => {
+    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(styledWorksheetXml()), 0, {
+      hasSharedStrings: false,
+      retainStyleCoordinates: false,
+    })
+    const requiredStyleIndexes = new Set<number>()
+    const coordinates: Array<{ row: number; column: number; styleIndex: number }> = []
+
+    scan?.cellScan.styleIndexes.collectRequiredStyleIndexes(requiredStyleIndexes)
+    scan?.cellScan.styleIndexes.forEach((row, column, styleIndex) => coordinates.push({ row, column, styleIndex }))
+
+    expect(scan?.cellScan.cellCount).toBe(1)
+    expect(scan?.cellScan.blankStyleCellCount).toBe(1)
+    expect(scan?.cellScan.styleIndexes.hasCoordinateStorage).toBe(false)
+    expect([...requiredStyleIndexes].toSorted((left, right) => left - right)).toEqual([3, 4])
+    expect(coordinates).toEqual([])
+  })
+
+  it('rescans style coordinates without materializing cell values', () => {
+    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(styledInlineWorksheetXml()), 0, {
+      hasSharedStrings: false,
+      retainCells: false,
+      retainStyleIndexes: true,
+      retainStyleCoordinates: true,
+    })
+    const coordinates: Array<{ row: number; column: number; styleIndex: number }> = []
+
+    scan?.cellScan.styleIndexes.forEach((row, column, styleIndex) => coordinates.push({ row, column, styleIndex }))
+
+    expect(scan?.cellScan.cellCount).toBe(2)
+    expect(scan?.cellScan.blankStyleCellCount).toBe(1)
+    expect(scan?.cellScan.arena.materializeSheetCells(0)).toEqual([])
+    expect(coordinates).toEqual([
+      { row: 0, column: 0, styleIndex: 3 },
+      { row: 0, column: 1, styleIndex: 4 },
+      { row: 1, column: 0, styleIndex: 5 },
+    ])
+  })
+
   it('streams large split merge metadata in materialized scans without retaining metadata bodies', () => {
     const retainedBufferLengths: number[] = []
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitLargeMergeCellsWorksheetXml(), 0, {
@@ -323,6 +362,27 @@ function worksheetXml(): string {
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
     '<dimension ref="A1:B1"/>',
     '<sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row></sheetData>',
+    '</worksheet>',
+  ].join('')
+}
+
+function styledWorksheetXml(): string {
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1:B1"/>',
+    '<sheetData><row r="1"><c r="A1" s="3"><v>1</v></c><c r="B1" s="4"/></row></sheetData>',
+    '</worksheet>',
+  ].join('')
+}
+
+function styledInlineWorksheetXml(): string {
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1:B2"/>',
+    '<sheetData>',
+    '<row r="1"><c r="A1" t="inlineStr" s="3"><is><t>Label</t></is></c><c r="B1" s="4"><v>2</v></c></row>',
+    '<row r="2"><c r="A2" s="5"/></row>',
+    '</sheetData>',
     '</worksheet>',
   ].join('')
 }
