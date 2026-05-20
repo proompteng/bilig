@@ -485,17 +485,28 @@ export function tryImportLargeSimpleXlsx(
       ...ownedSourceReleaseEvidence,
     })
   }
+  let remainingSharedStringSheets =
+    materializeCells && hasSharedStrings
+      ? scannedWorksheets.reduce((sum, scanned) => sum + ((scanned?.cellScan.arena.sharedStringRefCount ?? 0) > 0 ? 1 : 0), 0)
+      : 0
   for (const [index, scanned] of scannedWorksheets.entries()) {
     if (!scanned) {
       continue
     }
     const snapshotMaterializationStart = phaseRecorder.start()
-    const resolvedRichTextCells = materializeCells && hasSharedStrings ? scanned.cellScan.arena.resolveSharedStrings(sharedStrings) : []
+    const sheetHasSharedStrings = materializeCells && hasSharedStrings && scanned.cellScan.arena.sharedStringRefCount > 0
+    const resolvedRichTextCells = sheetHasSharedStrings ? scanned.cellScan.arena.resolveSharedStrings(sharedStrings) : []
     if (resolvedRichTextCells === null) {
       return null
     }
     if (resolvedRichTextCells.length > 0) {
       scanned.cellScan.richTextCells.push(...resolvedRichTextCells)
+    }
+    if (sheetHasSharedStrings) {
+      remainingSharedStringSheets -= 1
+      if (remainingSharedStringSheets === 0) {
+        sharedStrings = []
+      }
     }
     const drawingArtifacts = importedDrawingArtifacts?.sheetArtifactsByName.get(scanned.name)
     const parsed = buildParsedWorksheet(

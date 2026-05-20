@@ -94,6 +94,51 @@ describe('large simple XLSX import arena', () => {
     expect(arena.snapshot().formulaIds).toEqual(new Uint32Array([0, 0xffffffff, 0xffffffff]))
   })
 
+  it('tracks shared-string references so non-shared sheets skip resolution work', () => {
+    const numericOnlyArena = new ImportedWorkbookArena()
+    numericOnlyArena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })
+    const referencedIndexes = new Set<number>()
+
+    numericOnlyArena.collectSharedStringIndexes(referencedIndexes)
+
+    expect(numericOnlyArena.sharedStringRefCount).toBe(0)
+    expect(referencedIndexes.size).toBe(0)
+    expect(numericOnlyArena.resolveSharedStrings([])).toEqual([])
+    expect(numericOnlyArena.materializeSheetCells(0)).toEqual([{ address: 'A1', value: 42 }])
+
+    const sharedArena = new ImportedWorkbookArena()
+    sharedArena.addSharedStringCell({ sheetIndex: 1, row: 0, column: 0, sharedStringIndex: 3 })
+    sharedArena.addSharedStringCell({ sheetIndex: 1, row: 0, column: 1, sharedStringIndex: 5 })
+    const sharedIndexes = new Set<number>()
+
+    sharedArena.collectSharedStringIndexes(sharedIndexes)
+
+    expect(sharedArena.sharedStringRefCount).toBe(2)
+    expect([...sharedIndexes].toSorted((left, right) => left - right)).toEqual([3, 5])
+    expect(
+      sharedArena.resolveSharedStrings([
+        { text: 'unused 0', rich: false },
+        { text: 'unused 1', rich: false },
+        { text: 'unused 2', rich: false },
+        { text: 'Alpha', rich: false },
+        { text: 'unused 4', rich: false },
+        { text: 'Rich Beta', rich: true, xml: '<si><r><t>Rich Beta</t></r></si>' },
+      ]),
+    ).toEqual([
+      {
+        address: 'B1',
+        text: 'Rich Beta',
+        storage: 'sharedString',
+        xml: '<si><r><t>Rich Beta</t></r></si>',
+      },
+    ])
+    expect(sharedArena.sharedStringRefCount).toBe(0)
+    expect(sharedArena.materializeSheetCells(1)).toEqual([
+      { address: 'A1', value: 'Alpha' },
+      { address: 'B1', value: 'Rich Beta' },
+    ])
+  })
+
   it('keeps preview values in fixed slots without overriding values with formulas', () => {
     const arena = new ImportedWorkbookArena()
     const valueFormulaCell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })

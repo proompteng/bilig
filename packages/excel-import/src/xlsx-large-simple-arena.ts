@@ -113,11 +113,16 @@ export class ImportedWorkbookArena {
   private readonly formulaIdsByValue = new Map<string, number>()
   private readonly previewValues: (LiteralInput | undefined)[] = Array.from({ length: previewCellCount })
   private readonly previewValueSet = new Uint8Array(previewCellCount)
+  private sharedStringReferenceCount = 0
 
   constructor(private readonly stringPool?: ImportedWorkbookStringPool) {}
 
   get cellCount(): number {
     return this.length
+  }
+
+  get sharedStringRefCount(): number {
+    return this.sharedStringReferenceCount
   }
 
   addCell(input: ImportedWorksheetArenaCellInput): number {
@@ -138,6 +143,7 @@ export class ImportedWorkbookArena {
     const index = this.appendCell(input.sheetIndex, input.row, input.column)
     this.valueKinds[index] = valueKindSharedStringRef
     this.ensureStringIdStorage()[index] = input.sharedStringIndex
+    this.sharedStringReferenceCount += 1
     return index
   }
 
@@ -188,6 +194,9 @@ export class ImportedWorkbookArena {
   }
 
   collectSharedStringIndexes(output: Set<number>): void {
+    if (this.sharedStringReferenceCount === 0) {
+      return
+    }
     for (let index = 0; index < this.length; index += 1) {
       if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
         continue
@@ -200,7 +209,11 @@ export class ImportedWorkbookArena {
   }
 
   resolveSharedStrings(sharedStrings: readonly LargeSimpleSharedStringEntry[]): WorkbookRichTextCellSnapshot[] | null {
+    if (this.sharedStringReferenceCount === 0) {
+      return []
+    }
     const richTextCells: WorkbookRichTextCellSnapshot[] = []
+    let resolvedReferenceCount = 0
     for (let index = 0; index < this.length; index += 1) {
       if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
         continue
@@ -211,6 +224,7 @@ export class ImportedWorkbookArena {
         return null
       }
       this.valueKinds[index] = valueKindString
+      resolvedReferenceCount += 1
       const stringIds = this.ensureStringIdStorage()
       stringIds[index] = this.internString(entry.text)
       const row = this.rows[index] ?? 0
@@ -228,6 +242,7 @@ export class ImportedWorkbookArena {
         })
       }
     }
+    this.sharedStringReferenceCount = Math.max(0, this.sharedStringReferenceCount - resolvedReferenceCount)
     return richTextCells
   }
 
@@ -264,6 +279,7 @@ export class ImportedWorkbookArena {
     this.formulaIdsByValue.clear()
     this.previewValues.fill(undefined)
     this.previewValueSet.fill(0)
+    this.sharedStringReferenceCount = 0
   }
 
   private appendCell(sheetIndex: number, row: number, column: number): number {
