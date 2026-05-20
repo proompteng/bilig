@@ -479,6 +479,7 @@ try {
   allCompleted.push(
     ...(await runSequential('performance and clean-diff gates', [
       pnpm('perf smoke', 'bench:smoke'),
+      directPackageScript('public workbook corpus synthetic memory gate', 'public-workbook-corpus:memory-gate:synthetic'),
       ...(runDeepGates ? [withEnv(pnpm('benchmark contracts', 'bench:contracts'), { CI: '1' })] : []),
       git('working tree clean', 'diff', '--exit-code'),
       git('index clean', 'diff', '--cached', '--exit-code'),
