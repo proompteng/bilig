@@ -849,7 +849,7 @@ describe('large simple XLSX import fast path', () => {
     expect(stylesStreamCount()).toBe(2)
   })
 
-  it('falls back for broad style-only blank templates that need style-aware import', () => {
+  it('compacts broad style-only blank templates into style ranges without SheetJS fallback', () => {
     const rows: string[] = []
     for (let row = 1; row <= 3_001; row += 1) {
       const cells: string[] = []
@@ -871,7 +871,12 @@ describe('large simple XLSX import fast path', () => {
       ].join(''),
     })
 
-    expect(tryImportLargeSimpleXlsx(bytes, 'styled-blank-template.xlsx', unzipSync(bytes), { minByteLength: 0 })).toBeNull()
+    const imported = tryImportLargeSimpleXlsx(bytes, 'styled-blank-template.xlsx', unzipSync(bytes), { minByteLength: 0 })
+    const styleRanges = imported?.snapshot.sheets[0]?.metadata?.styleRanges
+    const styleId = styleRanges?.[0]?.styleId
+
+    expect(imported?.snapshot.sheets[0]?.cells).toEqual([{ address: 'A1', value: 123 }])
+    expect(styleRanges).toEqual([{ range: { sheetName: 'Data', startAddress: 'A1', endAddress: 'T3001' }, styleId }])
   })
 
   it('imports simple formula cells with cached values without falling back to SheetJS', () => {
@@ -1060,19 +1065,20 @@ function countLazyZipEntryStreams(zip: Record<string, Uint8Array>, path: string)
     throw new Error(`Missing lazy ZIP metadata for ${path}`)
   }
   const source = metadata.source
-  const fileNameLength = readLittleEndianUint16(source, entry.localHeaderOffset + 26)
-  const extraFieldLength = readLittleEndianUint16(source, entry.localHeaderOffset + 28)
+  const localHeader = source.readRange(entry.localHeaderOffset, entry.localHeaderOffset + 30)
+  const fileNameLength = readLittleEndianUint16(localHeader, 26)
+  const extraFieldLength = readLittleEndianUint16(localHeader, 28)
   const dataStart = entry.localHeaderOffset + 30 + fileNameLength + extraFieldLength
   const dataEnd = dataStart + entry.compressedSize
   let streamCount = 0
   metadata.source = new Proxy(source, {
     get(target, property) {
-      if (property === 'subarray') {
+      if (property === 'readRange') {
         return (start?: number, end?: number) => {
           if (start === dataStart && end === dataEnd) {
             streamCount += 1
           }
-          return target.subarray(start, end)
+          return target.readRange(start ?? 0, end ?? target.byteLength)
         }
       }
       const value = Reflect.get(target, property, target)
@@ -1084,7 +1090,7 @@ function countLazyZipEntryStreams(zip: Record<string, Uint8Array>, path: string)
 
 function readLazyZipMetadata(zip: Record<string, Uint8Array>):
   | {
-      source: Uint8Array
+      source: XlsxLazyZipByteSource
       readonly entriesByPath: ReadonlyMap<
         string,
         {
@@ -1104,7 +1110,7 @@ function readLazyZipMetadata(zip: Record<string, Uint8Array>):
 }
 
 function isLazyZipMetadata(value: unknown): value is {
-  source: Uint8Array
+  source: XlsxLazyZipByteSource
   readonly entriesByPath: ReadonlyMap<
     string,
     {
@@ -1117,9 +1123,25 @@ function isLazyZipMetadata(value: unknown): value is {
     typeof value === 'object' &&
     value !== null &&
     'source' in value &&
-    value.source instanceof Uint8Array &&
+    isLazyZipByteSource(value.source) &&
     'entriesByPath' in value &&
     value.entriesByPath instanceof Map
+  )
+}
+
+interface XlsxLazyZipByteSource {
+  readonly byteLength: number
+  readRange(start: number, end: number): Uint8Array
+}
+
+function isLazyZipByteSource(value: unknown): value is XlsxLazyZipByteSource {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'byteLength' in value &&
+    typeof value.byteLength === 'number' &&
+    'readRange' in value &&
+    typeof value.readRange === 'function'
   )
 }
 

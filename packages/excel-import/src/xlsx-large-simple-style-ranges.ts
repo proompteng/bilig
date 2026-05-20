@@ -8,10 +8,9 @@ export function buildLargeSimpleStyleRanges(
   stylesByIndex: ReadonlyMap<number, Omit<CellStyleRecord, 'id'>>,
   styleCatalog: Map<string, CellStyleRecord>,
 ): SheetStyleRangeSnapshot[] {
-  const ranges: SheetStyleRangeSnapshot[] = []
-  let active: { row: number; startColumn: number; endColumn: number; styleId: string } | undefined
   const styleIdsByIndex = new Map<number, string>()
-  cellScan.styleIndexes.forEach((row, column, styleIndex) => {
+  const builder = new StyleRangeBuilder(sheetName)
+  const append = (row: number, column: number, styleIndex: number): void => {
     let styleId = styleIdsByIndex.get(styleIndex)
     if (!styleId) {
       const style = stylesByIndex.get(styleIndex)
@@ -21,54 +20,134 @@ export function buildLargeSimpleStyleRanges(
       styleId = internImportedStyle(style, styleCatalog)
       styleIdsByIndex.set(styleIndex, styleId)
     }
-    if (active && active.row === row && active.endColumn + 1 === column && active.styleId === styleId) {
-      active.endColumn = column
-      return
-    }
-    if (active) {
-      ranges.push(styleRunToRange(sheetName, active))
-    }
-    active = { row, startColumn: column, endColumn: column, styleId }
-  })
-  if (active) {
-    ranges.push(styleRunToRange(sheetName, active))
+    builder.add(row, column, styleId)
   }
-  return ranges
+  if (cellScan.styleIndexes.isRowMajorOrdered) {
+    cellScan.styleIndexes.forEach(append)
+  } else {
+    const entries: { row: number; column: number; styleIndex: number }[] = []
+    cellScan.styleIndexes.forEach((row, column, styleIndex) => {
+      entries.push({ row, column, styleIndex })
+    })
+    entries
+      .toSorted((left, right) => left.row - right.row || left.column - right.column || left.styleIndex - right.styleIndex)
+      .forEach((entry) => append(entry.row, entry.column, entry.styleIndex))
+  }
+  return builder.finish()
 }
 
 export function buildLargeSimpleStyleRangesForCells(
   sheetName: string,
   cells: readonly { readonly row: number; readonly column: number; readonly styleId: string }[],
 ): SheetStyleRangeSnapshot[] {
-  const ranges: SheetStyleRangeSnapshot[] = []
-  let active: { row: number; startColumn: number; endColumn: number; styleId: string } | undefined
+  const builder = new StyleRangeBuilder(sheetName)
   for (const cell of cells) {
-    if (active && active.row === cell.row && active.endColumn + 1 === cell.column && active.styleId === cell.styleId) {
-      active.endColumn = cell.column
-      continue
-    }
-    if (active) {
-      ranges.push(styleRunToRange(sheetName, active))
-    }
-    active = { row: cell.row, startColumn: cell.column, endColumn: cell.column, styleId: cell.styleId }
+    builder.add(cell.row, cell.column, cell.styleId)
   }
-  if (active) {
-    ranges.push(styleRunToRange(sheetName, active))
-  }
-  return ranges
+  return builder.finish()
 }
 
 function styleRunToRange(
   sheetName: string,
-  run: { readonly row: number; readonly startColumn: number; readonly endColumn: number; readonly styleId: string },
+  run: {
+    readonly startRow: number
+    readonly endRow: number
+    readonly startColumn: number
+    readonly endColumn: number
+    readonly styleId: string
+  },
 ): SheetStyleRangeSnapshot {
   return {
     range: {
       sheetName,
-      startAddress: encodeCellAddress(run.row, run.startColumn),
-      endAddress: encodeCellAddress(run.row, run.endColumn),
+      startAddress: encodeCellAddress(run.startRow, run.startColumn),
+      endAddress: encodeCellAddress(run.endRow, run.endColumn),
     },
     styleId: run.styleId,
+  }
+}
+
+class StyleRangeBuilder {
+  private readonly ranges: SheetStyleRangeSnapshot[] = []
+  private readonly openRects = new Map<
+    string,
+    { startRow: number; endRow: number; startColumn: number; endColumn: number; styleId: string }
+  >()
+  private activeRun: { row: number; startColumn: number; endColumn: number; styleId: string } | undefined
+  private currentRow = -1
+
+  constructor(private readonly sheetName: string) {}
+
+  add(row: number, column: number, styleId: string): void {
+    if (this.activeRun && this.activeRun.row === row && this.activeRun.endColumn + 1 === column && this.activeRun.styleId === styleId) {
+      this.activeRun.endColumn = column
+      return
+    }
+    this.flushActiveRun()
+    this.activeRun = { row, startColumn: column, endColumn: column, styleId }
+  }
+
+  finish(): SheetStyleRangeSnapshot[] {
+    this.flushActiveRun()
+    for (const key of this.openRects.keys()) {
+      this.flushOpenRect(key)
+    }
+    return this.ranges
+  }
+
+  private flushActiveRun(): void {
+    if (!this.activeRun) {
+      return
+    }
+    this.appendRowRun(this.activeRun)
+    this.activeRun = undefined
+  }
+
+  private appendRowRun(run: {
+    readonly row: number
+    readonly startColumn: number
+    readonly endColumn: number
+    readonly styleId: string
+  }): void {
+    if (this.currentRow !== run.row) {
+      if (this.currentRow >= 0) {
+        this.flushOpenRectsNotEndingAt(this.currentRow)
+      }
+      this.currentRow = run.row
+    }
+    const key = `${String(run.startColumn)}\t${String(run.endColumn)}\t${run.styleId}`
+    const rect = this.openRects.get(key)
+    if (rect && rect.endRow === run.row - 1) {
+      rect.endRow = run.row
+      return
+    }
+    if (rect) {
+      this.flushOpenRect(key)
+    }
+    this.openRects.set(key, {
+      startRow: run.row,
+      endRow: run.row,
+      startColumn: run.startColumn,
+      endColumn: run.endColumn,
+      styleId: run.styleId,
+    })
+  }
+
+  private flushOpenRectsNotEndingAt(row: number): void {
+    for (const [key, rect] of this.openRects) {
+      if (rect.endRow !== row) {
+        this.flushOpenRect(key)
+      }
+    }
+  }
+
+  private flushOpenRect(key: string): void {
+    const rect = this.openRects.get(key)
+    if (!rect) {
+      return
+    }
+    this.ranges.push(styleRunToRange(this.sheetName, rect))
+    this.openRects.delete(key)
   }
 }
 

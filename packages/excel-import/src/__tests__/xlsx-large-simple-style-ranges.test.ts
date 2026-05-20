@@ -21,7 +21,7 @@ describe('large simple style range materialization', () => {
     expect([...styleCatalog.values()]).toEqual([{ id: styleId, fill: { backgroundColor: '#ffcc00' } }])
   })
 
-  it('falls back to sorted ranges when style records arrive out of row order', () => {
+  it('sorts and compacts ranges when style records arrive out of row order', () => {
     const styleIndexes = new ImportedWorksheetStyleIndexArena()
     styleIndexes.add(1, 0, 1)
     styleIndexes.add(1, 1, 1)
@@ -30,10 +30,7 @@ describe('large simple style range materialization', () => {
     const styleRanges = buildLargeSimpleStyleRanges('Data', scanWithStyleIndexes(styleIndexes), stylesByIndex(), new Map())
     const styleId = styleRanges[0]?.styleId
 
-    expect(styleRanges).toEqual([
-      { range: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B1' }, styleId },
-      { range: { sheetName: 'Data', startAddress: 'A2', endAddress: 'B2' }, styleId },
-    ])
+    expect(styleRanges).toEqual([{ range: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B2' }, styleId }])
   })
 })
 

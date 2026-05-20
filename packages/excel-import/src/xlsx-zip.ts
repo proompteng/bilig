@@ -77,7 +77,15 @@ export function forEachInflatedXlsxZipEntryChunk(
   const source = metadata?.source
   const entry = metadata?.entriesByPath.get(normalizeZipPath(path))
   if (!metadata || !source || !entry) {
-    return false
+    const inflated = zip[normalizeZipPath(path)]
+    if (!inflated) {
+      return false
+    }
+    const chunkSize = options.chunkSize ?? defaultZipEntryChunkSize
+    for (let offset = 0; offset < inflated.byteLength; offset += chunkSize) {
+      onChunk(inflated.subarray(offset, Math.min(inflated.byteLength, offset + chunkSize)))
+    }
+    return true
   }
   inflateCentralDirectoryEntryChunks(source, entry.localHeaderOffset, entry.compressedSize, entry.compressionMethod, onChunk, {
     chunkSize: options.chunkSize ?? defaultZipEntryChunkSize,

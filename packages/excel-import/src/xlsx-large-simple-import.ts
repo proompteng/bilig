@@ -156,7 +156,6 @@ const stylesPath = 'xl/styles.xml'
 const worksheetRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'
 const unsupportedPackagePathPattern =
   /^xl\/(?:charts|chartSheets|comments|ctrlProps|externalLinks|model|pivotCache|pivotTables|threadedComments|vbaProject\.bin)/u
-const maxPreservedBlankStyleCellCount = 10_000
 
 export function tryImportLargeSimpleXlsx(
   source: LargeSimpleXlsxImportSource,
@@ -270,39 +269,6 @@ export function tryImportLargeSimpleXlsx(
         cellScan = streamed.cellScan
         streamedWorksheetXml = streamed.metadataXml
         streamedMetadataScan = streamed.metadata
-        if (
-          materializeCells &&
-          options.allowUnsupportedCellMetadata !== true &&
-          cellScan.blankStyleCellCount > maxPreservedBlankStyleCellCount
-        ) {
-          const compactStreamed = parseLargeSimpleWorksheetCellsFromChunks(
-            (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
-            order,
-            {
-              hasSharedStrings,
-              retainCells: materializeCells,
-              sharedStrings: fallbackSharedStrings ?? [],
-              deferSharedStrings: materializeCells && hasSharedStrings,
-              retainMetadataXml: materializeMetadata,
-              sheetName: entry.name,
-              stringPool,
-              deduplicateStrings: deduplicateInlineStrings,
-              preserveBlankStyleCells: false,
-              ...(options.allowUnsupportedFormulaText === undefined
-                ? {}
-                : { allowUnsupportedFormulaText: options.allowUnsupportedFormulaText }),
-              ...(options.allowUnsupportedCellMetadata === undefined
-                ? {}
-                : { allowUnsupportedCellMetadata: options.allowUnsupportedCellMetadata }),
-            },
-          )
-          if (!compactStreamed) {
-            return null
-          }
-          cellScan = compactStreamed.cellScan
-          streamedWorksheetXml = compactStreamed.metadataXml
-          streamedMetadataScan = compactStreamed.metadata
-        }
         delete zip[entry.path]
       }
     }
@@ -331,22 +297,6 @@ export function tryImportLargeSimpleXlsx(
         deduplicateStrings: deduplicateInlineStrings,
         ...(options.allowUnsupportedFormulaText === undefined ? {} : { allowUnsupportedFormulaText: options.allowUnsupportedFormulaText }),
       })
-      if (
-        cellScan &&
-        materializeCells &&
-        options.allowUnsupportedCellMetadata !== true &&
-        cellScan.blankStyleCellCount > maxPreservedBlankStyleCellCount
-      ) {
-        cellScan = parseLargeSimpleWorksheetCells(worksheetBytes, fallbackSharedStrings ?? [], order, {
-          retainCells: materializeCells,
-          stringPool,
-          deduplicateStrings: deduplicateInlineStrings,
-          preserveBlankStyleCells: false,
-          ...(options.allowUnsupportedFormulaText === undefined
-            ? {}
-            : { allowUnsupportedFormulaText: options.allowUnsupportedFormulaText }),
-        })
-      }
     }
     if (!cellScan) {
       return null
