@@ -31,7 +31,11 @@ import { internLargeSimpleWorksheetMetadata } from './xlsx-large-simple-metadata
 import { prepareLargeSimplePackageArtifactsForZipRelease } from './xlsx-large-simple-package-artifact-release.js'
 import { readLargeSimpleSheetPrintMetadata, readLargeSimpleSheetPrintPageSetup } from './xlsx-large-simple-printer-settings.js'
 import { readAllLargeSimpleSharedStrings, readReferencedLargeSimpleSharedStrings } from './xlsx-large-simple-referenced-shared-strings.js'
-import { createLargeSimpleSharedStringSubset, type LargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
+import {
+  createLargeSimpleSharedStringSubset,
+  hasReferencedLargeSimpleRichSharedStrings,
+  type LargeSimpleSharedStrings,
+} from './xlsx-large-simple-shared-strings.js'
 import { shouldUseSharedStringlessFastPathBytes } from './xlsx-large-simple-shared-stringless-fast-path.js'
 import { buildLargeSimpleStyleRanges } from './xlsx-large-simple-style-ranges.js'
 import { readLargeSimpleWorkbookStylesFromChunks } from './xlsx-large-simple-styles.js'
@@ -643,8 +647,14 @@ export function tryImportLargeSimpleXlsx(
     const snapshotMaterializationStart = phaseRecorder.start()
     const retainSharedStringRefsForCells = materializeCells && hasSharedStrings
     const sheetSharedStrings = sharedStringsByScannedWorksheetIndex.get(index) ?? sharedStrings
+    const resolvePlainSharedStringsIntoArena =
+      retainSharedStringRefsForCells &&
+      scanned.cellScan.cellCount > lazySheetCellMaterializationThreshold &&
+      !hasReferencedLargeSimpleRichSharedStrings(sheetSharedStrings, scanned.sharedStringIndexes)
     const resolvedRichTextCells = retainSharedStringRefsForCells
-      ? scanned.cellScan.arena.retainSharedStringReferences(sheetSharedStrings)
+      ? resolvePlainSharedStringsIntoArena
+        ? scanned.cellScan.arena.resolveSharedStrings(sheetSharedStrings)
+        : scanned.cellScan.arena.retainSharedStringReferences(sheetSharedStrings)
       : []
     if (resolvedRichTextCells === null) {
       return null

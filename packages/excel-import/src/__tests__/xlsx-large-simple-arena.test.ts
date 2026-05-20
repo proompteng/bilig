@@ -158,6 +158,26 @@ describe('large simple XLSX import arena', () => {
     expect(arena.cellCount).toBe(0)
   })
 
+  it('resolves plain shared strings into arena pools for lazy cells', () => {
+    const arena = new ImportedWorkbookArena()
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 0, sharedStringIndex: 1 })
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 1, sharedStringIndex: 1 })
+
+    expect(
+      arena.resolveSharedStrings([
+        { text: 'unused', rich: false },
+        { text: 'Shared label', rich: false },
+      ]),
+    ).toEqual([])
+    const lazyCells = arena.createLazySheetCells(0)
+    arena.releaseMaterializationScratch()
+
+    expect(arena.snapshot().strings).toEqual(['Shared label'])
+    expect(lazyCells).toHaveLength(2)
+    expect(lazyCells[0]).toEqual({ address: 'A1', value: 'Shared label' })
+    expect(lazyCells[1]).toEqual({ address: 'B1', value: 'Shared label' })
+  })
+
   it('keeps large shared-string rich-text artifacts lazy', () => {
     const arena = new ImportedWorkbookArena()
     arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 0, sharedStringIndex: 0 })

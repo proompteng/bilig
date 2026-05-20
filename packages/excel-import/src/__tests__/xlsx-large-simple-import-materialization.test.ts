@@ -144,6 +144,53 @@ describe('large simple XLSX import materialization lifetime', () => {
       'public-snapshot-materialization',
     ])
   })
+
+  it('resolves plain shared strings before exposing large lazy cell arrays', () => {
+    const rowCount = 100_001
+    const rows: string[] = []
+    for (let row = 1; row <= rowCount; row += 1) {
+      rows.push(`<row r="${String(row)}"><c r="A${String(row)}" t="s"><v>0</v></c></row>`)
+    }
+    const bytes = buildSharedStringWorkbook(
+      [
+        {
+          name: 'Data',
+          path: 'xl/worksheets/sheet1.xml',
+          xml: [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            `<dimension ref="A1:A${String(rowCount)}"/>`,
+            `<sheetData>${rows.join('')}</sheetData>`,
+            '</worksheet>',
+          ].join(''),
+        },
+      ],
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${String(rowCount)}" uniqueCount="1">
+  <si><t>Repeated shared label</t></si>
+</sst>`,
+    )
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/sharedStrings.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('sharedStrings.xml should be streamed instead of fully inflated')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'large-plain-shared-strings.xlsx', zip, {
+      minByteLength: 0,
+      releaseZipSource: true,
+    })
+    const cells = imported?.snapshot.sheets[0]?.cells
+
+    expect(cells).toHaveLength(rowCount)
+    expect(cells?.[0]).toEqual({ address: 'A1', value: 'Repeated shared label' })
+    expect(cells?.at(-1)).toEqual({ address: `A${String(rowCount)}`, value: 'Repeated shared label' })
+    expect(imported?.snapshot.sheets[0]?.metadata?.richTextArtifacts).toBeUndefined()
+    expect(readLazyXlsxZipSourceByteLength(zip)).toBe(0)
+  })
 })
 
 function worksheetXml(label: string, value: number): string {

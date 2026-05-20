@@ -66,6 +66,18 @@ export function createLargeSimpleSharedStringSubset(
   return createReferencedSharedStringTable(entries, maxReferencedIndex, { preferSparse: true })
 }
 
+export function hasReferencedLargeSimpleRichSharedStrings(
+  sharedStrings: LargeSimpleSharedStrings,
+  referencedIndexes: ReadonlySet<number>,
+): boolean {
+  for (const index of referencedIndexes) {
+    if (sharedStrings[index]?.rich) {
+      return true
+    }
+  }
+  return false
+}
+
 export function readLargeSimpleRichTextCellArtifact(
   address: string,
   openingTag: string,
