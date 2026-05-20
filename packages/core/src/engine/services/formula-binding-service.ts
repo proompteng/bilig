@@ -70,6 +70,7 @@ import { createFormulaBindingFamilyIndexController } from './formula-binding-fam
 import { applyFormulaRuntimePlanFields } from './formula-binding-runtime-update.js'
 import { rebuildDeferredFormulaFamilyIndex } from './formula-family-index-rebuild.js'
 import { bindFreshDirectAggregateFormulaRun } from './formula-binding-fresh-direct-aggregate-run.js'
+import { bindFreshDirectScalarFormulaRun } from './formula-binding-fresh-direct-scalar-run.js'
 import type {
   BindPreparedFormulaOptions,
   CreateEngineFormulaBindingServiceArgs,
@@ -874,6 +875,16 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
         serviceArgs: args,
         edgeArena: args.edgeArena,
         formulaMemberCounts,
+        trackFormulaSheetIndexes,
+        run,
+      })
+    },
+    bindFreshDirectScalarFormulaRunNow(run) {
+      bindFreshDirectScalarFormulaRun({
+        serviceArgs: args,
+        edgeArena: args.edgeArena,
+        formulaMemberCounts,
+        appendKnownUniqueReverseEdge,
         trackFormulaSheetIndexes,
         run,
       })

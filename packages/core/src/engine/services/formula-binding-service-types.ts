@@ -60,6 +60,7 @@ export interface EngineFormulaBindingService {
     options?: BindPreparedFormulaOptions,
   ) => boolean
   readonly bindFreshDirectAggregateFormulaRunNow: (run: FreshDirectAggregateFormulaBindingRun) => void
+  readonly bindFreshDirectScalarFormulaRunNow: (run: FreshDirectScalarFormulaBindingRun) => void
   readonly rewriteFormulaSourcePreservingBindingNow: (cellIndex: number, ownerSheetName: string, source: string) => boolean
   readonly rewriteFormulaCompiledPreservingBindingNow: (
     cellIndex: number,
@@ -169,6 +170,21 @@ export interface FreshDirectAggregateFormulaBindingRun {
   readonly ownerSheetName: string
   readonly cellIndices: readonly number[] | Uint32Array
   readonly members: readonly FreshDirectAggregateFormulaBindingMember[]
+}
+
+export interface FreshDirectScalarFormulaBindingMember {
+  readonly row: number
+  readonly col: number
+  readonly source: string
+  readonly compiled: CompiledFormula
+  readonly templateId: number
+}
+
+export interface FreshDirectScalarFormulaBindingRun {
+  readonly sheetId: number
+  readonly ownerSheetName: string
+  readonly cellIndices: readonly number[] | Uint32Array
+  readonly members: readonly FreshDirectScalarFormulaBindingMember[]
 }
 
 export interface CreateEngineFormulaBindingServiceArgs {

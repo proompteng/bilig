@@ -20,7 +20,11 @@ import type { EngineMutationError } from '../errors.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
 import type { OperationDerivedOp } from './operation-derived-op-helpers.js'
 import type { SortedColumnSearchService } from './sorted-column-search-service.js'
-import type { BindPreparedFormulaOptions, FreshDirectAggregateFormulaBindingRun } from './formula-binding-service-types.js'
+import type {
+  BindPreparedFormulaOptions,
+  FreshDirectAggregateFormulaBindingRun,
+  FreshDirectScalarFormulaBindingRun,
+} from './formula-binding-service-types.js'
 
 export const ENGINE_OPERATION_TEST_HOOKS_ENABLED = readNodeEnv() === 'test'
 
@@ -149,6 +153,7 @@ export interface CreateEngineOperationServiceArgs {
     options?: BindPreparedFormulaOptions,
   ) => boolean
   readonly bindFreshDirectAggregateFormulaRun?: (run: FreshDirectAggregateFormulaBindingRun) => void
+  readonly bindFreshDirectScalarFormulaRun?: (run: FreshDirectScalarFormulaBindingRun) => void
   readonly registerFreshFormulaFamilyRun?: (run: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
   readonly upsertFormulaFamilyRun?: (run: FormulaFamilyRunUpsertArgs) => void
   readonly upsertFreshFormulaInstances?: (records: readonly FormulaInstanceSnapshot[]) => void

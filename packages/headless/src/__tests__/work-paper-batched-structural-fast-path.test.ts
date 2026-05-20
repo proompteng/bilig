@@ -47,6 +47,7 @@ interface TestRuntimeFormula {
   readonly dependencyIndices: Uint32Array
   readonly rangeDependencies: Uint32Array
   readonly directAggregate: unknown
+  readonly directScalar: unknown
 }
 
 interface TestRuntimeFormulaTable {
@@ -117,7 +118,7 @@ function isRuntimeFormula(value: unknown): value is TestRuntimeFormula {
     value !== null &&
     Reflect.get(value, 'dependencyIndices') instanceof Uint32Array &&
     Reflect.get(value, 'rangeDependencies') instanceof Uint32Array &&
-    Reflect.get(value, 'directAggregate') !== undefined
+    (Reflect.get(value, 'directAggregate') !== undefined || Reflect.get(value, 'directScalar') !== undefined)
   )
 }
 
@@ -362,6 +363,102 @@ describe('work paper batched structural fast path', () => {
         regionQueryIndexBuilds: 0,
         topoRepairs: 0,
       })
+    } finally {
+      applyCellMutations.mockRestore()
+      denseIdentityAttach.mockRestore()
+      singleIdentityAttach.mockRestore()
+      denseGridAttach.mockRestore()
+      rowMajorSetter.mockRestore()
+      formulaInstanceBulkUpsert.mockRestore()
+      formulaFamilyRunRegistration.mockRestore()
+      perFormulaFamilyRegistration.mockRestore()
+      dimensionUpdates.restore()
+    }
+  })
+
+  it('bulk-binds fresh appended direct-scalar formula matrices after structural edits', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Data: [
+        [1, 2, '=A1+B1'],
+        [3, 4, '=A2+B2'],
+      ],
+    })
+    const sheetId = workbook.getSheetId('Data')!
+    const appendCount = 96
+    const engine: unknown = Reflect.get(workbook, 'engine')
+    if (!hasCellMutationApplySupport(engine)) {
+      throw new Error('Expected WorkPaper to expose cell mutation application in tests')
+    }
+    const coreWorkbook: unknown = typeof engine === 'object' && engine !== null ? Reflect.get(engine, 'workbook') : undefined
+    if (!hasCoreWorkbookSheetLookup(coreWorkbook)) {
+      throw new Error('Expected WorkPaper to expose the core workbook in tests')
+    }
+    const coreSheet = coreWorkbook.getSheetById(sheetId)
+    if (!hasFreshDenseAttachSheet(coreSheet)) {
+      throw new Error('Expected WorkPaper to expose fresh dense attach internals in tests')
+    }
+    const applyCellMutations = vi.spyOn(engine, 'applyCellMutationsAtWithOptions')
+    const denseIdentityAttach = vi.spyOn(coreSheet.logical, 'setFreshVisibleDenseRowMajorIdentitiesWithAxisIdsDeferred')
+    const singleIdentityAttach = vi.spyOn(coreSheet.logical, 'setFreshVisibleCellIdentityWithAxisIdsDeferred')
+    const denseGridAttach = vi.spyOn(coreSheet.grid, 'setDenseRowMajor')
+    const rowMajorSetter = vi.spyOn(coreSheet.grid, 'createRowMajorSetter')
+    const binding = getCoreFormulaBindingSupport(workbook)
+    expect(binding.getFormulaFamilyStatsNow()).toEqual({ familyCount: 1, runCount: 1, memberCount: 2 })
+    const formulaInstanceBulkUpsert = vi.spyOn(binding, 'upsertFreshFormulaInstancesNow')
+    const formulaFamilies = getCoreFormulaFamilyStore(workbook)
+    const formulaFamilyRunRegistration = vi.spyOn(formulaFamilies, 'registerFormulaRun')
+    const perFormulaFamilyRegistration = vi.spyOn(formulaFamilies, 'upsertFormula')
+    const dimensionUpdates = trackSheetDimensionCacheUpdates(workbook)
+    const rows = Array.from({ length: appendCount }, (_, index) => {
+      const rowNumber = index + 3
+      return [rowNumber, rowNumber * 2, `=A${rowNumber}+B${rowNumber}`]
+    })
+
+    try {
+      workbook.resetPerformanceCounters()
+      const changes = workbook.batch(() => {
+        workbook.addRows(sheetId, 2, appendCount)
+        workbook.setCellContents(cell(sheetId, 2, 0), rows)
+      })
+
+      expect(changes).toHaveLength(appendCount * 3)
+      expect(hasDeferredTrackedIndexChanges(changes)).toBe(true)
+      expect(applyCellMutations).toHaveBeenCalledTimes(1)
+      expect(applyCellMutations.mock.calls[0]?.[0]).toHaveLength(appendCount * 3)
+      expect(denseIdentityAttach).toHaveBeenCalledTimes(1)
+      expect(denseIdentityAttach.mock.calls[0]?.[1]).toHaveLength(appendCount)
+      expect(denseIdentityAttach.mock.calls[0]?.[2]).toHaveLength(3)
+      expect(singleIdentityAttach).not.toHaveBeenCalled()
+      expect(denseGridAttach).toHaveBeenCalledWith(2, 0, appendCount, 3, expect.any(Number))
+      expect(rowMajorSetter).not.toHaveBeenCalled()
+      expect(formulaFamilyRunRegistration).toHaveBeenCalledTimes(1)
+      expect(perFormulaFamilyRegistration).not.toHaveBeenCalled()
+      expect(formulaInstanceBulkUpsert).toHaveBeenCalledTimes(1)
+      expect(formulaInstanceBulkUpsert.mock.calls[0]?.[0]).toHaveLength(appendCount)
+      expect(binding.getFormulaFamilyStatsNow()).toEqual({ familyCount: 1, runCount: 1, memberCount: appendCount + 2 })
+      expect(dimensionUpdates.matrixImpactCount).toBe(1)
+      expect(dimensionUpdates.refScanCount).toBe(0)
+      expect(workbook.getPerformanceCounters()).toMatchObject({
+        calcChainFullScans: 0,
+        directFormulaKernelSyncOnlyRecalcSkips: 1,
+        kernelSyncOnlyRecalcSkips: 1,
+        regionQueryIndexBuilds: 0,
+        topoRebuilds: 0,
+        topoRepairs: 0,
+      })
+      expect(workbook.getCellValue(cell(sheetId, 2, 2))).toEqual({ tag: ValueTag.Number, value: 9 })
+      expect(workbook.getCellValue(cell(sheetId, appendCount + 1, 2))).toEqual({
+        tag: ValueTag.Number,
+        value: (appendCount + 2) * 3,
+      })
+
+      const runtimeFormula = getCoreRuntimeFormula(workbook, 'Data', 'C3')
+      expect(runtimeFormula.dependencyIndices).toHaveLength(2)
+      expect(runtimeFormula.rangeDependencies).toHaveLength(0)
+      expect(runtimeFormula.directScalar).toMatchObject({ kind: 'binary', operator: '+' })
+
+      workbook.setCellContents(cell(sheetId, 2, 0), 10)
+      expect(workbook.getCellValue(cell(sheetId, 2, 2))).toEqual({ tag: ValueTag.Number, value: 16 })
     } finally {
       applyCellMutations.mockRestore()
       denseIdentityAttach.mockRestore()

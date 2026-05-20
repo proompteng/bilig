@@ -16,6 +16,7 @@ import type { DirectFormulaMetricCounts } from './operation-post-recalc-direct-f
 import { finalizeOperationRecalcAndEvents } from './operation-recalc-finalizer.js'
 import type { CreateEngineOperationServiceArgs, MutationSource } from './operation-service-types.js'
 import { createOperationFreshDirectAggregateFormulaBatchFastPath } from './operation-fresh-direct-aggregate-formula-batch-fast-path.js'
+import { createOperationFreshDirectScalarFormulaBatchFastPath } from './operation-fresh-direct-scalar-formula-batch-fast-path.js'
 import { createOperationExistingRectangularLiteralBatchFastPath } from './operation-existing-rectangular-literal-batch-fast-path.js'
 import { applyClearCellMutation } from './operation-clear-cell-mutation.js'
 import { applySetCellValueMutation } from './operation-set-cell-value-mutation.js'
@@ -187,6 +188,42 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
           captureChangedCells: args.captureChangedCells,
           applyDirectFormulaCurrentResult,
         })
+  const freshDirectScalarFormulaBatchFastPath =
+    args.bindFreshDirectScalarFormulaRun === undefined || args.compileTemplateFormula === undefined
+      ? undefined
+      : createOperationFreshDirectScalarFormulaBatchFastPath({
+          state: args.state,
+          emitBatch,
+          setCellEntityVersion,
+          hasTrackedExactLookupDependents,
+          hasTrackedSortedLookupDependents,
+          hasTrackedDirectRangeDependents,
+          ...(args.hasRegionFormulaSubscriptionsOverlappingRange === undefined
+            ? {}
+            : { hasRegionFormulaSubscriptionsOverlappingRange: args.hasRegionFormulaSubscriptionsOverlappingRange }),
+          ...(args.getRegionFormulaSubscriptionCount === undefined
+            ? {}
+            : { getRegionFormulaSubscriptionCount: args.getRegionFormulaSubscriptionCount }),
+          hasRegionFormulaSubscriptionsIntersectingRect: args.hasRegionFormulaSubscriptionsIntersectingRect,
+          bindFreshDirectScalarFormulaRun: args.bindFreshDirectScalarFormulaRun,
+          registerFreshFormulaFamilyRun: args.registerFreshFormulaFamilyRun,
+          upsertFormulaFamilyRun: args.upsertFormulaFamilyRun,
+          upsertFreshFormulaInstances: args.upsertFreshFormulaInstances,
+          compileTemplateFormula: args.compileTemplateFormula,
+          materializeDeferredStructuralFormulaSources: args.materializeDeferredStructuralFormulaSources,
+          checkEvaluationBudget: args.checkEvaluationBudget,
+          beginMutationCollection: args.beginMutationCollection,
+          ensureRecalcScratchCapacity: args.ensureRecalcScratchCapacity,
+          resetMaterializedCellScratch: args.resetMaterializedCellScratch,
+          getBatchMutationDepth: args.getBatchMutationDepth,
+          setBatchMutationDepth: args.setBatchMutationDepth,
+          markInputChanged: args.markInputChanged,
+          markExplicitChanged: args.markExplicitChanged,
+          getChangedInputBuffer: args.getChangedInputBuffer,
+          deferKernelSync: args.deferKernelSync,
+          captureChangedCells: args.captureChangedCells,
+          applyDirectFormulaCurrentResult,
+        })
   const existingRectangularLiteralBatchFastPath = createOperationExistingRectangularLiteralBatchFastPath({
     state: args.state,
     emitBatch,
@@ -210,6 +247,9 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
       return
     }
     if (freshDirectAggregateFormulaBatchFastPath?.tryApplyFreshDirectAggregateFormulaMatrixBatch(refs, batch, source, potentialNewCells)) {
+      return
+    }
+    if (freshDirectScalarFormulaBatchFastPath?.tryApplyFreshDirectScalarFormulaMatrixBatch(refs, batch, source, potentialNewCells)) {
       return
     }
     if (

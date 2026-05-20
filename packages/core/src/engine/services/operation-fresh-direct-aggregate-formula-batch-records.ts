@@ -26,6 +26,11 @@ export interface FreshDirectAggregateFormulaEntry {
 
 export type FreshDirectAggregateFormulaEntrySeed = Omit<FreshDirectAggregateFormulaEntry, 'result'>
 
+export interface FreshFormulaEntryPosition {
+  readonly row: number
+  readonly col: number
+}
+
 export interface ContiguousSingleColumnFormulaBatch {
   readonly rowStart: number
   readonly col: number
@@ -51,6 +56,15 @@ export function registerFreshDirectAggregateFormulaFamilyRun(
   args: FreshFormulaFamilyRunRegistrationArgs,
   sheetId: number,
   entries: readonly FreshDirectAggregateFormulaEntry[],
+  cellIndices: readonly number[] | Uint32Array,
+): void {
+  registerFreshBoundFormulaFamilyRun(args, sheetId, entries, cellIndices)
+}
+
+export function registerFreshBoundFormulaFamilyRun(
+  args: FreshFormulaFamilyRunRegistrationArgs,
+  sheetId: number,
+  entries: readonly FreshFormulaEntryPosition[],
   cellIndices: readonly number[] | Uint32Array,
 ): void {
   const upsertFormulaFamilyRun = args.upsertFormulaFamilyRun
@@ -136,7 +150,7 @@ export function registerFreshDirectAggregateFormulaFamilyRun(
 }
 
 export function getContiguousSingleColumnFormulaBatch(
-  entries: readonly FreshDirectAggregateFormulaEntry[],
+  entries: readonly FreshFormulaEntryPosition[],
 ): ContiguousSingleColumnFormulaBatch | undefined {
   const first = entries[0]
   if (first === undefined) {
@@ -181,7 +195,7 @@ function directAggregateRuntimeFormulaFamilyShapeKey(formula: RuntimeFormula): s
 }
 
 function materializeFormulaFamilyMembers(
-  entries: readonly FreshDirectAggregateFormulaEntry[],
+  entries: readonly FreshFormulaEntryPosition[],
   cellIndices: readonly number[] | Uint32Array,
   start: number,
   end: number,

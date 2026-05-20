@@ -181,7 +181,7 @@ export function installFreshFormulaBindingNow(args: {
   )
 }
 
-function appendFreshFormulaDependencyReverseEdges(
+export function appendFreshFormulaDependencyReverseEdges(
   dependencyEntities: Uint32Array,
   formulaEntity: number,
   appendKnownUniqueReverseEdge: (entityId: number, dependentEntityId: number) => void,
