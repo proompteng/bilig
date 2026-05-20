@@ -7,7 +7,7 @@ import type { FormulaInstanceSnapshot } from '../../formula/formula-instance-tab
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import type { EngineMutationError } from '../errors.js'
 import type { EngineRuntimeState, U32 } from '../runtime-state.js'
-import type { FormulaOwnerPosition } from './formula-binding-service-types.js'
+import type { FormulaOwnerPosition, FreshDirectScalarFormulaBindingRun } from './formula-binding-service-types.js'
 import type { DeferredInitialFormulaFamilyRun } from './formula-initialization-family-runs.js'
 import type { InitialFormulaEntryRefSource } from './formula-initialization-refs.js'
 
@@ -87,6 +87,7 @@ export interface EngineFormulaInitializationServiceArgs {
       readonly ownerPosition?: FormulaOwnerPosition
     },
   ) => boolean
+  readonly bindFreshDirectScalarFormulaRun?: (run: FreshDirectScalarFormulaBindingRun) => void
   readonly upsertFormulaFamilyRun: (args: FormulaFamilyRunUpsertArgs) => void
   readonly registerFreshFormulaFamilyRun: (args: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
   readonly deferFormulaFamilyIndexRebuild?: () => void

@@ -60,6 +60,7 @@ import type {
   HydratedPreparedFormulaInitializationRef,
   PreparedFormulaInitializationRef,
 } from './formula-initialization-service-types.js'
+import { tryBindHydratedFreshDirectScalarFormula } from './formula-initialization-hydrated-direct-scalar.js'
 import { tryEvaluateFormulaLeafInlineScalar } from './formula-leaf-inline-scalar-evaluator.js'
 import { initializeCachedFormulaSourcesAtNow as initializeCachedFormulaSourcesAtNowUnchecked } from './formula-initialization-cached-formulas.js'
 
@@ -69,7 +70,6 @@ export type {
   HydratedPreparedFormulaInitializationRef,
   PreparedFormulaInitializationRef,
 } from './formula-initialization-service-types.js'
-
 export function createEngineFormulaInitializationService(args: EngineFormulaInitializationServiceArgs): EngineFormulaInitializationService {
   const sheetNameById = new Map<number, string>()
   const hasCycleMembersNow = (): boolean => {
@@ -808,20 +808,31 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
             const ref = initialFormulaEntryRefAt(refs, refIndex)
             const cellIndex = hadExistingFormulas ? pendingInitialFormulaCellIndices[refIndex]! : targetCellIndices[refIndex]!
             const ownerSheetName = resolveSheetName(ref.sheetId)
-            topologyChanged =
-              args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId, {
-                deferFamilyRegistration:
-                  shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined || alignedFreshFormulaFamilyRuns !== undefined,
-                preserveCachedValueOnFullRecalc: ref.preserveCachedValueOnFullRecalc === true,
-                deferFormulaInstanceRegistration: shouldDeferFormulaInstanceTable,
-                assumeFreshFormula: !hadExistingFormulas,
-                ownerPosition: {
-                  sheetName: ownerSheetName,
-                  row: ref.row,
-                  col: ref.col,
-                },
-                resolveWorkbookDateSystem,
-              }) || topologyChanged
+            const usedHydratedDirectScalarFastBinding = tryBindHydratedFreshDirectScalarFormula(
+              args,
+              hadExistingFormulas,
+              cellIndex,
+              ownerSheetName,
+              ref,
+            )
+            if (usedHydratedDirectScalarFastBinding) {
+              topologyChanged = true
+            } else {
+              topologyChanged =
+                args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId, {
+                  deferFamilyRegistration:
+                    shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined || alignedFreshFormulaFamilyRuns !== undefined,
+                  preserveCachedValueOnFullRecalc: ref.preserveCachedValueOnFullRecalc === true,
+                  deferFormulaInstanceRegistration: shouldDeferFormulaInstanceTable,
+                  assumeFreshFormula: !hadExistingFormulas,
+                  ownerPosition: {
+                    sheetName: ownerSheetName,
+                    row: ref.row,
+                    col: ref.col,
+                  },
+                  resolveWorkbookDateSystem,
+                }) || topologyChanged
+            }
             const runtimeFormula = args.state.formulas.get(cellIndex)
             noteDeferredFormulaInstance(deferredFormulaInstances, { cellIndex, row: ref.row, col: ref.col, ownerSheetName }, runtimeFormula)
             if (alignedFreshFormulaFamilyRuns === undefined) {
