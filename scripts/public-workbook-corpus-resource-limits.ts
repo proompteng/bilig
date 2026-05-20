@@ -161,19 +161,9 @@ export function structuralSmokeResourceLimitPreflight(featureCounts: PublicWorkb
 
 export function formulaOracleResourceLimitPreflight(snapshot: WorkbookSnapshot): ResourceLimitPreflight | null {
   const formulaCellCount = countFormulaCells(snapshot)
-  if (formulaCellCount > preflightFormulaOracleFormulaCellLimit) {
-    return {
-      classification: `xlsx.publicCorpus.resourceLimit:preflightFormulaOracleBudget>${String(
-        preflightFormulaOracleFormulaCellLimit,
-      )}formulas`,
-      evidence: [
-        'rss-limit-phase=formula-oracle',
-        `Formula oracle skipped because workbook has ${String(formulaCellCount)} formulas, above verifier budget ${String(
-          preflightFormulaOracleFormulaCellLimit,
-        )}.`,
-        `formula-oracle-formula-count=${String(formulaCellCount)}`,
-      ],
-    }
+  const formulaCountLimit = formulaOracleFormulaCountResourceLimitPreflight({ formulaCellCount })
+  if (formulaCountLimit) {
+    return formulaCountLimit
   }
   const footprint = inspectFormulaOracleDependencyFootprint(snapshot)
   const reasons: string[] = []
@@ -205,6 +195,26 @@ export function formulaOracleResourceLimitPreflight(snapshot: WorkbookSnapshot):
       `formula-oracle-largest-dependency=${footprint.maxDependencyReference ?? 'unknown'}:${String(footprint.maxDependencyCellReferences)}`,
     ],
   }
+}
+
+export function formulaOracleFormulaCountResourceLimitPreflight(input: {
+  readonly formulaCellCount: number
+}): ResourceLimitPreflight | null {
+  if (input.formulaCellCount > preflightFormulaOracleFormulaCellLimit) {
+    return {
+      classification: `xlsx.publicCorpus.resourceLimit:preflightFormulaOracleBudget>${String(
+        preflightFormulaOracleFormulaCellLimit,
+      )}formulas`,
+      evidence: [
+        'rss-limit-phase=formula-oracle',
+        `Formula oracle skipped because workbook has ${String(input.formulaCellCount)} formulas, above verifier budget ${String(
+          preflightFormulaOracleFormulaCellLimit,
+        )}.`,
+        `formula-oracle-formula-count=${String(input.formulaCellCount)}`,
+      ],
+    }
+  }
+  return null
 }
 
 function countFormulaCells(snapshot: WorkbookSnapshot): number {

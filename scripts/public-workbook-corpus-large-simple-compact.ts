@@ -12,6 +12,7 @@ import {
 import type { PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus-footprint.ts'
 import { largeSimpleImportPhaseTelemetryEvidence } from './public-workbook-corpus-large-simple-evidence.ts'
 import {
+  formulaOracleFormulaCountResourceLimitPreflight,
   roundTripResourceLimitPreflight,
   structuralSmokeResourceLimitPreflight,
   unsupportedResourceLimitCase,
@@ -135,11 +136,12 @@ function shouldUseCompactLargeSimpleFeatureCounts(
   counts: PublicWorkbookFeatureCounts,
   runStructuralSmoke: boolean,
 ): boolean {
+  const formulaOracleResourceLimit = formulaOracleFormulaCountResourceLimitPreflight(counts)
   const roundTripResourceLimit = roundTripResourceLimitPreflight(artifact, counts)
   const structuralSmokeResourceLimit = runStructuralSmoke ? structuralSmokeResourceLimitPreflight(counts) : null
   return (
     counts.cellCount > 0 &&
-    counts.formulaCellCount === 0 &&
+    (counts.formulaCellCount === 0 || formulaOracleResourceLimit !== null) &&
     roundTripResourceLimit !== null &&
     (!runStructuralSmoke || structuralSmokeResourceLimit !== null)
   )
@@ -159,16 +161,26 @@ function buildLargeSimpleCompactCase(
     dimensions: inspected.stats.dimensions,
   }
   collectGarbage()
+  const formulaOracleResourceLimit = formulaOracleFormulaCountResourceLimitPreflight(featureCounts)
   const roundTripResourceLimit = roundTripResourceLimitPreflight(artifact, featureCounts)
   const structuralSmokeResourceLimit = runStructuralSmoke ? structuralSmokeResourceLimitPreflight(featureCounts) : null
-  if (!roundTripResourceLimit || (runStructuralSmoke && !structuralSmokeResourceLimit)) {
+  if (
+    (featureCounts.formulaCellCount > 0 && !formulaOracleResourceLimit) ||
+    !roundTripResourceLimit ||
+    (runStructuralSmoke && !structuralSmokeResourceLimit)
+  ) {
     throw new Error('Large-simple compact verification requires resource-skipped round-trip and structural phases.')
   }
   const phaseResourceLimitClassifications = [
+    ...(formulaOracleResourceLimit ? [formulaOracleResourceLimit.classification] : []),
     roundTripResourceLimit.classification,
     ...(structuralSmokeResourceLimit ? [structuralSmokeResourceLimit.classification] : []),
   ]
-  const phaseResourceLimitEvidence = [...roundTripResourceLimit.evidence, ...(structuralSmokeResourceLimit?.evidence ?? [])]
+  const phaseResourceLimitEvidence = [
+    ...(formulaOracleResourceLimit?.evidence ?? []),
+    ...roundTripResourceLimit.evidence,
+    ...(structuralSmokeResourceLimit?.evidence ?? []),
+  ]
   const unsupportedFeatureClassifications = classifyUnsupportedFeatures(
     minimalSnapshotFromLargeSimpleInspect(inspected),
     inspected.warnings,
