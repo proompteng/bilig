@@ -132,6 +132,22 @@ function withEnv(task: CiTask, env: Readonly<Record<string, string>>): CiTask {
   }
 }
 
+function vitestFileChunkEnv(defaultChunkSize: number): Readonly<Record<string, string>> {
+  const requestedChunkSize = readPositiveIntegerEnv('BILIG_VITEST_FILE_CHUNK_SIZE')
+  return {
+    BILIG_VITEST_FILE_CHUNK_SIZE: String(requestedChunkSize === null ? defaultChunkSize : Math.min(requestedChunkSize, defaultChunkSize)),
+  }
+}
+
+function readPositiveIntegerEnv(name: string): number | null {
+  const raw = process.env[name]
+  if (raw === undefined || !/^[1-9]\d*$/u.test(raw)) {
+    return null
+  }
+  const value = Number(raw)
+  return Number.isSafeInteger(value) ? value : null
+}
+
 async function runCoverageTask(task: Omit<CiTask, 'command' | 'steps'>): Promise<CompletedTask> {
   const taskStartedAt = performance.now()
   log(`start ${task.label}`)
@@ -271,14 +287,15 @@ const browserLane: CiTask = {
   ],
 }
 const parallelFocusedCorrectnessLanes: readonly CiTask[] = [
-  withEnv(directPackageScript('correctness core', 'test:correctness:core'), { BILIG_VITEST_FILE_CHUNK_SIZE: '10' }),
+  withEnv(directPackageScript('correctness core', 'test:correctness:core'), vitestFileChunkEnv(10)),
   directPackageScript('correctness formula', 'test:correctness:formula'),
   directPackageScript('correctness server', 'test:correctness:server'),
   directPackageScript('correctness browser runtime', 'test:correctness:browser'),
 ]
-const corpusCorrectnessLane = withEnv(directPackageScript('correctness public workbook corpus', 'test:correctness:corpus'), {
-  BILIG_VITEST_FILE_CHUNK_SIZE: '10',
-})
+const corpusCorrectnessLane = withEnv(
+  directPackageScript('correctness public workbook corpus', 'test:correctness:corpus'),
+  vitestFileChunkEnv(10),
+)
 const generatedSourceChecks: readonly CiTask[] = [
   bunScript('protocol check', 'scripts/gen-protocol.ts', '--check'),
   direct('protocol package build for generated-source imports', workspaceBin('tsc'), '-p', 'packages/protocol/tsconfig.json'),
