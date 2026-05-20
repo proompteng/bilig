@@ -15,6 +15,7 @@ export const metadataWorksheetTagNames = new Set([
   'oleObjects',
   'pageMargins',
   'pageSetup',
+  'pivotTableDefinition',
   'printOptions',
   'rowBreaks',
   'sheetFormatPr',

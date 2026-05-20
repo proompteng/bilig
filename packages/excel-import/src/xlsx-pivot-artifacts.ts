@@ -293,6 +293,10 @@ function insertPivotTableDefinitionsXml(
 export function readImportedPivotArtifacts(
   zip: XlsxZipEntries,
   sheetNames: readonly string[],
+  options: {
+    readonly readWorksheetPivotTableDefinitionsXml?: boolean
+    readonly worksheetPivotTableDefinitionsXmlByName?: ReadonlyMap<string, string>
+  } = {},
 ): {
   readonly artifacts: WorkbookPivotArtifactsSnapshot | undefined
   readonly sheetArtifactsByName: Map<string, WorkbookSheetPivotArtifactsSnapshot>
@@ -308,7 +312,11 @@ export function readImportedPivotArtifacts(
     const relationships = parseRelationships(getZipText(zip, `xl/worksheets/_rels/sheet${String(sheetIndex + 1)}.xml.rels`))
       .filter((relationship) => relationship.type === pivotTableRelationshipType)
       .map(relationshipSnapshot)
-    const pivotTableDefinitionsXml = readPivotTableDefinitionsXml(getZipText(zip, `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`))
+    const pivotTableDefinitionsXml =
+      options.worksheetPivotTableDefinitionsXmlByName?.get(sheetName) ??
+      (options.readWorksheetPivotTableDefinitionsXml === false
+        ? undefined
+        : readPivotTableDefinitionsXml(getZipText(zip, `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`)))
     if (relationships.length > 0 || pivotTableDefinitionsXml) {
       sheetArtifactsByName.set(sheetName, {
         relationships,

@@ -10,6 +10,10 @@ import {
 } from './xlsx-import-limits.js'
 import { tryInspectLargeSimpleXlsxHeadless } from './xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from './xlsx-large-simple-import.js'
+import {
+  hasFullImporterOnlyPackageMetadata,
+  shouldBypassLargeSimpleByteThresholdForPackageArtifacts,
+} from './xlsx-large-simple-package-artifact-threshold.js'
 import { attachImportedXlsxSourceReader } from './xlsx-source-bytes.js'
 import { readXlsxZipEntriesLazyFromByteSource, type XlsxZipByteSource } from './xlsx-zip.js'
 
@@ -26,6 +30,8 @@ export function importXlsxFromZipByteSource(
   }
   const limits = resolveXlsxImportLimits(options)
   const hasCalcChain = Object.hasOwn(workbookZip, 'xl/calcChain.xml')
+  const bypassLargeSimpleByteThreshold =
+    shouldBypassLargeSimpleByteThresholdForPackageArtifacts(workbookZip) && !hasFullImporterOnlyPackageMetadata(workbookZip)
   const inspection =
     limits || (hasCalcChain && source.byteLength >= denseSheetJsByteThreshold)
       ? inspectLargeSimpleXlsxSource(source, fileName, options.limits ? { minByteLength: 0 } : undefined)
@@ -35,9 +41,12 @@ export function importXlsxFromZipByteSource(
   const allowCachedUnsupportedFormulaText =
     hasCalcChain && (source.byteLength >= largeCalcChainStreamingByteThreshold || hasLargeCalcChainFormulaSet)
   const shouldTryLargeSimpleImport =
-    !hasCalcChain || source.byteLength >= largeCalcChainStreamingByteThreshold || hasLargeCalcChainFormulaSet
+    !hasCalcChain ||
+    source.byteLength >= largeCalcChainStreamingByteThreshold ||
+    hasLargeCalcChainFormulaSet ||
+    bypassLargeSimpleByteThreshold
   const largeSimpleImportOptions = {
-    ...(options.limits ? { minByteLength: 0 } : {}),
+    ...(options.limits || bypassLargeSimpleByteThreshold ? { minByteLength: 0 } : {}),
     allowUnsupportedFormulaText: allowCachedUnsupportedFormulaText,
     allowUnsupportedCellMetadata: allowCachedUnsupportedFormulaText,
     releaseArenaAfterMaterialization: true,

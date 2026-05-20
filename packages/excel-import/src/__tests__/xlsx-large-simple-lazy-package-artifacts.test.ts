@@ -32,6 +32,50 @@ describe('large simple XLSX lazy package artifacts', () => {
     expect(source.releaseCount).toBe(0)
   })
 
+  it('streams small file-backed data-model workbooks instead of falling back to full source materialization', () => {
+    const bytes = buildWorkbook({
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1"/>',
+        '<sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData>',
+        '</worksheet>',
+      ].join(''),
+      workbookRelationshipsXml: relationshipXml([
+        {
+          id: 'rId1',
+          type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet',
+          target: 'worksheets/sheet1.xml',
+        },
+        {
+          id: 'rIdModel',
+          type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/powerPivotData',
+          target: 'model/item.data',
+        },
+      ]),
+      extraEntries: {
+        'docProps/custom.xml': [
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+          '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">',
+          '<property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="scenario"><vt:lpwstr>PowerPivot smoke</vt:lpwstr></property>',
+          '</Properties>',
+        ].join(''),
+        'xl/model/item.data': deterministicBytes(128_000),
+      },
+    })
+    const source = new CountingXlsxZipByteSource(bytes)
+
+    const imported = importXlsxFromZipByteSource(source, 'small-byte-source-data-model.xlsx')
+
+    expect(bytes.byteLength).toBeLessThan(1_000_000)
+    expect(imported.stats?.cellCount).toBe(1)
+    expect(imported.snapshot.sheets[0]?.cells).toEqual([{ address: 'A1', value: 7 }])
+    expect(imported.snapshot.workbook.metadata?.properties).toEqual([{ key: 'scenario', value: 'PowerPivot smoke' }])
+    expect(imported.snapshot.workbook.metadata?.documentPropertyArtifacts?.custom?.path).toBe('docProps/custom.xml')
+    expect(imported.snapshot.workbook.metadata?.dataModelArtifacts?.parts).toHaveLength(1)
+    expect(source.fullReadCount).toBe(0)
+  })
+
   it('keeps pivot cache package XML lazy until export materialization needs it', () => {
     const pivotCacheRecordsXml = `<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1"><r>${'x'.repeat(
       400_000,
@@ -75,6 +119,13 @@ describe('large simple XLSX lazy package artifacts', () => {
     })
     const zip = readXlsxZipEntriesLazy(bytes)
     const pivotRecordsStreams = countLazyZipEntryStreams(zip, 'xl/pivotCache/pivotCacheRecords1.xml')
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('worksheet XML should be streamed while preserving pivot definitions')
+      },
+    })
 
     const imported = tryImportLargeSimpleXlsx({ byteLength: bytes.byteLength }, 'lazy-pivot.xlsx', zip, {
       minByteLength: 0,
@@ -83,8 +134,10 @@ describe('large simple XLSX lazy package artifacts', () => {
     const pivotRecordsPart = imported?.snapshot.workbook.metadata?.pivotArtifacts?.parts.find(
       (part) => part.path === 'xl/pivotCache/pivotCacheRecords1.xml',
     )
+    const sheetPivotArtifacts = imported?.snapshot.sheets[0]?.metadata?.pivotArtifacts
 
     expect(imported?.stats.cellCount).toBe(1)
+    expect(sheetPivotArtifacts?.pivotTableDefinitionsXml).toBe('<pivotTableDefinition r:id="rIdPivot"/>')
     expect(pivotRecordsStreams()).toBe(0)
     expect(pivotRecordsPart?.xml).toBe(pivotCacheRecordsXml)
     expect(pivotRecordsStreams()).toBe(1)

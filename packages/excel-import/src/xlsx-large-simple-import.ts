@@ -77,6 +77,7 @@ import {
 import { readImportedPivotArtifacts } from './xlsx-pivot-artifacts.js'
 import { readImportedWorkbookSlicerConnectionArtifactsFromSheets } from './xlsx-slicer-connection-artifacts.js'
 import { readImportedSheetTablesFromRelationshipIds, readImportedSheetTablesFromWorksheetXml } from './xlsx-tables.js'
+import { readImportedWorkbookDocumentPropertiesArtifacts, readImportedWorkbookProperties } from './xlsx-workbook-properties.js'
 import {
   forEachInflatedXlsxZipEntryChunk,
   getZipText,
@@ -250,12 +251,15 @@ export function tryImportLargeSimpleXlsx(
   const importedExternalLinkArtifacts =
     materializeCells && hasExternalLinkParts ? readImportedWorkbookExternalLinkArtifacts(zip) : undefined
   const importedDataModelArtifacts = materializeCells && hasDataModelParts ? readImportedWorkbookDataModelArtifacts(zip) : undefined
+  const importedWorkbookProperties = materializeCells ? readImportedWorkbookProperties(zip) : undefined
+  const importedWorkbookDocumentProperties = materializeCells ? readImportedWorkbookDocumentPropertiesArtifacts(zip) : undefined
   const importedWorkbookCellMetadata = materializeCells ? readImportedWorkbookCellMetadataPart(zip) : undefined
   const importedPivotArtifacts =
     materializeCells && hasPivotParts
       ? readImportedPivotArtifacts(
           zip,
           workbookSheets.map((entry) => entry.name),
+          { readWorksheetPivotTableDefinitionsXml: false },
         )
       : null
   const importedChartDrawingArtifacts =
@@ -674,7 +678,10 @@ export function tryImportLargeSimpleXlsx(
       importedChartDrawingArtifacts?.drawingArtifacts.sheetArtifactsByName.get(scanned.name) ??
       importedDrawingArtifacts?.sheetArtifactsByName.get(scanned.name)
     const controlArtifacts = importedControlArtifacts?.sheetArtifactsByName.get(scanned.name)
-    const pivotArtifacts = importedPivotArtifacts?.sheetArtifactsByName.get(scanned.name)
+    const pivotArtifacts = sheetPivotArtifactsWithStreamedDefinitions(
+      importedPivotArtifacts?.sheetArtifactsByName.get(scanned.name),
+      scanned.metadataScan?.pivotTableDefinitionsXml,
+    )
     const legacyCommentVml = importedLegacyCommentVmlBySheet?.get(scanned.name)
     const parsed = buildParsedWorksheet(
       scanned.name,
@@ -714,6 +721,8 @@ export function tryImportLargeSimpleXlsx(
   const hasFormulaCells = sheetStats.some((entry) => entry.formulaCellCount > 0)
   const workbookMetadata =
     workbookDefinedNames.definedNames ||
+    importedWorkbookProperties ||
+    importedWorkbookDocumentProperties ||
     importedChartDrawingArtifacts?.drawingArtifacts.artifacts ||
     importedDrawingArtifacts?.artifacts ||
     importedChartDrawingArtifacts?.chartArtifacts.artifacts ||
@@ -729,6 +738,8 @@ export function tryImportLargeSimpleXlsx(
     importedWorkbookCellMetadata ||
     hasFormulaCells
       ? {
+          ...(importedWorkbookProperties ? { properties: importedWorkbookProperties } : {}),
+          ...(importedWorkbookDocumentProperties ? { documentPropertyArtifacts: importedWorkbookDocumentProperties } : {}),
           ...(workbookDefinedNames.definedNames ? { definedNames: workbookDefinedNames.definedNames } : {}),
           ...(importedChartDrawingArtifacts?.drawingArtifacts.artifacts
             ? { drawingArtifacts: importedChartDrawingArtifacts.drawingArtifacts.artifacts }
@@ -965,6 +976,19 @@ function buildParsedWorksheet(
     cellScan.styleIndexes.release()
   }
   return parsed
+}
+
+function sheetPivotArtifactsWithStreamedDefinitions(
+  artifacts: SheetMetadataSnapshot['pivotArtifacts'],
+  pivotTableDefinitionsXml: string | undefined,
+): SheetMetadataSnapshot['pivotArtifacts'] {
+  if (!pivotTableDefinitionsXml) {
+    return artifacts
+  }
+  return {
+    relationships: artifacts?.relationships ?? [],
+    pivotTableDefinitionsXml,
+  }
 }
 
 function drawingRelationshipIdForScannedWorksheet(scanned: ScannedWorksheet): string | undefined {

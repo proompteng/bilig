@@ -91,7 +91,10 @@ import {
 } from './xlsx-import-limits.js'
 import { tryInspectLargeSimpleXlsxHeadless, type LargeSimpleXlsxHeadlessInspectResult } from './xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from './xlsx-large-simple-import.js'
-import { shouldBypassLargeSimpleByteThresholdForPackageArtifacts } from './xlsx-large-simple-package-artifact-threshold.js'
+import {
+  hasFullImporterOnlyPackageMetadata,
+  shouldBypassLargeSimpleByteThresholdForPackageArtifacts,
+} from './xlsx-large-simple-package-artifact-threshold.js'
 import { createPreservedVbaProjectPayload, type PreservedVbaProjectCodeNames } from './xlsx-macros.js'
 import { releaseOwnedXlsxSourceBytes, type OwnedXlsxSourceBytes } from './xlsx-owned-source-release.js'
 import { attachImportedXlsxSourceBytes } from './xlsx-source-bytes.js'
@@ -271,17 +274,6 @@ function inspectLargeSimpleXlsxSource(
     ...(options.minByteLength !== undefined ? { minByteLength: options.minByteLength } : {}),
     releaseZipSource: true,
   })
-}
-
-function hasFullImporterOnlyPackageMetadata(workbookZip: Unzipped): boolean {
-  return Object.keys(workbookZip).some(
-    (path) =>
-      path === 'docProps/custom.xml' ||
-      path.startsWith('xl/comments') ||
-      path.startsWith('xl/threadedComments/') ||
-      path.endsWith('.vml') ||
-      path.includes('/printerSettings/'),
-  )
 }
 
 function importSheetJsWorkbook(

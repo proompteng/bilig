@@ -45,6 +45,7 @@ export interface LargeSimpleWorksheetScannedMetadata {
   readonly legacyDrawingRelationshipId?: string
   readonly filters?: readonly WorkbookAutoFilterSnapshot[]
   readonly hyperlinks?: readonly LargeSimpleHyperlinkRef[]
+  readonly pivotTableDefinitionsXml?: string
   readonly rows?: LargeSimpleWorksheetAxisMetadata
   readonly merges?: readonly LargeSimpleWorksheetMergeRef[]
   readonly printPageSetup?: PrintPageSetupSnapshot

@@ -71,6 +71,7 @@ export class LargeSimpleWorksheetStreamMetadataCollector {
   private rowMetadata: WorkbookAxisMetadataSnapshot[] | undefined
   private mergeRefs: LargeSimpleWorksheetMergeRef[] | undefined
   private printPageSetup: LargeSimpleWorksheetScannedMetadata['printPageSetup']
+  private pivotTableDefinitionsXml: string[] | undefined
   private sheetFormatPr: LargeSimpleWorksheetScannedMetadata['sheetFormatPr']
   private sheetSlicerListExtXml: string | undefined
   private tableRelationshipIds: string[] | undefined
@@ -114,6 +115,9 @@ export class LargeSimpleWorksheetStreamMetadataCollector {
       ...(this.legacyDrawingRelationshipId ? { legacyDrawingRelationshipId: this.legacyDrawingRelationshipId } : {}),
       ...(this.filters && this.filters.length > 0 ? { filters: this.filters } : {}),
       ...(this.hyperlinks && this.hyperlinks.length > 0 ? { hyperlinks: this.hyperlinks } : {}),
+      ...(this.pivotTableDefinitionsXml && this.pivotTableDefinitionsXml.length > 0
+        ? { pivotTableDefinitionsXml: this.pivotTableDefinitionsXml.join('') }
+        : {}),
       ...(rows ? { rows } : {}),
       ...(this.mergeRefs && this.mergeRefs.length > 0 ? { merges: this.mergeRefs } : {}),
       ...(this.printPageSetup ? { printPageSetup: this.printPageSetup } : {}),
@@ -180,6 +184,11 @@ export class LargeSimpleWorksheetStreamMetadataCollector {
     }
     if (localName === 'drawing') {
       this.drawingRelationshipId = readLargeSimpleDrawingRelationshipIdTagFromBytes(buffer, startIndex, endIndex)
+      return true
+    }
+    if (localName === 'pivotTableDefinition') {
+      this.pivotTableDefinitionsXml ??= []
+      this.pivotTableDefinitionsXml.push(decodeBytes(buffer, startIndex, endIndex))
       return true
     }
     if (localName === 'legacyDrawing') {

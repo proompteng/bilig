@@ -63,6 +63,7 @@ export function internLargeSimpleWorksheetMetadata(
           })),
         }
       : {}),
+    ...(metadata.pivotTableDefinitionsXml ? { pivotTableDefinitionsXml: intern(metadata.pivotTableDefinitionsXml) } : {}),
     ...(metadata.rows ? { rows: internAxisMetadata(metadata.rows, intern) } : {}),
     ...(metadata.merges && metadata.merges.length > 0
       ? {
