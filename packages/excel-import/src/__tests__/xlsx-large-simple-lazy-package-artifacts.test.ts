@@ -26,8 +26,10 @@ describe('large simple XLSX lazy package artifacts', () => {
 
     expect(imported.snapshot.sheets[0]?.cells).toEqual([{ address: 'A1', value: 7 }])
     expect(source.fullReadCount).toBe(0)
+    expect(source.releaseCount).toBe(0)
     expect(exportXlsx(imported.snapshot)).toEqual(bytes)
     expect(source.fullReadCount).toBe(1)
+    expect(source.releaseCount).toBe(0)
   })
 
   it('keeps pivot cache package XML lazy until export materialization needs it', () => {
@@ -261,6 +263,7 @@ interface XlsxLazyZipByteSource {
 class CountingXlsxZipByteSource {
   readonly byteLength: number
   fullReadCount = 0
+  releaseCount = 0
 
   constructor(private readonly bytes: Uint8Array) {
     this.byteLength = bytes.byteLength
@@ -271,6 +274,10 @@ class CountingXlsxZipByteSource {
       this.fullReadCount += 1
     }
     return this.bytes.subarray(start, end)
+  }
+
+  release(): void {
+    this.releaseCount += 1
   }
 }
 

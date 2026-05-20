@@ -53,7 +53,7 @@ export function shouldUseCompactLargeSimpleVerification(
 
 export function verifyLargeSimpleWorkbookCompactPreflight(args: {
   readonly artifact: PublicWorkbookArtifact
-  readonly bytes: Uint8Array
+  readonly source: XlsxZipByteSource
   readonly baseEvidence: readonly string[]
   readonly classifyUnsupportedFeatures: LargeSimpleUnsupportedFeatureClassifier
   readonly maxCellCount: number
@@ -62,17 +62,17 @@ export function verifyLargeSimpleWorkbookCompactPreflight(args: {
   readonly runtimeMetrics: ReturnType<typeof startVerificationRuntimeMetrics>
   readonly workerOptions: PublicWorkbookCorpusWorkerOptions
 }): PublicWorkbookCorpusCase | null {
-  if (args.bytes.byteLength < args.minByteLength) {
+  if (args.source.byteLength < args.minByteLength) {
     return null
   }
-  const zip = readLargeSimpleVerifierZipEntries(args.bytes)
+  const zip = readLargeSimpleVerifierZipEntries(args.source)
   if (!zip) {
     return null
   }
   args.workerOptions.onPhase?.('import-xlsx')
   const startedAt = performance.now()
   const inspected = tryInspectLargeSimpleHeadless({
-    byteLength: args.bytes.byteLength,
+    byteLength: args.source.byteLength,
     fileName: args.artifact.fileName,
     zip,
     options: {
@@ -108,7 +108,7 @@ export function verifyLargeSimpleWorkbookCompactPreflight(args: {
 
 export async function verifyLargeSimpleWorkbookCompact(args: {
   readonly artifact: PublicWorkbookArtifact
-  readonly bytes: Uint8Array
+  readonly source: XlsxZipByteSource
   readonly footprint: WorkbookFootprint
   readonly baseEvidence: readonly string[]
   readonly classifyUnsupportedFeatures: LargeSimpleUnsupportedFeatureClassifier
@@ -117,10 +117,10 @@ export async function verifyLargeSimpleWorkbookCompact(args: {
   readonly workerOptions: PublicWorkbookCorpusWorkerOptions
 }): Promise<PublicWorkbookCorpusCase | null> {
   const inspected = await timeVerificationPhase(args.runtimeMetrics, args.workerOptions, 'import-xlsx', () => {
-    const zip = readLargeSimpleVerifierZipEntries(args.bytes)
+    const zip = readLargeSimpleVerifierZipEntries(args.source)
     return zip
       ? tryInspectLargeSimpleHeadless({
-          byteLength: args.bytes.byteLength,
+          byteLength: args.source.byteLength,
           fileName: args.artifact.fileName,
           zip,
           options: {
@@ -157,20 +157,14 @@ function tryInspectLargeSimpleHeadless(args: {
   }
 }
 
-function readLargeSimpleVerifierZipEntries(bytes: Uint8Array): XlsxZipEntries | null {
-  const source = xlsxZipByteSourceFromBytes(bytes)
-  return isZipWorkbookSource(source) ? readXlsxZipEntriesLazyFromByteSource(source) : null
+function readLargeSimpleVerifierZipEntries(source: XlsxZipByteSource): XlsxZipEntries | null {
+  return isZipWorkbookSource(source) ? readXlsxZipEntriesLazyFromByteSource(borrowXlsxZipByteSource(source)) : null
 }
 
-function xlsxZipByteSourceFromBytes(bytes: Uint8Array): XlsxZipByteSource {
+function borrowXlsxZipByteSource(source: XlsxZipByteSource): XlsxZipByteSource {
   return {
-    byteLength: bytes.byteLength,
-    readRange(start, end) {
-      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > bytes.byteLength) {
-        throw new Error('Invalid XLSX ZIP byte range')
-      }
-      return bytes.subarray(start, end)
-    },
+    byteLength: source.byteLength,
+    readRange: (start, end) => source.readRange(start, end),
   }
 }
 

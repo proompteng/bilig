@@ -14,7 +14,7 @@ export function importXlsxFromZipByteSource(
   fileName: string,
   options: XlsxImportOptions = {},
 ): ImportedWorkbook {
-  const workbookZip = readXlsxZipEntriesLazyFromByteSource(source)
+  const workbookZip = readXlsxZipEntriesLazyFromByteSource(borrowXlsxZipByteSource(source))
   if (!workbookZip) {
     return importXlsx(readAllSourceBytes(source), fileName, options)
   }
@@ -54,7 +54,7 @@ function inspectLargeSimpleXlsxSource(
   fileName: string,
   options: { readonly minByteLength?: number } = {},
 ): ReturnType<typeof tryInspectLargeSimpleXlsxHeadless> {
-  const inspectionZip = readXlsxZipEntriesLazyFromByteSource(source)
+  const inspectionZip = readXlsxZipEntriesLazyFromByteSource(borrowXlsxZipByteSource(source))
   return inspectionZip
     ? tryInspectLargeSimpleXlsxHeadless({ byteLength: source.byteLength }, fileName, inspectionZip, {
         allowUnsupportedWorksheetFeaturesForMetrics: true,
@@ -91,4 +91,11 @@ function assertXlsxInspectionWithinMaterializationLimits(
 
 function readAllSourceBytes(source: XlsxZipByteSource): Uint8Array {
   return source.readRange(0, source.byteLength)
+}
+
+function borrowXlsxZipByteSource(source: XlsxZipByteSource): XlsxZipByteSource {
+  return {
+    byteLength: source.byteLength,
+    readRange: (start, end) => source.readRange(start, end),
+  }
 }

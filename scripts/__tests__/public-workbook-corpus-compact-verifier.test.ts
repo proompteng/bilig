@@ -120,7 +120,7 @@ describe('public workbook corpus compact verifier', () => {
     expect(
       verifyLargeSimpleWorkbookCompactPreflight({
         artifact: testArtifact({ byteSize: 4 }),
-        bytes: new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+        source: xlsxZipByteSourceFromBytes(new Uint8Array([0x50, 0x4b, 0x03, 0x04])),
         baseEvidence: [],
         classifyUnsupportedFeatures: () => [],
         maxCellCount: 1_500_000,
@@ -132,6 +132,15 @@ describe('public workbook corpus compact verifier', () => {
     ).toBeNull()
   })
 })
+
+function xlsxZipByteSourceFromBytes(bytes: Uint8Array) {
+  return {
+    byteLength: bytes.byteLength,
+    readRange(start: number, end: number): Uint8Array {
+      return bytes.subarray(start, end)
+    },
+  }
+}
 
 async function buildSingleWorkbookScorecard(args: {
   readonly cacheDirPrefix: string

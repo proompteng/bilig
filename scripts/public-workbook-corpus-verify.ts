@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CellValue as HyperFormulaCellValue, RawCellContent } from 'hyperformula'
@@ -13,6 +14,8 @@ import {
   precisionAsDisplayedCalculationWarning,
   volatileFormulasWarning,
 } from '../packages/excel-import/src/index.js'
+import { importXlsxFromZipByteSource } from '../packages/excel-import/src/xlsx-byte-source-import.js'
+import type { XlsxZipByteSource } from '../packages/excel-import/src/xlsx-zip.js'
 import { ValueTag } from '../packages/protocol/src/enums.js'
 import type { CellValue, LiteralInput, WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import { validatePublicWorkbookManifest } from './public-workbook-corpus-json.ts'
@@ -55,6 +58,7 @@ import {
   timeVerificationPhase,
   withVerificationRuntimeMetrics,
 } from './public-workbook-corpus-verification-metrics.ts'
+import { FileBackedXlsxZipByteSource } from './public-workbook-corpus-xlsx-byte-source.ts'
 import {
   cellValuesMatchOracle,
   countWorkbookFeatures,
@@ -187,11 +191,9 @@ export async function verifyCachedWorkbookArtifact(
   if (!existsSync(cachePath)) {
     return finishCase(failedCase(artifact, 'error', baseEvidence, [`Missing cached workbook file: ${artifact.cachePath}`]))
   }
+  const source = new FileBackedXlsxZipByteSource(cachePath)
   try {
-    let bytes: Uint8Array | undefined = await timeVerificationPhase(runtimeMetrics, workerOptions, 'read-cache', () =>
-      readFileSync(cachePath),
-    )
-    const actualHash = sha256HexSync(bytes)
+    const actualHash = await timeVerificationPhase(runtimeMetrics, workerOptions, 'read-cache', () => sha256Hex(source))
     if (actualHash !== artifact.sha256) {
       return finishCase(
         failedCase(artifact, 'failed', baseEvidence, [
@@ -201,7 +203,7 @@ export async function verifyCachedWorkbookArtifact(
     }
     const preflightCompactCase = verifyLargeSimpleWorkbookCompactPreflight({
       artifact,
-      bytes,
+      source,
       baseEvidence,
       classifyUnsupportedFeatures,
       maxCellCount,
@@ -214,15 +216,15 @@ export async function verifyCachedWorkbookArtifact(
       return finishCase(preflightCompactCase)
     }
     const footprint = await timeVerificationPhase(runtimeMetrics, workerOptions, 'inspect-footprint', () =>
-      bytes.byteLength >= isolatedFootprintByteThreshold
+      source.byteLength >= isolatedFootprintByteThreshold
         ? inspectWorkbookFootprintIsolated({
-            bytes,
+            bytes: new Uint8Array(),
             filePath: cachePath,
             fileName: artifact.fileName,
             scriptPath: publicWorkbookCorpusFootprintWorkerScriptPath,
             options: workerOptions,
           })
-        : inspectWorkbookFootprint(bytes, artifact.fileName),
+        : inspectWorkbookFootprint(readAllSourceBytes(source), artifact.fileName),
     )
     if (!footprint) {
       return finishCase(
@@ -243,7 +245,7 @@ export async function verifyCachedWorkbookArtifact(
     if (shouldUseCompactLargeSimpleVerification(artifact, footprint, runStructuralSmoke)) {
       const compactImportCase = await verifyLargeSimpleWorkbookCompact({
         artifact,
-        bytes,
+        source,
         footprint,
         baseEvidence,
         classifyUnsupportedFeatures,
@@ -256,7 +258,7 @@ export async function verifyCachedWorkbookArtifact(
       }
     }
     const { imported, featureCounts, metadata } = await timeVerificationPhase(runtimeMetrics, workerOptions, 'import-xlsx', () => {
-      const importedWorkbook = importXlsx(bytes, artifact.fileName)
+      const importedWorkbook = importXlsxFromZipByteSource(source, artifact.fileName)
       const importedFeatureCounts = countWorkbookFeatures(importedWorkbook.snapshot, importedWorkbook.warnings)
       return {
         imported: importedWorkbook,
@@ -269,7 +271,6 @@ export async function verifyCachedWorkbookArtifact(
     const formulaOracleNeedsWorkbookBytes =
       !formulaOracleResourceLimit && footprint.featureCounts.formulaCellCount > 0 && !formulaOracleBlockingWarning
     if (!formulaOracleNeedsWorkbookBytes) {
-      bytes = undefined
       collectGarbage()
     }
     const {
@@ -290,10 +291,9 @@ export async function verifyCachedWorkbookArtifact(
               ? emptyFormulaOracleValidation()
               : await validateFormulaOracles(
                   imported.snapshot,
-                  bytes ?? readFileSync(cachePath),
+                  readAllSourceBytes(source),
                   unsupportedFormulaDependencyKeys(imported.snapshot),
                 )
-          bytes = undefined
           collectGarbage()
           const nextUnsupportedFormulaOracleWarning = hasUnsupportedPrecisionAsDisplayedOracleWarning(
             imported.warnings,
@@ -413,6 +413,8 @@ export async function verifyCachedWorkbookArtifact(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return finishCase(failedCase(artifact, 'error', baseEvidence, [message]))
+  } finally {
+    source.release()
   }
 }
 
@@ -711,6 +713,19 @@ function collectGarbage(): void {
   if (typeof gc === 'function') {
     gc()
   }
+}
+
+function sha256Hex(source: XlsxZipByteSource): string {
+  const hash = createHash('sha256')
+  const chunkSize = 64 * 1024
+  for (let offset = 0; offset < source.byteLength; offset += chunkSize) {
+    hash.update(source.readRange(offset, Math.min(source.byteLength, offset + chunkSize)))
+  }
+  return hash.digest('hex')
+}
+
+function readAllSourceBytes(source: XlsxZipByteSource): Uint8Array {
+  return source.readRange(0, source.byteLength)
 }
 
 async function runStructuralSmokeOps(snapshot: WorkbookSnapshot): Promise<boolean | null> {

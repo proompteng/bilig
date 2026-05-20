@@ -86,6 +86,7 @@ function tryVerifyCompactLargeSimpleArtifact(
     const imported = tryInspectLargeSimpleXlsxHeadless({ byteLength: source.byteLength }, artifact.fileName, zip, {
       afterWorksheetScan: collectGarbage,
       minByteLength: 0,
+      releaseOwnedSourceBytes: () => ({ ownedSourceBytesBeforeRelease: source.byteLength, ownedSourceBytesAfterRelease: 0 }),
       releaseZipSource: true,
     })
     if (!imported) {
