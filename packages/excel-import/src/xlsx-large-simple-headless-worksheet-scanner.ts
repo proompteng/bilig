@@ -45,12 +45,24 @@ export interface HeadlessLargeSimpleWorksheetScan {
   } | null
 }
 
+export interface HeadlessLargeSimpleWorksheetScanOptions {
+  readonly hasSharedStrings: boolean
+  readonly onRetainedBufferLength?: (length: number) => void
+}
+
+interface ActiveMetadataCount {
+  readonly localName: string
+  readonly childName: string | null
+  readonly multiplier: number
+  childCount: number
+}
+
 export function parseHeadlessLargeSimpleWorksheetFromChunks(
   readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
   sheetIndex: number,
-  options: { readonly hasSharedStrings: boolean },
+  options: HeadlessLargeSimpleWorksheetScanOptions,
 ): HeadlessLargeSimpleWorksheetScan | null {
-  const scanner = new HeadlessLargeSimpleWorksheetChunkScanner(sheetIndex, options.hasSharedStrings)
+  const scanner = new HeadlessLargeSimpleWorksheetChunkScanner(sheetIndex, options)
   if (!readChunks((chunk) => scanner.push(chunk))) {
     return null
   }
@@ -77,10 +89,11 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
   private cellContentNextIndex = 0
   private cellPackedAddress = -1
   private cellHasSharedStringType = false
+  private activeMetadata: ActiveMetadataCount | null = null
 
   constructor(
     private readonly sheetIndex: number,
-    private readonly hasSharedStrings: boolean,
+    private readonly options: HeadlessLargeSimpleWorksheetScanOptions,
   ) {}
 
   push(chunk: Uint8Array): void {
@@ -90,6 +103,7 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
     this.append(chunk)
     this.process(false)
     this.compact()
+    this.reportRetainedBufferLength()
   }
 
   finish(): HeadlessLargeSimpleWorksheetScan | null {
@@ -98,6 +112,7 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
     }
     this.process(true)
     this.compact()
+    this.reportRetainedBufferLength()
     return this.failed
       ? null
       : {
@@ -151,6 +166,12 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
 
   private process(final: boolean): void {
     while (!this.failed && this.index < this.buffer.byteLength) {
+      if (this.activeMetadata !== null) {
+        if (!this.processActiveMetadata(final)) {
+          return
+        }
+        continue
+      }
       if (this.buffer[this.index] !== lessThan) {
         this.index += 1
         continue
@@ -231,7 +252,7 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
       contentFlags = this.cellContentFlags
       contentNextIndex = this.cellContentNextIndex
     }
-    if (!this.readCellTagAttributes(nameEnd, tagEnd) || (!this.hasSharedStrings && this.cellHasSharedStringType)) {
+    if (!this.readCellTagAttributes(nameEnd, tagEnd) || (!this.options.hasSharedStrings && this.cellHasSharedStringType)) {
       this.failed = true
       return false
     }
@@ -376,73 +397,106 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
 
   private countMetadataElement(localName: string, nameEnd: number, tagEnd: number, final: boolean): boolean {
     if (isSelfClosingTag(this.buffer, tagEnd)) {
-      this.countMetadata(localName, nameEnd, tagEnd, tagEnd + 1, tagEnd + 1)
+      this.finalizeMetadataCount({
+        localName,
+        childName: metadataChildName(localName),
+        multiplier: metadataCountMultiplier(localName, this.buffer, nameEnd, tagEnd),
+        childCount: 0,
+      })
       this.index = tagEnd + 1
       return true
     }
-    const closing = findClosingTag(this.buffer, tagEnd + 1, localName)
-    if (!closing) {
+    this.activeMetadata = {
+      localName,
+      childName: metadataChildName(localName),
+      multiplier: metadataCountMultiplier(localName, this.buffer, nameEnd, tagEnd),
+      childCount: 0,
+    }
+    this.index = tagEnd + 1
+    if (!this.processActiveMetadata(final)) {
       if (final) {
         this.failed = true
       }
       return false
     }
-    this.countMetadata(localName, nameEnd, tagEnd, tagEnd + 1, closing.start)
-    this.index = closing.end
     return true
   }
 
-  private countMetadata(localName: string, nameEnd: number, tagEnd: number, contentStart: number, contentEnd: number): void {
-    if (localName === 'conditionalFormatting') {
-      const rangeCount = countSqrefRangesFromTag(this.buffer, nameEnd, tagEnd)
-      this.conditionalFormatCount += rangeCount * Math.max(1, countOpeningTags(this.buffer, contentStart, contentEnd, 'cfRule'))
-    } else if (localName === 'mergeCells') {
-      this.mergeCount += countOpeningTags(this.buffer, contentStart, contentEnd, 'mergeCell')
-    } else if (localName === 'tableParts') {
-      this.tableCount += countOpeningTags(this.buffer, contentStart, contentEnd, 'tablePart')
+  private processActiveMetadata(final: boolean): boolean {
+    const active = this.activeMetadata
+    if (active === null) {
+      return true
     }
+    while (this.index < this.buffer.byteLength) {
+      if (this.buffer[this.index] !== lessThan) {
+        this.index += 1
+        continue
+      }
+      const closing = this.buffer[this.index + 1] === slash
+      const tag = readXmlTagName(this.buffer, this.index + (closing ? 2 : 1))
+      if (!tag) {
+        if (!final && this.index + 1 >= this.buffer.byteLength) {
+          return false
+        }
+        this.index += 1
+        continue
+      }
+      const tagEnd = findTagEnd(this.buffer, tag.endIndex)
+      if (tagEnd === null) {
+        if (final) {
+          this.failed = true
+        }
+        return false
+      }
+      if (closing && tag.localName === active.localName) {
+        this.finalizeMetadataCount(active)
+        this.activeMetadata = null
+        this.index = tagEnd + 1
+        return true
+      }
+      if (!closing && active.childName !== null && tag.localName === active.childName) {
+        active.childCount += 1
+      }
+      this.index = tagEnd + 1
+    }
+    if (final) {
+      this.failed = true
+    } else {
+      this.index = this.buffer.byteLength
+    }
+    return false
+  }
+
+  private finalizeMetadataCount(active: ActiveMetadataCount): void {
+    if (active.localName === 'conditionalFormatting') {
+      this.conditionalFormatCount += active.multiplier * Math.max(1, active.childCount)
+    } else if (active.localName === 'mergeCells') {
+      this.mergeCount += active.childCount
+    } else if (active.localName === 'tableParts') {
+      this.tableCount += active.childCount
+    }
+  }
+
+  private reportRetainedBufferLength(): void {
+    this.options.onRetainedBufferLength?.(this.buffer.byteLength)
   }
 }
 
-function countOpeningTags(bytes: Uint8Array, startIndex: number, endIndex: number, localName: string): number {
-  let count = 0
-  let index = startIndex
-  while (index < endIndex) {
-    if (bytes[index] !== lessThan) {
-      index += 1
-      continue
-    }
-    const tag = readXmlTagName(bytes, index + 1)
-    if (tag?.localName === localName) {
-      count += 1
-      index = tag.endIndex
-      continue
-    }
-    index += 1
+function metadataChildName(localName: string): string | null {
+  switch (localName) {
+    case 'conditionalFormatting':
+      return 'cfRule'
+    case 'mergeCells':
+      return 'mergeCell'
+    case 'tableParts':
+      return 'tablePart'
+    default:
+      return null
   }
-  return count
 }
 
-function findClosingTag(
-  bytes: Uint8Array,
-  startIndex: number,
-  localName: string,
-  endIndex: number = bytes.byteLength,
-): { readonly start: number; readonly end: number } | null {
-  let index = startIndex
-  while (index < endIndex) {
-    if (bytes[index] !== lessThan || bytes[index + 1] !== slash) {
-      index += 1
-      continue
-    }
-    const tag = readXmlTagName(bytes, index + 2)
-    if (tag?.localName === localName) {
-      const tagEnd = findTagEnd(bytes, tag.endIndex, endIndex)
-      return tagEnd === null ? null : { start: index, end: tagEnd + 1 }
-    }
-    index += 1
-  }
-  return null
+function metadataCountMultiplier(localName: string, bytes: Uint8Array, nameEnd: number, tagEnd: number): number {
+  return localName === 'conditionalFormatting' ? countSqrefRangesFromTag(bytes, nameEnd, tagEnd) : 1
 }
 
 function findTagEnd(bytes: Uint8Array, startIndex: number, endIndex: number = bytes.byteLength): number | null {

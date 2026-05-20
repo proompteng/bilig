@@ -32,6 +32,24 @@ describe('large simple worksheet stream scanners', () => {
     })
   })
 
+  it('counts large split metadata in headless scans without retaining metadata bodies', () => {
+    const retainedBufferLengths: number[] = []
+    const scan = parseHeadlessLargeSimpleWorksheetFromChunks(splitLargeMergeCellsWorksheetXml(), 0, {
+      hasSharedStrings: false,
+      onRetainedBufferLength: (length) => retainedBufferLengths.push(length),
+    })
+
+    expect(scan).toMatchObject({
+      cellCount: 1,
+      valueCellCount: 1,
+      mergeCount: 2,
+      rowCount: 1,
+      columnCount: 1,
+    })
+    expect(retainedBufferLengths.length).toBeGreaterThan(0)
+    expect(Math.max(...retainedBufferLengths)).toBeLessThan(1024)
+  })
+
   it('retains tag-open boundaries across chunks in materialized scans', () => {
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(worksheetXml()), 0, { hasSharedStrings: false })
 
@@ -228,6 +246,26 @@ function headlessMetadataWorksheetXml(): string {
     '<tableParts count="2"><tablePart r:id="rIdTable1"/><tablePart r:id="rIdTable2"/></tableParts>',
     '</worksheet>',
   ].join('')
+}
+
+function splitLargeMergeCellsWorksheetXml(): (onChunk: (chunk: Uint8Array) => void) => boolean {
+  const chunks = [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1"/>',
+    '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>',
+    '<mergeCells count="2"><mergeCell ref="A1:B1"/>',
+    ' '.repeat(40_000),
+    ' '.repeat(40_000),
+    ' '.repeat(20_000),
+    '<mergeCell ref="A2:B2"/></mergeCells>',
+    '</worksheet>',
+  ]
+  return (onChunk) => {
+    for (const chunk of chunks) {
+      onChunk(encoder.encode(chunk))
+    }
+    return true
+  }
 }
 
 function scalarWorksheetXml(): string {
