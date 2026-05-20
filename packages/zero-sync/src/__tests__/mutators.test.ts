@@ -229,6 +229,32 @@ describe('zero sync mutator schemas', () => {
     ).toThrow()
   })
 
+  it('rejects unknown style patch fields instead of stripping them into no-ops', () => {
+    expect(() =>
+      setRangeStyleArgsSchema.parse({
+        documentId: 'doc-1',
+        range,
+        patch: {
+          textColor: '#111111',
+        },
+      }),
+    ).toThrow()
+    expect(() =>
+      setRangeStyleArgsSchema.parse({
+        documentId: 'doc-1',
+        range,
+        patch: {
+          borders: {
+            top: {
+              style: 'solid',
+              diagonal: true,
+            },
+          },
+        },
+      }),
+    ).toThrow()
+  })
+
   it('accepts protocol-owned clear style field names', () => {
     expect(
       clearRangeStyleArgsSchema.parse({
@@ -263,5 +289,19 @@ describe('zero sync mutator schemas', () => {
         dateStyle: 'iso',
       },
     })
+  })
+
+  it('rejects unknown number format preset fields instead of stripping them', () => {
+    expect(() =>
+      setRangeNumberFormatArgsSchema.parse({
+        documentId: 'doc-1',
+        range,
+        format: {
+          kind: 'currency',
+          currency: 'USD',
+          locale: 'en-US',
+        },
+      }),
+    ).toThrow()
   })
 })

@@ -159,6 +159,82 @@ describe('workbook event guards', () => {
     ).toBe(true)
   })
 
+  it('uses mutator schemas when validating formatting event payloads for replay', () => {
+    const range = { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B2' }
+
+    expect(
+      isWorkbookEventPayload({
+        kind: 'setRangeStyle',
+        range,
+        patch: { font: { bold: true }, alignment: { horizontal: 'center' } },
+      }),
+    ).toBe(true)
+    expect(
+      isWorkbookEventPayload({
+        kind: 'clearRangeStyle',
+        range,
+        fields: ['fontBold', 'alignmentHorizontal'],
+      }),
+    ).toBe(true)
+    expect(
+      isWorkbookEventPayload({
+        kind: 'setRangeNumberFormat',
+        range,
+        format: { kind: 'currency', currency: 'USD', decimals: 2 },
+      }),
+    ).toBe(true)
+
+    expect(
+      isWorkbookEventPayload({
+        kind: 'setRangeStyle',
+        range,
+        patch: null,
+      }),
+    ).toBe(false)
+    expect(
+      isWorkbookEventPayload({
+        kind: 'setRangeStyle',
+        range,
+        patch: { alignment: { horizontal: 'middle' } },
+      }),
+    ).toBe(false)
+    expect(
+      isWorkbookEventPayload({
+        kind: 'setRangeStyle',
+        range,
+        patch: { textColor: '#111111' },
+      }),
+    ).toBe(false)
+    expect(
+      isWorkbookEventPayload({
+        kind: 'clearRangeStyle',
+        range,
+        fields: ['fontBold', 'bogusField'],
+      }),
+    ).toBe(false)
+    expect(
+      isWorkbookEventPayload({
+        kind: 'setRangeNumberFormat',
+        range,
+        format: { kind: 'currency', negativeStyle: 'red' },
+      }),
+    ).toBe(false)
+    expect(
+      isWorkbookEventPayload({
+        kind: 'setRangeNumberFormat',
+        range,
+        format: { kind: 'currency', locale: 'en-US' },
+      }),
+    ).toBe(false)
+    expect(
+      isWorkbookEventPayload({
+        kind: 'setRangeNumberFormat',
+        range: { sheetName: '', startAddress: 'A1', endAddress: 'B2' },
+        format: '$#,##0.00',
+      }),
+    ).toBe(false)
+  })
+
   it('rejects unsafe structural metadata payload numbers', () => {
     const unsafe = Number.MAX_SAFE_INTEGER + 1
 

@@ -27,87 +27,75 @@ const cellRangeRefSchema = z.object({
   endAddress: z.string().min(1),
 }) satisfies z.ZodType<CellRangeRef>
 
-const cellStylePatchSchema = z.object({
-  fill: z
-    .object({
-      backgroundColor: z.string().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
-  font: z
-    .object({
-      family: z.string().nullable().optional(),
-      size: z.number().nullable().optional(),
-      bold: z.boolean().nullable().optional(),
-      italic: z.boolean().nullable().optional(),
-      underline: z.boolean().nullable().optional(),
-      color: z.string().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
-  alignment: z
-    .object({
-      horizontal: z.enum(CELL_HORIZONTAL_ALIGNMENT_VALUES).nullable().optional(),
-      vertical: z.enum(CELL_VERTICAL_ALIGNMENT_VALUES).nullable().optional(),
-      wrap: z.boolean().nullable().optional(),
-      indent: z.number().nullable().optional(),
-      shrinkToFit: z.boolean().nullable().optional(),
-      readingOrder: z.number().nullable().optional(),
-      textRotation: z.number().nullable().optional(),
-      justifyLastLine: z.boolean().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
-  borders: z
-    .object({
-      top: z
-        .object({
-          style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
-          weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
-          color: z.string().nullable().optional(),
-        })
-        .nullable()
-        .optional(),
-      right: z
-        .object({
-          style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
-          weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
-          color: z.string().nullable().optional(),
-        })
-        .nullable()
-        .optional(),
-      bottom: z
-        .object({
-          style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
-          weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
-          color: z.string().nullable().optional(),
-        })
-        .nullable()
-        .optional(),
-      left: z
-        .object({
-          style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
-          weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
-          color: z.string().nullable().optional(),
-        })
-        .nullable()
-        .optional(),
-    })
-    .nullable()
-    .optional(),
-})
+const cellStyleFillPatchSchema = z
+  .object({
+    backgroundColor: z.string().nullable().optional(),
+  })
+  .strict()
+
+const cellStyleFontPatchSchema = z
+  .object({
+    family: z.string().nullable().optional(),
+    size: z.number().nullable().optional(),
+    bold: z.boolean().nullable().optional(),
+    italic: z.boolean().nullable().optional(),
+    underline: z.boolean().nullable().optional(),
+    color: z.string().nullable().optional(),
+  })
+  .strict()
+
+const cellStyleAlignmentPatchSchema = z
+  .object({
+    horizontal: z.enum(CELL_HORIZONTAL_ALIGNMENT_VALUES).nullable().optional(),
+    vertical: z.enum(CELL_VERTICAL_ALIGNMENT_VALUES).nullable().optional(),
+    wrap: z.boolean().nullable().optional(),
+    indent: z.number().nullable().optional(),
+    shrinkToFit: z.boolean().nullable().optional(),
+    readingOrder: z.number().nullable().optional(),
+    textRotation: z.number().nullable().optional(),
+    justifyLastLine: z.boolean().nullable().optional(),
+  })
+  .strict()
+
+const cellBorderSidePatchSchema = z
+  .object({
+    style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
+    weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
+    color: z.string().nullable().optional(),
+  })
+  .strict()
+
+const cellStyleBordersPatchSchema = z
+  .object({
+    top: cellBorderSidePatchSchema.nullable().optional(),
+    right: cellBorderSidePatchSchema.nullable().optional(),
+    bottom: cellBorderSidePatchSchema.nullable().optional(),
+    left: cellBorderSidePatchSchema.nullable().optional(),
+  })
+  .strict()
+
+const cellStylePatchSchema = z
+  .object({
+    fill: cellStyleFillPatchSchema.nullable().optional(),
+    font: cellStyleFontPatchSchema.nullable().optional(),
+    alignment: cellStyleAlignmentPatchSchema.nullable().optional(),
+    borders: cellStyleBordersPatchSchema.nullable().optional(),
+  })
+  .strict()
 
 const cellStyleFieldSchema = z.enum(CELL_STYLE_FIELD_VALUES)
 
-const cellNumberFormatPresetSchema = z.object({
-  kind: z.enum(CELL_NUMBER_FORMAT_KIND_VALUES),
-  currency: z.string().optional(),
-  decimals: z.number().int().nonnegative().optional(),
-  useGrouping: z.boolean().optional(),
-  negativeStyle: z.enum(CELL_NUMBER_NEGATIVE_STYLE_VALUES).optional(),
-  zeroStyle: z.enum(CELL_NUMBER_ZERO_STYLE_VALUES).optional(),
-  dateStyle: z.enum(CELL_DATE_STYLE_VALUES).optional(),
-})
+const cellNumberFormatPresetSchema = z
+  .object({
+    kind: z.enum(CELL_NUMBER_FORMAT_KIND_VALUES),
+    currency: z.string().optional(),
+    decimals: z.number().int().nonnegative().optional(),
+    useGrouping: z.boolean().optional(),
+    negativeStyle: z.enum(CELL_NUMBER_NEGATIVE_STYLE_VALUES).optional(),
+    zeroStyle: z.enum(CELL_NUMBER_ZERO_STYLE_VALUES).optional(),
+    dateStyle: z.enum(CELL_DATE_STYLE_VALUES).optional(),
+  })
+  .strict()
 
 const cellNumberFormatInputSchema = z.union([z.string(), cellNumberFormatPresetSchema])
 

@@ -1,9 +1,30 @@
 import type { CellNumberFormatInput, CellRangeRef, CellStyleField, CellStylePatch, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
-import { isCellRangeRef, isLiteralInput, isWorkbookSnapshot } from '@bilig/protocol'
+import { isWorkbookSnapshot } from '@bilig/protocol'
 import { parseCellAddress } from '@bilig/formula'
-import { applyWorkbookAgentCommandBundle, isWorkbookAgentCommandBundle, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
-import { isCommitOps, type CommitOp, type SpreadsheetEngine } from '@bilig/core'
-import { isEngineOpBatch, isEngineOps, type EngineOp, type EngineOpBatch } from '@bilig/workbook-domain'
+import { applyWorkbookAgentCommandBundle, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
+import type { CommitOp, SpreadsheetEngine } from '@bilig/core'
+import { isEngineOps, type EngineOp, type EngineOpBatch } from '@bilig/workbook-domain'
+import {
+  applyAgentCommandBundleArgsSchema,
+  applyBatchArgsSchema,
+  clearCellArgsSchema,
+  clearRangeArgsSchema,
+  clearRangeNumberFormatArgsSchema,
+  clearRangeStyleArgsSchema,
+  mergeCellsArgsSchema,
+  rangeMutationArgsSchema,
+  renderCommitArgsSchema,
+  setCellFormulaArgsSchema,
+  setCellValueArgsSchema,
+  setFreezePaneArgsSchema,
+  setRangeNumberFormatArgsSchema,
+  setRangeStyleArgsSchema,
+  structuralAxisMutationArgsSchema,
+  unmergeCellsArgsSchema,
+  updateColumnMetadataArgsSchema,
+  updateColumnWidthArgsSchema,
+  updateRowMetadataArgsSchema,
+} from './mutators.js'
 import { isWorkbookChangeRange, type WorkbookChangeRange } from './workbook-change-range.js'
 
 export type WorkbookChangeUndoBundle =
@@ -239,20 +260,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
-}
-
 function isSafeNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
 function isSafePositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-}
-
-function isNullableSafePositiveInteger(value: unknown): value is number | null {
-  return value === null || isSafePositiveInteger(value)
 }
 
 export function isWorkbookChangeUndoBundle(value: unknown): value is WorkbookChangeUndoBundle {
@@ -273,6 +286,14 @@ export function isWorkbookEventKind(value: unknown): value is WorkbookEventKind 
   return typeof value === 'string' && WORKBOOK_EVENT_KIND_SET.has(value)
 }
 
+interface EventMutationArgsSchema {
+  safeParse: (value: unknown) => { success: boolean }
+}
+
+function matchesMutationArgsSchema(value: Record<string, unknown>, schema: EventMutationArgsSchema): boolean {
+  return schema.safeParse({ ...value, documentId: '__event_payload__' }).success
+}
+
 export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPayload {
   if (!isRecord(value) || !isWorkbookEventKind(value['kind'])) {
     return false
@@ -280,64 +301,48 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
 
   switch (value['kind']) {
     case 'applyBatch':
-      return isEngineOpBatch(value['batch'])
+      return matchesMutationArgsSchema(value, applyBatchArgsSchema)
     case 'applyAgentCommandBundle':
-      return isWorkbookAgentCommandBundle(value['bundle'])
+      return matchesMutationArgsSchema(value, applyAgentCommandBundleArgsSchema)
     case 'setCellValue':
-      return typeof value['sheetName'] === 'string' && typeof value['address'] === 'string' && isLiteralInput(value['value'])
+      return matchesMutationArgsSchema(value, setCellValueArgsSchema)
     case 'setCellFormula':
-      return typeof value['sheetName'] === 'string' && typeof value['address'] === 'string' && typeof value['formula'] === 'string'
+      return matchesMutationArgsSchema(value, setCellFormulaArgsSchema)
     case 'clearCell':
-      return typeof value['sheetName'] === 'string' && typeof value['address'] === 'string'
+      return matchesMutationArgsSchema(value, clearCellArgsSchema)
     case 'clearRange':
-      return isCellRangeRef(value['range'])
+      return matchesMutationArgsSchema(value, clearRangeArgsSchema)
     case 'renderCommit':
-      return isCommitOps(value['ops'])
+      return matchesMutationArgsSchema(value, renderCommitArgsSchema)
     case 'fillRange':
     case 'copyRange':
     case 'moveRange':
-      return isCellRangeRef(value['source']) && isCellRangeRef(value['target'])
+      return matchesMutationArgsSchema(value, rangeMutationArgsSchema)
     case 'insertRows':
     case 'deleteRows':
     case 'insertColumns':
     case 'deleteColumns':
-      return typeof value['sheetName'] === 'string' && isSafeNonNegativeInteger(value['start']) && isSafePositiveInteger(value['count'])
+      return matchesMutationArgsSchema(value, structuralAxisMutationArgsSchema)
     case 'updateRowMetadata':
-      return (
-        typeof value['sheetName'] === 'string' &&
-        isSafeNonNegativeInteger(value['startRow']) &&
-        isSafePositiveInteger(value['count']) &&
-        isNullableSafePositiveInteger(value['height']) &&
-        (typeof value['hidden'] === 'boolean' || value['hidden'] === null)
-      )
+      return matchesMutationArgsSchema(value, updateRowMetadataArgsSchema)
     case 'updateColumnMetadata':
-      return (
-        typeof value['sheetName'] === 'string' &&
-        isSafeNonNegativeInteger(value['startCol']) &&
-        isSafePositiveInteger(value['count']) &&
-        isNullableSafePositiveInteger(value['width']) &&
-        (typeof value['hidden'] === 'boolean' || value['hidden'] === null)
-      )
+      return matchesMutationArgsSchema(value, updateColumnMetadataArgsSchema)
     case 'updateColumnWidth':
-      return (
-        typeof value['sheetName'] === 'string' && isSafeNonNegativeInteger(value['columnIndex']) && isSafePositiveInteger(value['width'])
-      )
+      return matchesMutationArgsSchema(value, updateColumnWidthArgsSchema)
     case 'setFreezePane':
-      return typeof value['sheetName'] === 'string' && isSafeNonNegativeInteger(value['rows']) && isSafeNonNegativeInteger(value['cols'])
+      return matchesMutationArgsSchema(value, setFreezePaneArgsSchema)
     case 'mergeCells':
+      return matchesMutationArgsSchema(value, mergeCellsArgsSchema)
     case 'unmergeCells':
-      return isCellRangeRef(value['range'])
+      return matchesMutationArgsSchema(value, unmergeCellsArgsSchema)
     case 'setRangeStyle':
-      return isCellRangeRef(value['range']) && typeof value['patch'] === 'object'
+      return matchesMutationArgsSchema(value, setRangeStyleArgsSchema)
     case 'clearRangeStyle':
-      return isCellRangeRef(value['range']) && (value['fields'] === undefined || isStringArray(value['fields']))
+      return matchesMutationArgsSchema(value, clearRangeStyleArgsSchema)
     case 'setRangeNumberFormat':
-      return (
-        isCellRangeRef(value['range']) &&
-        (typeof value['format'] === 'string' || (typeof value['format'] === 'object' && value['format'] !== null))
-      )
+      return matchesMutationArgsSchema(value, setRangeNumberFormatArgsSchema)
     case 'clearRangeNumberFormat':
-      return isCellRangeRef(value['range'])
+      return matchesMutationArgsSchema(value, clearRangeNumberFormatArgsSchema)
     case 'restoreVersion':
       return (
         typeof value['versionId'] === 'string' &&
