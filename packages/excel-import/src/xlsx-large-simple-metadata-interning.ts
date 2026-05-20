@@ -1,4 +1,6 @@
 import type {
+  WorkbookAxisEntrySnapshot,
+  WorkbookAxisMetadataSnapshot,
   CellRangeRef,
   LiteralInput,
   WorkbookAutoFilterSnapshot,
@@ -17,17 +19,38 @@ export function internLargeSimpleWorksheetMetadata(
   }
   const intern = (value: string): string => stringPool.intern(value)
   return {
-    ...(metadata.columns ? { columns: metadata.columns } : {}),
+    ...(metadata.cellMetadataRefs && metadata.cellMetadataRefs.length > 0
+      ? {
+          cellMetadataRefs: metadata.cellMetadataRefs.map((ref) => ({
+            address: intern(ref.address),
+            ...(ref.cm ? { cm: intern(ref.cm) } : {}),
+            ...(ref.vm ? { vm: intern(ref.vm) } : {}),
+          })),
+        }
+      : {}),
+    ...(metadata.columns ? { columns: internAxisMetadata(metadata.columns, intern) } : {}),
     ...(metadata.conditionalFormats && metadata.conditionalFormats.length > 0
       ? { conditionalFormats: metadata.conditionalFormats.map((format) => internConditionalFormat(format, intern)) }
       : {}),
     ...(metadata.conditionalFormattingXml && metadata.conditionalFormattingXml.length > 0
       ? { conditionalFormattingXml: metadata.conditionalFormattingXml.map(intern) }
       : {}),
+    ...(metadata.controlArtifacts
+      ? {
+          controlArtifacts: {
+            controlsXml: intern(metadata.controlArtifacts.controlsXml),
+            worksheetRootOpenTag: intern(metadata.controlArtifacts.worksheetRootOpenTag),
+            ...(metadata.controlArtifacts.legacyDrawingRelationshipId
+              ? { legacyDrawingRelationshipId: intern(metadata.controlArtifacts.legacyDrawingRelationshipId) }
+              : {}),
+          },
+        }
+      : {}),
     ...(metadata.dataValidations && metadata.dataValidations.length > 0
       ? { dataValidations: metadata.dataValidations.map((validation) => internDataValidation(validation, intern)) }
       : {}),
     ...(metadata.drawingRelationshipId ? { drawingRelationshipId: intern(metadata.drawingRelationshipId) } : {}),
+    ...(metadata.legacyDrawingRelationshipId ? { legacyDrawingRelationshipId: intern(metadata.legacyDrawingRelationshipId) } : {}),
     ...(metadata.filters && metadata.filters.length > 0 ? { filters: metadata.filters.map((filter) => internFilter(filter, intern)) } : {}),
     ...(metadata.hyperlinks && metadata.hyperlinks.length > 0
       ? {
@@ -40,7 +63,7 @@ export function internLargeSimpleWorksheetMetadata(
           })),
         }
       : {}),
-    ...(metadata.rows ? { rows: metadata.rows } : {}),
+    ...(metadata.rows ? { rows: internAxisMetadata(metadata.rows, intern) } : {}),
     ...(metadata.merges && metadata.merges.length > 0
       ? {
           merges: metadata.merges.map((range) => ({
@@ -62,9 +85,23 @@ export function internLargeSimpleWorksheetMetadata(
         }
       : {}),
     ...(metadata.sheetFormatPr ? { sheetFormatPr: metadata.sheetFormatPr } : {}),
+    ...(metadata.sheetSlicerListExtXml ? { sheetSlicerListExtXml: intern(metadata.sheetSlicerListExtXml) } : {}),
     ...(metadata.tableRelationshipIds && metadata.tableRelationshipIds.length > 0
       ? { tableRelationshipIds: metadata.tableRelationshipIds.map(intern) }
       : {}),
+  }
+}
+
+function internAxisMetadata(
+  axis: { readonly entries: readonly WorkbookAxisEntrySnapshot[]; readonly metadata: readonly WorkbookAxisMetadataSnapshot[] },
+  intern: (value: string) => string,
+): { readonly entries: WorkbookAxisEntrySnapshot[]; readonly metadata: WorkbookAxisMetadataSnapshot[] } {
+  return {
+    entries: axis.entries.map((entry) => ({
+      ...entry,
+      id: intern(entry.id),
+    })),
+    metadata: [...axis.metadata],
   }
 }
 
