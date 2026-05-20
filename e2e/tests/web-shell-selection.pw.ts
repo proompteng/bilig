@@ -312,6 +312,53 @@ test('@browser-ci web app keeps reverse-drag range selection chrome geometricall
   await expectVisualRectNear(page.locator('[data-grid-selection-visual-role="fill-handle"]'), expectedFillHandle, 'fill handle')
 })
 
+test('@browser-ci web app keeps active cell chrome synchronized inside a keyboard-cycled range', async ({ page }) => {
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-range-keyboard-visual-geometry'))}&persist=0`)
+  await waitForWorkbookReady(page)
+
+  await dragProductBodySelection(page, 1, 1, 3, 4)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:D5')
+  await expect(page.getByTestId('name-box')).toHaveValue('B2:D5')
+  await expect(page.getByTestId('sheet-grid-focus-target')).toHaveAttribute('aria-label', 'Sheet1 B2')
+
+  const expectedRange = await getProductCellRangeBox(page, 1, 1, 3, 4)
+  const expectedFillHandle = {
+    x: expectedRange.x + expectedRange.width - 3.5,
+    y: expectedRange.y + expectedRange.height - 3.5,
+    width: 7,
+    height: 7,
+  }
+
+  await page.getByTestId('sheet-grid-focus-target').press('Tab')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:D5')
+  await expect(page.getByTestId('name-box')).toHaveValue('B2:D5')
+  await expect(page.getByTestId('sheet-grid-focus-target')).toHaveAttribute('aria-label', 'Sheet1 C2')
+
+  await expectVisualRectNear(page.locator('[data-grid-selection-visual-role="selection-border"]'), expectedRange, 'selection border')
+  await expectVisualRectNear(
+    page.locator('[data-grid-selection-visual-role="active-border"]'),
+    await getProductCellRangeBox(page, 2, 1, 2, 1),
+    'active cell border',
+  )
+  await expectVisualRectNear(page.locator('[data-grid-selection-visual-role="fill-handle"]'), expectedFillHandle, 'fill handle')
+
+  await page.getByTestId('sheet-grid-focus-target').press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:D5')
+  await expect(page.getByTestId('name-box')).toHaveValue('B2:D5')
+  await expect(page.getByTestId('sheet-grid-focus-target')).toHaveAttribute('aria-label', 'Sheet1 C3')
+  await expectVisualRectNear(
+    page.locator('[data-grid-selection-visual-role="selection-border"]'),
+    expectedRange,
+    'selection border after enter',
+  )
+  await expectVisualRectNear(
+    page.locator('[data-grid-selection-visual-role="active-border"]'),
+    await getProductCellRangeBox(page, 2, 2, 2, 2),
+    'active cell border after enter',
+  )
+  await expectVisualRectNear(page.locator('[data-grid-selection-visual-role="fill-handle"]'), expectedFillHandle, 'fill handle after enter')
+})
+
 test('web app clips spilled text before the active selected cell', async ({ page }) => {
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-selection-spill-clip'))}&persist=0`)
   await waitForWorkbookReady(page)

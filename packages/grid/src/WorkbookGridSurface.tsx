@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { parseCellAddress } from '@bilig/formula'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
@@ -82,6 +82,13 @@ export function resolveWorkbookGridSurfaceTextOcclusionRanges(input: {
     return axisRanges
   }
   return input.selectionRange ? [input.selectionRange] : []
+}
+
+export function resolveWorkbookGridSurfaceDisplayCell(input: {
+  readonly committedCell: Item
+  readonly displayGridSelection: GridSelection
+}): Item {
+  return input.displayGridSelection.current?.cell ?? input.committedCell
 }
 
 export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
@@ -181,11 +188,11 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   }, [focusGrid, props.isEditingCell, props.selectedAddr, props.sheetName])
   const visibleRange = renderState.visibleRegion.range
   const getCellLocalBounds = renderState.getCellLocalBounds
-  const displaySelectionCol = props.isEditingCell ? renderState.editorCell.col : renderState.selectedCell.col
-  const displaySelectionRow = props.isEditingCell ? renderState.editorCell.row : renderState.selectedCell.row
+  const committedSelectionCol = props.isEditingCell ? renderState.editorCell.col : renderState.selectedCell.col
+  const committedSelectionRow = props.isEditingCell ? renderState.editorCell.row : renderState.selectedCell.row
   const committedCellSelection = useMemo(
-    () => createGridSelection(displaySelectionCol, displaySelectionRow),
-    [displaySelectionCol, displaySelectionRow],
+    () => createGridSelection(committedSelectionCol, committedSelectionRow),
+    [committedSelectionCol, committedSelectionRow],
   )
   const hasPendingLocalSelection = renderState.gridRuntimeHost.input.hasPendingLocalSelection({
     currentSelection: renderState.gridSelection,
@@ -201,8 +208,14 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     isRangeMoveDragging: renderState.isRangeMoveDragging,
     renderGridSelection: renderState.gridSelection,
     renderSelectionRange: renderState.selectionRange,
-    selectedCell: [displaySelectionCol, displaySelectionRow],
+    selectedCell: [committedSelectionCol, committedSelectionRow],
   })
+  const displaySelectionCell = resolveWorkbookGridSurfaceDisplayCell({
+    committedCell: [committedSelectionCol, committedSelectionRow],
+    displayGridSelection,
+  })
+  const displaySelectionCol = displaySelectionCell[0]
+  const displaySelectionRow = displaySelectionCell[1]
   const displaySelectionRange = displayGridSelection.current?.range ?? null
   const displayTextOcclusionRanges = useMemo(
     () =>
@@ -312,6 +325,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     props.isEditingCell && props.editorTargetSelection?.sheetName === props.sheetName
       ? props.editorTargetSelection.address
       : props.selectedAddr
+  const displayTargetAddress = props.isEditingCell ? editorTargetAddress : formatAddress(displaySelectionRow, displaySelectionCol)
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]">
@@ -357,7 +371,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div
             aria-colindex={displaySelectionCol + 1}
-            aria-label={`${props.sheetName} ${editorTargetAddress}`}
+            aria-label={`${props.sheetName} ${displayTargetAddress}`}
             aria-selected="true"
             data-testid="sheet-grid-focus-target"
             ref={renderState.focusTargetRef}

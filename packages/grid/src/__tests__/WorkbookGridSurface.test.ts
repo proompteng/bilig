@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import {
   hasSelectionTargetChanged,
+  resolveWorkbookGridSurfaceDisplayCell,
   resolveWorkbookGridSurfaceDisplaySelection,
   resolveWorkbookGridSurfaceTextOcclusionRanges,
 } from '../WorkbookGridSurface.js'
@@ -205,6 +206,24 @@ describe('WorkbookGridSurface selection autoscroll', () => {
         selectedCell: [0, 0],
       }),
     ).toBe(pendingLocalRangeSelection)
+  })
+
+  test('uses the resolved display selection cell while local range selection is ahead of committed state', () => {
+    const pendingLocalRangeSelection = {
+      ...createGridSelection(3, 5),
+      current: {
+        cell: [3, 5] as const,
+        range: { x: 1, y: 2, width: 5, height: 7 },
+        rangeStack: [],
+      },
+    }
+
+    expect(
+      resolveWorkbookGridSurfaceDisplayCell({
+        committedCell: [0, 0],
+        displayGridSelection: pendingLocalRangeSelection,
+      }),
+    ).toEqual([3, 5])
   })
 
   test('rejects stale axis selections after the committed active cell changes', () => {
