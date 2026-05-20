@@ -3,6 +3,7 @@ import type {
   WorkbookAxisMetadataSnapshot,
   WorkbookAutoFilterSnapshot,
   WorkbookConditionalFormatSnapshot,
+  WorkbookDataValidationSnapshot,
   WorkbookMergeRangeSnapshot,
   WorkbookSheetFormatPrSnapshot,
 } from '@bilig/protocol'
@@ -25,6 +26,7 @@ export interface LargeSimpleWorksheetScannedMetadata {
   readonly columns?: LargeSimpleWorksheetAxisMetadata
   readonly conditionalFormats?: readonly WorkbookConditionalFormatSnapshot[]
   readonly conditionalFormattingXml?: readonly string[]
+  readonly dataValidations?: readonly WorkbookDataValidationSnapshot[]
   readonly drawingRelationshipId?: string
   readonly filters?: readonly WorkbookAutoFilterSnapshot[]
   readonly hyperlinks?: readonly LargeSimpleHyperlinkRef[]

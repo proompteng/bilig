@@ -80,6 +80,26 @@ export function isAsciiWhitespace(byte: number): boolean {
   return byte === 9 || byte === 10 || byte === 12 || byte === 13 || byte === 32
 }
 
+export function skipAsciiWhitespace(bytes: Uint8Array, startIndex: number, endIndex: number): number {
+  let index = startIndex
+  while (index < endIndex && isAsciiWhitespace(bytes[index] ?? 0)) {
+    index += 1
+  }
+  return index
+}
+
+export function attributeNameMatches(bytes: Uint8Array, startIndex: number, endIndex: number, attributeName: string): boolean {
+  if (endIndex - startIndex !== attributeName.length) {
+    return false
+  }
+  for (let index = 0; index < attributeName.length; index += 1) {
+    if (bytes[startIndex + index] !== attributeName.charCodeAt(index)) {
+      return false
+    }
+  }
+  return true
+}
+
 export function isXmlNameByte(byte: number): boolean {
   return (
     (byte >= 65 && byte <= 90) ||

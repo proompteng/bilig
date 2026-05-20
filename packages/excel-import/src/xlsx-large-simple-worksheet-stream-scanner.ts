@@ -2,6 +2,7 @@ import type {
   WorkbookAxisEntrySnapshot,
   WorkbookAxisMetadataSnapshot,
   WorkbookConditionalFormatSnapshot,
+  WorkbookDataValidationSnapshot,
   WorkbookRichTextCellSnapshot,
 } from '@bilig/protocol'
 import { readLargeSimpleAutoFiltersFromBytes } from './xlsx-large-simple-autofilter-byte-scan.js'
@@ -11,6 +12,7 @@ import {
   type LargeSimpleXmlTextRange,
 } from './xlsx-large-simple-cell-value-scan.js'
 import { readLargeSimpleConditionalFormattingFromBytes } from './xlsx-large-simple-conditional-format-byte-scan.js'
+import { readLargeSimpleDataValidationsFromBytes } from './xlsx-large-simple-data-validation-byte-scan.js'
 import {
   LargeSimpleFormulaRecords,
   parseLargeSimpleSharedFormulaIndex,
@@ -38,10 +40,12 @@ import {
   decodeCellAddress,
   decodePackedCellAddressBytes,
   encodeCellAddress,
+  attributeNameMatches,
   isAsciiWhitespace,
   isXmlNameByte,
   packedAddressColumn,
   packedAddressRow,
+  skipAsciiWhitespace,
 } from './xlsx-large-simple-xml-byte-utils.js'
 import {
   metadataWorksheetTagNames,
@@ -121,6 +125,7 @@ class LargeSimpleWorksheetChunkScanner {
   private conditionalFormats: WorkbookConditionalFormatSnapshot[] | undefined
   private conditionalFormatIdCounter = 0
   private conditionalFormattingXml: string[] | undefined
+  private dataValidations: WorkbookDataValidationSnapshot[] | undefined
   private drawingRelationshipId: string | undefined
   private filters: LargeSimpleWorksheetScannedMetadata['filters']
   private hyperlinks: LargeSimpleWorksheetScannedMetadata['hyperlinks']
@@ -256,6 +261,7 @@ class LargeSimpleWorksheetChunkScanner {
       ...(this.conditionalFormattingXml && this.conditionalFormattingXml.length > 0
         ? { conditionalFormattingXml: this.conditionalFormattingXml }
         : {}),
+      ...(this.dataValidations && this.dataValidations.length > 0 ? { dataValidations: this.dataValidations } : {}),
       ...(this.drawingRelationshipId ? { drawingRelationshipId: this.drawingRelationshipId } : {}),
       ...(this.filters && this.filters.length > 0 ? { filters: this.filters } : {}),
       ...(this.hyperlinks && this.hyperlinks.length > 0 ? { hyperlinks: this.hyperlinks } : {}),
@@ -576,6 +582,21 @@ class LargeSimpleWorksheetChunkScanner {
       if (scan.artifactXml) {
         this.conditionalFormattingXml ??= []
         this.conditionalFormattingXml.push(scan.artifactXml)
+      }
+      return true
+    }
+    if (localName === 'dataValidations') {
+      if (!this.sheetName) {
+        return false
+      }
+      const validations = readLargeSimpleDataValidationsFromBytes(this.sheetName, this.buffer, startIndex, endIndex)
+      if (validations === null) {
+        this.failed = true
+        return true
+      }
+      if (validations.length > 0) {
+        this.dataValidations ??= []
+        this.dataValidations.push(...validations)
       }
       return true
     }
@@ -973,24 +994,4 @@ function readXmlAttributeRangeFromTag(
     index += 1
   }
   return null
-}
-
-function attributeNameMatches(bytes: Uint8Array, startIndex: number, endIndex: number, attributeName: string): boolean {
-  if (endIndex - startIndex !== attributeName.length) {
-    return false
-  }
-  for (let index = 0; index < attributeName.length; index += 1) {
-    if (bytes[startIndex + index] !== attributeName.charCodeAt(index)) {
-      return false
-    }
-  }
-  return true
-}
-
-function skipAsciiWhitespace(bytes: Uint8Array, startIndex: number, endIndex: number): number {
-  let index = startIndex
-  while (index < endIndex && isAsciiWhitespace(bytes[index] ?? 0)) {
-    index += 1
-  }
-  return index
 }

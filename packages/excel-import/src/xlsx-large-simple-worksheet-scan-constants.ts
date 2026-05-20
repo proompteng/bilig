@@ -1,10 +1,11 @@
-export const unsupportedWorksheetTagNames = new Set(['dataValidations', 'legacyDrawing', 'oleObjects', 'picture', 'sheetProtection'])
+export const unsupportedWorksheetTagNames = new Set(['legacyDrawing', 'oleObjects', 'picture', 'sheetProtection'])
 
 export const metadataWorksheetTagNames = new Set([
   'autoFilter',
   'colBreaks',
   'cols',
   'conditionalFormatting',
+  'dataValidations',
   'drawing',
   'headerFooter',
   'hyperlinks',

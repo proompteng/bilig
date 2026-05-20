@@ -143,7 +143,8 @@ interface ScannedWorksheet {
 type LargeSimpleSheetMetadataInput = Pick<
   SheetMetadataSnapshot,
   'conditionalFormatArtifacts' | 'conditionalFormats' | 'drawingArtifacts' | 'filters' | 'hyperlinks' | 'printerSettings' | 'printPageSetup'
->
+> &
+  Pick<SheetMetadataSnapshot, 'validations'>
 
 const defaultLargeSimpleXlsxByteThreshold = 1_000_000
 const workbookPath = 'xl/workbook.xml'
@@ -369,6 +370,9 @@ export function tryImportLargeSimpleXlsx(
       if (sheetTables) {
         importedTables.push(...sheetTables)
       }
+    }
+    if (materializeCells && streamedMetadataScan?.dataValidations && streamedMetadataScan.dataValidations.length > 0) {
+      metadataInput = { ...metadataInput, validations: [...streamedMetadataScan.dataValidations] }
     }
     if (materializeCells) {
       const printPageSetup =
@@ -642,6 +646,7 @@ function buildParsedWorksheet(
     ...(input.drawingArtifacts ? { drawingArtifacts: input.drawingArtifacts } : {}),
     ...(input.filters ? { filters: input.filters } : {}),
     ...(input.hyperlinks ? { hyperlinks: input.hyperlinks } : {}),
+    ...(input.validations ? { validations: input.validations } : {}),
     ...(conditionalFormats ? { conditionalFormats } : {}),
     ...(input.conditionalFormatArtifacts ? { conditionalFormatArtifacts: input.conditionalFormatArtifacts } : {}),
     ...(input.printerSettings ? { printerSettings: input.printerSettings } : {}),

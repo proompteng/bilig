@@ -591,6 +591,78 @@ describe('large simple XLSX import fast path', () => {
     ])
   })
 
+  it('imports worksheet data validations as streamed typed metadata', () => {
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1:D4"/>',
+        '<sheetData>',
+        '<row r="1"><c r="A1" t="inlineStr"><is><t>Input</t></is></c><c r="D1" t="inlineStr"><is><t>Choices</t></is></c></row>',
+        '<row r="2"><c r="D2" t="inlineStr"><is><t>Base</t></is></c></row>',
+        '<row r="3"><c r="D3" t="inlineStr"><is><t>Downside</t></is></c></row>',
+        '<row r="4"><c r="D4" t="inlineStr"><is><t>Upside</t></is></c></row>',
+        '</sheetData>',
+        '<dataValidations count="3">',
+        '<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="B2"><formula1>$D$2:$D$4</formula1></dataValidation>',
+        '<dataValidation allowBlank="1" showInputMessage="1" promptTitle="Use model choices" prompt="Pick a case from the list." sqref="B3"/>',
+        '<dataValidation type="decimal" operator="between" allowBlank="1" promptTitle="Debt ratio" prompt="Enter a ratio from 0 to 1." sqref="B4"><formula1>0</formula1><formula2>1</formula2></dataValidation>',
+        '</dataValidations>',
+        '</worksheet>',
+      ].join(''),
+    })
+
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('data validation metadata should use streamed typed records instead of inflating worksheet XML')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'validations.xlsx', zip, { minByteLength: 0 })
+
+    expect(imported?.snapshot.sheets[0]?.metadata?.validations).toEqual([
+      {
+        range: { sheetName: 'Data', startAddress: 'B2', endAddress: 'B2' },
+        rule: { kind: 'list', source: { kind: 'range-ref', sheetName: 'Data', startAddress: 'D2', endAddress: 'D4' } },
+        allowBlank: true,
+      },
+      {
+        range: { sheetName: 'Data', startAddress: 'B3', endAddress: 'B3' },
+        rule: { kind: 'any' },
+        allowBlank: true,
+        promptTitle: 'Use model choices',
+        promptMessage: 'Pick a case from the list.',
+      },
+      {
+        range: { sheetName: 'Data', startAddress: 'B4', endAddress: 'B4' },
+        rule: { kind: 'decimal', operator: 'between', values: [0, 1] },
+        allowBlank: true,
+        promptTitle: 'Debt ratio',
+        promptMessage: 'Enter a ratio from 0 to 1.',
+      },
+    ])
+  })
+
+  it('falls back when worksheet data validations use unsupported rules', () => {
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1"/>',
+        '<sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData>',
+        '<dataValidations count="1"><dataValidation type="custom" sqref="A1"><formula1>A1&gt;0</formula1></dataValidation></dataValidations>',
+        '</worksheet>',
+      ].join(''),
+    })
+
+    expect(tryImportLargeSimpleXlsx(bytes, 'unsupported-validation.xlsx', unzipSync(bytes), { minByteLength: 0 })).toBeNull()
+  })
+
   it('imports table metadata without falling back to SheetJS', () => {
     const bytes = buildLargeSimpleWorkbook({
       includeSharedStrings: false,
