@@ -13,6 +13,33 @@ function isFullRecalcPreservableUnavailableFormulaCall(normalizedName: string): 
   return normalizedName.startsWith('_XLDUDF_') || normalizedName === '_FV'
 }
 
+function containsAsciiCaseInsensitive(source: string, needle: string): boolean {
+  const maxStart = source.length - needle.length
+  for (let start = source.indexOf('_'); start >= 0 && start <= maxStart; start = source.indexOf('_', start + 1)) {
+    let matches = true
+    for (let offset = 0; offset < needle.length; offset += 1) {
+      const sourceCode = source.charCodeAt(start + offset)
+      const needleCode = needle.charCodeAt(offset)
+      if (sourceCode === needleCode) {
+        continue
+      }
+      const foldedSourceCode = sourceCode >= 97 && sourceCode <= 122 ? sourceCode - 32 : sourceCode
+      if (foldedSourceCode !== needleCode) {
+        matches = false
+        break
+      }
+    }
+    if (matches) {
+      return true
+    }
+  }
+  return false
+}
+
+export function formulaMayContainFullRecalcPreservableUnavailableFormulaCall(source: string): boolean {
+  return source.indexOf('_') !== -1 && (containsAsciiCaseInsensitive(source, '_FV') || containsAsciiCaseInsensitive(source, '_XLDUDF_'))
+}
+
 function withLocalFormulaName(localNames: ReadonlySet<string>, name: string): ReadonlySet<string> {
   const normalized = normalizeFormulaName(name)
   if (normalized.length === 0 || localNames.has(normalized)) {
@@ -148,6 +175,9 @@ export function formulaShouldPreserveCachedUnsupportedFunctionValueOnFullRecalc(
   source: string,
   definedNames: ReadonlySet<string>,
 ): boolean {
+  if (!formulaMayContainFullRecalcPreservableUnavailableFormulaCall(source)) {
+    return false
+  }
   try {
     return formulaNodeHasUnavailableCall(parseFormula(source), definedNames, new Set(), isFullRecalcPreservableUnavailableFormulaCall)
   } catch {
