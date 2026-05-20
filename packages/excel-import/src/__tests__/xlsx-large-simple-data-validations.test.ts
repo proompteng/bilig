@@ -61,6 +61,26 @@ describe('large simple XLSX data validations', () => {
     expect(inspected?.stats.cellCount).toBe(3)
   })
 
+  it('counts broad headless data-validation refs without requiring product metadata materialization', () => {
+    const refCount = 5_000
+    const sqref = Array.from({ length: refCount }, (_value, index) => `A${String(index + 1)}`).join(' ')
+    const bytes = buildWorkbook(
+      [
+        worksheetPrefix(),
+        `<dataValidations count="1"><dataValidation type="whole" operator="between" sqref="${sqref}"><formula1>1</formula1><formula2>10</formula2></dataValidation></dataValidations>`,
+        '</worksheet>',
+      ].join(''),
+    )
+
+    const inspected = tryInspectLargeSimpleXlsxHeadless(bytes, 'headless-broad-data-validations.xlsx', readXlsxZipEntriesLazy(bytes), {
+      minByteLength: 0,
+      releaseZipSource: true,
+    })
+
+    expect(inspected?.stats.dataValidationCount).toBe(refCount)
+    expect(inspected?.stats.cellCount).toBe(3)
+  })
+
   it('rejects unsupported data validations from the large-simple product path', () => {
     const bytes = buildWorkbook(
       [

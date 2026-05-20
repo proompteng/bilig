@@ -1,5 +1,5 @@
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
-import { readLargeSimpleDataValidationsFromBytes } from './xlsx-large-simple-data-validation-byte-scan.js'
+import { countLargeSimpleDataValidationsFromBytes } from './xlsx-large-simple-data-validation-byte-scan.js'
 
 const lessThan = 60
 const slash = 47
@@ -323,8 +323,8 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
       }
       return false
     }
-    const validations = readLargeSimpleDataValidationsFromBytes('Sheet1', this.buffer, this.index, closing.end)
-    if (validations === null) {
+    const count = countLargeSimpleDataValidationsFromBytes('Sheet1', this.buffer, this.index, closing.end)
+    if (count === null) {
       if (this.options.allowUnsupportedFeaturesForMetrics === true) {
         this.index = closing.end
         return true
@@ -332,7 +332,7 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
       this.failed = true
       return true
     }
-    this.dataValidationCount += validations.length
+    this.dataValidationCount += count
     this.index = closing.end
     return true
   }

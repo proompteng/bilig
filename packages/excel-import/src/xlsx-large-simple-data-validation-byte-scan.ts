@@ -69,6 +69,50 @@ export function readLargeSimpleDataValidationsFromBytes(
   return validations
 }
 
+export function countLargeSimpleDataValidationsFromBytes(
+  sheetName: string,
+  bytes: Uint8Array,
+  startIndex: number,
+  endIndex: number,
+): number | null {
+  let count = 0
+  let index = startIndex
+  while (index < endIndex) {
+    if (bytes[index] !== lessThan || bytes[index + 1] === slash) {
+      index += 1
+      continue
+    }
+    const tag = readXmlTagName(bytes, index + 1)
+    if (!tag) {
+      index += 1
+      continue
+    }
+    const tagEnd = findTagEnd(bytes, tag.endIndex, endIndex)
+    if (tagEnd === null) {
+      return null
+    }
+    if (tag.localName !== 'dataValidation') {
+      index = tagEnd + 1
+      continue
+    }
+    const selfClosing = isSelfClosingTag(bytes, tagEnd)
+    const contentStart = tagEnd + 1
+    const closing = selfClosing
+      ? { start: contentStart, end: contentStart }
+      : findClosingTag(bytes, contentStart, 'dataValidation', endIndex)
+    if (!closing) {
+      return null
+    }
+    const parsedCount = countDataValidation(sheetName, bytes, tag.endIndex, tagEnd, contentStart, closing.start)
+    if (parsedCount === null) {
+      return null
+    }
+    count += parsedCount
+    index = selfClosing ? tagEnd + 1 : closing.end
+  }
+  return count
+}
+
 function parseDataValidation(
   sheetName: string,
   bytes: Uint8Array,
@@ -132,6 +176,43 @@ function parseDataValidation(
       }
       return [validation]
     })
+}
+
+function countDataValidation(
+  sheetName: string,
+  bytes: Uint8Array,
+  nameEnd: number,
+  tagEnd: number,
+  contentStart: number,
+  contentEnd: number,
+): number | null {
+  const formula1 = readElementText(bytes, contentStart, contentEnd, 'formula1')
+  const formula2 = readElementText(bytes, contentStart, contentEnd, 'formula2')
+  if (formula1 === null || formula2 === null || !hasOnlyFormulaChildren(bytes, contentStart, contentEnd)) {
+    return null
+  }
+  if (
+    !parseValidationRule(
+      sheetName,
+      readAttribute(bytes, nameEnd, tagEnd, 'type') ?? 'any',
+      readAttribute(bytes, nameEnd, tagEnd, 'operator'),
+      formula1,
+      formula2,
+    )
+  ) {
+    return null
+  }
+  const sqref = readAttribute(bytes, nameEnd, tagEnd, 'sqref')
+  if (!sqref) {
+    return null
+  }
+  let count = 0
+  for (const rangeRef of sqref.trim().split(/\s+/u)) {
+    if (parseSqrefRange(sheetName, rangeRef)) {
+      count += 1
+    }
+  }
+  return count
 }
 
 function parseValidationRule(
