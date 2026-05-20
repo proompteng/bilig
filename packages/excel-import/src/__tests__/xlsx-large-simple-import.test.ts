@@ -694,6 +694,39 @@ describe('large simple XLSX import fast path', () => {
     expect(decodeBase64(modelPart?.dataBase64 ?? '')).toEqual(modelBytes)
   })
 
+  it('uses the streaming path for sub-threshold Power Pivot packages', () => {
+    const modelBytes = deterministicBytes(64 * 1024)
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1"/>',
+        '<sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData>',
+        '</worksheet>',
+      ].join(''),
+      extraEntries: {
+        'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rIdModel" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/powerPivotData" Target="model/item.data"/>
+</Relationships>`,
+        'xl/model/item.data': modelBytes,
+      },
+    })
+
+    expect(bytes.byteLength).toBeLessThan(1_000_000)
+    const imported = importXlsx(bytes, 'small-power-pivot-model.xlsx')
+    const releasePhase = imported.stats?.phaseTelemetry.find((entry) => entry.phase === 'zip-source-release')
+    const modelPart = imported.snapshot.workbook.metadata?.dataModelArtifacts?.parts.find((part) => part.path === 'xl/model/item.data')
+
+    expect(imported.stats?.cellCount).toBe(1)
+    expect(releasePhase?.zipSourceBytesAfterRelease).toBe(0)
+    expect(releasePhase?.ownedSourceBytesAfterRelease).toBe(0)
+    expect(modelPart?.byteLength).toBe(modelBytes.byteLength)
+    expect(decodeBase64(modelPart?.dataBase64 ?? '')).toEqual(modelBytes)
+  })
+
   it('preserves streamed cell metadata references without falling back to SheetJS', () => {
     const metadataXml =
       '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><metadataTypes count="1"><metadataType name="XLRICHVALUE" minSupportedVersion="120000"/></metadataTypes><valueMetadata count="1"><bk><rc t="1" v="0"/></bk></valueMetadata></metadata>'

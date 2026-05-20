@@ -65,6 +65,7 @@ import {
 import { createWorkbookPreview } from './workbook-import-preview.js'
 import type { ImportedWorkbook } from './workbook-import-result.js'
 import { readImportedExternalLinkCaches, readImportedExternalWorkbookReferences } from './xlsx-external-references.js'
+import { shouldUseDenseSheetJsParse } from './xlsx-dense-sheetjs-parse.js'
 import { normalizeImportedFormulaSource } from './xlsx-formula-translation.js'
 import { readImportedSheetHyperlinks } from './xlsx-hyperlinks.js'
 import { collectStyleCandidateAddresses, internImportedStyle, readImportedXlsxCellStyle } from './xlsx-import-cell-styles.js'
@@ -82,6 +83,7 @@ import {
 import { compareCellAddresses, readImportedLiteralCellValue, readImportedNumberFormat } from './xlsx-import-cell-values.js'
 import { tryInspectLargeSimpleXlsxHeadless, type LargeSimpleXlsxHeadlessInspectResult } from './xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from './xlsx-large-simple-import.js'
+import { shouldBypassLargeSimpleByteThresholdForPackageArtifacts } from './xlsx-large-simple-package-artifact-threshold.js'
 import { createPreservedVbaProjectPayload, type PreservedVbaProjectCodeNames } from './xlsx-macros.js'
 import { releaseOwnedXlsxSourceBytes, type OwnedXlsxSourceBytes } from './xlsx-owned-source-release.js'
 import { attachImportedXlsxSourceBytes } from './xlsx-source-bytes.js'
@@ -129,7 +131,6 @@ const largeCalcChainStreamingByteThreshold = 5_000_000
 const largeCalcChainStreamingFormulaThreshold = 50_000
 const sheetJsBlankStyleStripMinCellCount = 1_000
 const denseSheetJsMaxColumnCount = 128
-const textDecoder = new TextDecoder()
 
 export type CsvImportOptions = CsvParseOptions
 export type XlsxHeadlessInspectResult = LargeSimpleXlsxHeadlessInspectResult
@@ -322,37 +323,6 @@ function inspectLargeSimpleXlsxSource(
   })
 }
 
-function shouldUseDenseSheetJsParse(data: Uint8Array, workbookZip: Unzipped | null): boolean {
-  if (!workbookZip || data.byteLength < denseSheetJsByteThreshold) {
-    return false
-  }
-  let sawWorksheetDimension = false
-  for (const path of Object.keys(workbookZip)) {
-    if (!/^xl\/worksheets\/[^/]+\.xml$/u.test(path)) {
-      continue
-    }
-    const bytes = workbookZip[path]
-    if (!bytes) {
-      continue
-    }
-    const dimensionRef = readWorksheetDimensionRef(bytes)
-    if (!dimensionRef) {
-      continue
-    }
-    sawWorksheetDimension = true
-    const range = XLSX.utils.decode_range(dimensionRef.includes(':') ? dimensionRef : `${dimensionRef}:${dimensionRef}`)
-    if (range.e.c + 1 > denseSheetJsMaxColumnCount) {
-      return false
-    }
-  }
-  return sawWorksheetDimension
-}
-
-function readWorksheetDimensionRef(bytes: Uint8Array): string | null {
-  const headerXml = textDecoder.decode(bytes.subarray(0, Math.min(bytes.byteLength, 4096)))
-  return /<dimension\b[^>]*\bref="([^"]+)"/u.exec(headerXml)?.[1] ?? null
-}
-
 function importSheetJsWorkbook(
   data: Uint8Array,
   fileName: string,
@@ -360,7 +330,10 @@ function importSheetJsWorkbook(
   workbookZip: Unzipped | null,
   sourceBytesForUntouchedExport?: Uint8Array,
 ): ImportedWorkbook {
-  const denseSheetJsParse = shouldUseDenseSheetJsParse(data, workbookZip)
+  const denseSheetJsParse = shouldUseDenseSheetJsParse(data, workbookZip, {
+    maxColumnCount: denseSheetJsMaxColumnCount,
+    minByteLength: denseSheetJsByteThreshold,
+  })
   const parserData = workbookZip
     ? prepareSheetJsParserXlsxBytes(data, workbookZip, {
         minBlankCellCount: sheetJsBlankStyleStripMinCellCount,
@@ -918,6 +891,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string, op
   const inspectionOptions = options.limits ? { minByteLength: 0 } : undefined
   const workbookZip = readValidXlsxZipContainer(ownedSource.bytes, 'lazy')
   const hasCalcChain = Object.hasOwn(workbookZip, 'xl/calcChain.xml')
+  const bypassLargeSimpleByteThreshold = shouldBypassLargeSimpleByteThresholdForPackageArtifacts(workbookZip)
   const inspection =
     limits || (hasCalcChain && sourceByteLength >= denseSheetJsByteThreshold)
       ? inspectLargeSimpleXlsxSource(ownedSource.bytes, fileName, inspectionOptions)
@@ -927,10 +901,13 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string, op
   const allowCachedUnsupportedFormulaText =
     hasCalcChain && (sourceByteLength >= largeCalcChainStreamingByteThreshold || hasLargeCalcChainFormulaSet)
   const largeSimpleImport =
-    hasCalcChain && sourceByteLength < largeCalcChainStreamingByteThreshold && !hasLargeCalcChainFormulaSet
+    hasCalcChain &&
+    sourceByteLength < largeCalcChainStreamingByteThreshold &&
+    !hasLargeCalcChainFormulaSet &&
+    !bypassLargeSimpleByteThreshold
       ? null
       : tryImportLargeSimpleXlsx({ byteLength: sourceByteLength }, fileName, workbookZip, {
-          ...(options.limits ? { minByteLength: 0 } : {}),
+          ...(options.limits || bypassLargeSimpleByteThreshold ? { minByteLength: 0 } : {}),
           allowUnsupportedFormulaText: allowCachedUnsupportedFormulaText,
           allowUnsupportedCellMetadata: allowCachedUnsupportedFormulaText,
           releaseArenaAfterMaterialization: true,
