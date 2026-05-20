@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { parsePublicWorkbookArtifact, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
@@ -13,6 +13,7 @@ import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookFe
 import { defaultSelfRssCheckIntervalMs, startSelfRssGuard } from './public-workbook-corpus-process.ts'
 import { readMegabytesArg, readNumberArg, readFlagArg, readStringArg } from './public-workbook-corpus-cli.ts'
 import { largeSimpleImportPhaseTelemetryEvidence } from './public-workbook-corpus-large-simple-evidence.ts'
+import { FileBackedXlsxZipByteSource, isZipWorkbookSource } from './public-workbook-corpus-xlsx-byte-source.ts'
 
 const verificationWorkerPhasePrefix = 'bilig-public-workbook-verify-phase='
 const defaultVerifyTimeoutMs = 180_000
@@ -64,7 +65,7 @@ function tryVerifyCompactLargeSimpleArtifact(
   writeWorkerPhase('read-cache')
   const source = new FileBackedXlsxZipByteSource(cachePath)
   try {
-    if (sha256Hex(source) !== artifact.sha256 || !isZipWorkbook(source)) {
+    if (sha256Hex(source) !== artifact.sha256 || !isZipWorkbookSource(source)) {
       return null
     }
     collectGarbage()
@@ -199,43 +200,6 @@ function capVerifyMaxRssBytes(value: number): number {
   return normalizedValue
 }
 
-class FileBackedXlsxZipByteSource implements XlsxZipByteSource {
-  readonly byteLength: number
-  private fd: number | null
-
-  constructor(path: string) {
-    this.fd = openSync(path, 'r')
-    this.byteLength = fstatSync(this.fd).size
-  }
-
-  readRange(start: number, end: number): Uint8Array {
-    if (this.fd === null) {
-      throw new Error('XLSX ZIP file source has been released')
-    }
-    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > this.byteLength) {
-      throw new Error('Invalid XLSX ZIP file byte range')
-    }
-    const output = Buffer.allocUnsafe(end - start)
-    let offset = 0
-    while (offset < output.byteLength) {
-      const bytesRead = readSync(this.fd, output, offset, output.byteLength - offset, start + offset)
-      if (bytesRead === 0) {
-        throw new Error('Unexpected end of XLSX ZIP file source')
-      }
-      offset += bytesRead
-    }
-    return output
-  }
-
-  release(): void {
-    if (this.fd === null) {
-      return
-    }
-    closeSync(this.fd)
-    this.fd = null
-  }
-}
-
 function sha256Hex(source: XlsxZipByteSource): string {
   const hash = createHash('sha256')
   const chunkSize = 64 * 1024
@@ -243,11 +207,6 @@ function sha256Hex(source: XlsxZipByteSource): string {
     hash.update(source.readRange(offset, Math.min(source.byteLength, offset + chunkSize)))
   }
   return hash.digest('hex')
-}
-
-function isZipWorkbook(source: XlsxZipByteSource): boolean {
-  const bytes = source.readRange(0, Math.min(4, source.byteLength))
-  return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04
 }
 
 function collectGarbage(): void {

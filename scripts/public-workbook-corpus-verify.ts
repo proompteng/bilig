@@ -85,7 +85,9 @@ declare const Bun:
     }
   | undefined
 
-const publicWorkbookCorpusScriptPath = fileURLToPath(new URL('./public-workbook-corpus.ts', import.meta.url))
+const publicWorkbookCorpusFootprintWorkerScriptPath = fileURLToPath(
+  new URL('./public-workbook-corpus-footprint-worker.ts', import.meta.url),
+)
 
 export const defaultVerifyTimeoutMs = 180_000
 export const defaultVerifyConcurrency = 1
@@ -215,8 +217,9 @@ export async function verifyCachedWorkbookArtifact(
       bytes.byteLength >= isolatedFootprintByteThreshold
         ? inspectWorkbookFootprintIsolated({
             bytes,
+            filePath: cachePath,
             fileName: artifact.fileName,
-            scriptPath: publicWorkbookCorpusScriptPath,
+            scriptPath: publicWorkbookCorpusFootprintWorkerScriptPath,
             options: workerOptions,
           })
         : inspectWorkbookFootprint(bytes, artifact.fileName),
