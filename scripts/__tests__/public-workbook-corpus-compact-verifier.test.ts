@@ -12,7 +12,11 @@ import {
   type PublicWorkbookManifest,
 } from '../public-workbook-corpus.ts'
 import { publicWorkbookResourceLimitClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
-import { shouldUseCompactLargeSimpleVerification } from '../public-workbook-corpus-large-simple-compact.ts'
+import {
+  shouldUseCompactLargeSimpleVerification,
+  verifyLargeSimpleWorkbookCompactPreflight,
+} from '../public-workbook-corpus-large-simple-compact.ts'
+import { startVerificationRuntimeMetrics } from '../public-workbook-corpus-verification-metrics.ts'
 import type { PublicWorkbookArtifact, PublicWorkbookFeatureCounts } from '../public-workbook-corpus-types.ts'
 import type { WorkbookFootprint } from '../public-workbook-corpus-workbook.ts'
 
@@ -64,6 +68,7 @@ describe('public workbook corpus compact verifier', () => {
 
   it('uses headless large-simple verification for formula-heavy workbooks when formula oracle is resource-skipped', async () => {
     const workbookBytes = buildLargeSimpleFormulaHeavyWorkbookBytes({ rowCount: 100_001, formulaRowCount: 2_001 })
+    expect(workbookBytes.byteLength).toBeLessThan(1_000_000)
     const scorecard = await buildSingleWorkbookScorecard({
       cacheDirPrefix: 'public-workbook-corpus-compact-formula-verifier-',
       fileName: 'large-simple-formula-compact.xlsx',
@@ -80,7 +85,7 @@ describe('public workbook corpus compact verifier', () => {
       formulaCellCount: 2_001,
       valueCellCount: 102_002,
     })
-    expect(corpusCase?.phaseTimings?.map((entry) => entry.phase)).toEqual(['read-cache', 'inspect-footprint', 'import-xlsx'])
+    expect(corpusCase?.phaseTimings?.map((entry) => entry.phase)).toEqual(['read-cache', 'import-xlsx'])
     expect(corpusCase?.unsupportedFeatureClassifications).toEqual([
       'xlsx.publicCorpus.resourceLimit:preflightFormulaOracleBudget>2000formulas',
       'xlsx.publicCorpus.resourceLimit:preflightRoundTripBudget>100000cells',
@@ -109,6 +114,22 @@ describe('public workbook corpus compact verifier', () => {
         true,
       ),
     ).toBe(false)
+  })
+
+  it('fails closed to the regular verifier when compact preflight cannot read a ZIP central directory', () => {
+    expect(
+      verifyLargeSimpleWorkbookCompactPreflight({
+        artifact: testArtifact({ byteSize: 4 }),
+        bytes: new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+        baseEvidence: [],
+        classifyUnsupportedFeatures: () => [],
+        maxCellCount: 1_500_000,
+        minByteLength: 0,
+        runStructuralSmoke: true,
+        runtimeMetrics: startVerificationRuntimeMetrics(),
+        workerOptions: {},
+      }),
+    ).toBeNull()
   })
 })
 

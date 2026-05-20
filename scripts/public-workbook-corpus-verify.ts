@@ -205,7 +205,7 @@ export async function verifyCachedWorkbookArtifact(
       baseEvidence,
       classifyUnsupportedFeatures,
       maxCellCount,
-      minByteLength: isolatedFootprintByteThreshold,
+      minByteLength: 0,
       runStructuralSmoke,
       runtimeMetrics,
       workerOptions,

@@ -3,7 +3,7 @@ import {
   type LargeSimpleXlsxHeadlessInspectResult,
 } from '../packages/excel-import/src/xlsx-large-simple-headless-inspect.js'
 import type { LargeSimpleXlsxImportStats } from '../packages/excel-import/src/xlsx-large-simple-import.js'
-import { readXlsxZipEntriesLazy } from '../packages/excel-import/src/xlsx-zip.js'
+import { readXlsxZipEntriesLazyFromByteSource, type XlsxZipByteSource, type XlsxZipEntries } from '../packages/excel-import/src/xlsx-zip.js'
 import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import {
   publicWorkbookResourceLimitClassifierEvidence,
@@ -18,6 +18,7 @@ import {
   unsupportedResourceLimitCase,
 } from './public-workbook-corpus-resource-limits.ts'
 import { timeVerificationPhase, type startVerificationRuntimeMetrics } from './public-workbook-corpus-verification-metrics.ts'
+import { isZipWorkbookSource } from './public-workbook-corpus-xlsx-byte-source.ts'
 import type {
   PublicWorkbookArtifact,
   PublicWorkbookCorpusCase,
@@ -64,17 +65,21 @@ export function verifyLargeSimpleWorkbookCompactPreflight(args: {
   if (args.bytes.byteLength < args.minByteLength) {
     return null
   }
+  const zip = readLargeSimpleVerifierZipEntries(args.bytes)
+  if (!zip) {
+    return null
+  }
   args.workerOptions.onPhase?.('import-xlsx')
   const startedAt = performance.now()
-  const inspected = tryInspectLargeSimpleXlsxHeadless(
-    { byteLength: args.bytes.byteLength },
-    args.artifact.fileName,
-    readXlsxZipEntriesLazy(args.bytes),
-    {
+  const inspected = tryInspectLargeSimpleHeadless({
+    byteLength: args.bytes.byteLength,
+    fileName: args.artifact.fileName,
+    zip,
+    options: {
       minByteLength: 0,
       releaseZipSource: true,
     },
-  )
+  })
   if (!inspected) {
     return null
   }
@@ -111,12 +116,20 @@ export async function verifyLargeSimpleWorkbookCompact(args: {
   readonly runtimeMetrics: ReturnType<typeof startVerificationRuntimeMetrics>
   readonly workerOptions: PublicWorkbookCorpusWorkerOptions
 }): Promise<PublicWorkbookCorpusCase | null> {
-  const inspected = await timeVerificationPhase(args.runtimeMetrics, args.workerOptions, 'import-xlsx', () =>
-    tryInspectLargeSimpleXlsxHeadless({ byteLength: args.bytes.byteLength }, args.artifact.fileName, readXlsxZipEntriesLazy(args.bytes), {
-      minByteLength: 0,
-      releaseZipSource: true,
-    }),
-  )
+  const inspected = await timeVerificationPhase(args.runtimeMetrics, args.workerOptions, 'import-xlsx', () => {
+    const zip = readLargeSimpleVerifierZipEntries(args.bytes)
+    return zip
+      ? tryInspectLargeSimpleHeadless({
+          byteLength: args.bytes.byteLength,
+          fileName: args.artifact.fileName,
+          zip,
+          options: {
+            minByteLength: 0,
+            releaseZipSource: true,
+          },
+        })
+      : null
+  })
   if (!inspected) {
     return null
   }
@@ -129,6 +142,36 @@ export async function verifyLargeSimpleWorkbookCompact(args: {
     args.runStructuralSmoke,
     args.classifyUnsupportedFeatures,
   )
+}
+
+function tryInspectLargeSimpleHeadless(args: {
+  readonly byteLength: number
+  readonly fileName: string
+  readonly zip: XlsxZipEntries
+  readonly options: Parameters<typeof tryInspectLargeSimpleXlsxHeadless>[3]
+}): LargeSimpleXlsxHeadlessInspectResult | null {
+  try {
+    return tryInspectLargeSimpleXlsxHeadless({ byteLength: args.byteLength }, args.fileName, args.zip, args.options)
+  } catch {
+    return null
+  }
+}
+
+function readLargeSimpleVerifierZipEntries(bytes: Uint8Array): XlsxZipEntries | null {
+  const source = xlsxZipByteSourceFromBytes(bytes)
+  return isZipWorkbookSource(source) ? readXlsxZipEntriesLazyFromByteSource(source) : null
+}
+
+function xlsxZipByteSourceFromBytes(bytes: Uint8Array): XlsxZipByteSource {
+  return {
+    byteLength: bytes.byteLength,
+    readRange(start, end) {
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > bytes.byteLength) {
+        throw new Error('Invalid XLSX ZIP byte range')
+      }
+      return bytes.subarray(start, end)
+    },
+  }
 }
 
 function shouldUseCompactLargeSimpleFeatureCounts(
