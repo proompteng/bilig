@@ -153,7 +153,7 @@ If the agent already supports MCP, skip the TypeScript wrapper and start the
 published stdio server in file-backed mode:
 
 ```sh
-npm exec --package @bilig/headless@0.40.20 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.40.21 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 That command creates `pricing.workpaper.json` only when it is missing, exposes

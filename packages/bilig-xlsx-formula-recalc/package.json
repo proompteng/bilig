@@ -1,6 +1,6 @@
 {
   "name": "@bilig/xlsx-formula-recalc",
-  "version": "0.40.20",
+  "version": "0.40.21",
   "description": "Scoped XLSX formula recalculation package for Node.js without Excel, LibreOffice, or browser automation.",
   "keywords": [
     "bilig",

@@ -93,7 +93,7 @@ For agents, expose small tools:
 The published MCP server can run against a local WorkPaper JSON file:
 
 ```sh
-npm exec --package @bilig/headless@0.40.20 -- \
+npm exec --package @bilig/headless@0.40.21 -- \
   bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 

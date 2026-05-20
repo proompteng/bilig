@@ -20,7 +20,7 @@ needs no API key.
 Use the release asset when you want the shortest install path:
 
 ```text
-https://github.com/proompteng/bilig/releases/download/libraries-v0.40.20/bilig-workpaper.mcpb
+https://github.com/proompteng/bilig/releases/download/libraries-v0.40.21/bilig-workpaper.mcpb
 ```
 
 Checksum:
@@ -32,7 +32,7 @@ Checksum:
 The matching checksum file is published beside the bundle:
 
 ```text
-https://github.com/proompteng/bilig/releases/download/libraries-v0.40.20/bilig-workpaper.mcpb.sha256
+https://github.com/proompteng/bilig/releases/download/libraries-v0.40.21/bilig-workpaper.mcpb.sha256
 ```
 
 Open the downloaded `.mcpb` file with Claude Desktop. Claude should show an
