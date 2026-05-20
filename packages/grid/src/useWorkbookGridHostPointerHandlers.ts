@@ -128,7 +128,7 @@ export function useWorkbookGridHostPointerHandlers(input: {
   } = inputController
 
   const handleFillHandlePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLButtonElement>) => {
+    (event: ReactPointerEvent<HTMLDivElement>) => {
       if (!selectionRange || event.button !== 0) {
         return
       }

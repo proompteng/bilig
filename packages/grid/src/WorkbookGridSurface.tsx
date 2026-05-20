@@ -448,7 +448,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           />
         </button>
         <GridFillHandleOverlay
-          getCellBounds={renderState.getCellLocalBounds}
+          getGeometrySnapshot={getLiveGeometrySnapshot}
           hidden={
             renderState.hostElement === null ||
             props.isEditingCell ||

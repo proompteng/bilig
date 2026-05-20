@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
-  resolveFillHandleOverlayBounds,
+  resolveFillHandleHitTargetBounds,
   resolveFillHandlePreviewBounds,
   resolveFillHandlePreviewRange,
   resolveFillHandleSelectionRange,
@@ -79,12 +79,11 @@ describe('gridFillHandle', () => {
     })
   })
 
-  test('computes overlay bounds from the trailing cell corner', () => {
+  test('computes the hit target from the visible handle center', () => {
     expect(
-      resolveFillHandleOverlayBounds({
-        sourceRange: { x: 1, y: 2, width: 2, height: 3 },
-        hostBounds: { left: 100, top: 200, width: 400, height: 300 },
-        getCellBounds: (col, row) => (col === 2 && row === 4 ? { x: 250, y: 320, width: 80, height: 24 } : undefined),
+      resolveFillHandleHitTargetBounds({
+        hostBounds: { width: 400, height: 300 },
+        visualBounds: { x: 226.5, y: 140.5, width: 7, height: 7 },
       }),
     ).toEqual({
       x: 225,
@@ -94,43 +93,40 @@ describe('gridFillHandle', () => {
     })
   })
 
-  test('hides overlay bounds when the anchor cell is above the visible grid body', () => {
+  test('hides the hit target when the visible handle is outside the grid body', () => {
     expect(
-      resolveFillHandleOverlayBounds({
-        sourceRange: { x: 1, y: 2, width: 2, height: 3 },
-        hostBounds: { left: 0, top: 0, width: 400, height: 300 },
+      resolveFillHandleHitTargetBounds({
+        hostBounds: { width: 400, height: 300 },
         minX: 46,
         minY: 24,
-        getCellBounds: (col, row) => (col === 2 && row === 4 ? { x: 250, y: -20, width: 80, height: 24 } : undefined),
+        visualBounds: { x: 20, y: -20, width: 7, height: 7 },
       }),
     ).toBeUndefined()
   })
 
-  test('clips overlay bounds to the visible grid body instead of intercepting headers', () => {
+  test('clips the hit target to the visible grid body instead of intercepting headers', () => {
     expect(
-      resolveFillHandleOverlayBounds({
-        sourceRange: { x: 0, y: 0, width: 1, height: 1 },
-        hostBounds: { left: 0, top: 0, width: 400, height: 300 },
+      resolveFillHandleHitTargetBounds({
+        hostBounds: { width: 400, height: 300 },
         minX: 46,
         minY: 24,
-        getCellBounds: (col, row) => (col === 0 && row === 0 ? { x: 20, y: 10, width: 28, height: 18 } : undefined),
+        visualBounds: { x: 43.5, y: 22.5, width: 7, height: 7 },
       }),
     ).toEqual({
       x: 46,
       y: 24,
-      width: 7,
-      height: 9,
+      width: 6,
+      height: 7,
     })
   })
 
-  test('clips overlay bounds at the viewport edge instead of covering footer chrome', () => {
+  test('clips the hit target at the viewport edge instead of covering footer chrome', () => {
     expect(
-      resolveFillHandleOverlayBounds({
-        sourceRange: { x: 3, y: 20, width: 1, height: 1 },
-        hostBounds: { left: 0, top: 0, width: 320, height: 100 },
+      resolveFillHandleHitTargetBounds({
+        hostBounds: { width: 320, height: 100 },
         minX: 46,
         minY: 24,
-        getCellBounds: (col, row) => (col === 3 && row === 20 ? { x: 250, y: 72, width: 66, height: 24 } : undefined),
+        visualBounds: { x: 312.5, y: 92.5, width: 7, height: 7 },
       }),
     ).toEqual({
       x: 311,

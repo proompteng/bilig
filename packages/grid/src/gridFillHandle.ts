@@ -108,23 +108,20 @@ export function resolveFillHandlePreviewBounds(options: {
   }
 }
 
-export function resolveFillHandleOverlayBounds(options: {
-  sourceRange: Rectangle
-  getCellBounds: (col: number, row: number) => Rectangle | undefined
-  hostBounds: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+export function resolveFillHandleHitTargetBounds(options: {
+  visualBounds: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
+  hostBounds: Pick<DOMRect, 'width' | 'height'>
   minX?: number
   minY?: number
   size?: number
 }): FillHandleOverlayBounds | undefined {
-  const { getCellBounds, hostBounds, minX = 0, minY = 0, size = GRID_FILL_HANDLE_HIT_SIZE, sourceRange } = options
-  const anchorBounds = getCellBounds(sourceRange.x + sourceRange.width - 1, sourceRange.y + sourceRange.height - 1)
-  if (!anchorBounds) {
-    return undefined
-  }
+  const { hostBounds, minX = 0, minY = 0, size = GRID_FILL_HANDLE_HIT_SIZE, visualBounds } = options
+  const centerX = visualBounds.x + visualBounds.width / 2
+  const centerY = visualBounds.y + visualBounds.height / 2
 
   const resolvedBounds = {
-    x: anchorBounds.x - hostBounds.left + anchorBounds.width - size / 2,
-    y: anchorBounds.y - hostBounds.top + anchorBounds.height - size / 2,
+    x: centerX - size / 2,
+    y: centerY - size / 2,
     width: size,
     height: size,
   }

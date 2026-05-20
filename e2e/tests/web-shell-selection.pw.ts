@@ -326,6 +326,35 @@ test('@browser-ci web app keeps reverse-drag range selection chrome geometricall
   })
 })
 
+test('@browser-ci web app keeps fill-handle hit target aligned and pointer-only', async ({ page }) => {
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-fill-handle-hit-target'))}&persist=0`)
+  await waitForWorkbookReady(page)
+
+  await dragProductBodySelection(page, 1, 1, 3, 3)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:D4')
+
+  const expectedRange = await getProductCellRangeBox(page, 1, 1, 3, 3)
+  const expectedVisualHandle = {
+    x: expectedRange.x + expectedRange.width - 3.5,
+    y: expectedRange.y + expectedRange.height - 3.5,
+    width: 7,
+    height: 7,
+  }
+  const expectedHitTarget = {
+    x: expectedRange.x + expectedRange.width - 5,
+    y: expectedRange.y + expectedRange.height - 5,
+    width: 10,
+    height: 10,
+  }
+
+  await expectVisualRectNear(page.locator('[data-grid-selection-visual-role="fill-handle"]'), expectedVisualHandle, 'visible fill handle')
+  await expectVisualRectNear(page.locator('[data-grid-fill-handle="true"]'), expectedHitTarget, 'fill handle hit target')
+
+  await expect(page.locator('[data-grid-fill-handle="true"]')).toHaveJSProperty('tagName', 'DIV')
+  await expect(page.locator('[data-grid-fill-handle="true"]')).toHaveAttribute('aria-hidden', 'true')
+  await expect(page.locator('[data-grid-fill-handle="true"]')).toHaveJSProperty('tabIndex', -1)
+})
+
 test('@browser-ci web app keeps active cell chrome synchronized inside a keyboard-cycled range', async ({ page }) => {
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-range-keyboard-visual-geometry'))}&persist=0`)
   await waitForWorkbookReady(page)
