@@ -119,7 +119,7 @@ function featureCountsFromLargeSimpleStats(stats: LargeSimpleXlsxImportStats): W
     mergeCount: stats.mergeCount,
     styleRangeCount: 0,
     conditionalFormatCount: stats.conditionalFormatCount,
-    dataValidationCount: 0,
+    dataValidationCount: stats.dataValidationCount ?? 0,
     macroPayloadCount: 0,
     warningCount: stats.warningCount,
   }

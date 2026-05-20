@@ -1,3 +1,4 @@
+import { readLargeSimpleDataValidationsFromBytes } from './xlsx-large-simple-data-validation-byte-scan.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 
 const lessThan = 60
@@ -9,12 +10,13 @@ const packedAddressColumnFactor = 16_384
 const cellContentHasValue = 1 << 0
 const cellContentHasFormula = 1 << 1
 const emptyBytes = new Uint8Array(0)
-const unsupportedWorksheetTagNames = new Set(['dataValidations', 'legacyDrawing', 'oleObjects', 'picture', 'sheetProtection'])
+const unsupportedWorksheetTagNames = new Set(['legacyDrawing', 'oleObjects', 'picture', 'sheetProtection'])
 const metadataWorksheetTagNames = new Set([
   'autoFilter',
   'colBreaks',
   'cols',
   'conditionalFormatting',
+  'dataValidations',
   'drawing',
   'headerFooter',
   'hyperlinks',
@@ -35,6 +37,7 @@ export interface HeadlessLargeSimpleWorksheetScan {
   readonly tableCount: number
   readonly mergeCount: number
   readonly conditionalFormatCount: number
+  readonly dataValidationCount: number
   readonly rowCount: number
   readonly columnCount: number
   readonly usedRange: {
@@ -47,6 +50,7 @@ export interface HeadlessLargeSimpleWorksheetScan {
 
 export interface HeadlessLargeSimpleWorksheetScanOptions {
   readonly hasSharedStrings: boolean
+  readonly sheetName?: string
   readonly onRetainedBufferLength?: (length: number) => void
 }
 
@@ -81,6 +85,7 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
   private tableCount = 0
   private mergeCount = 0
   private conditionalFormatCount = 0
+  private dataValidationCount = 0
   private minRow = Number.POSITIVE_INFINITY
   private minColumn = Number.POSITIVE_INFINITY
   private maxRow = -1
@@ -126,6 +131,7 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
           tableCount: this.tableCount,
           mergeCount: this.mergeCount,
           conditionalFormatCount: this.conditionalFormatCount,
+          dataValidationCount: this.dataValidationCount,
           rowCount: this.rowCount,
           columnCount: this.columnCount,
           usedRange:
@@ -458,6 +464,17 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
         this.index = tagEnd + 1
         return true
       }
+      if (!closing && active.localName === 'dataValidations' && tag.localName === 'dataValidation') {
+        const elementEnd = this.findDataValidationElementEnd(tagEnd, final)
+        if (elementEnd === null) {
+          return false
+        }
+        if (!this.countDataValidationElement(this.index, elementEnd)) {
+          return false
+        }
+        this.index = elementEnd
+        continue
+      }
       if (!closing && active.childName !== null && tag.localName === active.childName) {
         active.childCount += 1
       }
@@ -469,6 +486,32 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
       this.index = this.buffer.byteLength
     }
     return false
+  }
+
+  private findDataValidationElementEnd(tagEnd: number, final: boolean): number | null {
+    if (isSelfClosingTag(this.buffer, tagEnd)) {
+      return tagEnd + 1
+    }
+    const closing = findClosingTag(this.buffer, tagEnd + 1, 'dataValidation')
+    if (closing) {
+      return closing.end
+    }
+    if (final) {
+      this.failed = true
+    }
+    return null
+  }
+
+  private countDataValidationElement(startIndex: number, endIndex: number): boolean {
+    const validations = this.options.sheetName
+      ? readLargeSimpleDataValidationsFromBytes(this.options.sheetName, this.buffer, startIndex, endIndex)
+      : null
+    if (validations === null) {
+      this.failed = true
+      return false
+    }
+    this.dataValidationCount += validations.length
+    return true
   }
 
   private finalizeMetadataCount(active: ActiveMetadataCount): void {
@@ -501,6 +544,23 @@ function metadataChildName(localName: string): string | null {
 
 function metadataCountMultiplier(localName: string, bytes: Uint8Array, nameEnd: number, tagEnd: number): number {
   return localName === 'conditionalFormatting' ? countSqrefRangesFromTag(bytes, nameEnd, tagEnd) : 1
+}
+
+function findClosingTag(bytes: Uint8Array, startIndex: number, localName: string): { readonly start: number; readonly end: number } | null {
+  let index = startIndex
+  while (index < bytes.byteLength) {
+    if (bytes[index] !== lessThan || bytes[index + 1] !== slash) {
+      index += 1
+      continue
+    }
+    const tag = readXmlTagName(bytes, index + 2)
+    if (tag?.localName === localName) {
+      const tagEnd = findTagEnd(bytes, tag.endIndex)
+      return tagEnd === null ? null : { start: index, end: tagEnd + 1 }
+    }
+    index += 1
+  }
+  return null
 }
 
 function findTagEnd(bytes: Uint8Array, startIndex: number, endIndex: number = bytes.byteLength): number | null {

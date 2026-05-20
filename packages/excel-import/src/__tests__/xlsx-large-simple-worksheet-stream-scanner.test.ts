@@ -50,6 +50,34 @@ describe('large simple worksheet stream scanners', () => {
     expect(Math.max(...retainedBufferLengths)).toBeLessThan(1024)
   })
 
+  it('counts supported data validations in headless scans without retaining validation bodies', () => {
+    const retainedBufferLengths: number[] = []
+    const scan = parseHeadlessLargeSimpleWorksheetFromChunks(splitLargeDataValidationsWorksheetXml(), 0, {
+      hasSharedStrings: false,
+      sheetName: 'Data',
+      onRetainedBufferLength: (length) => retainedBufferLengths.push(length),
+    })
+
+    expect(scan).toMatchObject({
+      cellCount: 1,
+      valueCellCount: 1,
+      dataValidationCount: 3,
+      rowCount: 2,
+      columnCount: 2,
+    })
+    expect(retainedBufferLengths.length).toBeGreaterThan(0)
+    expect(Math.max(...retainedBufferLengths)).toBeLessThan(1024)
+  })
+
+  it('rejects unsupported data validations in headless scans', () => {
+    expect(
+      parseHeadlessLargeSimpleWorksheetFromChunks(splitAfterTagOpen(unsupportedDataValidationWorksheetXml()), 0, {
+        hasSharedStrings: false,
+        sheetName: 'Data',
+      }),
+    ).toBeNull()
+  })
+
   it('retains tag-open boundaries across chunks in materialized scans', () => {
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(worksheetXml()), 0, { hasSharedStrings: false })
 
@@ -328,6 +356,27 @@ function splitLargeTablePartsWorksheetXml(): (onChunk: (chunk: Uint8Array) => vo
   }
 }
 
+function splitLargeDataValidationsWorksheetXml(): (onChunk: (chunk: Uint8Array) => void) => boolean {
+  const chunks = [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1:B2"/>',
+    '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>',
+    '<dataValidations count="2"><dataValidation type="list" sqref="A1"><formula1>"Open,Closed"</formula1></dataValidation>',
+    ' '.repeat(40_000),
+    ' '.repeat(40_000),
+    ' '.repeat(20_000),
+    '<dataValidation type="whole" operator="between" sqref="B1 B2"><formula1>1</formula1><formula2>10</formula2></dataValidation></',
+    'dataValidations>',
+    '</worksheet>',
+  ]
+  return (onChunk) => {
+    for (const chunk of chunks) {
+      onChunk(encoder.encode(chunk))
+    }
+    return true
+  }
+}
+
 function splitUnterminatedMergeCellsWorksheetXml(): (onChunk: (chunk: Uint8Array) => void) => boolean {
   const chunks = [
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
@@ -341,6 +390,16 @@ function splitUnterminatedMergeCellsWorksheetXml(): (onChunk: (chunk: Uint8Array
     }
     return true
   }
+}
+
+function unsupportedDataValidationWorksheetXml(): string {
+  return [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1"/>',
+    '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>',
+    '<dataValidations count="1"><dataValidation type="custom" sqref="A1"><formula1>A1&gt;0</formula1></dataValidation></dataValidations>',
+    '</worksheet>',
+  ].join('')
 }
 
 function scalarWorksheetXml(): string {

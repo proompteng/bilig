@@ -471,6 +471,7 @@ export interface ImportedWorksheetCellScan {
   readonly formulaCellCount: number
   readonly mergeCount?: number
   readonly conditionalFormatCount?: number
+  readonly dataValidationCount?: number
   readonly tableCount?: number
   readonly rowCount: number
   readonly columnCount: number

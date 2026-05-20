@@ -27,11 +27,9 @@ import { shouldUseSharedStringlessFastPathBytes } from './xlsx-large-simple-shar
 import { buildLargeSimpleStyleRanges } from './xlsx-large-simple-style-ranges.js'
 import { readLargeSimpleWorkbookStylesFromChunks } from './xlsx-large-simple-styles.js'
 import { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
-import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
-import {
-  parseHeadlessLargeSimpleWorksheetFromChunks,
-  type HeadlessLargeSimpleWorksheetScan,
-} from './xlsx-large-simple-headless-worksheet-scanner.js'
+import type { ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import { importedWorksheetCellScanFromHeadless } from './xlsx-large-simple-headless-cell-scan.js'
+import { parseHeadlessLargeSimpleWorksheetFromChunks } from './xlsx-large-simple-headless-worksheet-scanner.js'
 import {
   hasUnsupportedLargeSimpleWorksheetTags,
   needsLargeSimpleWorksheetMetadataXml,
@@ -93,6 +91,7 @@ export interface LargeSimpleXlsxImportStats {
   readonly tableCount: number
   readonly mergeCount: number
   readonly conditionalFormatCount: number
+  readonly dataValidationCount?: number
   readonly warningCount: number
   readonly dimensions: readonly LargeSimpleXlsxSheetDimension[]
   readonly phaseTelemetry: readonly LargeSimpleXlsxImportPhaseTelemetry[]
@@ -127,6 +126,7 @@ interface ParsedWorksheet {
     readonly tableCount: number
     readonly mergeCount: number
     readonly conditionalFormatCount: number
+    readonly dataValidationCount: number
     readonly dimension: LargeSimpleXlsxSheetDimension
   }
 }
@@ -238,7 +238,7 @@ export function tryImportLargeSimpleXlsx(
       const headless = parseHeadlessLargeSimpleWorksheetFromChunks(
         (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
         order,
-        { hasSharedStrings },
+        { hasSharedStrings, sheetName: entry.name },
       )
       if (headless && (hasSharedStrings || headless.valueCellCount > 0)) {
         cellScan = importedWorksheetCellScanFromHeadless(headless)
@@ -532,6 +532,7 @@ export function tryImportLargeSimpleXlsx(
     tableCount: sortedImportedTables?.length ?? sheetStats.reduce((sum, entry) => sum + entry.tableCount, 0),
     mergeCount: sheetStats.reduce((sum, entry) => sum + entry.mergeCount, 0),
     conditionalFormatCount: sheetStats.reduce((sum, entry) => sum + entry.conditionalFormatCount, 0),
+    dataValidationCount: sheetStats.reduce((sum, entry) => sum + entry.dataValidationCount, 0),
     warningCount: warnings.length,
     dimensions: sheetStats.map((entry) => entry.dimension),
     phaseTelemetry: phaseRecorder.entries(),
@@ -677,6 +678,7 @@ function buildParsedWorksheet(
       tableCount: cellScan.tableCount ?? 0,
       mergeCount,
       conditionalFormatCount,
+      dataValidationCount: input.validations?.length ?? cellScan.dataValidationCount ?? 0,
       dimension: {
         sheetName,
         rowCount: cellScan.rowCount,
@@ -702,25 +704,6 @@ function drawingRelationshipIdForScannedWorksheet(scanned: ScannedWorksheet): st
 
 function readConditionalFormattingBlockCount(worksheetXml: string): number {
   return [...worksheetXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?conditionalFormatting\b/gu)].length
-}
-
-function importedWorksheetCellScanFromHeadless(scan: HeadlessLargeSimpleWorksheetScan): ImportedWorksheetCellScan {
-  return {
-    arena: new ImportedWorkbookArena(),
-    sheetIndex: scan.sheetIndex,
-    richTextCells: [],
-    styleIndexes: new ImportedWorksheetStyleIndexArena(),
-    blankStyleCellCount: 0,
-    cellCount: scan.cellCount,
-    valueCellCount: scan.valueCellCount,
-    formulaCellCount: scan.formulaCellCount,
-    mergeCount: scan.mergeCount,
-    conditionalFormatCount: scan.conditionalFormatCount,
-    tableCount: scan.tableCount,
-    rowCount: scan.rowCount,
-    columnCount: scan.columnCount,
-    usedRange: scan.usedRange,
-  }
 }
 
 function readWorkbookSheets(workbookXml: string, stringPool?: ImportedWorkbookStringPool): WorkbookSheetEntry[] {

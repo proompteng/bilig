@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 
+import { tryInspectLargeSimpleXlsxHeadless } from '../xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from '../xlsx-large-simple-import.js'
 import { forEachInflatedXlsxZipEntryChunk, readXlsxZipEntriesLazy } from '../xlsx-zip.js'
 
@@ -185,6 +186,7 @@ describe('large simple XLSX import fast path', () => {
         '<sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1"><v>1</v></c></row></sheetData>',
         '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
         '<conditionalFormatting sqref="B1:B2"><cfRule type="cellIs" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>',
+        '<dataValidations count="2"><dataValidation type="list" sqref="A1"><formula1>"Open,Closed"</formula1></dataValidation><dataValidation type="whole" operator="between" sqref="B1 B2"><formula1>1</formula1><formula2>10</formula2></dataValidation></dataValidations>',
         '<tableParts count="1"><tablePart r:id="rIdTable1"/></tableParts>',
         '</worksheet>',
       ].join(''),
@@ -215,6 +217,14 @@ describe('large simple XLSX import fast path', () => {
     expect(imported?.stats.tableCount).toBe(1)
     expect(imported?.stats.mergeCount).toBe(1)
     expect(imported?.stats.conditionalFormatCount).toBe(1)
+    expect(imported?.stats.dataValidationCount).toBe(3)
+    const inspected = tryInspectLargeSimpleXlsxHeadless(
+      { byteLength: bytes.byteLength },
+      'headless-verifier.xlsx',
+      readXlsxZipEntriesLazy(bytes),
+      { minByteLength: 0 },
+    )
+    expect(inspected?.stats.dataValidationCount).toBe(3)
   })
 
   it('streams compressed worksheet zip entries across multiple compressed chunks', () => {
@@ -645,6 +655,7 @@ describe('large simple XLSX import fast path', () => {
         promptMessage: 'Enter a ratio from 0 to 1.',
       },
     ])
+    expect(imported?.stats.dataValidationCount).toBe(3)
   })
 
   it('falls back when worksheet data validations use unsupported rules', () => {
