@@ -12,6 +12,10 @@ const sharedStringElementPattern =
 const richTextRunPattern = /<(?:[A-Za-z_][\w.-]*:)?r\b/u
 const partialSharedStringTagRetainLength = 256
 
+export interface LargeSimpleReferencedSharedStringScanOptions {
+  readonly onRetainedBufferLength?: (length: number) => void
+}
+
 export function readLargeSimpleSharedStrings(sharedStringsXml: string): LargeSimpleSharedStringEntry[] {
   return [...sharedStringsXml.matchAll(sharedStringElementPattern)].map((match) => {
     const xml = match[0]
@@ -22,11 +26,12 @@ export function readLargeSimpleSharedStrings(sharedStringsXml: string): LargeSim
 export function readLargeSimpleReferencedSharedStringsFromChunks(
   readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
   referencedIndexes: ReadonlySet<number>,
+  options: LargeSimpleReferencedSharedStringScanOptions = {},
 ): LargeSimpleSharedStringEntry[] | null {
   if (referencedIndexes.size === 0) {
     return []
   }
-  const scanner = new LargeSimpleSharedStringChunkScanner(referencedIndexes)
+  const scanner = new LargeSimpleSharedStringChunkScanner(referencedIndexes, options)
   if (!readChunks((chunk) => scanner.push(chunk))) {
     return null
   }
@@ -72,8 +77,12 @@ class LargeSimpleSharedStringChunkScanner {
   private index = 0
   private sharedStringIndex = 0
   private failed = false
+  private skippingUnreferencedElementName: string | null = null
 
-  constructor(private readonly referencedIndexes: ReadonlySet<number>) {}
+  constructor(
+    private readonly referencedIndexes: ReadonlySet<number>,
+    private readonly options: LargeSimpleReferencedSharedStringScanOptions,
+  ) {}
 
   push(chunk: Uint8Array): void {
     if (this.failed || chunk.byteLength === 0) {
@@ -82,6 +91,7 @@ class LargeSimpleSharedStringChunkScanner {
     this.buffer += this.decoder.decode(chunk, { stream: true })
     this.process(false)
     this.compact()
+    this.reportRetainedBufferLength()
   }
 
   finish(): LargeSimpleSharedStringEntry[] | null {
@@ -90,6 +100,8 @@ class LargeSimpleSharedStringChunkScanner {
     }
     this.buffer += this.decoder.decode()
     this.process(true)
+    this.compact()
+    this.reportRetainedBufferLength()
     if (this.failed) {
       return null
     }
@@ -103,6 +115,12 @@ class LargeSimpleSharedStringChunkScanner {
 
   private process(final: boolean): void {
     while (!this.failed && this.index < this.buffer.length) {
+      if (this.skippingUnreferencedElementName !== null) {
+        if (!this.finishSkippingUnreferencedElement(final)) {
+          return
+        }
+        continue
+      }
       const opening = findNextElementOpening(this.buffer, 'si', this.index)
       if (!opening) {
         this.index = final ? this.buffer.length : Math.max(this.index, this.buffer.length - partialSharedStringTagRetainLength)
@@ -120,6 +138,10 @@ class LargeSimpleSharedStringChunkScanner {
         if (final) {
           this.failed = true
         }
+        if (!this.referencedIndexes.has(this.sharedStringIndex)) {
+          this.skippingUnreferencedElementName = opening.name
+          this.index = tagEnd + 1
+        }
         return
       }
       if (this.referencedIndexes.has(this.sharedStringIndex)) {
@@ -130,7 +152,32 @@ class LargeSimpleSharedStringChunkScanner {
     }
   }
 
+  private finishSkippingUnreferencedElement(final: boolean): boolean {
+    const elementName = this.skippingUnreferencedElementName
+    if (elementName === null) {
+      return true
+    }
+    const xmlEnd = findClosingElementEnd(this.buffer, elementName, this.index)
+    if (xmlEnd === null) {
+      if (final) {
+        this.failed = true
+      }
+      this.index = this.buffer.length
+      return false
+    }
+    this.sharedStringIndex += 1
+    this.index = xmlEnd
+    this.skippingUnreferencedElementName = null
+    return true
+  }
+
   private compact(): void {
+    if (this.skippingUnreferencedElementName !== null) {
+      const retainLength = closingTagRetainLength(this.skippingUnreferencedElementName)
+      this.buffer = this.buffer.slice(Math.max(0, this.buffer.length - retainLength))
+      this.index = 0
+      return
+    }
     if (this.index === 0) {
       return
     }
@@ -142,6 +189,14 @@ class LargeSimpleSharedStringChunkScanner {
     this.buffer = this.buffer.slice(this.index)
     this.index = 0
   }
+
+  private reportRetainedBufferLength(): void {
+    this.options.onRetainedBufferLength?.(this.buffer.length)
+  }
+}
+
+function closingTagRetainLength(elementName: string): number {
+  return Math.max(partialSharedStringTagRetainLength, elementName.length + 4)
 }
 
 function readLargeSimpleSharedStringEntry(xml: string): LargeSimpleSharedStringEntry {
