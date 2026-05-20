@@ -134,6 +134,34 @@ describe('large simple XLSX import arena', () => {
     expect([...lazyCells]).toEqual([{ address: 'A1', value: 'Shared label', formula: 'A1&""' }])
   })
 
+  it('compacts rare retained shared-string indexes for mostly numeric lazy sheets', () => {
+    const arena = new ImportedWorkbookArena()
+    arena.reserveDenseRowMajorCellCapacity(0, 10, 100)
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 0, sharedStringIndex: 1 })
+    for (let row = 0; row < 100; row += 1) {
+      for (let column = row === 0 ? 1 : 0; column < 10; column += 1) {
+        arena.addCell({ sheetIndex: 0, row, column, value: row * 10 + column })
+      }
+    }
+
+    expect(
+      arena.retainSharedStringReferences([
+        { text: 'unused', rich: false },
+        { text: 'Header', rich: false },
+      ]),
+    ).toEqual([])
+    const lazyCells = arena.createLazySheetCells(0)
+    const retainedBeforeScratchRelease = arena.retainedStorageByteLength()
+
+    arena.releaseMaterializationScratch()
+
+    expect(arena.retainedStorageByteLength()).toBeLessThan(retainedBeforeScratchRelease)
+    expect(lazyCells).toHaveLength(1000)
+    expect(lazyCells[0]).toEqual({ address: 'A1', value: 'Header' })
+    expect(lazyCells[999]).toEqual({ address: 'J100', value: 999 })
+    expect(arena.snapshot().stringIds).toEqual(Uint32Array.from(Array.from({ length: 1000 }, (_, index) => (index === 0 ? 1 : 0xffffffff))))
+  })
+
   it('eagerly materializes retained shared strings without duplicating them into arena pools', () => {
     const arena = new ImportedWorkbookArena()
     arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 0, sharedStringIndex: 1 })

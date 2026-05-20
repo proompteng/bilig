@@ -66,6 +66,35 @@ describe('public workbook corpus compact verifier', () => {
     )
   })
 
+  it('uses headless visitor verification instead of a failed import when full public arrays exceed the case cell cap', () => {
+    const workbookBytes = buildLargeSimpleNumericWorkbookBytes(200_001)
+    const corpusCase = verifyLargeSimpleWorkbookCompactPreflight({
+      artifact: testArtifact({ byteSize: workbookBytes.byteLength }),
+      source: xlsxZipByteSourceFromBytes(workbookBytes),
+      baseEvidence: [],
+      classifyUnsupportedFeatures: (_snapshot, _warnings, _featureCounts, options) => [...(options.extraClassifications ?? [])],
+      maxCellCount: 100_000,
+      minByteLength: 0,
+      runStructuralSmoke: true,
+      runtimeMetrics: startVerificationRuntimeMetrics(),
+      workerOptions: {},
+    })
+
+    expect(corpusCase?.validation.importPassed).toBe(true)
+    expect(corpusCase?.featureCounts.cellCount).toBe(200_001)
+    expect(corpusCase?.unsupportedFeatureClassifications).toEqual([
+      'xlsx.publicCorpus.resourceLimit:cellCount>100000',
+      'xlsx.publicCorpus.resourceLimit:preflightRoundTripBudget>100000cells',
+      'xlsx.publicCorpus.resourceLimit:preflightStructuralSmokeBudget>100000cells',
+    ])
+    expect(corpusCase?.evidence).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('headless large-simple visitor import supplied counts and metadata without public cell arrays'),
+        expect.stringContaining('large-simple-import-phase=zip-source-release'),
+      ]),
+    )
+  })
+
   it('uses headless large-simple verification for formula-heavy workbooks when formula oracle is resource-skipped', async () => {
     const workbookBytes = buildLargeSimpleFormulaHeavyWorkbookBytes({ rowCount: 100_001, formulaRowCount: 2_001 })
     expect(workbookBytes.byteLength).toBeLessThan(1_000_000)

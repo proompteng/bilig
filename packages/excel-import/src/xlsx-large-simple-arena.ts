@@ -82,6 +82,8 @@ export class ImportedWorkbookArena {
   private numberValues: Float64Array<ArrayBuffer> | undefined
   private integerValues: Int32Array<ArrayBuffer> | undefined
   private stringIds: Uint32Array<ArrayBuffer> | undefined
+  private sparseStringCellIndexes: Uint32Array<ArrayBuffer> | undefined
+  private sparseStringIds: Uint32Array<ArrayBuffer> | undefined
   private booleanValues: Uint8Array<ArrayBuffer> | undefined
   private formulaIds: Uint32Array<ArrayBuffer> | undefined
   private length = 0
@@ -117,6 +119,23 @@ export class ImportedWorkbookArena {
 
   get cellCount(): number {
     return this.length
+  }
+
+  retainedStorageByteLength(): number {
+    return (
+      (this.sheetIndexes?.byteLength ?? 0) +
+      this.rows.byteLength +
+      this.columns.byteLength +
+      this.valueKinds.byteLength +
+      (this.numberValues?.byteLength ?? 0) +
+      (this.integerValues?.byteLength ?? 0) +
+      (this.stringIds?.byteLength ?? 0) +
+      (this.sparseStringCellIndexes?.byteLength ?? 0) +
+      (this.sparseStringIds?.byteLength ?? 0) +
+      (this.booleanValues?.byteLength ?? 0) +
+      (this.formulaIds?.byteLength ?? 0) +
+      (this.linearCellIndexes?.byteLength ?? 0)
+    )
   }
 
   reserveCellCapacity(capacity: number): void {
@@ -333,6 +352,7 @@ export class ImportedWorkbookArena {
 
   snapshot(): ImportedWorkbookArenaSnapshot {
     this.materializeCoordinateStorage(this.length)
+    const stringIds = this.snapshotStringIds()
     return {
       sheetIndex: this.sheetIndex,
       ...(this.sheetIndexes ? { sheetIndexes: this.sheetIndexes.subarray(0, this.length) } : {}),
@@ -341,7 +361,7 @@ export class ImportedWorkbookArena {
       valueKinds: this.valueKinds.subarray(0, this.length),
       ...(this.numberValues ? { numberValues: this.numberValues.subarray(0, this.length) } : {}),
       ...(this.integerValues ? { integerValues: this.integerValues.subarray(0, this.length) } : {}),
-      ...(this.stringIds ? { stringIds: this.stringIds.subarray(0, this.length) } : {}),
+      ...(stringIds ? { stringIds } : {}),
       ...(this.booleanValues ? { booleanValues: this.booleanValues.subarray(0, this.length) } : {}),
       ...(this.formulaIds ? { formulaIds: this.formulaIds.subarray(0, this.length) } : {}),
       strings: this.strings,
@@ -358,6 +378,8 @@ export class ImportedWorkbookArena {
     this.numberValues = undefined
     this.integerValues = undefined
     this.stringIds = undefined
+    this.sparseStringCellIndexes = undefined
+    this.sparseStringIds = undefined
     this.booleanValues = undefined
     this.formulaIds = undefined
     this.length = 0
@@ -381,6 +403,7 @@ export class ImportedWorkbookArena {
   }
 
   releaseMaterializationScratch(): void {
+    this.compactSparseStringIds()
     this.stringIdsByValue.clear()
     this.stringDedupeKeys.length = 0
     this.stringDedupeEvictionIndex = 0
@@ -478,7 +501,7 @@ export class ImportedWorkbookArena {
       case valueKindInteger:
         return this.integerValues?.[index]
       case valueKindString: {
-        const stringId = this.stringIds?.[index] ?? noPoolId
+        const stringId = this.stringIdAt(index)
         return stringId === noPoolId ? undefined : this.strings[stringId]
       }
       case valueKindSharedStringRef: {
@@ -606,6 +629,19 @@ export class ImportedWorkbookArena {
     if (this.stringIds) {
       return this.stringIds
     }
+    if (this.sparseStringCellIndexes && this.sparseStringIds) {
+      const output = filledUint32Array(this.valueKinds.length, noPoolId)
+      for (let index = 0; index < this.sparseStringCellIndexes.length; index += 1) {
+        const cellIndex = this.sparseStringCellIndexes[index] ?? -1
+        if (cellIndex >= 0 && cellIndex < output.length) {
+          output[cellIndex] = this.sparseStringIds[index] ?? noPoolId
+        }
+      }
+      this.sparseStringCellIndexes = undefined
+      this.sparseStringIds = undefined
+      this.stringIds = output
+      return this.stringIds
+    }
     this.stringIds = filledUint32Array(this.valueKinds.length, noPoolId)
     return this.stringIds
   }
@@ -661,7 +697,7 @@ export class ImportedWorkbookArena {
         return Math.trunc(value)
       }
     }
-    return this.stringIds?.[index] ?? noPoolId
+    return this.stringIdAt(index)
   }
 
   private moveSharedStringIndexesToNumberValues(): void {
@@ -675,6 +711,19 @@ export class ImportedWorkbookArena {
     }
     this.stringIds = undefined
     this.sharedStringRefsInNumberValues = true
+  }
+
+  private stringIdAt(index: number): number {
+    if (this.stringIds) {
+      return this.stringIds[index] ?? noPoolId
+    }
+    const sparseIndexes = this.sparseStringCellIndexes
+    const sparseIds = this.sparseStringIds
+    if (!sparseIndexes || !sparseIds) {
+      return noPoolId
+    }
+    const offset = binarySearchUint32(sparseIndexes, index)
+    return offset === -1 ? noPoolId : (sparseIds[offset] ?? noPoolId)
   }
 
   private internString(value: string): number {
@@ -839,6 +888,9 @@ export class ImportedWorkbookArena {
   }
 
   private resizeStorage(nextCapacity: number): void {
+    if (this.sparseStringCellIndexes || this.sparseStringIds) {
+      this.ensureStringIdStorage()
+    }
     if (this.sheetIndexes) {
       this.sheetIndexes = growUint32Array(this.sheetIndexes, nextCapacity)
     }
@@ -864,6 +916,62 @@ export class ImportedWorkbookArena {
     if (this.formulaIds) {
       this.formulaIds = growUint32Array(this.formulaIds, nextCapacity, noPoolId)
     }
+  }
+
+  private compactSparseStringIds(): void {
+    const denseStringIds = this.stringIds
+    if (!denseStringIds || this.length === 0) {
+      return
+    }
+    let retainedCount = 0
+    for (let index = 0; index < this.length; index += 1) {
+      if ((denseStringIds[index] ?? noPoolId) !== noPoolId) {
+        retainedCount += 1
+      }
+    }
+    if (retainedCount === 0) {
+      this.stringIds = undefined
+      this.sparseStringCellIndexes = undefined
+      this.sparseStringIds = undefined
+      return
+    }
+    if (retainedCount * 2 >= this.length) {
+      return
+    }
+    const indexes = new Uint32Array(retainedCount)
+    const ids = new Uint32Array(retainedCount)
+    let outputIndex = 0
+    for (let index = 0; index < this.length; index += 1) {
+      const stringId = denseStringIds[index] ?? noPoolId
+      if (stringId === noPoolId) {
+        continue
+      }
+      indexes[outputIndex] = index
+      ids[outputIndex] = stringId
+      outputIndex += 1
+    }
+    this.stringIds = undefined
+    this.sparseStringCellIndexes = indexes
+    this.sparseStringIds = ids
+  }
+
+  private snapshotStringIds(): Uint32Array | undefined {
+    if (this.stringIds) {
+      return this.stringIds.subarray(0, this.length)
+    }
+    const sparseIndexes = this.sparseStringCellIndexes
+    const sparseIds = this.sparseStringIds
+    if (!sparseIndexes || !sparseIds || sparseIndexes.length === 0) {
+      return undefined
+    }
+    const output = filledUint32Array(this.length, noPoolId)
+    for (let index = 0; index < sparseIndexes.length; index += 1) {
+      const cellIndex = sparseIndexes[index] ?? -1
+      if (cellIndex >= 0 && cellIndex < output.length) {
+        output[cellIndex] = sparseIds[index] ?? noPoolId
+      }
+    }
+    return output
   }
 }
 
@@ -923,4 +1031,22 @@ function canStoreLinearCoordinate(width: number, row: number, column: number): b
 
 function canStoreInt32Number(value: number): boolean {
   return Number.isInteger(value) && value >= minInt32 && value <= maxInt32 && !Object.is(value, -0)
+}
+
+function binarySearchUint32(values: Uint32Array, target: number): number {
+  let low = 0
+  let high = values.length - 1
+  while (low <= high) {
+    const mid = (low + high) >>> 1
+    const value = values[mid] ?? 0
+    if (value === target) {
+      return mid
+    }
+    if (value < target) {
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+  return -1
 }

@@ -13,6 +13,7 @@ import type { PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus
 import { largeSimpleImportPhaseTelemetryEvidence } from './public-workbook-corpus-large-simple-evidence.ts'
 import {
   formulaOracleFormulaCountResourceLimitPreflight,
+  type ResourceLimitPreflight,
   roundTripResourceLimitPreflight,
   structuralSmokeResourceLimitPreflight,
   unsupportedResourceLimitCase,
@@ -85,10 +86,12 @@ export function verifyLargeSimpleWorkbookCompactPreflight(args: {
   }
   const featureCounts = featureCountsFromLargeSimpleStats(inspected.stats)
   const footprint = footprintFromLargeSimpleInspect(inspected, featureCounts)
+  const fullSnapshotResourceLimit =
+    featureCounts.cellCount > args.maxCellCount ? largeSimpleFullSnapshotResourceLimit(featureCounts, args.maxCellCount) : null
   const recordImportTiming = (): void => {
     args.runtimeMetrics.phaseTimings.push({ phase: 'import-xlsx', elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)) })
   }
-  if (featureCounts.cellCount > args.maxCellCount) {
+  if (fullSnapshotResourceLimit && !shouldUseCompactLargeSimpleFeatureCounts(args.artifact, featureCounts, args.runStructuralSmoke)) {
     recordImportTiming()
     return unsupportedResourceLimitCase(args.artifact, args.baseEvidence, footprint, args.maxCellCount)
   }
@@ -103,6 +106,7 @@ export function verifyLargeSimpleWorkbookCompactPreflight(args: {
     args.baseEvidence,
     args.runStructuralSmoke,
     args.classifyUnsupportedFeatures,
+    fullSnapshotResourceLimit ? [fullSnapshotResourceLimit] : [],
   )
 }
 
@@ -191,6 +195,7 @@ function buildLargeSimpleCompactCase(
   baseEvidence: readonly string[],
   runStructuralSmoke: boolean,
   classifyUnsupportedFeatures: LargeSimpleUnsupportedFeatureClassifier,
+  extraResourceLimits: readonly ResourceLimitPreflight[] = [],
 ): PublicWorkbookCorpusCase {
   const metadata: PublicWorkbookCorpusCase['workbookMetadata'] = {
     workbookName: inspected.workbookName,
@@ -209,11 +214,13 @@ function buildLargeSimpleCompactCase(
     throw new Error('Large-simple compact verification requires resource-skipped round-trip and structural phases.')
   }
   const phaseResourceLimitClassifications = [
+    ...extraResourceLimits.map((entry) => entry.classification),
     ...(formulaOracleResourceLimit ? [formulaOracleResourceLimit.classification] : []),
     roundTripResourceLimit.classification,
     ...(structuralSmokeResourceLimit ? [structuralSmokeResourceLimit.classification] : []),
   ]
   const phaseResourceLimitEvidence = [
+    ...extraResourceLimits.flatMap((entry) => entry.evidence),
     ...(formulaOracleResourceLimit?.evidence ?? []),
     ...roundTripResourceLimit.evidence,
     ...(structuralSmokeResourceLimit?.evidence ?? []),
@@ -255,6 +262,18 @@ function buildLargeSimpleCompactCase(
       ...(hasResourceLimitUnsupportedClassifications(unsupportedFeatureClassifications)
         ? [publicWorkbookResourceLimitClassifierEvidence, ...phaseResourceLimitEvidence]
         : []),
+    ],
+  }
+}
+
+function largeSimpleFullSnapshotResourceLimit(featureCounts: PublicWorkbookFeatureCounts, maxCellCount: number): ResourceLimitPreflight {
+  return {
+    classification: `xlsx.publicCorpus.resourceLimit:cellCount>${String(maxCellCount)}`,
+    evidence: [
+      'rss-limit-phase=import-xlsx',
+      `Full public snapshot materialization skipped because workbook has ${String(
+        featureCounts.cellCount,
+      )} cells, above verifier max ${String(maxCellCount)}; headless large-simple visitor import supplied counts and metadata without public cell arrays.`,
     ],
   }
 }
