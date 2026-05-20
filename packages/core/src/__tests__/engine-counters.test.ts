@@ -36,6 +36,9 @@ const oracleStructuralCounterKeys = [
 const oracleAggregateCounterKeys = [
   'directAggregateScanEvaluations',
   'directAggregateScanCells',
+  'directAggregatePageEvaluations',
+  'directAggregatePageFullHits',
+  'directAggregatePageEdgeCells',
   'directAggregatePrefixEvaluations',
   'nativeDirectAggregatePrefixEvaluations',
   'directAggregateDeltaApplications',

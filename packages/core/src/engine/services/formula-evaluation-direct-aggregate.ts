@@ -1,13 +1,15 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineCounters } from '../../perf/engine-counters.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
+import { BLOCK_ROWS } from '../../sheet-grid.js'
 import type { WorkbookStore } from '../../workbook-store.js'
-import type { RuntimeFormula } from '../runtime-state.js'
+import type { RuntimeDirectAggregateDescriptor, RuntimeFormula } from '../runtime-state.js'
 import type { RangeAggregateCacheService } from './range-aggregate-cache-service.js'
 import { decodeErrorCode, directErrorResult, directNumberResult, offsetDirectAggregateResult } from './formula-evaluation-helpers.js'
 
 const DIRECT_AGGREGATE_SCAN_MAX_LENGTH = 64
 const DIRECT_AGGREGATE_PREFIX_MIN_LENGTH = 16
+const DIRECT_AGGREGATE_PAGE_SHIFT_MIN_ROWS = BLOCK_ROWS * 16
 
 export function tryEvaluateDirectAggregate(input: {
   readonly formula: RuntimeFormula
@@ -21,6 +23,61 @@ export function tryEvaluateDirectAggregate(input: {
     return undefined
   }
   const columnCount = directAggregate.colEnd - directAggregate.col + 1
+  const pageStats = directAggregatePageStats(directAggregate.rowStart, directAggregate.rowEnd)
+  const canUsePageSummary =
+    input.formula.dependencyIndices.length === 0 &&
+    (directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average' || directAggregate.aggregateKind === 'count') &&
+    directAggregate.rowStart >= DIRECT_AGGREGATE_PAGE_SHIFT_MIN_ROWS &&
+    pageStats.edgeCells <= Math.max(pageStats.fullPageCells, BLOCK_ROWS * 2) &&
+    !hasReusableSharedPrefix(input.aggregateCache, directAggregate)
+  if (canUsePageSummary) {
+    let sum = 0
+    let count = 0
+    let averageCount = 0
+    let errorCount = 0
+    let errorCode = ErrorCode.None
+    let fullPageHits = 0
+    let edgeCellScans = 0
+    let resolved = true
+    for (let colOffset = 0; colOffset < columnCount; colOffset += 1) {
+      const summary = input.aggregateCache.summarizeColumnWindow({
+        sheetName: directAggregate.sheetName,
+        rowStart: directAggregate.rowStart,
+        rowEnd: directAggregate.rowEnd,
+        col: directAggregate.col + colOffset,
+      })
+      if (!summary) {
+        resolved = false
+        break
+      }
+      sum += summary.sum
+      count += summary.count
+      averageCount += summary.averageCount
+      errorCount += summary.errorCount
+      fullPageHits += summary.fullPageHits
+      edgeCellScans += summary.edgeCellScans
+      if (errorCode === ErrorCode.None && summary.errorCode !== ErrorCode.None) {
+        errorCode = summary.errorCode
+      }
+    }
+    if (resolved) {
+      addEngineCounter(input.counters, 'directAggregatePageEvaluations')
+      addEngineCounter(input.counters, 'directAggregatePageFullHits', fullPageHits)
+      addEngineCounter(input.counters, 'directAggregatePageEdgeCells', edgeCellScans)
+      if (errorCount > 0 && (directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average')) {
+        return directErrorResult(errorCode)
+      }
+      if (directAggregate.aggregateKind === 'sum') {
+        return offsetDirectAggregateResult(directAggregate, directNumberResult(sum))
+      }
+      if (directAggregate.aggregateKind === 'count') {
+        return offsetDirectAggregateResult(directAggregate, directNumberResult(count))
+      }
+      return averageCount === 0
+        ? directErrorResult(ErrorCode.Div0)
+        : offsetDirectAggregateResult(directAggregate, directNumberResult(sum / averageCount))
+    }
+  }
   const canUseSlidingPrefix =
     input.formula.dependencyIndices.length === 0 &&
     (directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average' || directAggregate.aggregateKind === 'count') &&
@@ -156,4 +213,46 @@ export function tryEvaluateDirectAggregate(input: {
   return averageCount === 0
     ? directErrorResult(ErrorCode.Div0)
     : offsetDirectAggregateResult(directAggregate, directNumberResult(sum / averageCount))
+}
+
+function directAggregatePageStats(
+  rowStart: number,
+  rowEnd: number,
+): {
+  readonly fullPages: number
+  readonly fullPageCells: number
+  readonly edgeCells: number
+} {
+  const length = rowEnd - rowStart + 1
+  const firstFullPageStart = Math.ceil(rowStart / BLOCK_ROWS) * BLOCK_ROWS
+  const lastFullPageStart = Math.floor((rowEnd - BLOCK_ROWS + 1) / BLOCK_ROWS) * BLOCK_ROWS
+  if (lastFullPageStart < firstFullPageStart) {
+    return { fullPages: 0, fullPageCells: 0, edgeCells: length }
+  }
+  const fullPages = (lastFullPageStart - firstFullPageStart) / BLOCK_ROWS + 1
+  const fullPageCells = fullPages * BLOCK_ROWS
+  return { fullPages, fullPageCells, edgeCells: length - fullPageCells }
+}
+
+function hasReusableSharedPrefix(aggregateCache: RangeAggregateCacheService, directAggregate: RuntimeDirectAggregateDescriptor): boolean {
+  const sharedPrefixStart =
+    directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average' || directAggregate.aggregateKind === 'count'
+      ? 0
+      : directAggregate.rowStart
+  for (let col = directAggregate.col; col <= directAggregate.colEnd; col += 1) {
+    if (
+      aggregateCache.hasReusableColumnPrefix(
+        {
+          sheetName: directAggregate.sheetName,
+          rowStart: sharedPrefixStart,
+          rowEnd: directAggregate.rowEnd,
+          col,
+        },
+        directAggregate.aggregateKind,
+      )
+    ) {
+      return true
+    }
+  }
+  return false
 }

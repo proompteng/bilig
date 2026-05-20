@@ -18,7 +18,7 @@ export interface RuntimeColumnSlice {
   errors: Uint16Array
 }
 
-interface RuntimeColumnPage {
+export interface RuntimeColumnPage {
   readonly rowStart: number
   nonEmptyCount: number
   readonly tags: Uint8Array

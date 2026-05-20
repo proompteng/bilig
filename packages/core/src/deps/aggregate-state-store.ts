@@ -1,6 +1,12 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { WorkbookStore } from '../workbook-store.js'
-import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from '../engine/services/runtime-column-store-service.js'
+import { BLOCK_ROWS } from '../sheet-grid.js'
+import type {
+  EngineRuntimeColumnStoreService,
+  RuntimeColumnOwner,
+  RuntimeColumnPage,
+  RuntimeColumnView,
+} from '../engine/services/runtime-column-store-service.js'
 import type { RegionGraph } from './region-graph.js'
 import type { RegionId } from './region-node-store.js'
 
@@ -25,11 +31,31 @@ export interface AggregateStateEntry {
   prefixMaximums: Float64Array
 }
 
+export interface AggregateColumnWindowSummary {
+  readonly sum: number
+  readonly count: number
+  readonly averageCount: number
+  readonly errorCount: number
+  readonly errorCode: ErrorCode
+  readonly fullPageHits: number
+  readonly edgeCellScans: number
+}
+
 export interface AggregateStateStore {
   readonly getOrBuildPrefixForRegion: (
     regionId: RegionId,
     aggregateKind?: 'sum' | 'average' | 'count' | 'min' | 'max',
   ) => AggregateStateEntry
+  readonly summarizeColumnWindow: (request: {
+    sheetName: string
+    rowStart: number
+    rowEnd: number
+    col: number
+  }) => AggregateColumnWindowSummary | undefined
+  readonly hasReusableColumnPrefix: (
+    request: { sheetName: string; rowStart: number; rowEnd: number; col: number },
+    aggregateKind?: 'sum' | 'average' | 'count' | 'min' | 'max',
+  ) => boolean
   readonly noteLiteralWrite: (request: {
     readonly sheetName: string
     readonly row: number
@@ -38,6 +64,33 @@ export interface AggregateStateStore {
     readonly newValue: CellValue
   }) => void
   readonly invalidateColumn: (sheetName: string, col: number) => void
+}
+
+interface MutableAggregateColumnWindowSummary {
+  sum: number
+  count: number
+  averageCount: number
+  errorCount: number
+  errorCode: ErrorCode
+  fullPageHits: number
+  edgeCellScans: number
+}
+
+interface AggregatePageIndexEntry {
+  readonly sheetName: string
+  readonly col: number
+  readonly columnVersion: number
+  readonly structureVersion: number
+  readonly sheetColumnVersions: Uint32Array
+  readonly pages: ReadonlyMap<number, AggregatePageSummary>
+}
+
+interface AggregatePageSummary {
+  readonly sum: number
+  readonly count: number
+  readonly averageCount: number
+  readonly errorCount: number
+  readonly errorCode: ErrorCode
 }
 
 function columnKeyPrefix(sheetName: string, col: number): string {
@@ -143,6 +196,90 @@ function averageCountContribution(value: CellValue): number {
   return value.tag === ValueTag.Number || value.tag === ValueTag.Boolean ? 1 : 0
 }
 
+function emptyWindowSummary(): MutableAggregateColumnWindowSummary {
+  return {
+    sum: 0,
+    count: 0,
+    averageCount: 0,
+    errorCount: 0,
+    errorCode: ErrorCode.None,
+    fullPageHits: 0,
+    edgeCellScans: 0,
+  }
+}
+
+function addRawAggregateContribution(
+  summary: MutableAggregateColumnWindowSummary,
+  rawTag: number | undefined,
+  numeric: number,
+  errorCode: number | undefined,
+): void {
+  switch (decodeValueTag(rawTag)) {
+    case ValueTag.Number:
+      summary.sum += numeric
+      summary.count += 1
+      summary.averageCount += 1
+      break
+    case ValueTag.Boolean:
+      summary.sum += numeric !== 0 ? 1 : 0
+      summary.count += 1
+      summary.averageCount += 1
+      break
+    case ValueTag.Error:
+      summary.errorCount += 1
+      if (summary.errorCode === ErrorCode.None) {
+        summary.errorCode = (errorCode as ErrorCode | undefined) ?? ErrorCode.None
+      }
+      break
+    case ValueTag.Empty:
+    case ValueTag.String:
+    default:
+      break
+  }
+}
+
+function addPageSummary(target: MutableAggregateColumnWindowSummary, page: AggregatePageSummary | undefined): void {
+  if (!page) {
+    return
+  }
+  target.sum += page.sum
+  target.count += page.count
+  target.averageCount += page.averageCount
+  target.errorCount += page.errorCount
+  if (target.errorCode === ErrorCode.None && page.errorCode !== ErrorCode.None) {
+    target.errorCode = page.errorCode
+  }
+}
+
+function summarizePage(page: RuntimeColumnPage): AggregatePageSummary {
+  const summary = emptyWindowSummary()
+  for (let localRow = 0; localRow < BLOCK_ROWS; localRow += 1) {
+    addRawAggregateContribution(summary, page.tags[localRow], page.numbers[localRow] ?? 0, page.errors[localRow])
+  }
+  return {
+    sum: summary.sum,
+    count: summary.count,
+    averageCount: summary.averageCount,
+    errorCount: summary.errorCount,
+    errorCode: summary.errorCode,
+  }
+}
+
+function scanPageRows(
+  target: MutableAggregateColumnWindowSummary,
+  page: RuntimeColumnPage | undefined,
+  localStart: number,
+  localEnd: number,
+): void {
+  target.edgeCellScans += localEnd - localStart + 1
+  if (!page) {
+    return
+  }
+  for (let localRow = localStart; localRow <= localEnd; localRow += 1) {
+    addRawAggregateContribution(target, page.tags[localRow], page.numbers[localRow] ?? 0, page.errors[localRow])
+  }
+}
+
 export function createAggregateStateStore(args: {
   readonly workbook: Pick<WorkbookStore, 'getSheet'>
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
@@ -150,6 +287,7 @@ export function createAggregateStateStore(args: {
 }): AggregateStateStore {
   const cache = new Map<string, AggregateStateEntry>()
   const entriesByColumn = new Map<string, AggregateStateEntry[]>()
+  const pageIndexCache = new Map<string, AggregatePageIndexEntry>()
 
   const registerEntry = (entry: AggregateStateEntry): void => {
     const key = columnKeyPrefix(entry.sheetName, entry.col)
@@ -230,6 +368,97 @@ export function createAggregateStateStore(args: {
     }
   }
 
+  const getColumnOwner = (request: { sheetName: string; col: number }): RuntimeColumnOwner | undefined => {
+    const direct = Reflect.get(args.runtimeColumnStore, 'getColumnOwner')
+    return typeof direct === 'function' ? direct.call(args.runtimeColumnStore, request) : undefined
+  }
+
+  const getOrBuildPageIndex = (request: { sheetName: string; col: number }): AggregatePageIndexEntry | undefined => {
+    const owner = getColumnOwner(request)
+    if (!owner) {
+      return undefined
+    }
+    const key = columnKeyPrefix(request.sheetName, request.col)
+    const existing = pageIndexCache.get(key)
+    if (
+      existing &&
+      existing.columnVersion === owner.columnVersion &&
+      existing.structureVersion === owner.structureVersion &&
+      existing.sheetColumnVersions === owner.sheetColumnVersions
+    ) {
+      return existing
+    }
+    const pages = new Map<number, AggregatePageSummary>()
+    for (const [pageRowStart, page] of owner.pages) {
+      pages.set(pageRowStart, summarizePage(page))
+    }
+    const next: AggregatePageIndexEntry = {
+      sheetName: request.sheetName,
+      col: request.col,
+      columnVersion: owner.columnVersion,
+      structureVersion: owner.structureVersion,
+      sheetColumnVersions: owner.sheetColumnVersions,
+      pages,
+    }
+    pageIndexCache.set(key, next)
+    return next
+  }
+
+  const summarizeColumnWindow = (request: {
+    sheetName: string
+    rowStart: number
+    rowEnd: number
+    col: number
+  }): AggregateColumnWindowSummary | undefined => {
+    if (request.rowEnd < request.rowStart) {
+      return {
+        sum: 0,
+        count: 0,
+        averageCount: 0,
+        errorCount: 0,
+        errorCode: ErrorCode.None,
+        fullPageHits: 0,
+        edgeCellScans: 0,
+      }
+    }
+    const index = getOrBuildPageIndex({ sheetName: request.sheetName, col: request.col })
+    const owner = getColumnOwner({ sheetName: request.sheetName, col: request.col })
+    if (!index || !owner) {
+      return undefined
+    }
+    const summary = emptyWindowSummary()
+    let row = request.rowStart
+    while (row <= request.rowEnd) {
+      const pageRowStart = Math.floor(row / BLOCK_ROWS) * BLOCK_ROWS
+      const pageRowEnd = Math.min(request.rowEnd, pageRowStart + BLOCK_ROWS - 1)
+      if (row === pageRowStart && pageRowEnd === pageRowStart + BLOCK_ROWS - 1) {
+        addPageSummary(summary, index.pages.get(pageRowStart))
+        summary.fullPageHits += 1
+      } else {
+        scanPageRows(summary, owner.pages.get(pageRowStart), row - pageRowStart, pageRowEnd - pageRowStart)
+      }
+      row = pageRowEnd + 1
+    }
+    return summary
+  }
+
+  const hasReusableColumnPrefix = (
+    request: { sheetName: string; rowStart: number; rowEnd: number; col: number },
+    aggregateKind?: 'sum' | 'average' | 'count' | 'min' | 'max',
+  ): boolean => {
+    const rowStart = prefixAnchorForRegion(request.rowStart, aggregateKind)
+    const currentVersions = getCurrentVersions(request.sheetName, request.col)
+    const existing = cache.get(cacheKey(request.sheetName, request.col, rowStart))
+    return (
+      existing !== undefined &&
+      !isStaleEntry(existing) &&
+      existing.columnVersion === currentVersions.columnVersion &&
+      existing.structureVersion === currentVersions.structureVersion &&
+      existing.rowStart <= request.rowStart &&
+      (aggregateKind !== 'min' && aggregateKind !== 'max' ? true : existing.extremaValid)
+    )
+  }
+
   const extendEntry = (entry: AggregateStateEntry, targetRowEnd: number): AggregateStateEntry => {
     const view = getColumnView({
       sheetName: entry.sheetName,
@@ -298,6 +527,8 @@ export function createAggregateStateStore(args: {
   }
 
   return {
+    summarizeColumnWindow,
+    hasReusableColumnPrefix,
     getOrBuildPrefixForRegion(regionId, aggregateKind) {
       const region = args.regionGraph.getRegion(regionId)
       if (!region) {
@@ -346,6 +577,7 @@ export function createAggregateStateStore(args: {
       return extendEntry(next, region.rowEnd)
     },
     noteLiteralWrite({ sheetName, row, col, oldValue, newValue }) {
+      pageIndexCache.delete(columnKeyPrefix(sheetName, col))
       const entries = entriesByColumn.get(columnKeyPrefix(sheetName, col))
       if (!entries) {
         return
@@ -396,6 +628,7 @@ export function createAggregateStateStore(args: {
     },
     invalidateColumn(sheetName, col) {
       const key = columnKeyPrefix(sheetName, col)
+      pageIndexCache.delete(key)
       const entries = entriesByColumn.get(key)
       if (!entries) {
         return

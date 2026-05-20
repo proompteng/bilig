@@ -15,6 +15,32 @@ function buildSlidingAggregateSheet(rowCount: number, window: number): readonly 
 }
 
 describe('WorkPaper sliding aggregate fast path', () => {
+  it('evaluates far shifted SUM COUNT and AVERAGE windows from column page summaries', () => {
+    const rowCount = 4_224
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: Array.from({ length: rowCount }, (_, row) => {
+        if (row === 0) {
+          return [null, '=SUM(A4097:A4224)', '=COUNT(A4097:A4224)', '=AVERAGE(A4097:A4224)']
+        }
+        if (row >= 4_096) {
+          return [row - 4_095]
+        }
+        return []
+      }),
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({ tag: ValueTag.Number, value: 8256 })
+    expect(workbook.getCellValue(cell(sheetId, 0, 2))).toEqual({ tag: ValueTag.Number, value: 128 })
+    expect(workbook.getCellValue(cell(sheetId, 0, 3))).toEqual({ tag: ValueTag.Number, value: 64.5 })
+    const counters = workbook.getPerformanceCounters()
+    expect(counters.formulasBound).toBe(0)
+    expect(counters.directAggregatePageEvaluations).toBe(3)
+    expect(counters.directAggregatePageFullHits).toBe(3)
+    expect(counters.directAggregatePageEdgeCells).toBe(0)
+    expect(counters.directAggregatePrefixEvaluations).toBe(0)
+  })
+
   it('keeps benchmark-shaped public numeric edits on the compact direct aggregate path', () => {
     const rowCount = 1_500
     const workbook = WorkPaper.buildFromSheets({
