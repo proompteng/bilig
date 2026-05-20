@@ -7,7 +7,7 @@ import type {
   WorkbookRichTextCellSnapshot,
 } from '@bilig/protocol'
 import { needsConditionalFormatArtifactXml, readImportedSheetConditionalFormatsFromElementXml } from './xlsx-conditional-formats.js'
-import { readImportedSheetAutoFiltersFromElementXml } from './xlsx-filters.js'
+import { readLargeSimpleAutoFiltersFromBytes } from './xlsx-large-simple-autofilter-byte-scan.js'
 import {
   readLargeSimpleCellValueFromTextRange,
   readLargeSimpleSharedStringIndexFromTextRange,
@@ -494,7 +494,7 @@ class LargeSimpleWorksheetChunkScanner {
       if (!this.sheetName) {
         return false
       }
-      const filters = readImportedSheetAutoFiltersFromElementXml(this.sheetName, decodeBytes(this.buffer, startIndex, endIndex))
+      const filters = readLargeSimpleAutoFiltersFromBytes(this.sheetName, this.buffer, startIndex, endIndex)
       this.filters = [...(this.filters ?? []), ...filters]
       return true
     }
