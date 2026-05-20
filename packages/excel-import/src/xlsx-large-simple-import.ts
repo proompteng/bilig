@@ -617,14 +617,8 @@ export function tryImportLargeSimpleXlsx(
       continue
     }
     const snapshotMaterializationStart = phaseRecorder.start()
-    const keepSharedStringRefsForLazyCells =
-      materializeCells && hasSharedStrings && scanned.cellScan.cellCount > lazySheetCellMaterializationThreshold
-    const resolvedRichTextCells =
-      materializeCells && hasSharedStrings
-        ? keepSharedStringRefsForLazyCells
-          ? scanned.cellScan.arena.retainSharedStringReferences(sharedStrings)
-          : scanned.cellScan.arena.resolveSharedStrings(sharedStrings)
-        : []
+    const retainSharedStringRefsForCells = materializeCells && hasSharedStrings
+    const resolvedRichTextCells = retainSharedStringRefsForCells ? scanned.cellScan.arena.retainSharedStringReferences(sharedStrings) : []
     if (resolvedRichTextCells === null) {
       return null
     }
