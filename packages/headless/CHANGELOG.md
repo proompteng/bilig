@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.1
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.0
+- Manual override: no
+
+## Fixes
+- fix(xlsx): release large import arena scratch (717b6a8a)
+
 ## 0.40.0
 
 - Release type: minor
