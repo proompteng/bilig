@@ -1,5 +1,3 @@
-import { strFromU8 } from 'fflate'
-
 import type {
   WorkbookAxisEntrySnapshot,
   WorkbookAxisMetadataSnapshot,
@@ -35,6 +33,17 @@ import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool
 import { stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
 import { readKnownXmlLocalName } from './xlsx-large-simple-xml-name.js'
 import {
+  decodeAscii,
+  decodeBytes,
+  decodeCellAddress,
+  decodePackedCellAddressBytes,
+  encodeCellAddress,
+  isAsciiWhitespace,
+  isXmlNameByte,
+  packedAddressColumn,
+  packedAddressRow,
+} from './xlsx-large-simple-xml-byte-utils.js'
+import {
   metadataWorksheetTagNames,
   richTextRunPattern,
   unsupportedWorksheetTagNames,
@@ -46,7 +55,6 @@ const slash = 47
 const greaterThan = 62
 const doubleQuote = 34
 const singleQuote = 39
-const packedAddressColumnFactor = 16_384
 const emptyBytes = new Uint8Array(0)
 
 export interface LargeSimpleWorksheetStreamScan {
@@ -66,6 +74,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     readonly retainMetadataXml?: boolean
     readonly sheetName?: string
     readonly stringPool?: ImportedWorkbookStringPool
+    readonly onRetainedBufferLength?: (length: number) => void
   },
 ): LargeSimpleWorksheetStreamScan | null {
   const scanner = new LargeSimpleWorksheetChunkScanner(sheetIndex, {
@@ -76,6 +85,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
     retainMetadataXml: options.retainMetadataXml !== false,
     sheetName: options.sheetName,
     stringPool: options.stringPool,
+    onRetainedBufferLength: options.onRetainedBufferLength,
   })
   if (!readChunks((chunk) => scanner.push(chunk))) {
     return null
@@ -125,6 +135,7 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
   private readonly deferSharedStrings: boolean
   private readonly retainMetadataXml: boolean
+  private activeMergeCells = false
 
   constructor(
     private readonly sheetIndex: number,
@@ -136,6 +147,7 @@ class LargeSimpleWorksheetChunkScanner {
       readonly retainMetadataXml: boolean
       readonly sheetName: string | undefined
       readonly stringPool: ImportedWorkbookStringPool | undefined
+      readonly onRetainedBufferLength: ((length: number) => void) | undefined
     },
   ) {
     this.arena = new ImportedWorkbookArena(options.stringPool)
@@ -145,6 +157,7 @@ class LargeSimpleWorksheetChunkScanner {
     this.deferSharedStrings = options.deferSharedStrings
     this.retainMetadataXml = options.retainMetadataXml
     this.sheetName = options.sheetName
+    this.reportRetainedBufferLength = () => options.onRetainedBufferLength?.(this.buffer.byteLength)
   }
 
   push(chunk: Uint8Array): void {
@@ -154,6 +167,7 @@ class LargeSimpleWorksheetChunkScanner {
     this.append(chunk)
     this.process(false)
     this.compact()
+    this.reportRetainedBufferLength()
   }
 
   finish(): LargeSimpleWorksheetStreamScan | null {
@@ -161,7 +175,11 @@ class LargeSimpleWorksheetChunkScanner {
       return null
     }
     this.process(true)
+    if (this.activeMergeCells) {
+      this.failed = true
+    }
     this.compact()
+    this.reportRetainedBufferLength()
     if (this.failed || (this.formulas.count > 0 && !this.formulas.resolveIntoArena(this.arena))) {
       return null
     }
@@ -251,6 +269,12 @@ class LargeSimpleWorksheetChunkScanner {
 
   private process(final: boolean): void {
     while (!this.failed && this.index < this.buffer.byteLength) {
+      if (this.activeMergeCells) {
+        if (!this.processActiveMergeCells(final)) {
+          return
+        }
+        continue
+      }
       if (this.buffer[this.index] !== lessThan) {
         this.index += 1
         continue
@@ -448,6 +472,17 @@ class LargeSimpleWorksheetChunkScanner {
       this.index = tagEnd + 1
       return true
     }
+    if (localName === 'mergeCells') {
+      this.activeMergeCells = true
+      this.index = tagEnd + 1
+      if (!this.processActiveMergeCells(final)) {
+        if (final) {
+          this.failed = true
+        }
+        return false
+      }
+      return true
+    }
     const closing = findClosingTag(this.buffer, tagEnd + 1, localName)
     if (!closing) {
       if (final) {
@@ -557,6 +592,62 @@ class LargeSimpleWorksheetChunkScanner {
       this.tableCount += countOpeningTags(this.buffer, contentStart, contentEnd, 'tablePart')
     }
   }
+
+  private processActiveMergeCells(final: boolean): boolean {
+    while (this.index < this.buffer.byteLength) {
+      if (this.buffer[this.index] !== lessThan) {
+        this.index += 1
+        continue
+      }
+      const closing = this.buffer[this.index + 1] === slash
+      const tagNameStart = this.index + (closing ? 2 : 1)
+      const tag = readXmlTagName(this.buffer, tagNameStart)
+      if (!tag) {
+        if (!final && tagNameStart >= this.buffer.byteLength) {
+          return false
+        }
+        this.index += 1
+        continue
+      }
+      const tagEnd = findTagEnd(this.buffer, tag.endIndex)
+      if (tagEnd === null) {
+        if (final) {
+          this.failed = true
+        }
+        return false
+      }
+      if (closing && tag.localName === 'mergeCells') {
+        this.activeMergeCells = false
+        this.index = tagEnd + 1
+        return true
+      }
+      if (!closing && tag.localName === 'mergeCell') {
+        this.collectMergeCellTag(tag.endIndex, tagEnd)
+      }
+      this.index = tagEnd + 1
+    }
+    if (final) {
+      this.failed = true
+    } else {
+      this.index = this.buffer.byteLength
+    }
+    return false
+  }
+
+  private collectMergeCellTag(nameEnd: number, tagEnd: number): void {
+    const ref = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 'ref')
+    const [startAddress, endAddress] = ref?.split(':') ?? []
+    if (!startAddress || !endAddress || startAddress === endAddress) {
+      return
+    }
+    this.mergeCount += 1
+    if (this.retainMetadataXml) {
+      this.mergeRefs ??= []
+      this.mergeRefs.push({ startAddress, endAddress })
+    }
+  }
+
+  private reportRetainedBufferLength: () => void = () => {}
 }
 
 function readInlineStringCellValue(bytes: Uint8Array, contentStart: number, contentEnd: number): string | undefined {
@@ -879,94 +970,4 @@ function skipAsciiWhitespace(bytes: Uint8Array, startIndex: number, endIndex: nu
     index += 1
   }
   return index
-}
-
-function decodeCellAddress(address: string): { readonly row: number; readonly column: number } | null {
-  const match = /^([A-Z]{1,3})([1-9][0-9]*)$/iu.exec(address.replaceAll('$', ''))
-  if (!match) {
-    return null
-  }
-  let column = 0
-  for (const letter of match[1]?.toUpperCase() ?? '') {
-    column = column * 26 + letter.charCodeAt(0) - 64
-  }
-  const row = Number(match[2])
-  return Number.isSafeInteger(row) && row > 0 && column > 0 ? { row: row - 1, column: column - 1 } : null
-}
-
-function decodePackedCellAddressBytes(bytes: Uint8Array, startIndex: number, endIndex: number): number | null {
-  let column = 0
-  let row = 0
-  let letterCount = 0
-  let digitCount = 0
-  for (let index = startIndex; index < endIndex; index += 1) {
-    const byte = bytes[index] ?? 0
-    if (byte === 36) {
-      continue
-    }
-    const upper = byte >= 97 && byte <= 122 ? byte - 32 : byte
-    if (upper >= 65 && upper <= 90 && digitCount === 0) {
-      column = column * 26 + upper - 64
-      letterCount += 1
-      continue
-    }
-    if (byte >= 48 && byte <= 57 && letterCount > 0) {
-      row = row * 10 + byte - 48
-      digitCount += 1
-      continue
-    }
-    return null
-  }
-  return letterCount > 0 && letterCount <= 3 && digitCount > 0 && row > 0 && column > 0 ? packCellAddress(row - 1, column - 1) : null
-}
-
-function packCellAddress(row: number, column: number): number {
-  return row * packedAddressColumnFactor + column
-}
-
-function packedAddressRow(value: number): number {
-  return Math.floor(value / packedAddressColumnFactor)
-}
-
-function packedAddressColumn(value: number): number {
-  return value % packedAddressColumnFactor
-}
-
-function encodeCellAddress(row: number, column: number): string {
-  let value = column + 1
-  let columnName = ''
-  while (value > 0) {
-    value -= 1
-    columnName = String.fromCharCode(65 + (value % 26)) + columnName
-    value = Math.floor(value / 26)
-  }
-  return `${columnName}${String(row + 1)}`
-}
-
-function decodeBytes(bytes: Uint8Array, startIndex: number, endIndex: number): string {
-  return strFromU8(bytes.subarray(startIndex, endIndex))
-}
-
-function decodeAscii(bytes: Uint8Array, startIndex: number, endIndex: number): string {
-  let output = ''
-  for (let index = startIndex; index < endIndex; index += 1) {
-    output += String.fromCharCode(bytes[index] ?? 0)
-  }
-  return output
-}
-
-function isAsciiWhitespace(byte: number): boolean {
-  return byte === 9 || byte === 10 || byte === 12 || byte === 13 || byte === 32
-}
-
-function isXmlNameByte(byte: number): boolean {
-  return (
-    (byte >= 65 && byte <= 90) ||
-    (byte >= 97 && byte <= 122) ||
-    (byte >= 48 && byte <= 57) ||
-    byte === 45 ||
-    byte === 46 ||
-    byte === 58 ||
-    byte === 95
-  )
 }

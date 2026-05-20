@@ -111,6 +111,9 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
       return null
     }
     this.process(true)
+    if (this.activeMetadata !== null) {
+      this.failed = true
+    }
     this.compact()
     this.reportRetainedBufferLength()
     return this.failed
@@ -433,9 +436,10 @@ class HeadlessLargeSimpleWorksheetChunkScanner {
         continue
       }
       const closing = this.buffer[this.index + 1] === slash
-      const tag = readXmlTagName(this.buffer, this.index + (closing ? 2 : 1))
+      const tagNameStart = this.index + (closing ? 2 : 1)
+      const tag = readXmlTagName(this.buffer, tagNameStart)
       if (!tag) {
-        if (!final && this.index + 1 >= this.buffer.byteLength) {
+        if (!final && tagNameStart >= this.buffer.byteLength) {
           return false
         }
         this.index += 1

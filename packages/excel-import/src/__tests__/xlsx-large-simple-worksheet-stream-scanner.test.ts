@@ -60,6 +60,30 @@ describe('large simple worksheet stream scanners', () => {
     ])
   })
 
+  it('streams large split merge metadata in materialized scans without retaining metadata bodies', () => {
+    const retainedBufferLengths: number[] = []
+    const scan = parseLargeSimpleWorksheetCellsFromChunks(splitLargeMergeCellsWorksheetXml(), 0, {
+      hasSharedStrings: false,
+      onRetainedBufferLength: (length) => retainedBufferLengths.push(length),
+    })
+
+    expect(scan?.cellScan.cellCount).toBe(1)
+    expect(scan?.cellScan.mergeCount).toBe(2)
+    expect(scan?.metadata?.merges).toEqual([
+      { startAddress: 'A1', endAddress: 'B1' },
+      { startAddress: 'A2', endAddress: 'B2' },
+    ])
+    expect(retainedBufferLengths.length).toBeGreaterThan(0)
+    expect(Math.max(...retainedBufferLengths)).toBeLessThan(1024)
+  })
+
+  it('rejects unterminated streamed metadata in headless and materialized scans', () => {
+    expect(
+      parseHeadlessLargeSimpleWorksheetFromChunks(splitUnterminatedMergeCellsWorksheetXml(), 0, { hasSharedStrings: false }),
+    ).toBeNull()
+    expect(parseLargeSimpleWorksheetCellsFromChunks(splitUnterminatedMergeCellsWorksheetXml(), 0, { hasSharedStrings: false })).toBeNull()
+  })
+
   it('preserves streamed scalar and shared-string values when parsing value byte ranges', () => {
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(scalarWorksheetXml()), 0, {
       hasSharedStrings: true,
@@ -257,8 +281,24 @@ function splitLargeMergeCellsWorksheetXml(): (onChunk: (chunk: Uint8Array) => vo
     ' '.repeat(40_000),
     ' '.repeat(40_000),
     ' '.repeat(20_000),
-    '<mergeCell ref="A2:B2"/></mergeCells>',
+    '<mergeCell ref="A2:B2"/></',
+    'mergeCells>',
     '</worksheet>',
+  ]
+  return (onChunk) => {
+    for (const chunk of chunks) {
+      onChunk(encoder.encode(chunk))
+    }
+    return true
+  }
+}
+
+function splitUnterminatedMergeCellsWorksheetXml(): (onChunk: (chunk: Uint8Array) => void) => boolean {
+  const chunks = [
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<dimension ref="A1"/>',
+    '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>',
+    '<mergeCells count="1"><mergeCell ref="A1:B1"/>',
   ]
   return (onChunk) => {
     for (const chunk of chunks) {
