@@ -31,12 +31,18 @@ const PUSH_STRING_OPCODE = Number(Opcode.PushString)
 const EMPTY_RUNTIME_PROGRAM = new Uint32Array(0)
 const INVALID_INLINE_STRING_ID = 0xffffffff
 
-function shouldEvaluateMetadataCellAliasInJs(compiled: ParsedCompiledFormula): boolean {
-  return compiled.symbolicNames.length > 0 && compiled.optimizedAst.kind === 'CellRef'
+function shouldEvaluateMetadataNameFormulaInJs(compiled: ParsedCompiledFormula): boolean {
+  return compiled.symbolicNames.length > 0
 }
 
-function normalizeMetadataCellAliasMode(compiled: ParsedCompiledFormula): ParsedCompiledFormula {
-  return shouldEvaluateMetadataCellAliasInJs(compiled) ? { ...compiled, mode: FormulaMode.JsOnly } : compiled
+function shouldEvaluateMetadataTableFormulaInJs(compiled: ParsedCompiledFormula): boolean {
+  return compiled.symbolicTables.length > 0
+}
+
+function normalizeWorkbookMetadataMode(compiled: ParsedCompiledFormula): ParsedCompiledFormula {
+  return shouldEvaluateMetadataNameFormulaInJs(compiled) || shouldEvaluateMetadataTableFormulaInJs(compiled)
+    ? { ...compiled, mode: FormulaMode.JsOnly }
+    : compiled
 }
 
 function buildInlineScalarFastPlanStringIds(args: {
@@ -144,7 +150,7 @@ export function prepareFormulaBindingFromCompiled(args: {
     ? (args.resolveWorkbookDateSystem?.() ?? serviceArgs.state.workbook.getCalculationSettings().dateSystem)
     : undefined
   const requiresWorkbookDateSystemJs = isDateSystemSensitive && workbookDateSystem === '1904'
-  const compiled = normalizeMetadataCellAliasMode(
+  const compiled = normalizeWorkbookMetadataMode(
     requiresWorkbookDateSystemJs
       ? { ...args.normalizeLookupCompileMode(args.compiledInput), mode: FormulaMode.JsOnly }
       : args.normalizeLookupCompileMode(args.compiledInput),
