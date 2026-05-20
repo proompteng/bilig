@@ -7,10 +7,18 @@ export interface LargeSimpleSharedStringEntry {
   readonly rich: boolean
 }
 
+export interface LargeSimpleSharedStringTable {
+  readonly length: number
+  readonly [index: number]: LargeSimpleSharedStringEntry | undefined
+}
+
+export type LargeSimpleSharedStrings = readonly LargeSimpleSharedStringEntry[] | LargeSimpleSharedStringTable
+
 const sharedStringElementPattern =
   /<(?:[A-Za-z_][\w.-]*:)?si\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?si)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/gu
 const richTextRunPattern = /<(?:[A-Za-z_][\w.-]*:)?r\b/u
 const partialSharedStringTagRetainLength = 256
+const sparseReferencedSharedStringDensityDivisor = 64
 
 export interface LargeSimpleReferencedSharedStringScanOptions {
   readonly onRetainedBufferLength?: (length: number) => void
@@ -27,7 +35,7 @@ export function readLargeSimpleReferencedSharedStringsFromChunks(
   readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
   referencedIndexes: ReadonlySet<number>,
   options: LargeSimpleReferencedSharedStringScanOptions = {},
-): LargeSimpleSharedStringEntry[] | null {
+): LargeSimpleSharedStrings | null {
   if (referencedIndexes.size === 0) {
     return []
   }
@@ -42,7 +50,7 @@ export function readLargeSimpleRichTextCellArtifact(
   address: string,
   openingTag: string,
   cellXml: string,
-  sharedStrings: readonly LargeSimpleSharedStringEntry[],
+  sharedStrings: LargeSimpleSharedStrings,
 ): WorkbookRichTextCellSnapshot | undefined {
   const type = readXmlAttribute(openingTag, 't')
   if (type === 's') {
@@ -72,17 +80,33 @@ export function readLargeSimpleRichTextCellArtifact(
 
 class LargeSimpleSharedStringChunkScanner {
   private readonly decoder = new TextDecoder()
-  private readonly entries: LargeSimpleSharedStringEntry[] = []
+  private readonly denseEntries: LargeSimpleSharedStringEntry[] | null
+  private readonly sparseEntries: Map<number, LargeSimpleSharedStringEntry> | null
   private buffer = ''
   private index = 0
   private sharedStringIndex = 0
   private failed = false
   private skippingUnreferencedElementName: string | null = null
+  private readonly maxReferencedIndex: number
 
   constructor(
     private readonly referencedIndexes: ReadonlySet<number>,
     private readonly options: LargeSimpleReferencedSharedStringScanOptions,
-  ) {}
+  ) {
+    let maxIndex = 0
+    for (const index of referencedIndexes) {
+      maxIndex = Math.max(maxIndex, index)
+    }
+    this.maxReferencedIndex = maxIndex
+    if (maxIndex + 1 <= referencedIndexes.size * sparseReferencedSharedStringDensityDivisor) {
+      this.denseEntries = []
+      this.denseEntries.length = maxIndex + 1
+      this.sparseEntries = null
+    } else {
+      this.denseEntries = null
+      this.sparseEntries = new Map()
+    }
+  }
 
   push(chunk: Uint8Array): void {
     if (this.failed || chunk.byteLength === 0) {
@@ -94,7 +118,7 @@ class LargeSimpleSharedStringChunkScanner {
     this.reportRetainedBufferLength()
   }
 
-  finish(): LargeSimpleSharedStringEntry[] | null {
+  finish(): LargeSimpleSharedStrings | null {
     if (this.failed) {
       return null
     }
@@ -106,11 +130,11 @@ class LargeSimpleSharedStringChunkScanner {
       return null
     }
     for (const index of this.referencedIndexes) {
-      if (!this.entries[index]) {
+      if (!this.hasEntry(index)) {
         return null
       }
     }
-    return this.entries
+    return this.denseEntries ?? createReferencedSharedStringTable(this.sparseEntries ?? new Map(), this.maxReferencedIndex)
   }
 
   private process(final: boolean): void {
@@ -145,7 +169,7 @@ class LargeSimpleSharedStringChunkScanner {
         return
       }
       if (this.referencedIndexes.has(this.sharedStringIndex)) {
-        this.entries[this.sharedStringIndex] = readLargeSimpleSharedStringEntry(this.buffer.slice(opening.start, xmlEnd))
+        this.setEntry(this.sharedStringIndex, readLargeSimpleSharedStringEntry(this.buffer.slice(opening.start, xmlEnd)))
       }
       this.sharedStringIndex += 1
       this.index = xmlEnd
@@ -193,6 +217,55 @@ class LargeSimpleSharedStringChunkScanner {
   private reportRetainedBufferLength(): void {
     this.options.onRetainedBufferLength?.(this.buffer.length)
   }
+
+  private hasEntry(index: number): boolean {
+    return this.denseEntries ? this.denseEntries[index] !== undefined : (this.sparseEntries?.has(index) ?? false)
+  }
+
+  private setEntry(index: number, entry: LargeSimpleSharedStringEntry): void {
+    if (this.denseEntries) {
+      this.denseEntries[index] = entry
+      return
+    }
+    this.sparseEntries?.set(index, entry)
+  }
+}
+
+function createReferencedSharedStringTable(
+  entries: ReadonlyMap<number, LargeSimpleSharedStringEntry>,
+  maxReferencedIndex: number,
+): LargeSimpleSharedStrings {
+  const length = maxReferencedIndex + 1
+  if (length <= entries.size * sparseReferencedSharedStringDensityDivisor) {
+    const output: LargeSimpleSharedStringEntry[] = []
+    output.length = length
+    for (const [index, entry] of entries) {
+      output[index] = entry
+    }
+    return output
+  }
+  return new Proxy(
+    { length },
+    {
+      get(target, property) {
+        if (property === 'length') {
+          return target.length
+        }
+        return typeof property === 'string' && isArrayIndexProperty(property) ? entries.get(Number(property)) : undefined
+      },
+      has(_target, property) {
+        return property === 'length' || (typeof property === 'string' && isArrayIndexProperty(property) && entries.has(Number(property)))
+      },
+    },
+  ) as LargeSimpleSharedStringTable
+}
+
+function isArrayIndexProperty(property: string): boolean {
+  if (property.length === 0 || !/^(?:0|[1-9][0-9]*)$/u.test(property)) {
+    return false
+  }
+  const index = Number(property)
+  return Number.isSafeInteger(index) && index >= 0 && index < 2 ** 32 - 1
 }
 
 function closingTagRetainLength(elementName: string): number {
@@ -201,11 +274,22 @@ function closingTagRetainLength(elementName: string): number {
 
 function readLargeSimpleSharedStringEntry(xml: string): LargeSimpleSharedStringEntry {
   const rich = richTextRunPattern.test(xml)
-  const entry: LargeSimpleSharedStringEntry = { text: stringItemText(xml), rich }
-  if (rich) {
-    Object.assign(entry, { xml })
+  if (!rich) {
+    return { text: stringItemText(xml), rich: false }
   }
-  return entry
+  return lazyRichSharedStringEntry(xml)
+}
+
+function lazyRichSharedStringEntry(xml: string): LargeSimpleSharedStringEntry {
+  let text: string | undefined
+  return {
+    rich: true,
+    xml,
+    get text() {
+      text ??= stringItemText(xml)
+      return text
+    },
+  }
 }
 
 function readSharedStringIndex(cellXml: string): number | null {

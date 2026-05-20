@@ -1,7 +1,7 @@
 import { strFromU8 } from 'fflate'
 
 import type { LiteralInput } from '@bilig/protocol'
-import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import type { LargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
 import { decodeXmlText, normalizeWorksheetText } from './xlsx-large-simple-worksheet-stream-text.js'
 
 export interface LargeSimpleXmlTextRange {
@@ -13,7 +13,7 @@ export function readLargeSimpleCellValueFromTextRange(
   bytes: Uint8Array,
   rawValueRange: LargeSimpleXmlTextRange | null,
   type: string | null,
-  sharedStrings: readonly LargeSimpleSharedStringEntry[],
+  sharedStrings: LargeSimpleSharedStrings,
 ): LiteralInput | undefined {
   switch (type) {
     case null:

@@ -34,7 +34,7 @@ import {
   readLargeSimpleSheetFormatPrTagFromBytes,
   readLargeSimpleTableRelationshipIdsFromBytes,
 } from './xlsx-large-simple-metadata-byte-scan.js'
-import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import type { LargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { stringItemText } from './xlsx-large-simple-worksheet-stream-text.js'
 import {
@@ -90,7 +90,7 @@ export function parseLargeSimpleWorksheetCellsFromChunks(
   options: {
     readonly hasSharedStrings: boolean
     readonly retainCells?: boolean
-    readonly sharedStrings?: readonly LargeSimpleSharedStringEntry[]
+    readonly sharedStrings?: LargeSimpleSharedStrings
     readonly deferSharedStrings?: boolean
     readonly retainMetadataXml?: boolean
     readonly sheetName?: string
@@ -181,7 +181,7 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly metadataSnippets: string[] = []
   private readonly hasSharedStrings: boolean
   private readonly retainCells: boolean
-  private readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
+  private readonly sharedStrings: LargeSimpleSharedStrings
   private readonly deferSharedStrings: boolean
   private readonly retainMetadataXml: boolean
   private readonly allowUnsupportedFormulaText: boolean
@@ -197,7 +197,7 @@ class LargeSimpleWorksheetChunkScanner {
     options: {
       readonly hasSharedStrings: boolean
       readonly retainCells: boolean
-      readonly sharedStrings: readonly LargeSimpleSharedStringEntry[]
+      readonly sharedStrings: LargeSimpleSharedStrings
       readonly deferSharedStrings: boolean
       readonly retainMetadataXml: boolean
       readonly sheetName: string | undefined
@@ -936,7 +936,7 @@ function readRichTextCellArtifact(
   column: number,
   type: string | null,
   sharedStringIndex: number | null,
-  sharedStrings: readonly LargeSimpleSharedStringEntry[],
+  sharedStrings: LargeSimpleSharedStrings,
 ): WorkbookRichTextCellSnapshot | undefined {
   if (type === 's') {
     const entry = sharedStringIndex === null ? undefined : sharedStrings[sharedStringIndex]

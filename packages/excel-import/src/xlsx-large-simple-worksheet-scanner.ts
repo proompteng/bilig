@@ -14,7 +14,7 @@ import {
   type ImportedWorkbookArenaDedupeMode,
   type ImportedWorksheetCellScan,
 } from './xlsx-large-simple-arena.js'
-import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import type { LargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 
 const lessThan = 60
@@ -43,7 +43,7 @@ const richTextRunPattern = /<(?:[A-Za-z_][\w.-]*:)?r\b/u
 
 export function parseLargeSimpleWorksheetCells(
   bytes: Uint8Array,
-  sharedStrings: readonly LargeSimpleSharedStringEntry[],
+  sharedStrings: LargeSimpleSharedStrings,
   sheetIndex: number,
   options: {
     readonly retainCells?: boolean
@@ -247,7 +247,7 @@ function readCellValue(
   contentEnd: number,
   type: string | null,
   rawValue: string | null,
-  sharedStrings: readonly LargeSimpleSharedStringEntry[],
+  sharedStrings: LargeSimpleSharedStrings,
 ): LiteralInput | undefined {
   switch (type) {
     case null:
@@ -327,7 +327,7 @@ function readRichTextCellArtifact(
   address: { readonly row: number; readonly column: number },
   type: string | null,
   rawValue: string | null,
-  sharedStrings: readonly LargeSimpleSharedStringEntry[],
+  sharedStrings: LargeSimpleSharedStrings,
 ): WorkbookRichTextCellSnapshot | undefined {
   if (type === 's') {
     const index = rawValue === null ? -1 : Number(decodeXmlText(rawValue.trim()))

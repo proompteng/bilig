@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena } from '../xlsx-large-simple-arena.js'
+import { createLazyWorkbookRichTextCells, mergeWorkbookRichTextCells } from '../xlsx-large-simple-lazy-rich-text-cells.js'
 import { ImportedWorkbookStringPool } from '../xlsx-large-simple-string-pool.js'
 
 describe('large simple XLSX import arena', () => {
@@ -162,6 +163,30 @@ describe('large simple XLSX import arena', () => {
     expect(richTextCells?.map((cell) => cell.address)).toEqual(['A1', 'A2'])
     const toJSON = Reflect.get(richTextCells ?? [], 'toJSON')
     expect(typeof toJSON === 'function' ? toJSON.call(richTextCells) : null).toEqual([...richTextCells!])
+  })
+
+  it('merges imported rich-text artifacts without forcing lazy materialization', () => {
+    let materialized = 0
+    const appended = createLazyWorkbookRichTextCells(2, (index) => {
+      materialized += 1
+      return {
+        address: index === 0 ? 'B1' : 'C1',
+        text: index === 0 ? 'Second' : 'Third',
+        storage: 'sharedString',
+        xml: `<si><t>${index === 0 ? 'Second' : 'Third'}</t></si>`,
+      }
+    })
+
+    const merged = mergeWorkbookRichTextCells(
+      [{ address: 'A1', text: 'First', storage: 'inlineString', xml: '<is><r><t>First</t></r></is>' }],
+      appended,
+    )
+
+    expect(Array.isArray(merged)).toBe(true)
+    expect(merged).toHaveLength(3)
+    expect(materialized).toBe(0)
+    expect(merged[2]).toEqual({ address: 'C1', text: 'Third', storage: 'sharedString', xml: '<si><t>Third</t></si>' })
+    expect(materialized).toBe(1)
   })
 
   it('packs deferred shared-string indexes into numeric storage for mixed large sheets', () => {

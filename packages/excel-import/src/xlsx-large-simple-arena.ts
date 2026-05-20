@@ -2,7 +2,7 @@ import type { LiteralInput, WorkbookRichTextCellSnapshot, WorkbookSnapshot } fro
 import { toDisplayText } from './workbook-import-helpers.js'
 import { filledUint32Array, growFloat64Array, growUint8Array, growUint16Array, growUint32Array } from './xlsx-large-simple-array-storage.js'
 import { createLazyWorkbookRichTextCells } from './xlsx-large-simple-lazy-rich-text-cells.js'
-import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import type { LargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import type { ImportedWorksheetStyleIndexArena } from './xlsx-large-simple-style-index-arena.js'
 export { ImportedWorksheetStyleIndexArena } from './xlsx-large-simple-style-index-arena.js'
@@ -81,7 +81,7 @@ export class ImportedWorkbookArena {
   private readonly stringIdsByValue = new Map<string, number>()
   private readonly formulas: string[] = []
   private readonly formulaIdsByValue = new Map<string, number>()
-  private sharedStrings: readonly LargeSimpleSharedStringEntry[] | undefined
+  private sharedStrings: LargeSimpleSharedStrings | undefined
   private stringValueCount = 0
   private sharedStringRefCount = 0
   private sharedStringRefsInNumberValues = false
@@ -378,7 +378,7 @@ export class ImportedWorkbookArena {
     }
   }
 
-  resolveSharedStrings(sharedStrings: readonly LargeSimpleSharedStringEntry[]): WorkbookRichTextCellSnapshot[] | null {
+  resolveSharedStrings(sharedStrings: LargeSimpleSharedStrings): WorkbookRichTextCellSnapshot[] | null {
     const richTextCells: WorkbookRichTextCellSnapshot[] = []
     for (let index = 0; index < this.length; index += 1) {
       if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
@@ -412,7 +412,7 @@ export class ImportedWorkbookArena {
   }
 
   retainSharedStringReferences(
-    sharedStrings: readonly LargeSimpleSharedStringEntry[],
+    sharedStrings: LargeSimpleSharedStrings,
     options: { readonly lazyRichTextCellThreshold?: number } = {},
   ): WorkbookRichTextCellSnapshot[] | null {
     let richTextCellIndexes: Uint32Array<ArrayBuffer> | undefined

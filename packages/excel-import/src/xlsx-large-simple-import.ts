@@ -29,7 +29,7 @@ import { LargeSimpleXlsxImportPhaseRecorder, type LargeSimpleXlsxImportPhaseTele
 import { prepareLargeSimplePackageArtifactsForZipRelease } from './xlsx-large-simple-package-artifact-release.js'
 import { readLargeSimpleSheetPrintMetadata, readLargeSimpleSheetPrintPageSetup } from './xlsx-large-simple-printer-settings.js'
 import { readAllLargeSimpleSharedStrings, readReferencedLargeSimpleSharedStrings } from './xlsx-large-simple-referenced-shared-strings.js'
-import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
+import type { LargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
 import { shouldUseSharedStringlessFastPathBytes } from './xlsx-large-simple-shared-stringless-fast-path.js'
 import { buildLargeSimpleStyleRanges } from './xlsx-large-simple-style-ranges.js'
 import { readLargeSimpleWorkbookStylesFromChunks } from './xlsx-large-simple-styles.js'
@@ -39,6 +39,7 @@ import {
   shouldDeferLargeSimpleStyleCoordinates,
 } from './xlsx-large-simple-style-coordinate-rescan.js'
 import { collectLargeSimpleImportGarbage } from './xlsx-large-simple-garbage.js'
+import { mergeWorkbookRichTextCells } from './xlsx-large-simple-lazy-rich-text-cells.js'
 import { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import {
@@ -190,7 +191,6 @@ const sharedStringsPath = 'xl/sharedStrings.xml'
 const stylesPath = 'xl/styles.xml'
 const worksheetRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'
 const unsupportedPackagePathPattern = /^xl\/(?:ctrlProps|threadedComments|vbaProject\.bin)/u
-
 export function tryImportLargeSimpleXlsx(
   source: LargeSimpleXlsxImportSource,
   fileName: string,
@@ -269,7 +269,7 @@ export function tryImportLargeSimpleXlsx(
       : null
   const deduplicateInlineStrings = hasSharedStrings ? true : 'bounded'
   const deduplicateFormulaStrings = 'bounded'
-  let fallbackSharedStrings: readonly LargeSimpleSharedStringEntry[] | null | undefined = hasSharedStrings ? undefined : []
+  let fallbackSharedStrings: LargeSimpleSharedStrings | null | undefined = hasSharedStrings ? undefined : []
   delete zip[workbookPath]
   delete zip[workbookRelationshipsPath]
   const workbookName = stringPool.intern(normalizeWorkbookName(fileName))
@@ -506,7 +506,7 @@ export function tryImportLargeSimpleXlsx(
     phaseRecorder.finish('metadata-parsing', metadataParsingStart)
   }
   const sharedStringResolutionStart = phaseRecorder.start()
-  let sharedStrings: readonly LargeSimpleSharedStringEntry[] = fallbackSharedStrings ?? []
+  let sharedStrings: LargeSimpleSharedStrings = fallbackSharedStrings ?? []
   if (materializeCells && hasSharedStrings && referencedSharedStringIndexes.size > 0) {
     const referencedSharedStrings = fallbackSharedStrings ?? readReferencedLargeSimpleSharedStrings(zip, referencedSharedStringIndexes)
     if (referencedSharedStrings === null) {
@@ -633,8 +633,9 @@ export function tryImportLargeSimpleXlsx(
     if (resolvedRichTextCells === null) {
       return null
     }
-    for (const richTextCell of resolvedRichTextCells) {
-      scanned.cellScan.richTextCells.push(richTextCell)
+    const cellScan = {
+      ...scanned.cellScan,
+      richTextCells: mergeWorkbookRichTextCells(scanned.cellScan.richTextCells, resolvedRichTextCells),
     }
     const drawingArtifacts =
       importedChartDrawingArtifacts?.drawingArtifacts.sheetArtifactsByName.get(scanned.name) ??
@@ -645,7 +646,7 @@ export function tryImportLargeSimpleXlsx(
     const parsed = buildParsedWorksheet(
       scanned.name,
       scanned.order,
-      scanned.cellScan,
+      cellScan,
       scanned.worksheetXml,
       scanned.metadataScan,
       {

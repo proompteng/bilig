@@ -103,6 +103,21 @@ export function createLazyWorkbookRichTextCells(
   return proxy
 }
 
+export function mergeWorkbookRichTextCells(
+  base: WorkbookRichTextCellSnapshot[],
+  appended: WorkbookRichTextCellSnapshot[],
+): WorkbookRichTextCellSnapshot[] {
+  if (base.length === 0) {
+    return appended
+  }
+  if (appended.length === 0) {
+    return base
+  }
+  return createLazyWorkbookRichTextCells(base.length + appended.length, (index) =>
+    index < base.length ? base[index]! : appended[index - base.length]!,
+  )
+}
+
 function normalizeSliceIndex(value: number, length: number): number {
   const integer = Math.trunc(value)
   return integer < 0 ? Math.max(0, length + integer) : Math.min(length, integer)
