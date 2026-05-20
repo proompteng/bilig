@@ -96,6 +96,7 @@ const xlsxRecalcPackageJson = await readFile(join(repoRoot, 'packages', 'xlsx-fo
 const xlsxRecalcPackageReadme = await readFile(join(repoRoot, 'packages', 'xlsx-formula-recalc', 'README.md'), 'utf8')
 const xlsxRecalcPackageAgentNotes = await readFile(join(repoRoot, 'packages', 'xlsx-formula-recalc', 'AGENTS.md'), 'utf8')
 const xlsxRecalcPackageSkillNotes = await readFile(join(repoRoot, 'packages', 'xlsx-formula-recalc', 'SKILL.md'), 'utf8')
+const recalcBridgeReadme = await readFile(join(repoRoot, 'examples', 'recalc-bridge-workflows', 'README.md'), 'utf8')
 const sheetjsRecalcPackageJson = await readFile(join(repoRoot, 'packages', 'sheetjs-formula-recalc', 'package.json'), 'utf8')
 const sheetjsRecalcPackageReadme = await readFile(join(repoRoot, 'packages', 'sheetjs-formula-recalc', 'README.md'), 'utf8')
 const sheetjsRecalcPackageAgentNotes = await readFile(join(repoRoot, 'packages', 'sheetjs-formula-recalc', 'AGENTS.md'), 'utf8')
@@ -174,9 +175,21 @@ await Promise.all(
   ),
 )
 await Promise.all(
-  ['README.md', 'package.json', 'smoke.mjs'].map((sourceFile) =>
+  ['README.md', 'package.json', 'smoke.mjs', 'stackoverflow-exceljs-44199441.mjs', 'stackoverflow-sheetjs-63085785.mjs'].map((sourceFile) =>
     requireFile(join(repoRoot, 'examples', 'recalc-bridge-workflows', sourceFile)),
   ),
+)
+requireIncludes(recalcBridgeReadme, 'so:sheetjs-63085785', 'examples/recalc-bridge-workflows/README.md')
+requireIncludes(recalcBridgeReadme, 'so:exceljs-44199441', 'examples/recalc-bridge-workflows/README.md')
+requireIncludes(
+  recalcBridgeReadme,
+  'https://stackoverflow.com/questions/63085785/how-to-recalculate-all-formulas-in-excel-file-through-javascript',
+  'examples/recalc-bridge-workflows/README.md',
+)
+requireIncludes(
+  recalcBridgeReadme,
+  'https://stackoverflow.com/questions/44199441/get-computed-value-of-excel-sheet-cell-in-node-js',
+  'examples/recalc-bridge-workflows/README.md',
 )
 await requireFile(join(repoRoot, 'scripts', 'build-workpaper-mcpb.ts'))
 await Promise.all(
@@ -247,6 +260,8 @@ for (const required of [
   'title: SheetJS formula result not updating in Node.js',
   'keep SheetJS for file I/O, but add a recalculation step',
   liveSheetjsRecalcCli,
+  'so:sheetjs-63085785',
+  'https://stackoverflow.com/questions/63085785/how-to-recalculate-all-formulas-in-excel-file-through-javascript',
   'npm --prefix examples/recalc-bridge-workflows run smoke',
   `\`${liveSheetjsRecalcPackage}\``,
   'https://github.com/proompteng/bilig/stargazers',
@@ -644,6 +659,12 @@ requireIncludes(exceljsRecalcPackageReadme, 'examples/recalc-bridge-workflows', 
 requireIncludes(exceljsRecalcPackageAgentNotes, 'recalculateExceljsWorkbook', 'packages/exceljs-formula-recalc/AGENTS.md')
 requireIncludes(exceljsRecalcPackageSkillNotes, 'exceljs-recalc --demo --json', 'packages/exceljs-formula-recalc/SKILL.md')
 requireIncludes(exceljsFormulaRecalculationNode, 'exceljs-recalc --demo --json', 'docs/exceljs-formula-recalculation-node.md')
+requireIncludes(exceljsFormulaRecalculationNode, 'so:exceljs-44199441', 'docs/exceljs-formula-recalculation-node.md')
+requireIncludes(
+  exceljsFormulaRecalculationNode,
+  'https://stackoverflow.com/questions/44199441/get-computed-value-of-excel-sheet-cell-in-node-js',
+  'docs/exceljs-formula-recalculation-node.md',
+)
 requireIncludes(readme, 'docs/agent-xlsx-formula-recalculation-without-libreoffice.md', 'README.md')
 requireIncludes(readme, 'docs/excel-file-calculation-engine-node.md', 'README.md')
 requireIncludes(readme, 'docs/exceljs-shared-formula-recalculation-node.md', 'README.md')
@@ -672,6 +693,16 @@ requireIncludes(index, './sheetjs-formula-result-not-updating-node.html', 'docs/
 requireIncludes(llms, 'https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/xlsx-formula-recalculation-node.md', 'docs/llms.txt')
+requireIncludes(
+  llms,
+  'https://github.com/proompteng/bilig/blob/main/examples/recalc-bridge-workflows/stackoverflow-sheetjs-63085785.mjs',
+  'docs/llms.txt',
+)
+requireIncludes(
+  llms,
+  'https://github.com/proompteng/bilig/blob/main/examples/recalc-bridge-workflows/stackoverflow-exceljs-44199441.mjs',
+  'docs/llms.txt',
+)
 requireIncludes(llms, xlsxRecalcCli, 'docs/llms.txt')
 requireIncludes(llms, liveSheetjsRecalcCli, 'docs/llms.txt')
 requireIncludes(llms, 'https://www.npmjs.com/package/xlsx-formula-recalc', 'docs/llms.txt')

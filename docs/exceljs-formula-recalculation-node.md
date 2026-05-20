@@ -101,6 +101,20 @@ The demo creates a small workbook, changes `Inputs!B2` and `Inputs!B3`,
 recalculates `Summary!B2`, writes `bilig-formula-recalc-demo.xlsx`, and prints
 `verified: true`.
 
+Exact reproduction for the high-view Stack Overflow question:
+
+```sh
+git clone https://github.com/proompteng/bilig.git
+cd bilig
+npm --prefix examples/recalc-bridge-workflows install
+npm --prefix examples/recalc-bridge-workflows run so:exceljs-44199441
+```
+
+That script mirrors
+[Get computed value of Excel sheet cell in Node.js](https://stackoverflow.com/questions/44199441/get-computed-value-of-excel-sheet-cell-in-node-js):
+`A1` changes from `1` to `3`, ExcelJS still has the stale formula `result = 3`,
+then `exceljs-formula-recalc` verifies and patches the formula result to `5`.
+
 ## Minimal ExcelJS bridge
 
 Install the runtime in a scratch project:

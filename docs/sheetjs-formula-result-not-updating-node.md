@@ -45,6 +45,20 @@ One-off proof:
 npx --package xlsx-formula-recalc sheetjs-recalc --demo --json
 ```
 
+Exact reproduction for the high-view Stack Overflow question:
+
+```sh
+git clone https://github.com/proompteng/bilig.git
+cd bilig
+npm --prefix examples/recalc-bridge-workflows install
+npm --prefix examples/recalc-bridge-workflows run so:sheetjs-63085785
+```
+
+That script mirrors the small case from
+[How to recalculate all formulas in excel file through Javascript?](https://stackoverflow.com/questions/63085785/how-to-recalculate-all-formulas-in-excel-file-through-javascript):
+`A1` changes from `1` to `3`, SheetJS still has the stale cached `C1 = 3`,
+then `xlsx-formula-recalc` verifies `C1 = 5`.
+
 For a real workbook:
 
 ```sh

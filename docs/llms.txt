@@ -79,9 +79,11 @@ restoring it, and confirming the restored value matches. Return `editedCell`,
 - https://proompteng.github.io/bilig/headless-spreadsheet-engine-node-services-agents.html
 - https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html
 - https://proompteng.github.io/bilig/sheetjs-formula-result-not-updating-node.html
+- https://github.com/proompteng/bilig/blob/main/examples/recalc-bridge-workflows/stackoverflow-sheetjs-63085785.mjs
 - https://proompteng.github.io/bilig/excel-file-calculation-engine-node.html
 - https://proompteng.github.io/bilig/xlsx-calc-alternative-node-workbook-recalculation.html
 - https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
+- https://github.com/proompteng/bilig/blob/main/examples/recalc-bridge-workflows/stackoverflow-exceljs-44199441.mjs
 - https://proompteng.github.io/bilig/exceljs-shared-formula-recalculation-node.html
 - https://proompteng.github.io/bilig/xlsx-template-formula-recalculation-node.html
 - https://proompteng.github.io/bilig/xlsx-populate-formula-result-node.html

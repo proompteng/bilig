@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "smoke": "node smoke.mjs",
+    "so:exceljs-44199441": "node stackoverflow-exceljs-44199441.mjs",
+    "so:sheetjs-63085785": "node stackoverflow-sheetjs-63085785.mjs",
     "start": "npm run smoke"
   },
   "dependencies": {
