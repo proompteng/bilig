@@ -370,6 +370,58 @@ describe('FormulaBar', () => {
     })
   })
 
+  it('commits a first formula-bar draft on blur before the editing prop catches up', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const onBeginEdit = vi.fn()
+    const onChange = vi.fn()
+    const onCommit = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <FormulaBar
+          address="B2"
+          isEditing={false}
+          onAddressCommit={() => true}
+          onBeginEdit={onBeginEdit}
+          onCancel={() => {}}
+          onChange={onChange}
+          onCommit={onCommit}
+          resolvedValue=""
+          sheetName="Sheet1"
+          value=""
+        />,
+      )
+    })
+
+    const formulaInput = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(formulaInput).not.toBeNull()
+    if (!formulaInput) {
+      throw new Error('Expected formula input')
+    }
+
+    await act(async () => {
+      formulaInput.focus()
+      dispatchTextControlValue(formulaInput, 'fast blur draft')
+    })
+    await act(async () => {
+      formulaInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    })
+
+    expect(onBeginEdit).toHaveBeenCalledTimes(1)
+    expect(onBeginEdit).toHaveBeenCalledWith('')
+    expect(onChange).toHaveBeenCalledWith('fast blur draft')
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit).toHaveBeenCalledWith('fast blur draft', { address: 'B2', sheetName: 'Sheet1' }, undefined)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('commits formula-bar Tab navigation with a stable target and returns focus to the grid', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

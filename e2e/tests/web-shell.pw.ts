@@ -1283,6 +1283,27 @@ test('web app commits a cleared formula bar draft when clicking away', async ({ 
   await expect(formulaInput).toHaveValue('')
 })
 
+test('@browser-ci web app commits a first formula bar draft when focus leaves immediately', async ({ page }) => {
+  const draftText = 'first-formula-blur-commit'
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-formula-first-blur'))}`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 1, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await formulaInput.click()
+  await formulaInput.fill(draftText)
+  await page.getByTestId('workbook-agent-input').click()
+
+  await expect(formulaInput).toHaveValue(draftText)
+  await expect.poll(() => nativeTextRunsInclude(page, draftText)).toBe(true)
+
+  await clickProductCell(page, 2, 1)
+  await clickProductCell(page, 1, 1)
+  await expect(formulaInput).toHaveValue(draftText)
+})
+
 test('web app commits a cleared formula bar draft with Enter', async ({ page }) => {
   const staleText = 'formula-clear-enter'
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-formula-clear-enter'))}`)

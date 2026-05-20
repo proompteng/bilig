@@ -46,6 +46,9 @@ export function FormulaBar({
   const nameBoxRef = useRef<HTMLInputElement | null>(null)
   const commitRequestedRef = useRef(false)
   const editingTargetRef = useRef<EditTargetSelection>({ address, sheetName })
+  const localFormulaDraftDirtyRef = useRef(false)
+  const localFormulaDraftValueRef = useRef(value)
+  const localFormulaEditStartedRef = useRef(false)
   const [isFormulaFocused, setIsFormulaFocused] = useState(false)
   const [formulaCaret, setFormulaCaret] = useState(value.length)
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0)
@@ -74,11 +77,14 @@ export function FormulaBar({
   }, [value])
 
   useEffect(() => {
-    if (!isEditing) {
+    if (!isEditing && !isFormulaFocused) {
       commitRequestedRef.current = false
+      localFormulaDraftDirtyRef.current = false
+      localFormulaDraftValueRef.current = value
+      localFormulaEditStartedRef.current = false
       editingTargetRef.current = { address, sheetName }
     }
-  }, [address, isEditing, sheetName])
+  }, [address, isEditing, isFormulaFocused, sheetName, value])
 
   useEffect(() => {
     const handleGoToShortcut = (event: KeyboardEvent) => {
@@ -126,6 +132,14 @@ export function FormulaBar({
     return target
   }
 
+  const beginFormulaEdit = (seed: string) => {
+    noteFormulaEditTarget()
+    if (!isEditing && !localFormulaEditStartedRef.current) {
+      localFormulaEditStartedRef.current = true
+      onBeginEdit(seed)
+    }
+  }
+
   const requestCommit = (options?: { movement?: EditMovement; returnFocusToGrid?: boolean }) => {
     if (commitRequestedRef.current) {
       if (options?.returnFocusToGrid) {
@@ -134,7 +148,14 @@ export function FormulaBar({
       return
     }
     commitRequestedRef.current = true
-    onCommit(inputRef.current?.value ?? value, editingTargetRef.current, options?.movement)
+    onCommit(
+      localFormulaDraftDirtyRef.current ? localFormulaDraftValueRef.current : (inputRef.current?.value ?? value),
+      editingTargetRef.current,
+      options?.movement,
+    )
+    localFormulaDraftDirtyRef.current = false
+    localFormulaDraftValueRef.current = value
+    localFormulaEditStartedRef.current = false
     if (options?.returnFocusToGrid) {
       inputRef.current?.blur()
       onFormulaCommitSuccess?.()
@@ -152,8 +173,10 @@ export function FormulaBar({
       suggestion,
     })
     if (!isEditing) {
-      onBeginEdit(value)
+      beginFormulaEdit(value)
     }
+    localFormulaDraftDirtyRef.current = true
+    localFormulaDraftValueRef.current = next.value
     pendingSelectionRef.current = { start: next.caret, end: next.caret }
     setFormulaCaret(next.caret)
     setDismissedAutocompleteValue(null)
@@ -167,9 +190,10 @@ export function FormulaBar({
     const nextValue = `${currentValue.slice(0, selectionStart)}${text}${currentValue.slice(selectionEnd)}`
     const caretPosition = selectionStart + text.length
     commitRequestedRef.current = false
+    localFormulaDraftDirtyRef.current = true
+    localFormulaDraftValueRef.current = nextValue
     if (!isEditing) {
-      noteFormulaEditTarget()
-      onBeginEdit(nextValue)
+      beginFormulaEdit(nextValue)
     }
     pendingSelectionRef.current = { start: caretPosition, end: caretPosition }
     setFormulaCaret(caretPosition)
@@ -217,16 +241,17 @@ export function FormulaBar({
                 if (nextTarget instanceof Node && event.currentTarget.closest('.formula-bar')?.contains(nextTarget)) {
                   return
                 }
-                if (isEditing) {
+                if (isEditing || localFormulaDraftDirtyRef.current) {
                   requestCommit()
                 }
               }}
               onChange={(event) => {
                 const nextValue = event.target.value
                 commitRequestedRef.current = false
+                localFormulaDraftDirtyRef.current = true
+                localFormulaDraftValueRef.current = nextValue
                 if (!isEditing) {
-                  noteFormulaEditTarget()
-                  onBeginEdit(nextValue)
+                  beginFormulaEdit(nextValue)
                 }
                 setFormulaCaret(event.target.selectionStart ?? nextValue.length)
                 onChange(nextValue)
@@ -239,8 +264,7 @@ export function FormulaBar({
                 commitRequestedRef.current = false
                 setFormulaCaret(event.currentTarget.selectionStart ?? event.currentTarget.value.length)
                 if (!isEditing) {
-                  noteFormulaEditTarget()
-                  onBeginEdit(value)
+                  beginFormulaEdit(value)
                 }
               }}
               onKeyDown={(event) => {
@@ -285,6 +309,9 @@ export function FormulaBar({
                     return
                   }
                   commitRequestedRef.current = true
+                  localFormulaDraftDirtyRef.current = false
+                  localFormulaDraftValueRef.current = value
+                  localFormulaEditStartedRef.current = false
                   onCancel()
                   inputRef.current?.blur()
                   onFormulaCommitSuccess?.()

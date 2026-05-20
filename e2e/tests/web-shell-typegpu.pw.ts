@@ -322,9 +322,13 @@ test('main workbook shell mounts typegpu-v3 as the only grid renderer', async ({
 })
 
 test('@browser-webgpu @browser-serial main workbook shell grid renders and updates through typegpu', async ({ page }, testInfo) => {
-  const rangeFillPoint = {
+  const selectedRangeFillPoint = {
     x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH * 2 + 24,
     y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT * 2 + Math.floor(PRODUCT_ROW_HEIGHT / 2),
+  }
+  const activeCellFillPoint = {
+    x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + 50,
+    y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
   }
   const rangeBorderPoint = {
     x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + 50,
@@ -417,7 +421,8 @@ test('@browser-webgpu @browser-serial main workbook shell grid renders and updat
 
   const rangeProbe = {
     points: [
-      { name: 'rangeFill', x: rangeFillPoint.x, y: rangeFillPoint.y },
+      { name: 'activeCellFill', x: activeCellFillPoint.x, y: activeCellFillPoint.y },
+      { name: 'selectedRangeFill', x: selectedRangeFillPoint.x, y: selectedRangeFillPoint.y },
       { name: 'rangeBorder', x: rangeBorderPoint.x, y: rangeBorderPoint.y },
       { name: 'topHeaderSelectionFill', x: topHeaderSelectionFillPoint.x, y: topHeaderSelectionFillPoint.y },
     ],
@@ -433,10 +438,16 @@ test('@browser-webgpu @browser-serial main workbook shell grid renders and updat
   } as const
 
   const rangeReadback = await waitForReadback(page, rangeProbe, (result) => {
-    return result.points.rangeBorder.a > 150 && result.darkPixelCounts.fillHandleRegion > 4 && result.points.topHeaderSelectionFill.a > 0
+    return (
+      result.points.selectedRangeFill.a > 0 &&
+      result.points.rangeBorder.a > 150 &&
+      result.darkPixelCounts.fillHandleRegion > 4 &&
+      result.points.topHeaderSelectionFill.a > 0
+    )
   })
 
-  expect(rangeReadback.points.rangeFill).toMatchObject({ r: 0, g: 0, b: 0, a: 0 })
+  expect(rangeReadback.points.activeCellFill).toMatchObject({ r: 0, g: 0, b: 0, a: 0 })
+  expect(rangeReadback.points.selectedRangeFill.a).toBeGreaterThan(0)
   expect(rangeReadback.points.rangeBorder.a).toBeGreaterThan(150)
   expect(rangeReadback.darkPixelCounts.fillHandleRegion).toBeGreaterThan(4)
   expect(rangeReadback.points.topHeaderSelectionFill.a).toBeGreaterThan(0)

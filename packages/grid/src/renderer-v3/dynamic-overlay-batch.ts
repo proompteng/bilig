@@ -222,6 +222,13 @@ function appendSelectionOverlay(input: {
   const isMultiCellSelection = input.selectionRange.width > 1 || input.selectionRange.height > 1
   const activeCell = input.gridSelection?.current?.cell ?? null
   if (isMultiCellSelection) {
+    appendSelectionFillRects({
+      activeCell,
+      color: parseGpuColor(workbookThemeColors.selectionFill),
+      fillRects: input.fillRects,
+      geometry: input.geometry,
+      range: input.selectionRange,
+    })
     for (const rect of input.geometry.rangeScreenRects(input.selectionRange)) {
       appendBorderRects(input.borderRects, rect, borderColor, 1)
     }
@@ -231,9 +238,8 @@ function appendSelectionOverlay(input: {
     }
   }
   if (activeCell && isMultiCellSelection && cellInRange(activeCell, input.selectionRange)) {
-    const activeBorderSides = resolveActiveCellBorderSides(activeCell, input.selectionRange)
     for (const activeRect of input.geometry.rangeScreenRects({ x: activeCell[0], y: activeCell[1], width: 1, height: 1 })) {
-      appendBorderRectsForSides(input.borderRects, activeRect, borderColor, 2, activeBorderSides)
+      appendBorderRects(input.borderRects, activeRect, borderColor, 2)
     }
   }
   if (input.showFillHandle) {
@@ -629,17 +635,6 @@ function insetRect(rect: Rectangle, insetX: number, insetY: number): Rectangle {
 
 function cellInRange(cell: Item, range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): boolean {
   return cell[0] >= range.x && cell[0] < range.x + range.width && cell[1] >= range.y && cell[1] < range.y + range.height
-}
-
-function resolveActiveCellBorderSides(cell: Item, range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>): BorderSides {
-  const right = range.x + range.width - 1
-  const bottom = range.y + range.height - 1
-  return {
-    bottom: cell[1] < bottom,
-    left: cell[0] > range.x,
-    right: cell[0] < right,
-    top: cell[1] > range.y,
-  }
 }
 
 function appendBorderRects(target: GridGpuRect[], rect: Rectangle, color: GridGpuRect['color'], thickness: number): void {

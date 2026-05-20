@@ -51,7 +51,7 @@ describe('dynamic overlay batch v3', () => {
         expect.objectContaining({ x: 297, y: 75, width: 98, height: 18 }),
       ]),
     )
-    expect(readOverlayRects(overlay)).not.toEqual(
+    expect(readOverlayRects(overlay)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ x: 197, y: 45, width: 98, height: 8 }),
         expect.objectContaining({ x: 147, y: 55, width: 148, height: 18 }),
@@ -125,7 +125,7 @@ describe('dynamic overlay batch v3', () => {
     )
   })
 
-  test('keeps the TypeGPU active-cell border inside the selected range perimeter', () => {
+  test('draws a complete TypeGPU active-cell border inside the selected range', () => {
     const metrics = getGridMetrics()
     const geometry = createGridGeometrySnapshotFromAxes({
       columns: createGridAxisWorldIndex({ axisLength: 20, defaultSize: 100 }),
@@ -154,12 +154,14 @@ describe('dynamic overlay batch v3', () => {
       expect.arrayContaining([
         expect.objectContaining({ x: 346, y: 84, width: 100, height: 2 }),
         expect.objectContaining({ x: 346, y: 84, width: 2, height: 20 }),
-      ]),
-    )
-    expect(readOverlayRects(overlay)).not.toEqual(
-      expect.arrayContaining([
         expect.objectContaining({ x: 346, y: 102, width: 100, height: 2 }),
         expect.objectContaining({ x: 444, y: 84, width: 2, height: 20 }),
+      ]),
+    )
+    expect(readOverlayRects(overlay)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ x: 147, y: 45, width: 298, height: 38 }),
+        expect.objectContaining({ x: 147, y: 85, width: 198, height: 18 }),
       ]),
     )
   })
