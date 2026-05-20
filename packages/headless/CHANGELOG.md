@@ -4,6 +4,26 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.38.3
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.38.2
+- Manual override: no
+
+## Fixes
+- fix(headless): make WorkPaper config rebuild rollback atomic (5306047f)
+- perf(formula): accelerate mixed criteria predicates (063d9edc)
+- fix(core): preserve formula binding timeout failures (c9dc9f48)
+- perf(core): widen exact criteria aggregate buckets (1596d969)
+- perf(formula): batch native lookup recalc (c58d4722)
+- fix(core): enforce operation evaluation budgets (332ef129)
+
+## Internal runtime changes
+- docs(npm): canonicalize scoped runtime packages (4d9202f0)
+- test(headless): cover split WorkPaper surface base (4d7dc45c)
+- test(headless): allow whole-column criteria regression on CI (6b7ccebd)
+- ci(release): skip local hooks for runtime publish pushes (4cebaf17)
+
 ## 0.38.2
 
 - Release type: patch

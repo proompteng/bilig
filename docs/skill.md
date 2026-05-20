@@ -42,7 +42,7 @@ Before wiring a client, an agent can prove the direct WorkPaper loop with:
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/workpaper@0.38.2", "--", "bilig-agent-challenge"]
+  "args": ["exec", "--package", "@bilig/workpaper@0.38.3", "--", "bilig-agent-challenge"]
 }
 ```
 
@@ -51,7 +51,7 @@ For the actual file-backed MCP path, run the package-owned challenge first:
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/workpaper@0.38.2", "--", "bilig-mcp-challenge"]
+  "args": ["exec", "--package", "@bilig/workpaper@0.38.3", "--", "bilig-mcp-challenge"]
 }
 ```
 
@@ -61,7 +61,7 @@ For the actual file-backed MCP path, run the package-owned challenge first:
   "args": [
     "exec",
     "--package",
-    "@bilig/workpaper@0.38.2",
+    "@bilig/workpaper@0.38.3",
     "--",
     "bilig-workpaper-mcp",
     "--workpaper",
@@ -135,7 +135,7 @@ When the user has a reduced XLSX formula/import bug, generate a local report thr
 ```json
 {
   "command": "npm",
-  "args": ["exec", "--package", "@bilig/workpaper@0.38.2", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
+  "args": ["exec", "--package", "@bilig/workpaper@0.38.3", "--", "bilig-formula-clinic", "./reduced.xlsx", "--cells", "Summary!B7,Inputs!B2"]
 }
 ```
 
