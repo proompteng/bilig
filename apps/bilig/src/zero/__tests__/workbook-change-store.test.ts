@@ -11,6 +11,7 @@ import {
   loadWorkbookChange,
 } from '../workbook-change-store.js'
 import type { QueryResultRow, Queryable } from '../store.js'
+import type { Row } from '@rocicorp/zero'
 
 interface RecordedQuery {
   readonly text: string
@@ -35,6 +36,170 @@ class FakeQueryable implements Queryable {
       }
     }
     return { rows: [] }
+  }
+
+  async loadWorkbookChangeRow(input: { readonly documentId: string; readonly revision: number }): Promise<ZeroWorkbookChangeRow | null> {
+    const result = await this.query(
+      `
+        FROM workbook_change
+        WHERE workbook_id = $1 AND revision = $2
+      `,
+      [input.documentId, input.revision],
+    )
+    return result.rows[0] ? toZeroWorkbookChangeRow(result.rows[0]) : null
+  }
+
+  async listWorkbookChangesAfterRevisionRows(input: {
+    readonly documentId: string
+    readonly revision: number
+  }): Promise<readonly ZeroWorkbookChangeRow[]> {
+    const result = await this.query(
+      `
+        FROM workbook_change
+        WHERE workbook_id = $1 AND revision > $2
+        ORDER BY revision ASC
+      `,
+      [input.documentId, input.revision],
+    )
+    return result.rows.map(toZeroWorkbookChangeRow)
+  }
+
+  async listWorkbookHistoryRows(input: { readonly documentId: string }): Promise<readonly ZeroWorkbookChangeRow[]> {
+    const result = await this.query(
+      `
+        FROM workbook_change
+        WHERE workbook_id = $1
+        ORDER BY revision ASC
+      `,
+      [input.documentId],
+    )
+    return result.rows.map(toZeroWorkbookChangeRow)
+  }
+
+  async listRecentWorkbookChangeRows(input: {
+    readonly documentId: string
+    readonly limit: number
+  }): Promise<readonly ZeroWorkbookChangeRow[]> {
+    const result = await this.query(
+      `
+        FROM workbook_change
+        WHERE workbook_id = $1
+        ORDER BY revision DESC
+      `,
+      [input.documentId, input.limit],
+    )
+    return result.rows.map(toZeroWorkbookChangeRow)
+  }
+}
+
+type ZeroWorkbookChangeRow = Row['workbook_change']
+
+type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue }
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return true
+  }
+  if (Array.isArray(value)) {
+    return value.every((entry) => isJsonValue(entry))
+  }
+  if (typeof value !== 'object') {
+    return false
+  }
+  return Object.values(value).every((entry) => isJsonValue(entry))
+}
+
+function stringValue(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function optionalStringValue(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+function numberValue(value: unknown, fallback: number): number {
+  return typeof value === 'number' ? value : fallback
+}
+
+function optionalNumberValue(value: unknown): number | null {
+  return typeof value === 'number' ? value : null
+}
+
+function jsonValue(value: unknown): JsonValue | null {
+  return isJsonValue(value) ? value : null
+}
+
+function toZeroWorkbookChangeRow(row: QueryResultRow): ZeroWorkbookChangeRow {
+  return {
+    workbookId: stringValue(row['workbookId'], 'doc-1'),
+    revision: numberValue(row['revision'], -1),
+    actorUserId: stringValue(row['actorUserId'], ''),
+    clientMutationId: optionalStringValue(row['clientMutationId']),
+    eventKind: stringValue(row['eventKind'], ''),
+    summary: stringValue(row['summary'], ''),
+    sheetId: optionalNumberValue(row['sheetId']),
+    sheetName: optionalStringValue(row['sheetName']),
+    anchorAddress: optionalStringValue(row['anchorAddress']),
+    rangeJson: jsonValue(row['rangeJson']),
+    undoBundleJson: jsonValue(row['undoBundleJson']),
+    revertedByRevision: optionalNumberValue(row['revertedByRevision']),
+    revertsRevision: optionalNumberValue(row['revertsRevision']),
+    createdAt: numberValue(row['createdAt'] ?? row['createdAtUnixMs'], 0),
+  }
+}
+
+class FakeWorkbookChangeStoreConnection extends FakeQueryable {
+  readonly zeroChangeInputs: {
+    readonly kind: 'one' | 'afterRevision' | 'history' | 'recent'
+    readonly documentId: string
+    readonly revision?: number
+    readonly limit?: number
+  }[] = []
+
+  constructor(private readonly zeroChangeRows: readonly ZeroWorkbookChangeRow[]) {
+    super()
+  }
+
+  async loadWorkbookChangeRow(input: { readonly documentId: string; readonly revision: number }) {
+    this.zeroChangeInputs.push({
+      kind: 'one',
+      documentId: input.documentId,
+      revision: input.revision,
+    })
+    return this.zeroChangeRows.find((row) => row.workbookId === input.documentId && row.revision === input.revision) ?? null
+  }
+
+  async listWorkbookChangesAfterRevisionRows(input: { readonly documentId: string; readonly revision: number }) {
+    this.zeroChangeInputs.push({
+      kind: 'afterRevision',
+      documentId: input.documentId,
+      revision: input.revision,
+    })
+    return this.zeroChangeRows
+      .filter((row) => row.workbookId === input.documentId && row.revision > input.revision)
+      .toSorted((left, right) => left.revision - right.revision)
+  }
+
+  async listWorkbookHistoryRows(input: { readonly documentId: string }) {
+    this.zeroChangeInputs.push({
+      kind: 'history',
+      documentId: input.documentId,
+    })
+    return this.zeroChangeRows
+      .filter((row) => row.workbookId === input.documentId)
+      .toSorted((left, right) => left.revision - right.revision)
+  }
+
+  async listRecentWorkbookChangeRows(input: { readonly documentId: string; readonly limit: number }) {
+    this.zeroChangeInputs.push({
+      kind: 'recent',
+      documentId: input.documentId,
+      limit: input.limit,
+    })
+    return this.zeroChangeRows
+      .filter((row) => row.workbookId === input.documentId)
+      .toSorted((left, right) => right.revision - left.revision)
+      .slice(0, input.limit)
   }
 }
 
@@ -518,6 +683,203 @@ describe('workbook-change-store', () => {
       },
     ])
     expect(latestQuery(queryable).values).toEqual(['doc-1', 2])
+  })
+
+  it('lists recent workbook changes through the shared Zero query model', async () => {
+    const queryable = new FakeWorkbookChangeStoreConnection([
+      {
+        workbookId: 'doc-1',
+        revision: 12,
+        actorUserId: 'alex@example.com',
+        clientMutationId: null,
+        eventKind: 'applyAgentCommandBundle',
+        summary: 'Applied workbook change set at revision r12',
+        sheetId: 4,
+        sheetName: 'Sheet1',
+        anchorAddress: 'B2',
+        rangeJson: {
+          sheetName: 'Sheet1',
+          startAddress: 'B2',
+          endAddress: 'C4',
+        },
+        undoBundleJson: null,
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAt: 1_234,
+      },
+      {
+        workbookId: 'doc-1',
+        revision: 11,
+        actorUserId: 'casey@example.com',
+        clientMutationId: 'mutation-11',
+        eventKind: 'setCellValue',
+        summary: 'Updated Sheet1!A1',
+        sheetId: 4,
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        rangeJson: {
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
+        },
+        undoBundleJson: null,
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAt: 1_111,
+      },
+    ])
+
+    const changes = await listWorkbookChanges(queryable, { documentId: 'doc-1', limit: 2 })
+
+    expect(queryable.zeroChangeInputs).toEqual([{ kind: 'recent', documentId: 'doc-1', limit: 2 }])
+    expect(queryable.calls.some((call) => call.text.includes('FROM workbook_change'))).toBe(false)
+    expect(changes.map((change) => [change.revision, change.createdAtUnixMs])).toEqual([
+      [12, 1_234],
+      [11, 1_111],
+    ])
+  })
+
+  it('loads targeted and after-revision workbook history through the shared Zero query model', async () => {
+    const queryable = new FakeWorkbookChangeStoreConnection([
+      {
+        workbookId: 'doc-1',
+        revision: 7,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-7',
+        eventKind: 'setCellValue',
+        summary: 'Updated Sheet1!A1',
+        sheetId: 4,
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        rangeJson: {
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
+        },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+        },
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAt: 700,
+      },
+      {
+        workbookId: 'doc-1',
+        revision: 8,
+        actorUserId: 'casey@example.com',
+        clientMutationId: 'mutation-8',
+        eventKind: 'setCellValue',
+        summary: 'Updated Sheet1!B1',
+        sheetId: 4,
+        sheetName: 'Sheet1',
+        anchorAddress: 'B1',
+        rangeJson: {
+          sheetName: 'Sheet1',
+          startAddress: 'B1',
+          endAddress: 'B1',
+        },
+        undoBundleJson: null,
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAt: 800,
+      },
+    ])
+
+    await expect(loadWorkbookChange(queryable, 'doc-1', 7)).resolves.toMatchObject({
+      revision: 7,
+      undoBundle: {
+        kind: 'engineOps',
+      },
+    })
+    await expect(
+      listWorkbookChangesAfterRevision(queryable, {
+        documentId: 'doc-1',
+        revision: 7,
+      }),
+    ).resolves.toMatchObject([
+      {
+        revision: 8,
+      },
+    ])
+
+    expect(queryable.zeroChangeInputs).toEqual([
+      { kind: 'one', documentId: 'doc-1', revision: 7 },
+      { kind: 'afterRevision', documentId: 'doc-1', revision: 7 },
+    ])
+    expect(queryable.calls.some((call) => call.text.includes('FROM workbook_change'))).toBe(false)
+  })
+
+  it('resolves undo and redo history from Zero-ordered workbook change rows', async () => {
+    const queryable = new FakeWorkbookChangeStoreConnection([
+      {
+        workbookId: 'doc-1',
+        revision: 20,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-20',
+        eventKind: 'setCellValue',
+        summary: 'Updated Sheet1!A1',
+        sheetId: 4,
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        rangeJson: {
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
+        },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+        },
+        revertedByRevision: 21,
+        revertsRevision: null,
+        createdAt: 2_000,
+      },
+      {
+        workbookId: 'doc-1',
+        revision: 21,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-21',
+        eventKind: 'revertChange',
+        summary: 'Reverted r20',
+        sheetId: 4,
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        rangeJson: {
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
+        },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 5 }],
+        },
+        revertedByRevision: null,
+        revertsRevision: 20,
+        createdAt: 2_100,
+      },
+    ])
+
+    await expect(
+      loadLatestUndoableWorkbookChange(queryable, {
+        documentId: 'doc-1',
+        actorUserId: 'alex@example.com',
+      }),
+    ).resolves.toBeNull()
+    await expect(
+      loadLatestRedoableWorkbookChange(queryable, {
+        documentId: 'doc-1',
+        actorUserId: 'alex@example.com',
+      }),
+    ).resolves.toMatchObject({
+      revision: 21,
+    })
+
+    expect(queryable.zeroChangeInputs).toEqual([
+      { kind: 'history', documentId: 'doc-1' },
+      { kind: 'history', documentId: 'doc-1' },
+    ])
+    expect(queryable.calls.some((call) => call.text.includes('FROM workbook_change'))).toBe(false)
   })
 
   it('backfills missing workbook_change rows from authoritative workbook events', async () => {

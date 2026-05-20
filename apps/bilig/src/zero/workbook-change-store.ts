@@ -1,12 +1,14 @@
 import {
   isWorkbookEventPayload,
   normalizeWorkbookChangeRowModel,
+  queries,
   type WorkbookChangeUndoBundle,
   type WorkbookChangeRange,
   type WorkbookEventPayload,
 } from '@bilig/zero-sync'
+import type { Row } from '@rocicorp/zero'
 import { buildWorkbookChangeDescriptor, type WorkbookChangeDescriptor } from './workbook-change-descriptor.js'
-import type { QueryResultRow, Queryable } from './store.js'
+import type { QueryResultRow, Queryable, ZeroQueryRunner } from './store.js'
 import { parseNonNegativeInteger, parsePositiveInteger } from './store-support.js'
 import { resolveWorkbookSheetRef } from './workbook-sheet-ref.js'
 import { selectLatestRedoableWorkbookChangeRevision, selectLatestUndoableWorkbookChangeRevision } from './workbook-history-selector.js'
@@ -81,6 +83,50 @@ interface WorkbookChangeSelectRow extends QueryResultRow {
   readonly createdAtUnixMs?: unknown
 }
 
+type ZeroWorkbookChangeRow = Row['workbook_change']
+
+export interface WorkbookChangeStoreConnection extends Queryable {
+  loadWorkbookChangeRow(input: { readonly documentId: string; readonly revision: number }): Promise<ZeroWorkbookChangeRow | null>
+  listWorkbookChangesAfterRevisionRows(input: {
+    readonly documentId: string
+    readonly revision: number
+  }): Promise<readonly ZeroWorkbookChangeRow[]>
+  listWorkbookHistoryRows(input: { readonly documentId: string }): Promise<readonly ZeroWorkbookChangeRow[]>
+  listRecentWorkbookChangeRows(input: { readonly documentId: string; readonly limit: number }): Promise<readonly ZeroWorkbookChangeRow[]>
+}
+
+export function createWorkbookChangeStoreConnection(db: Queryable & ZeroQueryRunner): WorkbookChangeStoreConnection {
+  return {
+    query: (text, values) => db.query(text, values),
+    loadWorkbookChangeRow: async ({ documentId, revision }) =>
+      (await db.run(queries.workbookChange.one.fn({ args: { documentId, revision }, ctx: { userID: 'system' } }))) ?? null,
+    listWorkbookChangesAfterRevisionRows: async ({ documentId, revision }) =>
+      await db.run(queries.workbookChange.afterRevision.fn({ args: { documentId, revision }, ctx: { userID: 'system' } })),
+    listWorkbookHistoryRows: async ({ documentId }) =>
+      await db.run(queries.workbookChange.historyByWorkbook.fn({ args: { documentId }, ctx: { userID: 'system' } })),
+    listRecentWorkbookChangeRows: async ({ documentId, limit }) =>
+      await db.run(queries.workbookChange.byWorkbook.fn({ args: { documentId, limit }, ctx: { userID: 'system' } })),
+  }
+}
+
+function toWorkbookChangeSelectRow(row: ZeroWorkbookChangeRow): WorkbookChangeSelectRow {
+  return {
+    revision: row.revision,
+    actorUserId: row.actorUserId,
+    clientMutationId: row.clientMutationId,
+    eventKind: row.eventKind,
+    summary: row.summary,
+    sheetId: row.sheetId,
+    sheetName: row.sheetName,
+    anchorAddress: row.anchorAddress,
+    rangeJson: row.rangeJson,
+    undoBundleJson: row.undoBundleJson,
+    revertedByRevision: row.revertedByRevision,
+    revertsRevision: row.revertsRevision,
+    createdAtUnixMs: row.createdAt,
+  }
+}
+
 function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookChangeRecord | null {
   const model = normalizeWorkbookChangeRowModel({
     ...row,
@@ -105,6 +151,14 @@ function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookCh
     revertsRevision: model.revertsRevision,
     createdAtUnixMs: model.createdAt,
   }
+}
+
+function isSafePositiveInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0
+}
+
+function isSafeNonNegativeInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0
 }
 
 async function insertWorkbookChange(db: Queryable, row: WorkbookChangeInsertRow): Promise<void> {
@@ -226,103 +280,50 @@ export async function appendWorkbookChange(db: Queryable, input: AppendWorkbookC
   })
 }
 
-export async function loadWorkbookChange(db: Queryable, documentId: string, revision: number): Promise<WorkbookChangeRecord | null> {
-  const result = await db.query<WorkbookChangeSelectRow>(
-    `
-      SELECT revision AS "revision",
-             actor_user_id AS "actorUserId",
-             client_mutation_id AS "clientMutationId",
-             event_kind AS "eventKind",
-             summary AS "summary",
-             sheet_id AS "sheetId",
-             sheet_name AS "sheetName",
-             anchor_address AS "anchorAddress",
-             range_json AS "rangeJson",
-             undo_bundle_json AS "undoBundleJson",
-             reverted_by_revision AS "revertedByRevision",
-             reverts_revision AS "revertsRevision",
-             created_at AS "createdAtUnixMs"
-        FROM workbook_change
-       WHERE workbook_id = $1
-         AND revision = $2
-       LIMIT 1
-    `,
-    [documentId, revision],
-  )
-  const row = result.rows[0]
-  return row ? normalizeWorkbookChangeRecord(row) : null
+export async function loadWorkbookChange(
+  db: WorkbookChangeStoreConnection,
+  documentId: string,
+  revision: number,
+): Promise<WorkbookChangeRecord | null> {
+  if (!isSafePositiveInteger(revision)) {
+    return null
+  }
+  const row = await db.loadWorkbookChangeRow({ documentId, revision })
+  return row ? normalizeWorkbookChangeRecord(toWorkbookChangeSelectRow(row)) : null
 }
 
 export async function listWorkbookChangesAfterRevision(
-  db: Queryable,
+  db: WorkbookChangeStoreConnection,
   input: {
     readonly documentId: string
     readonly revision: number
   },
 ): Promise<WorkbookChangeRecord[]> {
-  const result = await db.query<WorkbookChangeSelectRow>(
-    `
-      SELECT revision AS "revision",
-             actor_user_id AS "actorUserId",
-             client_mutation_id AS "clientMutationId",
-             event_kind AS "eventKind",
-             summary AS "summary",
-             sheet_id AS "sheetId",
-             sheet_name AS "sheetName",
-             anchor_address AS "anchorAddress",
-             range_json AS "rangeJson",
-             undo_bundle_json AS "undoBundleJson",
-             reverted_by_revision AS "revertedByRevision",
-             reverts_revision AS "revertsRevision",
-             created_at AS "createdAtUnixMs"
-        FROM workbook_change
-       WHERE workbook_id = $1
-         AND revision > $2
-       ORDER BY revision ASC
-    `,
-    [input.documentId, input.revision],
-  )
-  return result.rows.flatMap((row) => {
-    const record = normalizeWorkbookChangeRecord(row)
+  if (!isSafeNonNegativeInteger(input.revision)) {
+    return []
+  }
+  const rows = await db.listWorkbookChangesAfterRevisionRows(input)
+  return rows.flatMap((row) => {
+    const record = normalizeWorkbookChangeRecord(toWorkbookChangeSelectRow(row))
     return record ? [record] : []
   })
 }
 
 async function listWorkbookHistoryChanges(
-  db: Queryable,
+  db: WorkbookChangeStoreConnection,
   input: {
     readonly documentId: string
   },
 ): Promise<WorkbookChangeRecord[]> {
-  const result = await db.query<WorkbookChangeSelectRow>(
-    `
-      SELECT revision AS "revision",
-             actor_user_id AS "actorUserId",
-             client_mutation_id AS "clientMutationId",
-             event_kind AS "eventKind",
-             summary AS "summary",
-             sheet_id AS "sheetId",
-             sheet_name AS "sheetName",
-             anchor_address AS "anchorAddress",
-             range_json AS "rangeJson",
-             undo_bundle_json AS "undoBundleJson",
-             reverted_by_revision AS "revertedByRevision",
-             reverts_revision AS "revertsRevision",
-             created_at AS "createdAtUnixMs"
-        FROM workbook_change
-       WHERE workbook_id = $1
-       ORDER BY revision ASC
-    `,
-    [input.documentId],
-  )
-  return result.rows.flatMap((row) => {
-    const record = normalizeWorkbookChangeRecord(row)
+  const rows = await db.listWorkbookHistoryRows(input)
+  return rows.flatMap((row) => {
+    const record = normalizeWorkbookChangeRecord(toWorkbookChangeSelectRow(row))
     return record ? [record] : []
   })
 }
 
 export async function loadLatestUndoableWorkbookChange(
-  db: Queryable,
+  db: WorkbookChangeStoreConnection,
   input: {
     readonly documentId: string
     readonly actorUserId: string
@@ -337,7 +338,7 @@ export async function loadLatestUndoableWorkbookChange(
 }
 
 export async function loadLatestRedoableWorkbookChange(
-  db: Queryable,
+  db: WorkbookChangeStoreConnection,
   input: {
     readonly documentId: string
     readonly actorUserId: string
@@ -352,36 +353,21 @@ export async function loadLatestRedoableWorkbookChange(
 }
 
 export async function listWorkbookChanges(
-  db: Queryable,
+  db: WorkbookChangeStoreConnection,
   input: {
     readonly documentId: string
     readonly limit?: number
   },
 ): Promise<WorkbookChangeRecord[]> {
-  const result = await db.query<WorkbookChangeSelectRow>(
-    `
-      SELECT revision AS "revision",
-             actor_user_id AS "actorUserId",
-             client_mutation_id AS "clientMutationId",
-             event_kind AS "eventKind",
-             summary AS "summary",
-             sheet_id AS "sheetId",
-             sheet_name AS "sheetName",
-             anchor_address AS "anchorAddress",
-             range_json AS "rangeJson",
-             undo_bundle_json AS "undoBundleJson",
-             reverted_by_revision AS "revertedByRevision",
-             reverts_revision AS "revertsRevision",
-             created_at AS "createdAtUnixMs"
-        FROM workbook_change
-       WHERE workbook_id = $1
-       ORDER BY revision DESC
-       LIMIT $2
-    `,
-    [input.documentId, input.limit ?? 10],
-  )
-  return result.rows.flatMap((row) => {
-    const record = normalizeWorkbookChangeRecord(row)
+  if (input.limit !== undefined && !isSafePositiveInteger(input.limit)) {
+    return []
+  }
+  const rows = await db.listRecentWorkbookChangeRows({
+    documentId: input.documentId,
+    limit: input.limit ?? 10,
+  })
+  return rows.flatMap((row) => {
+    const record = normalizeWorkbookChangeRecord(toWorkbookChangeSelectRow(row))
     return record ? [record] : []
   })
 }

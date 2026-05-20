@@ -3,14 +3,14 @@ import {
   loadLatestRedoableWorkbookChange,
   loadLatestUndoableWorkbookChange,
   loadWorkbookChange,
+  type WorkbookChangeStoreConnection,
   type WorkbookChangeRecord,
 } from './workbook-change-store.js'
 import type { WorkbookHistoryMutationTarget } from './server-mutator-commit.js'
-import type { Queryable } from './store.js'
 import { workbookChangeRowHistoryRangeSource, workbookHistoryRangesOverlap } from '@bilig/zero-sync'
 
 export async function resolveRevertWorkbookChangeTarget(
-  db: Queryable,
+  db: WorkbookChangeStoreConnection,
   input: {
     readonly documentId: string
     readonly revision: number
@@ -34,7 +34,7 @@ export async function resolveRevertWorkbookChangeTarget(
 }
 
 export async function resolveUndoLatestWorkbookChangeTarget(
-  db: Queryable,
+  db: WorkbookChangeStoreConnection,
   input: {
     readonly documentId: string
     readonly actorUserId: string
@@ -48,7 +48,7 @@ export async function resolveUndoLatestWorkbookChangeTarget(
 }
 
 export async function resolveRedoLatestWorkbookChangeTarget(
-  db: Queryable,
+  db: WorkbookChangeStoreConnection,
   input: {
     readonly documentId: string
     readonly actorUserId: string
@@ -75,7 +75,11 @@ function toWorkbookHistoryMutationTarget(change: WorkbookChangeRecord): Workbook
   }
 }
 
-async function assertNoActiveOverlappingLaterChange(db: Queryable, documentId: string, targetChange: WorkbookChangeRecord): Promise<void> {
+async function assertNoActiveOverlappingLaterChange(
+  db: WorkbookChangeStoreConnection,
+  documentId: string,
+  targetChange: WorkbookChangeRecord,
+): Promise<void> {
   const laterChanges = await listWorkbookChangesAfterRevision(db, {
     documentId,
     revision: targetChange.revision,

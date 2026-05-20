@@ -33,7 +33,7 @@ import {
 import { persistWorkbookMutation } from './workbook-mutation-store.js'
 import { acquireWorkbookMutationLock, loadWorkbookRuntimeMetadata, loadWorkbookState } from './workbook-runtime-store.js'
 import { ensureZeroPublication } from './publication-store.js'
-import { listWorkbookChanges, type WorkbookChangeRecord } from './workbook-change-store.js'
+import { createWorkbookChangeStoreConnection, listWorkbookChanges, type WorkbookChangeRecord } from './workbook-change-store.js'
 import { ensureZeroServiceSchema } from './schema-bootstrap.js'
 import { ensureWorkbookDocumentExists } from './workbook-migration-store.js'
 import {
@@ -376,7 +376,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
   }
 
   async listWorkbookChanges(documentId: string, limit = 10): Promise<WorkbookChangeRecord[]> {
-    return await listWorkbookChanges(this.pool, {
+    return await listWorkbookChanges(createWorkbookChangeStoreConnection(this.runtimeStore), {
       documentId,
       limit,
     })

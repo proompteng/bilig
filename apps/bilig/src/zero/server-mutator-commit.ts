@@ -11,7 +11,11 @@ import {
   persistWorkbookMutation,
   type AppliedWorkbookClientMutation,
 } from './workbook-mutation-store.js'
-import type { WorkbookChangeRange } from './workbook-change-store.js'
+import {
+  createWorkbookChangeStoreConnection,
+  type WorkbookChangeRange,
+  type WorkbookChangeStoreConnection,
+} from './workbook-change-store.js'
 
 export interface ServerTransactionLike extends ZeroQueryRunner {
   dbTransaction: {
@@ -136,7 +140,7 @@ export async function commitWorkbookHistoryMutation(input: {
   clientMutationId?: string
   eventKind: 'revertChange' | 'redoChange'
   replayMatches: (payload: WorkbookEventPayload) => boolean
-  resolveTargetChange: (db: Queryable) => Promise<WorkbookHistoryMutationTarget>
+  resolveTargetChange: (db: WorkbookChangeStoreConnection) => Promise<WorkbookHistoryMutationTarget>
 }): Promise<void> {
   const { clientMutationId, documentId, eventKind, replayMatches, resolveTargetChange, runtimeManager, serverTx, session } = input
   await runtimeManager.runExclusive(documentId, async () => {
@@ -148,7 +152,7 @@ export async function commitWorkbookHistoryMutation(input: {
       assertClientMutationReplaySatisfies(appliedClientMutation, replayMatches)
       return
     }
-    const targetChange = await resolveTargetChange(db)
+    const targetChange = await resolveTargetChange(createWorkbookChangeStoreConnection(runtimeStore))
     const eventPayload = buildWorkbookHistoryEventPayload(eventKind, targetChange)
     const state = await runtimeManager.loadRuntime(runtimeStore, documentId)
     try {

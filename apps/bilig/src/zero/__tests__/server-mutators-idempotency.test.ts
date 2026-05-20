@@ -19,6 +19,7 @@ const mutationStoreFns = vi.hoisted(() => ({
 }))
 
 const changeStoreFns = vi.hoisted(() => ({
+  createWorkbookChangeStoreConnection: vi.fn((db: unknown) => db),
   listWorkbookChangesAfterRevision: vi.fn(async () => []),
   loadLatestRedoableWorkbookChange: vi.fn(async () => null),
   loadLatestUndoableWorkbookChange: vi.fn(async () => null),
@@ -35,6 +36,7 @@ vi.mock('../workbook-mutation-store.js', () => ({
 }))
 
 vi.mock('../workbook-change-store.js', () => ({
+  createWorkbookChangeStoreConnection: changeStoreFns.createWorkbookChangeStoreConnection,
   listWorkbookChangesAfterRevision: changeStoreFns.listWorkbookChangesAfterRevision,
   loadLatestRedoableWorkbookChange: changeStoreFns.loadLatestRedoableWorkbookChange,
   loadLatestUndoableWorkbookChange: changeStoreFns.loadLatestUndoableWorkbookChange,
@@ -53,6 +55,7 @@ describe('server mutator client mutation idempotency', () => {
     changeStoreFns.loadLatestUndoableWorkbookChange.mockClear()
     changeStoreFns.listWorkbookChangesAfterRevision.mockClear()
     changeStoreFns.loadWorkbookChange.mockClear()
+    changeStoreFns.createWorkbookChangeStoreConnection.mockClear()
   })
 
   it('treats a matching clientMutationId as a replay without mutating the workbook again', async () => {
@@ -300,10 +303,22 @@ describe('server mutator client mutation idempotency', () => {
     ).rejects.toThrow('Duplicate client mutations must not load runtime state')
 
     expect(mutationStoreFns.loadAppliedWorkbookClientMutation).toHaveBeenCalledWith(db, 'doc-1', 'doc-1:pending:12')
-    expect(changeStoreFns.loadLatestUndoableWorkbookChange).toHaveBeenCalledWith(db, {
-      documentId: 'doc-1',
-      actorUserId: 'system',
-    })
+    expect(changeStoreFns.createWorkbookChangeStoreConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.any(Function),
+        run: expect.any(Function),
+      }),
+    )
+    expect(changeStoreFns.loadLatestUndoableWorkbookChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.any(Function),
+        run: expect.any(Function),
+      }),
+      {
+        documentId: 'doc-1',
+        actorUserId: 'system',
+      },
+    )
     expect(loadRuntime).toHaveBeenCalled()
     expect(commitMutation).not.toHaveBeenCalled()
     expect(mutationStoreFns.persistWorkbookMutation).not.toHaveBeenCalled()
@@ -388,7 +403,20 @@ describe('server mutator client mutation idempotency', () => {
     ).rejects.toThrow('Workbook change was already reverted in r8')
 
     expect(mutationStoreFns.loadAppliedWorkbookClientMutation).toHaveBeenCalledWith(db, 'doc-1', 'doc-1:pending:13')
-    expect(changeStoreFns.loadWorkbookChange).toHaveBeenCalledWith(db, 'doc-1', 3)
+    expect(changeStoreFns.createWorkbookChangeStoreConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.any(Function),
+        run: expect.any(Function),
+      }),
+    )
+    expect(changeStoreFns.loadWorkbookChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.any(Function),
+        run: expect.any(Function),
+      }),
+      'doc-1',
+      3,
+    )
     expect(loadRuntime).not.toHaveBeenCalled()
     expect(commitMutation).not.toHaveBeenCalled()
     expect(mutationStoreFns.persistWorkbookMutation).not.toHaveBeenCalled()

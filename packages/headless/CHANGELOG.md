@@ -11,10 +11,12 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(web): centralize projected local delta authority (48c77b09)
 - perf(formula): preallocate scalar delta closure buffers (5018ad98)
 
 ## Internal runtime changes
+
 - chore(format): normalize headless docs (5b08b1ff)
 
 ## 0.38.0

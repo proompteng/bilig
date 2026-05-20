@@ -47,6 +47,15 @@ function flattenQueryAliases(value: unknown, prefix = ''): string[] {
 
 function queryArgsForAlias(alias: string): unknown {
   const workbookArgs = { documentId: 'doc-1' }
+  if (alias === 'workbookChange.one' || alias === 'workbookChanges.one') {
+    return { ...workbookArgs, revision: 1 }
+  }
+  if (alias === 'workbookChange.afterRevision' || alias === 'workbookChanges.afterRevision') {
+    return { ...workbookArgs, revision: 0 }
+  }
+  if (alias === 'workbookChange.byWorkbook' || alias === 'workbookChanges.byWorkbook') {
+    return { ...workbookArgs, limit: 10 }
+  }
   if (alias.endsWith('.one')) {
     return { ...workbookArgs, sheetName: 'Sheet1', address: 'A1' }
   }

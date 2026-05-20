@@ -15,6 +15,18 @@ export const workbookThreadArgsSchema = workbookQueryArgsSchema.extend({
   threadId: z.string().min(1),
 })
 
+const limitedWorkbookQueryArgsSchema = workbookQueryArgsSchema.extend({
+  limit: safePositiveIntegerSchema.optional(),
+})
+
+const workbookChangeRevisionArgsSchema = workbookQueryArgsSchema.extend({
+  revision: safePositiveIntegerSchema,
+})
+
+const workbookChangeAfterRevisionArgsSchema = workbookQueryArgsSchema.extend({
+  revision: safeNonNegativeIntegerSchema,
+})
+
 const workbookSheetArgsSchema = workbookQueryArgsSchema
   .extend({
     sheetId: safePositiveIntegerSchema.optional(),
@@ -143,8 +155,21 @@ const presenceCoarseByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: {
   zql.presence_coarse.where('workbookId', documentId).orderBy('updatedAt', 'desc'),
 )
 
-const workbookChangeByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
-  zql.workbook_change.where('workbookId', documentId).orderBy('createdAt', 'desc').orderBy('revision', 'desc'),
+const workbookChangeOne = defineQuery(workbookChangeRevisionArgsSchema, ({ args }) =>
+  zql.workbook_change.where('workbookId', args.documentId).where('revision', args.revision).one(),
+)
+
+const workbookChangeByWorkbook = defineQuery(limitedWorkbookQueryArgsSchema, ({ args }) => {
+  const query = zql.workbook_change.where('workbookId', args.documentId).orderBy('createdAt', 'desc').orderBy('revision', 'desc')
+  return args.limit === undefined ? query : query.limit(args.limit)
+})
+
+const workbookChangeHistoryByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
+  zql.workbook_change.where('workbookId', documentId).orderBy('revision', 'asc'),
+)
+
+const workbookChangeAfterRevision = defineQuery(workbookChangeAfterRevisionArgsSchema, ({ args }) =>
+  zql.workbook_change.where('workbookId', args.documentId).where('revision', '>', args.revision).orderBy('revision', 'asc'),
 )
 
 const workbookChatThreadByWorkbook = defineUserQuery(workbookQueryArgsSchema, ({ args: { documentId }, ctx }) =>
@@ -349,10 +374,16 @@ export const queries = defineQueries({
     byWorkbook: presenceCoarseByWorkbook,
   },
   workbookChange: {
+    one: workbookChangeOne,
     byWorkbook: workbookChangeByWorkbook,
+    historyByWorkbook: workbookChangeHistoryByWorkbook,
+    afterRevision: workbookChangeAfterRevision,
   },
   workbookChanges: {
+    one: workbookChangeOne,
     byWorkbook: workbookChangeByWorkbook,
+    historyByWorkbook: workbookChangeHistoryByWorkbook,
+    afterRevision: workbookChangeAfterRevision,
   },
   workbookChatThread: {
     byWorkbook: workbookChatThreadByWorkbook,
