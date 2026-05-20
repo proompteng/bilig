@@ -379,7 +379,7 @@ export abstract class WorkPaperRuntimeFastPathBase extends WorkPaperRuntimeSurfa
       throw new WorkPaperOperationError('Cell contents cannot be set')
     }
     const visibleCellIndex = this.getVisibleCellIndexInSheet(sheet, address.row, address.col)
-    return this.enqueueDeferredBatchLiteral(address.sheet, address.row, address.col, content, visibleCellIndex) ? [] : null
+    return this.enqueueValidatedDeferredBatchLiteral(address.sheet, address.row, address.col, content, visibleCellIndex) ? [] : null
   }
 
   override getCellValue(address: WorkPaperCellAddress): CellValue {

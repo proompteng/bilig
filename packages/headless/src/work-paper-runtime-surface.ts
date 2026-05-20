@@ -381,6 +381,26 @@ export abstract class WorkPaperRuntimeSurface extends WorkPaperRuntimeMetadataSu
     )
   }
 
+  protected enqueueValidatedDeferredBatchLiteral(
+    sheetId: number,
+    row: number,
+    col: number,
+    content: RawCellContent,
+    cellIndex: number | undefined,
+  ): boolean {
+    if (this.batchDepth === 0 || this.evaluationSuspended) {
+      return false
+    }
+    this.mutationQueues.enqueueValidatedDeferredBatchLiteral({
+      sheetId,
+      row,
+      col,
+      content,
+      cellIndex,
+    })
+    return true
+  }
+
   protected prepareReadableState(): void {
     this.assertNotDisposed()
     this.flushPendingBatchOps()

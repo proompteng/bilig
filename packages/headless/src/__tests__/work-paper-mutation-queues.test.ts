@@ -106,4 +106,50 @@ describe('work paper mutation queues', () => {
 
     expect(dimensionUpdates).toEqual([refs])
   })
+
+  it('flushes validated deferred literal mutations without reclassifying them', () => {
+    const { queues, applied, dimensionUpdates } = createRecordedQueues()
+
+    queues.enqueueValidatedDeferredBatchLiteral({
+      sheetId: 3,
+      row: 2,
+      col: 1,
+      content: 42,
+      cellIndex: 11,
+    })
+    queues.enqueueValidatedDeferredBatchLiteral({
+      sheetId: 3,
+      row: 3,
+      col: 1,
+      content: null,
+      cellIndex: 12,
+    })
+
+    queues.flushPendingBatchOps()
+
+    expect(applied).toEqual([
+      {
+        refs: [
+          {
+            sheetId: 3,
+            cellIndex: 11,
+            mutation: { kind: 'setCellValue', row: 2, col: 1, value: 42 },
+          },
+          {
+            sheetId: 3,
+            cellIndex: 12,
+            mutation: { kind: 'clearCell', row: 3, col: 1 },
+          },
+        ],
+        options: {
+          captureUndo: true,
+          potentialNewCells: 0,
+          source: 'local',
+          returnUndoOps: false,
+          reuseRefs: true,
+        },
+      },
+    ])
+    expect(dimensionUpdates).toHaveLength(1)
+  })
 })
