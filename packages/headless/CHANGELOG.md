@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.7
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.6
+- Manual override: no
+
+## Fixes
+- fix(xlsx): release dense import buffers (5d8bee40)
+
 ## 0.40.6
 
 - Release type: patch
