@@ -4,6 +4,16 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.19
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.18
+- Manual override: no
+
+## Fixes
+- perf(xlsx): materialize compressed style ranges (1873f142)
+- perf(core): fast-bind restored direct scalar formulas (72afb11c)
+
 ## 0.40.18
 
 - Release type: patch

@@ -73,8 +73,8 @@ This uses the package-owned challenge command. It does not clone the repo, curl
 a TypeScript file, or require a spreadsheet UI:
 
 ```sh
-npm exec --package @bilig/headless@0.40.18 -- bilig-agent-challenge
-npm exec --package @bilig/headless@0.40.18 -- bilig-mcp-challenge
+npm exec --package @bilig/headless@0.40.19 -- bilig-agent-challenge
+npm exec --package @bilig/headless@0.40.19 -- bilig-mcp-challenge
 ```
 
 A passing run prints `verified: true`.
@@ -92,7 +92,7 @@ same persisted file.
 Use this when the host supports MCP servers:
 
 ```sh
-npm exec --package @bilig/headless@0.40.18 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
+npm exec --package @bilig/headless@0.40.19 -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
 Required tool sequence:

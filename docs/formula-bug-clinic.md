@@ -37,7 +37,7 @@ the Markdown output into the fixture form. It reads the file on your machine and
 does not upload workbook contents.
 
 ```sh
-npm exec --package @bilig/headless@0.40.18 -- bilig-formula-clinic ./reduced.xlsx \
+npm exec --package @bilig/headless@0.40.19 -- bilig-formula-clinic ./reduced.xlsx \
   --cells "Summary!B7,Inputs!B2"
 ```
 
