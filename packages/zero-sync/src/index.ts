@@ -57,9 +57,13 @@ export {
 export { zql } from './zql.js'
 export { createEmptyWorkbookSnapshot, projectWorkbookToSnapshot } from './snapshot.js'
 export {
+  canonicalizeWorkbookChangeRange,
   isWorkbookChangeRange,
   isWorkbookChangeRangeScope,
   normalizeWorkbookChangeRange,
+  normalizeWorkbookChangeRangeBounds,
+  workbookChangeRangeFromAddresses,
+  type WorkbookChangeRangeBounds,
   type WorkbookChangeRange,
   type WorkbookChangeRangeScope,
 } from './workbook-change-range.js'

@@ -1,6 +1,11 @@
-import { formatAddress, parseCellAddress } from '@bilig/formula'
+import { formatAddress } from '@bilig/formula'
 import type { CellRangeRef } from '@bilig/protocol'
-import { isWorkbookChangeRangeScope, type WorkbookChangeRange, type WorkbookEventPayload } from '@bilig/zero-sync'
+import {
+  canonicalizeWorkbookChangeRange,
+  workbookChangeRangeFromAddresses,
+  type WorkbookChangeRange,
+  type WorkbookEventPayload,
+} from '@bilig/zero-sync'
 
 export interface WorkbookChangeDescriptor {
   readonly eventKind: WorkbookEventPayload['kind']
@@ -22,15 +27,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeRange(range: CellRangeRef): WorkbookChangeRange {
-  const start = parseCellAddress(range.startAddress, range.sheetName)
-  const end = parseCellAddress(range.endAddress, range.sheetName)
-  const scope = isRecord(range) && isWorkbookChangeRangeScope(range['scope']) ? range['scope'] : undefined
-  return {
-    sheetName: range.sheetName,
-    startAddress: formatAddress(Math.min(start.row, end.row), Math.min(start.col, end.col)),
-    endAddress: formatAddress(Math.max(start.row, end.row), Math.max(start.col, end.col)),
-    ...(scope && scope !== 'cells' ? { scope } : {}),
+  const normalized = canonicalizeWorkbookChangeRange(range, isRecord(range) ? range['scope'] : undefined)
+  if (!normalized) {
+    throw new Error(`Invalid workbook change range ${range.sheetName}!${range.startAddress}:${range.endAddress}`)
   }
+  return normalized
 }
 
 function rangeLabel(range: WorkbookChangeRange): string {
@@ -56,25 +57,7 @@ function columnRangeLabel(startCol: number, count: number): string {
 }
 
 function rangeFromAddresses(sheetName: string, addresses: readonly string[]): WorkbookChangeRange | null {
-  if (addresses.length === 0) {
-    return null
-  }
-  let rowStart = Number.POSITIVE_INFINITY
-  let rowEnd = Number.NEGATIVE_INFINITY
-  let colStart = Number.POSITIVE_INFINITY
-  let colEnd = Number.NEGATIVE_INFINITY
-  for (const address of addresses) {
-    const parsed = parseCellAddress(address, sheetName)
-    rowStart = Math.min(rowStart, parsed.row)
-    rowEnd = Math.max(rowEnd, parsed.row)
-    colStart = Math.min(colStart, parsed.col)
-    colEnd = Math.max(colEnd, parsed.col)
-  }
-  return {
-    sheetName,
-    startAddress: formatAddress(rowStart, colStart),
-    endAddress: formatAddress(rowEnd, colEnd),
-  }
+  return workbookChangeRangeFromAddresses(sheetName, addresses)
 }
 
 function summarizeCommitCellOps(ops: readonly CommitCellOpDescriptor[]): WorkbookChangeDescriptor {

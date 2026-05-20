@@ -88,4 +88,16 @@ describe('workbook change row model', () => {
       rangeJsonInvalid: true,
     })
   })
+
+  it('marks persisted ranges with malformed addresses as explicit trust failures', () => {
+    expect(
+      normalizeWorkbookChangeRowModel({
+        ...baseRow,
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'A0', endAddress: 'A1' },
+      }),
+    ).toMatchObject({
+      rangeJson: null,
+      rangeJsonInvalid: true,
+    })
+  })
 })

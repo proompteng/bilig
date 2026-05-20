@@ -1,7 +1,6 @@
 import type { WorkbookChangeUndoBundle, WorkbookEventKind } from './workbook-events.js'
-import { parseCellAddress } from '@bilig/formula'
 import type { WorkbookChangeRange, WorkbookChangeRangeScope } from './workbook-change-range.js'
-import { normalizeWorkbookChangeRange } from './workbook-change-range.js'
+import { normalizeWorkbookChangeRange, normalizeWorkbookChangeRangeBounds } from './workbook-change-range.js'
 
 export type WorkbookHistoryRange = WorkbookChangeRange
 
@@ -82,19 +81,17 @@ function normalizeWorkbookHistoryRange(source: WorkbookHistoryRangeSource): Norm
   if (!range) {
     return null
   }
-  try {
-    const start = parseCellAddress(range.startAddress, range.sheetName)
-    const end = parseCellAddress(range.endAddress, range.sheetName)
-    return {
-      sheetName: range.sheetName,
-      startRow: Math.min(start.row, end.row),
-      endRow: Math.max(start.row, end.row),
-      startCol: Math.min(start.col, end.col),
-      endCol: Math.max(start.col, end.col),
-      scope: range.scope ?? 'cells',
-    }
-  } catch {
+  const bounds = normalizeWorkbookChangeRangeBounds(range)
+  if (!bounds) {
     return null
+  }
+  return {
+    sheetName: bounds.sheetName,
+    startRow: bounds.rowStart,
+    endRow: bounds.rowEnd,
+    startCol: bounds.colStart,
+    endCol: bounds.colEnd,
+    scope: bounds.scope,
   }
 }
 

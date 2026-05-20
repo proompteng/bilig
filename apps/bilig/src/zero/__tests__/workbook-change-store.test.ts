@@ -169,6 +169,29 @@ describe('workbook-change-store', () => {
     })
   })
 
+  it('canonicalizes authored range descriptors through the shared Zero range authority', () => {
+    expect(
+      buildWorkbookChangeDescriptor({
+        kind: 'clearRange',
+        range: {
+          sheetName: 'Sheet1',
+          startAddress: 'D5',
+          endAddress: 'B2',
+        },
+      }),
+    ).toEqual({
+      eventKind: 'clearRange',
+      summary: 'Cleared Sheet1!B2:D5',
+      sheetName: 'Sheet1',
+      anchorAddress: 'B2',
+      range: {
+        sheetName: 'Sheet1',
+        startAddress: 'B2',
+        endAddress: 'D5',
+      },
+    })
+  })
+
   it('keeps multi-sheet render commits conservative instead of lying about one sheet range', () => {
     expect(
       buildWorkbookChangeDescriptor({
@@ -250,6 +273,39 @@ describe('workbook-change-store', () => {
       revision: 17,
       sheetName: 'Sheet1',
       anchorAddress: 'A3',
+      range: null,
+      rangeInvalid: true,
+    })
+  })
+
+  it('drops malformed persisted range addresses so history conflict checks stay conservative', async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes('FROM workbook_change')
+          ? [
+              {
+                revision: 19,
+                actorUserId: 'alex@example.com',
+                clientMutationId: 'mutation-19',
+                eventKind: 'setCellValue',
+                summary: 'Updated Sheet1!A1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A0', endAddress: 'A1' },
+                undoBundleJson: null,
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 124_650,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(loadWorkbookChange(queryable, 'doc-1', 19)).resolves.toMatchObject({
+      revision: 19,
+      sheetName: 'Sheet1',
+      anchorAddress: 'A1',
       range: null,
       rangeInvalid: true,
     })

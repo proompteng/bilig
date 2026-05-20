@@ -146,6 +146,25 @@ describe('deriveWorkbookActorHistoryState', () => {
     expect(state.undoStack).toEqual([])
   })
 
+  it('treats malformed persisted range addresses as unknown and invalidates stale history conservatively', () => {
+    const state = deriveWorkbookActorHistoryState({
+      actorUserId: 'alex@example.com',
+      rows: [
+        historyRow({ revision: 100, eventKind: 'setCellValue', address: 'Z99' }),
+        historyRow({
+          revision: 101,
+          actorUserId: 'morgan@example.com',
+          eventKind: 'setCellValue',
+          address: 'A1',
+          rangeJson: { sheetName: 'Sheet1', startAddress: 'A0', endAddress: 'A1' },
+        }),
+      ],
+    })
+
+    expect(state.canUndo).toBe(false)
+    expect(state.undoStack).toEqual([])
+  })
+
   it('does not fall back to anchor metadata after a range was already marked invalid', () => {
     const state = deriveWorkbookActorHistoryState({
       actorUserId: 'alex@example.com',
