@@ -1,6 +1,6 @@
 {
   "name": "bilig-workpaper",
-  "version": "0.37.1",
+  "version": "0.37.2",
   "description": "Bilig WorkPaper runtime for Node.js services, agent tools, and server-side spreadsheet formulas.",
   "keywords": [
     "agent-tools",

@@ -4,6 +4,17 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.37.2
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.37.1
+- Manual override: no
+
+## Fixes
+- fix(zero): share persisted value guards (10bab669)
+- perf(formula): tighten scalar row-pair batch writes (586e30cb)
+- perf(core): avoid reparsing initial formula templates (a7d70e4f)
+
 ## 0.37.1
 
 - Release type: patch
