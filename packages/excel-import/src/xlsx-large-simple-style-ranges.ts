@@ -9,30 +9,52 @@ export function buildLargeSimpleStyleRanges(
   styleCatalog: Map<string, CellStyleRecord>,
 ): SheetStyleRangeSnapshot[] {
   const styleIdsByIndex = new Map<number, string>()
-  const builder = new StyleRangeBuilder(sheetName)
-  const append = (row: number, column: number, styleIndex: number): void => {
+  const styleIdForIndex = (styleIndex: number): string | undefined => {
     let styleId = styleIdsByIndex.get(styleIndex)
     if (!styleId) {
       const style = stylesByIndex.get(styleIndex)
       if (!style) {
-        return
+        return undefined
       }
       styleId = internImportedStyle(style, styleCatalog)
       styleIdsByIndex.set(styleIndex, styleId)
     }
+    return styleId
+  }
+  const compressedRanges: SheetStyleRangeSnapshot[] = []
+  const usedCompressedRanges = cellScan.styleIndexes.forEachCompressedRange((startRow, endRow, startColumn, endColumn, styleIndex) => {
+    const styleId = styleIdForIndex(styleIndex)
+    if (!styleId) {
+      return
+    }
+    compressedRanges.push(
+      styleRunToRange(sheetName, {
+        startRow,
+        endRow,
+        startColumn,
+        endColumn,
+        styleId,
+      }),
+    )
+  })
+  if (usedCompressedRanges) {
+    return compressedRanges
+  }
+  const builder = new StyleRangeBuilder(sheetName)
+  const append = (row: number, column: number, styleIndex: number): void => {
+    const styleId = styleIdForIndex(styleIndex)
+    if (!styleId) {
+      return
+    }
     builder.add(row, column, styleId)
   }
-  if (cellScan.styleIndexes.isRowMajorOrdered) {
-    cellScan.styleIndexes.forEach(append)
-  } else {
-    const entries: { row: number; column: number; styleIndex: number }[] = []
-    cellScan.styleIndexes.forEach((row, column, styleIndex) => {
-      entries.push({ row, column, styleIndex })
-    })
-    entries
-      .toSorted((left, right) => left.row - right.row || left.column - right.column || left.styleIndex - right.styleIndex)
-      .forEach((entry) => append(entry.row, entry.column, entry.styleIndex))
-  }
+  const entries: { row: number; column: number; styleIndex: number }[] = []
+  cellScan.styleIndexes.forEach((row, column, styleIndex) => {
+    entries.push({ row, column, styleIndex })
+  })
+  entries
+    .toSorted((left, right) => left.row - right.row || left.column - right.column || left.styleIndex - right.styleIndex)
+    .forEach((entry) => append(entry.row, entry.column, entry.styleIndex))
   return builder.finish()
 }
 

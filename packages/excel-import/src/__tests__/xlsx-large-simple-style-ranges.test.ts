@@ -21,6 +21,24 @@ describe('large simple style range materialization', () => {
     expect([...styleCatalog.values()]).toEqual([{ id: styleId, fill: { backgroundColor: '#ffcc00' } }])
   })
 
+  it('materializes broad row-major style templates from compressed rectangles instead of per-cell expansion', () => {
+    const styleIndexes = new ImportedWorksheetStyleIndexArena()
+    for (let row = 0; row < 3_000; row += 1) {
+      for (let column = 0; column < 20; column += 1) {
+        styleIndexes.add(row, column, 1)
+      }
+    }
+    Object.defineProperty(styleIndexes, 'forEach', {
+      value() {
+        throw new Error('row-major compressed style ranges should not expand every styled cell')
+      },
+    })
+    const styleRanges = buildLargeSimpleStyleRanges('Data', scanWithStyleIndexes(styleIndexes), stylesByIndex(), new Map())
+    const styleId = styleRanges[0]?.styleId
+
+    expect(styleRanges).toEqual([{ range: { sheetName: 'Data', startAddress: 'A1', endAddress: 'T3000' }, styleId }])
+  })
+
   it('sorts and compacts ranges when style records arrive out of row order', () => {
     const styleIndexes = new ImportedWorksheetStyleIndexArena()
     styleIndexes.add(1, 0, 1)

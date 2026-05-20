@@ -107,6 +107,19 @@ export class ImportedWorksheetStyleIndexArena {
     }
   }
 
+  forEachCompressedRange(
+    callback: (startRow: number, endRow: number, startColumn: number, endColumn: number, styleIndex: number) => void,
+  ): boolean {
+    this.finishCompressedStorage()
+    if (!this.rowMajorOrdered) {
+      return false
+    }
+    for (const rect of this.sortedRects()) {
+      callback(rect.startRow, rect.endRow, rect.startColumn, rect.endColumn, rect.styleIndex)
+    }
+    return true
+  }
+
   release(): void {
     this.rectStartRows = new Uint32Array(0)
     this.rectEndRows = new Uint32Array(0)
