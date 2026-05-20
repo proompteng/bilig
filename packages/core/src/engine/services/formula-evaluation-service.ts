@@ -17,7 +17,7 @@ import { CellFlags } from '../../cell-store.js'
 import { definedNameValueToCellValue, definedNameValueToReferenceOperand } from '../../engine-metadata-utils.js'
 import { emptyValue, errorValue } from '../../engine-value-utils.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
-import type { EngineRuntimeState, RuntimeDirectCriteriaOperand, RuntimeFormula, SpillMaterialization } from '../runtime-state.js'
+import type { EngineRuntimeState, RuntimeFormula, SpillMaterialization } from '../runtime-state.js'
 import { EngineFormulaEvaluationError } from '../errors.js'
 import type { CriterionRangeCacheService, CriterionRangeMatch } from './criterion-range-cache-service.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
@@ -35,9 +35,7 @@ import { tryEvaluateDirectVectorLookup } from './formula-evaluation-direct-looku
 import { tryEvaluateDirectIndexExactMatch, tryEvaluateDirectIndexOffset } from './formula-evaluation-direct-index.js'
 import { tryEvaluateDirectScalar } from './formula-evaluation-direct-scalar.js'
 import {
-  cellValueCriteriaString,
   cellValuesEqual,
-  directCriteriaCacheValueKey,
   directErrorResult,
   directNumberResult,
   evaluationErrorMessage,
@@ -48,7 +46,7 @@ import {
   tryEvaluateNativeDirectCriteriaMatchedAggregate,
   tryEvaluateNativeDirectCriteriaPredicateAggregate,
 } from './formula-evaluation-direct-criteria-native.js'
-import { readRuntimeDirectCriteriaOperandValue } from './direct-criteria-operands.js'
+import { createDirectCriteriaSharingContext } from './formula-evaluation-direct-criteria-sharing.js'
 import type { EngineFormulaEvaluationService } from './formula-evaluation-service-types.js'
 export type { EngineFormulaEvaluationService } from './formula-evaluation-service-types.js'
 
@@ -335,13 +333,7 @@ export function createEngineFormulaEvaluationService(args: {
   ) => {
     return args.sortedLookup.findVectorMatch(request)
   }
-  const readDirectCriteriaOperandValue = (operand: RuntimeDirectCriteriaOperand): CellValue => {
-    return readRuntimeDirectCriteriaOperandValue({
-      operand,
-      readCellValueByIndex,
-      stringifyCriteriaValue: cellValueCriteriaString,
-    })
-  }
+  const directCriteriaSharing = createDirectCriteriaSharingContext({ state: args.state, readCellValueByIndex })
   const tryEvaluateDirectCriteriaAggregate = (formula: RuntimeFormula): CellValue | undefined => {
     const directCriteria = formula.directCriteria
     if (!directCriteria) return undefined
@@ -357,18 +349,13 @@ export function createEngineFormulaEvaluationService(args: {
     if (directIndexOffsetResult !== undefined) {
       return applyDirectCriteriaResultTransforms(readCellValueByIndex, formula, directIndexOffsetResult)
     }
-    const resolvedPairs = directCriteria.criteriaPairs.map((pair) => ({
-      range: pair.range,
-      criteria: readDirectCriteriaOperandValue(pair.criterion),
-    }))
-    const criterionError = resolvedPairs.find((pair) => pair.criteria.tag === ValueTag.Error)?.criteria
-    if (criterionError) {
-      return criterionError
+    const directCriteriaPairs = directCriteriaSharing.resolveDirectCriteriaPairs(formula)
+    if (directCriteriaPairs?.error !== undefined) {
+      return directCriteriaPairs.error
     }
+    const resolvedPairs = directCriteriaPairs?.pairs ?? []
     const aggregateRange = directCriteria.aggregateRange
-    const criteriaVersionKey = resolvedPairs
-      .map((pair) => `${directCriteriaRangeVersionKey(args.state, pair.range)}:${directCriteriaCacheValueKey(pair.criteria)}`)
-      .join('|')
+    const criteriaVersionKey = directCriteriaSharing.directCriteriaVersionKeyForPairs(resolvedPairs)
     const aggregateCacheKey =
       aggregateRange === undefined
         ? undefined
@@ -415,6 +402,7 @@ export function createEngineFormulaEvaluationService(args: {
         aggregateKind: directCriteria.aggregateKind,
         aggregateRange,
         criteriaPairs: resolvedPairs,
+        shouldUseSharedCriteriaCache: () => directCriteriaSharing.directCriteriaShareCount(criteriaVersionKey) > 1,
       },
     )
     if (nativePredicateAggregateResult !== undefined) {

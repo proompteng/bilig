@@ -29,12 +29,12 @@ export function tryEvaluateNativeDirectCriteriaPredicateAggregate(
     readonly aggregateKind: RuntimeDirectCriteriaDescriptor['aggregateKind']
     readonly aggregateRange: CriterionRangeDescriptor | undefined
     readonly criteriaPairs: readonly CriterionRangePair[]
+    readonly shouldUseSharedCriteriaCache?: () => boolean
   },
 ): CellValue | undefined {
   const aggregateKind = nativeDirectCriteriaAggregateKind(input.aggregateKind)
   if (
     aggregateKind === undefined ||
-    input.aggregateKind !== 'count' ||
     input.criteriaPairs.length === 0 ||
     input.criteriaPairs.length > MAX_NATIVE_DIRECT_CRITERIA_PREDICATE_PAIRS ||
     !args.state.wasm.initSyncIfPossible()
@@ -54,6 +54,9 @@ export function tryEvaluateNativeDirectCriteriaPredicateAggregate(
 
   const loweredCriteria = input.criteriaPairs.map((pair) => lowerNativeNumericCriteria(pair.criteria))
   if (loweredCriteria.some((criterion) => criterion === undefined)) {
+    return undefined
+  }
+  if (input.shouldUseSharedCriteriaCache?.()) {
     return undefined
   }
 
