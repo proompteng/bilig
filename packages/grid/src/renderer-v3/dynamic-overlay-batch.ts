@@ -32,6 +32,8 @@ export interface DynamicGridPreviewRectV3 {
   readonly bounds: Rectangle
 }
 
+export type DynamicGridSelectionOverlayModeV3 = 'all' | 'fills-only'
+
 interface BorderSides {
   readonly bottom: boolean
   readonly left: boolean
@@ -50,6 +52,7 @@ export function buildDynamicGridOverlayBatchV3(input: {
   readonly showFillHandle: boolean
   readonly activeHeaderDrag?: HeaderSelection | null | undefined
   readonly showHoverOverlay?: boolean | undefined
+  readonly selectionOverlayMode?: DynamicGridSelectionOverlayModeV3 | undefined
   readonly showSelectionOverlay?: boolean | undefined
   readonly resizeGuideColumn?: number | null | undefined
   readonly resizeGuideColumnWidth?: number | null | undefined
@@ -59,6 +62,8 @@ export function buildDynamicGridOverlayBatchV3(input: {
   const fillRects: GridGpuRect[] = []
   const borderRects: GridGpuRect[] = []
   if (input.showSelectionOverlay !== false) {
+    const selectionOverlayMode = input.selectionOverlayMode ?? 'all'
+    const showSelectionChrome = selectionOverlayMode === 'all'
     appendAxisSelectionOverlay({
       borderRects,
       fillRects,
@@ -73,7 +78,8 @@ export function buildDynamicGridOverlayBatchV3(input: {
       geometry: input.geometry,
       gridSelection: input.gridSelection ?? null,
       selectionRange: input.selectionRange,
-      showFillHandle: input.showFillHandle,
+      showFillHandle: showSelectionChrome && input.showFillHandle,
+      showSelectionChrome,
     })
   }
   appendFillPreviewOverlay({
@@ -204,6 +210,7 @@ function appendSelectionOverlay(input: {
   readonly gridSelection: GridSelection | null
   readonly selectionRange: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
   readonly showFillHandle: boolean
+  readonly showSelectionChrome: boolean
   readonly fillRects: GridGpuRect[]
   readonly borderRects: GridGpuRect[]
 }): void {
@@ -213,6 +220,9 @@ function appendSelectionOverlay(input: {
   const hasAxisSelection = (input.gridSelection?.columns.length ?? 0) > 0 || (input.gridSelection?.rows.length ?? 0) > 0
   const borderColor = parseGpuColor(workbookThemeColors.accent)
   if (hasAxisSelection) {
+    if (!input.showSelectionChrome) {
+      return
+    }
     const activeCell = input.gridSelection?.current?.cell ?? [input.selectionRange.x, input.selectionRange.y]
     for (const activeRect of input.geometry.rangeScreenRects({ x: activeCell[0], y: activeCell[1], width: 1, height: 1 })) {
       appendBorderRects(input.borderRects, activeRect, borderColor, 2)
@@ -229,15 +239,17 @@ function appendSelectionOverlay(input: {
       geometry: input.geometry,
       range: input.selectionRange,
     })
-    for (const rect of input.geometry.rangeScreenRects(input.selectionRange)) {
-      appendBorderRects(input.borderRects, rect, borderColor, 1)
+    if (input.showSelectionChrome) {
+      for (const rect of input.geometry.rangeScreenRects(input.selectionRange)) {
+        appendBorderRects(input.borderRects, rect, borderColor, 1)
+      }
     }
-  } else {
+  } else if (input.showSelectionChrome) {
     for (const rect of input.geometry.rangeScreenRects(input.selectionRange)) {
       appendBorderRects(input.borderRects, rect, borderColor, 2)
     }
   }
-  if (activeCell && isMultiCellSelection && cellInRange(activeCell, input.selectionRange)) {
+  if (input.showSelectionChrome && activeCell && isMultiCellSelection && cellInRange(activeCell, input.selectionRange)) {
     for (const activeRect of input.geometry.rangeScreenRects({ x: activeCell[0], y: activeCell[1], width: 1, height: 1 })) {
       appendBorderRects(input.borderRects, activeRect, borderColor, 2)
     }

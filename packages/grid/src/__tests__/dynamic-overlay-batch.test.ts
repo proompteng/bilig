@@ -166,6 +166,48 @@ describe('dynamic overlay batch v3', () => {
     )
   })
 
+  test('can leave selection chrome to the DOM while keeping TypeGPU range fills authoritative', () => {
+    const metrics = getGridMetrics()
+    const geometry = createGridGeometrySnapshotFromAxes({
+      columns: createGridAxisWorldIndex({ axisLength: 20, defaultSize: 100 }),
+      dpr: 2,
+      freezeCols: 0,
+      freezeRows: 0,
+      gridMetrics: metrics,
+      hostHeight: 220,
+      hostWidth: 520,
+      rows: createGridAxisWorldIndex({ axisLength: 20, defaultSize: 20 }),
+      scrollLeft: 0,
+      scrollTop: 0,
+      sheetName: 'Sheet1',
+      updatedAt: 100,
+    })
+
+    const overlay = buildDynamicGridOverlayBatchV3({
+      geometry,
+      gridSelection: createRangeSelection(createGridSelection(1, 1), [1, 1], [3, 3]),
+      selectedCell: [1, 1],
+      selectionOverlayMode: 'fills-only',
+      selectionRange: { x: 1, y: 1, width: 3, height: 3 },
+      showFillHandle: true,
+    })
+
+    expect(overlay.fillRectCount).toBeGreaterThan(0)
+    expect(overlay.borderRectCount).toBe(0)
+    expect(readOverlayRects(overlay)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ x: 247, y: 45, width: 198, height: 18 }),
+        expect.objectContaining({ x: 147, y: 65, width: 298, height: 38 }),
+      ]),
+    )
+    expect(readOverlayRects(overlay)).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ x: 146, y: 44, width: 300, height: 1 }),
+        expect.objectContaining({ x: 442.5, y: 100.5, width: 7, height: 7 }),
+      ]),
+    )
+  })
+
   test('draws resize preview guides from overlay dimensions without mutating axis geometry', () => {
     const metrics = getGridMetrics()
     const geometry = createGridGeometrySnapshotFromAxes({

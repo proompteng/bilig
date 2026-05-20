@@ -307,6 +307,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         hoveredCell: hoverCell,
         previewRects,
         selectedCell: [displaySelectionCol, displaySelectionRow],
+        selectionOverlayMode: 'fills-only',
         selectionRange: displaySelectionRange,
         showFillHandle: showSelectionFillHandle,
         showHoverOverlay: false,
