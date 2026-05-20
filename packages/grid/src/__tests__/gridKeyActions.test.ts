@@ -174,6 +174,80 @@ describe('gridKeyActions', () => {
     ).toEqual({ kind: 'move-selection-in-range', cell: [1, 1], range })
   })
 
+  test('uses the visible active cell for non-shift navigation inside a selected range', () => {
+    const range = { x: 1, y: 1, width: 3, height: 4 }
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'ArrowRight', ctrlKey: false, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [1, 1],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: range,
+      }),
+    ).toEqual({ kind: 'move-selection', cell: [2, 1] })
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'ArrowDown', ctrlKey: false, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [2, 3],
+        currentSelectionCell: [2, 3],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: range,
+      }),
+    ).toEqual({ kind: 'move-selection', cell: [2, 4] })
+  })
+
+  test('uses the visible active cell for current-region and axis shortcuts inside a selected range', () => {
+    const range = { x: 1, y: 1, width: 3, height: 4 }
+    const navigationCalls: Array<readonly [number, number]> = []
+    const navigation = {
+      resolveCurrentRegion: (cell: readonly [number, number]) => {
+        navigationCalls.push(cell)
+        return { x: 0, y: 0, width: 5, height: 6 }
+      },
+      resolveDataEdge: () => null,
+    }
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'a', ctrlKey: true, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [1, 1],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: range,
+        navigation,
+      }),
+    ).toEqual({ kind: 'select-range', cell: [1, 1], range: { x: 0, y: 0, width: 5, height: 6 } })
+    expect(navigationCalls).toEqual([[1, 1]])
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: ' ', ctrlKey: true, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [2, 3],
+        currentSelectionCell: [2, 3],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: range,
+      }),
+    ).toEqual({ kind: 'select-column', col: 2, row: 3 })
+  })
+
   test('supports sheet-style navigation keys and selection shortcuts', () => {
     expect(
       resolveGridKeyAction({

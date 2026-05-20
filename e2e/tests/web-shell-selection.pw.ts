@@ -357,6 +357,17 @@ test('@browser-ci web app keeps active cell chrome synchronized inside a keyboar
     'active cell border after enter',
   )
   await expectVisualRectNear(page.locator('[data-grid-selection-visual-role="fill-handle"]'), expectedFillHandle, 'fill handle after enter')
+
+  await page.getByTestId('sheet-grid-focus-target').press('ArrowRight')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D3')
+  await expect(page.getByTestId('name-box')).toHaveValue('D3')
+  await expect(page.getByTestId('sheet-grid-focus-target')).toHaveAttribute('aria-label', 'Sheet1 D3')
+  await expect(page.locator('[data-grid-selection-visual-role="selection-border"]')).toHaveCount(0)
+  await expectVisualRectNear(
+    page.locator('[data-grid-selection-visual-role="active-border"]'),
+    await getProductCellRangeBox(page, 3, 2, 3, 2),
+    'collapsed active cell border after arrow',
+  )
 })
 
 test('web app clips spilled text before the active selected cell', async ({ page }) => {

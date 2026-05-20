@@ -74,6 +74,20 @@ function resolveSelectionActiveCell(
   currentSelectionCell: Item | null,
   currentSelectionRange: Rectangle | null | undefined,
 ): Item {
+  if (currentSelectionCell && (!currentSelectionRange || isCellInRange(currentSelectionCell, currentSelectionRange))) {
+    return currentSelectionCell
+  }
+  if (currentSelectionRange && isCellInRange(anchorCell, currentSelectionRange)) {
+    return anchorCell
+  }
+  return currentSelectionCell ?? anchorCell
+}
+
+function resolveSelectionExtensionEdgeCell(
+  anchorCell: Item,
+  currentSelectionCell: Item | null,
+  currentSelectionRange: Rectangle | null | undefined,
+): Item {
   if (!currentSelectionRange || (currentSelectionRange.width === 1 && currentSelectionRange.height === 1)) {
     return currentSelectionCell ?? anchorCell
   }
@@ -169,6 +183,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   const anchorCell = currentRangeAnchor ?? selectedCell
   const selectedActionCell = currentSelectionCell ?? selectedCell
   const activeCell = resolveSelectionActiveCell(anchorCell, currentSelectionCell, currentSelectionRange)
+  const extensionEdgeCell = resolveSelectionExtensionEdgeCell(anchorCell, currentSelectionCell, currentSelectionRange)
 
   if (isEditingCell) {
     if (!editorInputFocused) {
@@ -224,7 +239,8 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   }
 
   if (event.key === 'Home' && !event.altKey) {
-    const nextCell = hasPrimaryModifier ? ([0, 0] as Item) : ([0, activeCell[1]] as Item)
+    const navigationCell = event.shiftKey ? extensionEdgeCell : activeCell
+    const nextCell = hasPrimaryModifier ? ([0, 0] as Item) : ([0, navigationCell[1]] as Item)
     if (event.shiftKey) {
       return {
         kind: 'extend-selection',
@@ -236,7 +252,8 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   }
 
   if (event.key === 'End' && !event.altKey) {
-    const nextCell = hasPrimaryModifier ? ([MAX_COLS - 1, MAX_ROWS - 1] as Item) : ([MAX_COLS - 1, activeCell[1]] as Item)
+    const navigationCell = event.shiftKey ? extensionEdgeCell : activeCell
+    const nextCell = hasPrimaryModifier ? ([MAX_COLS - 1, MAX_ROWS - 1] as Item) : ([MAX_COLS - 1, navigationCell[1]] as Item)
     if (event.shiftKey) {
       return {
         kind: 'extend-selection',
@@ -248,8 +265,9 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   }
 
   if ((event.key === 'PageUp' || event.key === 'PageDown') && !event.altKey) {
+    const navigationCell = event.shiftKey ? extensionEdgeCell : activeCell
     const jumpRows = resolvePageJumpRows(pageJumpRows)
-    const nextCell = clampCell([activeCell[0], activeCell[1] + (event.key === 'PageDown' ? jumpRows : -jumpRows)])
+    const nextCell = clampCell([navigationCell[0], navigationCell[1] + (event.key === 'PageDown' ? jumpRows : -jumpRows)])
     if (event.shiftKey) {
       return {
         kind: 'extend-selection',
@@ -303,9 +321,10 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
       event.key === 'ArrowUp' ? [0, -1] : event.key === 'ArrowDown' ? [0, 1] : event.key === 'ArrowLeft' ? [-1, 0] : [1, 0]
     const direction: GridNavigationDirection =
       event.key === 'ArrowUp' ? 'up' : event.key === 'ArrowDown' ? 'down' : event.key === 'ArrowLeft' ? 'left' : 'right'
+    const navigationCell = event.shiftKey ? extensionEdgeCell : activeCell
     const nextCell = hasPrimaryModifier
-      ? (navigation?.resolveDataEdge(activeCell, direction) ?? moveSelectionToEdge(activeCell, direction))
-      : clampCell([activeCell[0] + delta[0], activeCell[1] + delta[1]])
+      ? (navigation?.resolveDataEdge(navigationCell, direction) ?? moveSelectionToEdge(navigationCell, direction))
+      : clampCell([navigationCell[0] + delta[0], navigationCell[1] + delta[1]])
 
     if (event.shiftKey) {
       return {
