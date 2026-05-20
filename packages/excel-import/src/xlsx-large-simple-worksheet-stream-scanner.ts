@@ -415,10 +415,11 @@ class LargeSimpleWorksheetChunkScanner {
     }
     this.rowCount = Math.max(this.rowCount, start.row + 1, end.row + 1)
     this.columnCount = Math.max(this.columnCount, start.column + 1, end.column + 1)
-    this.reserveDimensionCellCapacity((end.row + 1) * (end.column + 1))
+    this.reserveDimensionCellCapacity(end.row + 1, end.column + 1)
   }
 
-  private reserveDimensionCellCapacity(cellCapacity: number): void {
+  private reserveDimensionCellCapacity(rowCount: number, columnCount: number): void {
+    const cellCapacity = rowCount * columnCount
     if (
       this.dimensionCellPreallocationApplied ||
       !Number.isSafeInteger(cellCapacity) ||
@@ -428,7 +429,7 @@ class LargeSimpleWorksheetChunkScanner {
       return
     }
     this.dimensionCellPreallocationApplied = true
-    this.arena.reserveCellCapacity(cellCapacity)
+    this.arena.reserveDenseRowMajorCellCapacity(this.sheetIndex, columnCount, rowCount)
   }
 
   private collectRowMetadata(nameEnd: number, tagEnd: number): void {

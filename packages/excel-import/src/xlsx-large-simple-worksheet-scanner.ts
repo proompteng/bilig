@@ -67,6 +67,9 @@ export function parseLargeSimpleWorksheetCells(
   const dimension = readWorksheetDimensionFromBytes(bytes)
   let rowCount = dimension?.rowCount ?? 0
   let columnCount = dimension?.columnCount ?? 0
+  if (retainCells && dimension) {
+    arena.reserveDenseRowMajorCellCapacity(sheetIndex, columnCount, rowCount)
+  }
   let cellCount = 0
   let valueCellCount = 0
   let formulaCellCount = 0

@@ -1,6 +1,5 @@
 import * as XLSX from 'xlsx'
 import type { Unzipped } from 'fflate'
-
 import type { CsvParseOptions } from '@bilig/core'
 import type {
   CellStyleRecord,
@@ -84,7 +83,7 @@ import { compareCellAddresses, readImportedLiteralCellValue, readImportedNumberF
 import { tryInspectLargeSimpleXlsxHeadless, type LargeSimpleXlsxHeadlessInspectResult } from './xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from './xlsx-large-simple-import.js'
 import { createPreservedVbaProjectPayload, type PreservedVbaProjectCodeNames } from './xlsx-macros.js'
-import type { OwnedXlsxSourceBytes } from './xlsx-owned-source-release.js'
+import { releaseOwnedXlsxSourceBytes, type OwnedXlsxSourceBytes } from './xlsx-owned-source-release.js'
 import { attachImportedXlsxSourceBytes } from './xlsx-source-bytes.js'
 import { worksheetCellAt, worksheetCellEntries, worksheetCellEntriesAtAddresses } from './xlsx-worksheet-cells.js'
 import { readImportedWorksheetTextValues } from './xlsx-worksheet-text-values.js'
@@ -927,19 +926,20 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string, op
   const hasLargeCalcChainFormulaSet = hasCalcChain && (inspection?.stats.formulaCellCount ?? 0) >= largeCalcChainStreamingFormulaThreshold
   const allowCachedUnsupportedFormulaText =
     hasCalcChain && (sourceByteLength >= largeCalcChainStreamingByteThreshold || hasLargeCalcChainFormulaSet)
-  const shouldTryLargeSimpleImport =
-    !hasCalcChain || sourceByteLength >= largeCalcChainStreamingByteThreshold || hasLargeCalcChainFormulaSet
-  const largeSimpleImport = !shouldTryLargeSimpleImport
-    ? null
-    : tryImportLargeSimpleXlsx({ byteLength: sourceByteLength }, fileName, workbookZip, {
-        ...(options.limits ? { minByteLength: 0 } : {}),
-        allowUnsupportedFormulaText: allowCachedUnsupportedFormulaText,
-        allowUnsupportedCellMetadata: allowCachedUnsupportedFormulaText,
-        releaseArenaAfterMaterialization: true,
-        releaseZipSource: true,
-      })
+  const largeSimpleImport =
+    hasCalcChain && sourceByteLength < largeCalcChainStreamingByteThreshold && !hasLargeCalcChainFormulaSet
+      ? null
+      : tryImportLargeSimpleXlsx({ byteLength: sourceByteLength }, fileName, workbookZip, {
+          ...(options.limits ? { minByteLength: 0 } : {}),
+          allowUnsupportedFormulaText: allowCachedUnsupportedFormulaText,
+          allowUnsupportedCellMetadata: allowCachedUnsupportedFormulaText,
+          releaseArenaAfterMaterialization: true,
+          releaseZipSource: true,
+          maxMaterializedLazyPackageArtifactBytes: 8 * 1024 * 1024,
+          releaseOwnedSourceBytes: () => releaseOwnedXlsxSourceBytes(ownedSource, (releasedBytes) => (bytes = releasedBytes)),
+        })
   if (largeSimpleImport) {
-    attachImportedXlsxSourceBytes(largeSimpleImport.snapshot, ownedSource.bytes)
+    if (ownedSource.bytes.byteLength > 0) attachImportedXlsxSourceBytes(largeSimpleImport.snapshot, ownedSource.bytes)
     return largeSimpleImport
   }
   const fallbackData = ownedSource.bytes.byteLength > 0 ? ownedSource.bytes : readLazyXlsxZipSource(workbookZip)

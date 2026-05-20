@@ -74,6 +74,23 @@ export function lazyEncodedPartSnapshot(
   return new LazyEncodedPartSnapshot(path, byteLength, readBytes)
 }
 
+export function materializePreservedPackageParts(parts: readonly WorkbookPreservedPackagePartSnapshot[]): {
+  readonly byteLength: number
+  readonly partCount: number
+} {
+  let byteLength = 0
+  let partCount = 0
+  for (const part of parts) {
+    if (part.storage !== 'base64') {
+      continue
+    }
+    void part.dataBase64
+    byteLength += part.byteLength
+    partCount += 1
+  }
+  return { byteLength, partCount }
+}
+
 export function decodedPartBytes(part: WorkbookPreservedPackagePartSnapshot): Uint8Array | undefined {
   if (part.storage !== 'base64') {
     return undefined

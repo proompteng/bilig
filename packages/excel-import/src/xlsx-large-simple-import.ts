@@ -26,6 +26,7 @@ import { readImportedWorkbookChartDrawingArtifacts } from './xlsx-import-chart-d
 import { decodeXmlText, readWorkbookDefinedNames, readXmlAttribute, resolveTargetPath } from './xlsx-large-simple-defined-names.js'
 import { readLargeSimpleSheetHyperlinks, resolveLargeSimpleSheetHyperlinks } from './xlsx-large-simple-hyperlinks.js'
 import { LargeSimpleXlsxImportPhaseRecorder, type LargeSimpleXlsxImportPhaseTelemetry } from './xlsx-large-simple-import-telemetry.js'
+import { prepareLargeSimplePackageArtifactsForZipRelease } from './xlsx-large-simple-package-artifact-release.js'
 import { readLargeSimpleSheetPrintMetadata, readLargeSimpleSheetPrintPageSetup } from './xlsx-large-simple-printer-settings.js'
 import { readAllLargeSimpleSharedStrings, readReferencedLargeSimpleSharedStrings } from './xlsx-large-simple-referenced-shared-strings.js'
 import type { LargeSimpleSharedStringEntry } from './xlsx-large-simple-shared-strings.js'
@@ -88,6 +89,7 @@ export interface LargeSimpleXlsxImportOptions {
   releaseZipSource?: boolean
   allowUnsupportedFormulaText?: boolean
   allowUnsupportedCellMetadata?: boolean
+  maxMaterializedLazyPackageArtifactBytes?: number
   releaseOwnedSourceBytes?: () => LargeSimpleXlsxOwnedSourceReleaseEvidence | undefined
 }
 
@@ -573,14 +575,20 @@ export function tryImportLargeSimpleXlsx(
   if (options.releaseZipSource === true) {
     const zipSourceReleaseStart = phaseRecorder.start()
     const zipSourceBytesBeforeRelease = readLazyXlsxZipSourceByteLength(zip)
-    const retainZipSourceForLazyPackageArtifacts =
-      zipSourceBytesBeforeRelease !== undefined &&
-      ((importedDataModelArtifacts?.parts.length ?? 0) > 0 ||
-        (importedSlicerConnectionArtifacts?.parts.length ?? 0) > 0 ||
-        (importedPivotArtifacts?.artifacts?.parts.length ?? 0) > 0 ||
-        (importedDrawingArtifacts?.artifacts?.parts.length ?? 0) > 0 ||
-        (importedChartDrawingArtifacts?.drawingArtifacts.artifacts?.parts.length ?? 0) > 0 ||
-        (importedChartDrawingArtifacts?.chartArtifacts.artifacts?.parts.length ?? 0) > 0)
+    const artifactReleasePlan = prepareLargeSimplePackageArtifactsForZipRelease({
+      ...(options.maxMaterializedLazyPackageArtifactBytes !== undefined
+        ? { maxMaterializedBytes: options.maxMaterializedLazyPackageArtifactBytes }
+        : {}),
+      preservedArtifacts: [
+        importedDataModelArtifacts,
+        importedSlicerConnectionArtifacts,
+        importedDrawingArtifacts?.artifacts,
+        importedChartDrawingArtifacts?.drawingArtifacts.artifacts,
+        importedChartDrawingArtifacts?.chartArtifacts.artifacts,
+      ],
+      opaqueArtifacts: [importedPivotArtifacts?.artifacts],
+    })
+    const retainZipSourceForLazyPackageArtifacts = zipSourceBytesBeforeRelease !== undefined && artifactReleasePlan.retainZipSource
     if (!retainZipSourceForLazyPackageArtifacts) {
       releaseLazyXlsxZipSource(zip)
     }
