@@ -1,38 +1,19 @@
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, type ReactNode } from 'react'
 import {
-  Check,
   AlignCenter,
   AlignLeft,
   AlignRight,
   Baseline,
   Bold,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Italic,
   PaintBucket,
   Redo2,
   RemoveFormatting,
-  TableCellsMerge,
-  TableCellsSplit,
-  TableProperties,
   Undo2,
   Underline,
   WrapText,
 } from 'lucide-react'
-import { Popover } from '@base-ui/react/popover'
-import { Select } from '@base-ui/react/select'
 import { Toolbar } from '@base-ui/react/toolbar'
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import {
-  BorderAllIcon,
-  BorderBottomIcon,
-  BorderFullIcon,
-  BorderLeftIcon,
-  BorderNoneIcon,
-  BorderRightIcon,
-  BorderTopIcon,
-} from '@hugeicons/core-free-icons'
 import { useWorkbookGridFocusReturn } from '@bilig/grid'
 import type { CellHorizontalAlignment } from '@bilig/protocol'
 import { cn } from './cn.js'
@@ -40,17 +21,21 @@ import { GOOGLE_SHEETS_SWATCH_ROWS } from './workbook-colors.js'
 import { ColorPaletteButton } from './workbook-color-picker.js'
 import { getWorkbookShortcutLabel } from './shortcut-registry.js'
 import {
+  ToolbarOverflowCue,
+  WorkbookToolbarBorderMenu,
+  WorkbookToolbarSelect,
+  WorkbookToolbarStructureMenu,
+} from './workbook-toolbar-controls.js'
+import { useToolbarScrollCue } from './workbook-toolbar-scroll.js'
+import type { BorderPreset, StructureActionAvailability, StructureActionTemplate } from './workbook-toolbar-options.js'
+import {
   FONT_SIZE_OPTIONS,
   NUMBER_FORMAT_OPTIONS,
-  toolbarBorderIconClass,
-  toolbarBorderPopupClass,
   toolbarButtonClass,
   toolbarFormattingRegionClass,
   toolbarFormattingScrollClass,
   toolbarGroupClass,
   toolbarIconClass,
-  toolbarOverflowCueClass,
-  toolbarPopupClass,
   toolbarRootClass,
   toolbarRowClass,
   toolbarSegmentedClass,
@@ -59,94 +44,7 @@ import {
   toolbarTrailingRegionClass,
 } from './workbook-toolbar-theme.js'
 
-export type BorderPreset = 'all' | 'outer' | 'left' | 'top' | 'right' | 'bottom' | 'clear'
-
-interface BorderPresetOption {
-  key: BorderPreset
-  icon: IconSvgElement
-  label: string
-  shortLabel: string
-}
-
-const BORDER_PRESET_OPTIONS: readonly BorderPresetOption[] = [
-  { key: 'all', label: 'All borders', shortLabel: 'All', icon: BorderAllIcon },
-  { key: 'outer', label: 'Outer borders', shortLabel: 'Outer', icon: BorderFullIcon },
-  { key: 'left', label: 'Left border', shortLabel: 'Left', icon: BorderLeftIcon },
-  { key: 'top', label: 'Top border', shortLabel: 'Top', icon: BorderTopIcon },
-  { key: 'right', label: 'Right border', shortLabel: 'Right', icon: BorderRightIcon },
-  { key: 'bottom', label: 'Bottom border', shortLabel: 'Bottom', icon: BorderBottomIcon },
-  { key: 'clear', label: 'Clear borders', shortLabel: 'Clear', icon: BorderNoneIcon },
-] as const
-
-const STRUCTURE_ACTIONS = [
-  { key: 'merge-cells', label: 'Merge cells', template: 'mergeSelectedCells', icon: TableCellsMerge },
-  { key: 'unmerge-cells', label: 'Unmerge cells', template: 'unmergeSelectedCells', icon: TableCellsSplit },
-  { key: 'hide-row', label: 'Hide row', template: 'hideCurrentRow' },
-  { key: 'unhide-row', label: 'Unhide row', template: 'unhideCurrentRow' },
-  { key: 'hide-column', label: 'Hide column', template: 'hideCurrentColumn' },
-  { key: 'unhide-column', label: 'Unhide column', template: 'unhideCurrentColumn' },
-] as const
-
-interface ToolbarScrollCueState {
-  readonly hasOverflow: boolean
-  readonly isAtStart: boolean
-  readonly isAtEnd: boolean
-}
-
-function useToolbarScrollCue() {
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
-  const [state, setState] = useState<ToolbarScrollCueState>({
-    hasOverflow: false,
-    isAtStart: true,
-    isAtEnd: true,
-  })
-
-  useEffect(() => {
-    const scrollContainer = scrollContainerRef.current
-    if (!scrollContainer) {
-      return
-    }
-
-    const updateScrollCue = () => {
-      const maxScrollLeft = Math.max(0, scrollContainer.scrollWidth - scrollContainer.clientWidth)
-      const nextState: ToolbarScrollCueState = {
-        hasOverflow: maxScrollLeft > 1,
-        isAtStart: scrollContainer.scrollLeft <= 1,
-        isAtEnd: scrollContainer.scrollLeft >= maxScrollLeft - 1,
-      }
-
-      setState((currentState) =>
-        currentState.hasOverflow === nextState.hasOverflow &&
-        currentState.isAtStart === nextState.isAtStart &&
-        currentState.isAtEnd === nextState.isAtEnd
-          ? currentState
-          : nextState,
-      )
-    }
-
-    updateScrollCue()
-    scrollContainer.addEventListener('scroll', updateScrollCue, { passive: true })
-    window.addEventListener('resize', updateScrollCue)
-
-    let resizeObserver: ResizeObserver | null = null
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(updateScrollCue)
-      resizeObserver.observe(scrollContainer)
-    }
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateScrollCue)
-      window.removeEventListener('resize', updateScrollCue)
-      resizeObserver?.disconnect()
-    }
-  }, [])
-
-  return {
-    scrollContainerRef,
-    showBackwardCue: state.hasOverflow && !state.isAtStart,
-    showForwardCue: state.hasOverflow && !state.isAtEnd,
-  } as const
-}
+export type { BorderPreset } from './workbook-toolbar-options.js'
 
 export interface WorkbookToolbarProps {
   writesAllowed: boolean
@@ -259,13 +157,6 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
     },
     [returnFocusToGridAfterCommand],
   )
-  const runTransientGridCommand = useCallback(
-    (command: () => void) => {
-      command()
-      returnFocusToGridAfterCommand()
-    },
-    [returnFocusToGridAfterCommand],
-  )
   const getToolbarScrollStep = () => {
     const scrollContainer = scrollContainerRef.current
     return scrollContainer ? Math.max(96, Math.floor(scrollContainer.clientWidth)) : 96
@@ -301,15 +192,15 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
       left: getToolbarScrollStep(),
     })
   }
-  const structureActionAvailability = {
+  const structureActionAvailability: StructureActionAvailability = {
     mergeSelectedCells: canMergeSelection,
     unmergeSelectedCells: canUnmergeSelection,
     hideCurrentRow: canHideCurrentRow,
     hideCurrentColumn: canHideCurrentColumn,
     unhideCurrentRow: canUnhideCurrentRow,
     unhideCurrentColumn: canUnhideCurrentColumn,
-  } as const
-  const runStructureAction = (template: (typeof STRUCTURE_ACTIONS)[number]['template']) => {
+  }
+  const runStructureAction = (template: StructureActionTemplate) => {
     switch (template) {
       case 'mergeSelectedCells':
         onMergeSelectedCells()
@@ -337,18 +228,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
     <div className={toolbarRootClass()}>
       <Toolbar.Root aria-label="Formatting toolbar" className={toolbarRowClass()}>
         <div className={toolbarFormattingRegionClass()}>
-          {showBackwardCue ? (
-            <button
-              aria-label="Show previous toolbar actions"
-              className={cn(toolbarOverflowCueClass(), 'border-l-0 border-r')}
-              data-testid="toolbar-overflow-back-cue"
-              title="Show previous toolbar actions"
-              type="button"
-              onClick={scrollFormattingToolbarBackward}
-            >
-              <ChevronLeft className="h-3.5 w-3.5 stroke-[2]" />
-            </button>
-          ) : null}
+          {showBackwardCue ? <ToolbarOverflowCue direction="backward" onClick={scrollFormattingToolbarBackward} /> : null}
           <div ref={scrollContainerRef} className={toolbarFormattingScrollClass()} data-testid="toolbar-formatting-scroll">
             <Toolbar.Group className={toolbarGroupClass()}>
               <div className={toolbarSegmentedClass()} role="group" aria-label="History">
@@ -376,100 +256,33 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <Toolbar.Separator className={toolbarSeparatorClass()} />
 
             <Toolbar.Group className={toolbarGroupClass()}>
-              <Select.Root
-                items={NUMBER_FORMAT_OPTIONS}
+              <WorkbookToolbarSelect
+                ariaLabel="Number format"
+                options={NUMBER_FORMAT_OPTIONS}
+                triggerClassName={cn(toolbarSelectTriggerClass(), 'w-32 max-[420px]:w-28 max-[360px]:w-24')}
                 value={currentNumberFormatKind}
-                onValueChange={(nextValue: string | null) => {
-                  if (typeof nextValue === 'string') {
-                    onNumberFormatChange(nextValue)
-                    returnFocusToGridAfterCommand()
-                  }
+                valueClassName="min-w-0 flex-1 truncate whitespace-nowrap text-left"
+                onChange={(nextValue) => {
+                  onNumberFormatChange(nextValue)
+                  returnFocusToGridAfterCommand()
                 }}
-              >
-                <Select.Trigger
-                  aria-label="Number format"
-                  className={cn(toolbarSelectTriggerClass(), 'w-32 max-[420px]:w-28 max-[360px]:w-24')}
-                  data-current-value={currentNumberFormatKind}
-                >
-                  <span className="min-w-0 flex-1 truncate whitespace-nowrap text-left">
-                    {(NUMBER_FORMAT_OPTIONS.find((option) => option.value === currentNumberFormatKind) ?? NUMBER_FORMAT_OPTIONS[0])
-                      ?.label ?? ''}
-                  </span>
-                  <Select.Icon className="ml-2 text-[var(--color-mauve-700)]">
-                    <ChevronDown className="h-3.5 w-3.5 stroke-[1.75]" />
-                  </Select.Icon>
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={6}>
-                    <Select.Popup className={toolbarPopupClass()}>
-                      <Select.List className="max-h-72 min-w-[var(--anchor-width)] overflow-auto py-1">
-                        {NUMBER_FORMAT_OPTIONS.map((option) => (
-                          <Select.Item
-                            className="flex cursor-default items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[12px] text-[var(--color-mauve-900)] outline-none data-[highlighted]:bg-[var(--color-mauve-100)] data-[selected]:font-semibold"
-                            key={`number-format-${option.value || 'default'}`}
-                            label={option.label}
-                            value={option.value}
-                          >
-                            <Select.ItemText>{option.label}</Select.ItemText>
-                            <Select.ItemIndicator className="text-[var(--color-mauve-700)]">
-                              <Check className="h-3.5 w-3.5 stroke-[2]" />
-                            </Select.ItemIndicator>
-                          </Select.Item>
-                        ))}
-                      </Select.List>
-                    </Select.Popup>
-                  </Select.Positioner>
-                </Select.Portal>
-              </Select.Root>
+              />
             </Toolbar.Group>
 
             <Toolbar.Separator className={toolbarSeparatorClass()} />
 
             <Toolbar.Group className={toolbarGroupClass()}>
-              <Select.Root
-                items={FONT_SIZE_OPTIONS}
+              <WorkbookToolbarSelect
+                ariaLabel="Font size"
+                options={FONT_SIZE_OPTIONS}
+                triggerClassName={cn(toolbarSelectTriggerClass(), 'w-[5rem] max-[420px]:w-14')}
                 value={selectedFontSize}
-                onValueChange={(nextValue: string | null) => {
-                  if (typeof nextValue === 'string') {
-                    onFontSizeChange(nextValue)
-                    returnFocusToGridAfterCommand()
-                  }
+                valueClassName="flex-none w-[2ch] overflow-visible text-center font-medium tabular-nums"
+                onChange={(nextValue) => {
+                  onFontSizeChange(nextValue)
+                  returnFocusToGridAfterCommand()
                 }}
-              >
-                <Select.Trigger
-                  aria-label="Font size"
-                  className={cn(toolbarSelectTriggerClass(), 'w-[5rem] max-[420px]:w-14')}
-                  data-current-value={selectedFontSize}
-                >
-                  <span className="flex-none w-[2ch] overflow-visible text-center font-medium tabular-nums">
-                    {(FONT_SIZE_OPTIONS.find((option) => option.value === selectedFontSize) ?? FONT_SIZE_OPTIONS[0])?.label ?? ''}
-                  </span>
-                  <Select.Icon className="ml-2 text-[var(--color-mauve-700)]">
-                    <ChevronDown className="h-3.5 w-3.5 stroke-[1.75]" />
-                  </Select.Icon>
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={6}>
-                    <Select.Popup className={toolbarPopupClass()}>
-                      <Select.List className="max-h-72 min-w-[var(--anchor-width)] overflow-auto py-1">
-                        {FONT_SIZE_OPTIONS.map((option) => (
-                          <Select.Item
-                            className="flex cursor-default items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[12px] text-[var(--color-mauve-900)] outline-none data-[highlighted]:bg-[var(--color-mauve-100)] data-[selected]:font-semibold"
-                            key={`font-size-${option.value || 'default'}`}
-                            label={option.label}
-                            value={option.value}
-                          >
-                            <Select.ItemText>{option.label}</Select.ItemText>
-                            <Select.ItemIndicator className="text-[var(--color-mauve-700)]">
-                              <Check className="h-3.5 w-3.5 stroke-[2]" />
-                            </Select.ItemIndicator>
-                          </Select.Item>
-                        ))}
-                      </Select.List>
-                    </Select.Popup>
-                  </Select.Positioner>
-                </Select.Portal>
-              </Select.Root>
+              />
               <div className={toolbarSegmentedClass()} role="group" aria-label="Font emphasis">
                 <Toolbar.Button
                   aria-label="Bold"
@@ -569,101 +382,21 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <Toolbar.Separator className={toolbarSeparatorClass()} />
 
             <Toolbar.Group className={toolbarGroupClass()}>
-              <Popover.Root modal={false}>
-                <Popover.Trigger
-                  aria-label="Borders"
-                  aria-haspopup="menu"
-                  aria-pressed={isBorderActive}
-                  className={cn(toolbarButtonClass({ active: isBorderActive }), 'gap-1 px-1.5')}
-                  disabled={!writesAllowed}
-                  title="Borders"
-                  type="button"
-                >
-                  <HugeiconsIcon
-                    className={toolbarBorderIconClass()}
-                    color="currentColor"
-                    icon={BorderAllIcon}
-                    size={20}
-                    strokeWidth={1.6}
-                  />
-                  <ChevronDown className="h-3 w-3 shrink-0 stroke-[1.75] text-[var(--wb-text-muted)]" />
-                </Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
-                    <Popover.Popup aria-label="Border presets" className={cn(toolbarBorderPopupClass(), 'w-[188px]')}>
-                      <div className="grid grid-cols-2 gap-1">
-                        {BORDER_PRESET_OPTIONS.map(({ key, label, shortLabel, icon }) => (
-                          <Toolbar.Button
-                            key={key}
-                            aria-label={label}
-                            className="inline-flex h-8 items-center gap-2 rounded-md border border-transparent px-2 text-left text-[11px] font-medium text-[var(--color-mauve-900)] outline-none transition-colors hover:bg-[var(--color-mauve-100)] focus-visible:border-[var(--color-mauve-400)] focus-visible:bg-[var(--color-mauve-100)]"
-                            title={label}
-                            type="button"
-                            onClick={() => runTransientGridCommand(() => onApplyBorderPreset(key))}
-                          >
-                            <HugeiconsIcon
-                              className="shrink-0 text-[var(--color-mauve-700)]"
-                              color="currentColor"
-                              icon={icon}
-                              size={18}
-                              strokeWidth={1.6}
-                            />
-                            <span className="truncate">{shortLabel}</span>
-                          </Toolbar.Button>
-                        ))}
-                      </div>
-                    </Popover.Popup>
-                  </Popover.Positioner>
-                </Popover.Portal>
-              </Popover.Root>
+              <WorkbookToolbarBorderMenu
+                disabled={!writesAllowed}
+                isActive={isBorderActive}
+                onApplyPreset={(preset) => runToolbarButtonCommand(() => onApplyBorderPreset(preset))}
+              />
             </Toolbar.Group>
 
             <Toolbar.Separator className={toolbarSeparatorClass()} />
 
             <Toolbar.Group className={toolbarGroupClass()}>
-              <Popover.Root modal={false}>
-                <Popover.Trigger
-                  aria-label="Structure"
-                  aria-haspopup="menu"
-                  className={cn(toolbarButtonClass(), 'gap-1 px-1.5')}
-                  disabled={!writesAllowed || STRUCTURE_ACTIONS.every((action) => !structureActionAvailability[action.template])}
-                  title="Structure"
-                  type="button"
-                >
-                  <TableProperties className={toolbarIconClass()} />
-                  <ChevronDown className="h-3 w-3 shrink-0 stroke-[1.75] text-[var(--wb-text-muted)]" />
-                </Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
-                    <Popover.Popup aria-label="Structure actions" className={cn(toolbarPopupClass(), 'w-[176px] p-1')}>
-                      <div className="grid gap-1">
-                        {STRUCTURE_ACTIONS.map((action) => {
-                          const isAvailable = structureActionAvailability[action.template]
-                          const ActionIcon = 'icon' in action ? action.icon : null
-                          return (
-                            <Popover.Close
-                              aria-label={action.label}
-                              className={cn(
-                                'inline-flex h-8 items-center rounded-md border border-transparent px-2 text-left text-[11px] font-medium outline-none transition-colors focus-visible:border-[var(--color-mauve-400)] focus-visible:bg-[var(--color-mauve-100)]',
-                                isAvailable
-                                  ? 'text-[var(--color-mauve-900)] hover:bg-[var(--color-mauve-100)]'
-                                  : 'cursor-not-allowed text-[var(--wb-text-muted)] opacity-45',
-                              )}
-                              disabled={!isAvailable}
-                              key={action.key}
-                              type="button"
-                              onClick={() => runStructureAction(action.template)}
-                            >
-                              {ActionIcon ? <ActionIcon className={cn(toolbarIconClass(), 'mr-2')} /> : null}
-                              {action.label}
-                            </Popover.Close>
-                          )
-                        })}
-                      </div>
-                    </Popover.Popup>
-                  </Popover.Positioner>
-                </Popover.Portal>
-              </Popover.Root>
+              <WorkbookToolbarStructureMenu
+                availability={structureActionAvailability}
+                disabled={!writesAllowed}
+                onRunAction={runStructureAction}
+              />
             </Toolbar.Group>
 
             <Toolbar.Separator className={toolbarSeparatorClass()} />
@@ -690,18 +423,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               </Toolbar.Button>
             </Toolbar.Group>
           </div>
-          {showForwardCue ? (
-            <button
-              aria-label="Show more toolbar actions"
-              className={toolbarOverflowCueClass()}
-              data-testid="toolbar-overflow-cue"
-              title="Show more toolbar actions"
-              type="button"
-              onClick={scrollFormattingToolbarForward}
-            >
-              <ChevronRight className="h-3.5 w-3.5 stroke-[2]" />
-            </button>
-          ) : null}
+          {showForwardCue ? <ToolbarOverflowCue direction="forward" onClick={scrollFormattingToolbarForward} /> : null}
         </div>
         {trailingContent ? (
           <>
