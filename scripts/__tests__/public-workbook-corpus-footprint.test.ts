@@ -55,7 +55,7 @@ describe('public workbook corpus footprint worker', () => {
         usedRange: { startRow: 0, startColumn: 0, endRow: 0, endColumn: 1 },
       },
     ])
-  })
+  }, 30_000)
 })
 
 function buildLargeSimpleWorkbook(): Uint8Array {

@@ -143,6 +143,18 @@ describe('public workbook corpus resource limit preflights', () => {
     ).toBeNull()
   })
 
+  it('allows large XLSX imports with supported data validations through the product fast path budget when compatibility is proven', () => {
+    expect(
+      importResourceLimitPreflight(
+        workbookArtifact(),
+        workbookFootprint(
+          { cellCount: 246_086, valueCellCount: 246_086, dataValidationCount: 20 },
+          { largeSimpleXlsxImport: { eligible: true, blockers: [] } },
+        ),
+      ),
+    ).toBeNull()
+  })
+
   it('does not apply the SheetJS sheet/package import budget to proven large simple XLSX imports', () => {
     expect(
       importResourceLimitPreflight(

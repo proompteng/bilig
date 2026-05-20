@@ -95,7 +95,6 @@ function usesLargeSimpleXlsxImportBudget(footprint: WorkbookFootprint): boolean 
       footprint.largeSimpleXlsxImport.eligible &&
       counts.chartCount === 0 &&
       counts.pivotCount === 0 &&
-      counts.dataValidationCount === 0 &&
       counts.macroPayloadCount === 0 &&
       footprint.externalWorkbookReferences.length === 0
     )

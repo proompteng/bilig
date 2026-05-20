@@ -3,6 +3,7 @@ import { TextDecoder } from 'node:util'
 import { createInflateRaw, inflateRawSync } from 'node:zlib'
 
 import type { WorkbookExternalWorkbookReferenceSnapshot } from '../packages/protocol/src/types.js'
+import { WorksheetDataValidationSupportScanner } from './public-workbook-corpus-xlsx-data-validation-footprint.ts'
 import type { WorkbookFootprint } from './public-workbook-corpus-workbook.ts'
 
 interface ZipEntryInfo {
@@ -31,6 +32,7 @@ interface WorksheetFootprint {
   dataValidationCount: number
   formulaCellCount: number
   largeSimpleUnsupportedElementCount: number
+  largeSimpleUnsupportedDataValidationCount: number
   largeSimpleUnsupportedFormulaCellCount: number
   mergeCount: number
   rowCount: number
@@ -172,8 +174,8 @@ function inspectLargeSimpleXlsxImportCompatibility(
   if (definedNamesReferenceExternalWorkbook(context.workbookXml)) {
     blockers.push('external-defined-name-reference')
   }
-  if (totals.dataValidationCount > 0) {
-    blockers.push(`data-validations=${String(totals.dataValidationCount)}`)
+  if (totals.largeSimpleUnsupportedDataValidationCount > 0) {
+    blockers.push(`unsupported-data-validations=${String(totals.largeSimpleUnsupportedDataValidationCount)}`)
   }
   if (totals.largeSimpleUnsupportedFormulaCellCount > 0) {
     blockers.push(`unsupported-formula-cells=${String(totals.largeSimpleUnsupportedFormulaCellCount)}`)
@@ -216,6 +218,7 @@ function addWorksheetFootprint(total: WorksheetFootprint, footprint: WorksheetFo
   total.conditionalFormatCount += footprint.conditionalFormatCount
   total.dataValidationCount += footprint.dataValidationCount
   total.largeSimpleUnsupportedElementCount += footprint.largeSimpleUnsupportedElementCount
+  total.largeSimpleUnsupportedDataValidationCount += footprint.largeSimpleUnsupportedDataValidationCount
 }
 
 function worksheetDimension(sheetName: string, footprint: WorksheetFootprint): WorkbookFootprint['workbookMetadata']['dimensions'][number] {
@@ -380,6 +383,7 @@ function emptyWorksheetFootprint(): WorksheetFootprint {
     xmlCellCount: 0,
     sharedStringCellCount: 0,
     largeSimpleUnsupportedElementCount: 0,
+    largeSimpleUnsupportedDataValidationCount: 0,
     largeSimpleUnsupportedFormulaCellCount: 0,
   }
 }
@@ -388,23 +392,27 @@ class WorksheetXmlByteFootprintScanner {
   private buffer = new Uint8Array()
   private readonly sharedFormulaIndexes = new Set<string>()
   private readonly counter = new WorksheetElementStartCounter()
+  private readonly dataValidationScanner = new WorksheetDataValidationSupportScanner()
   private readonly footprint = emptyWorksheetFootprint()
 
   push(chunk: Uint8Array): void {
     this.counter.push(chunk, false)
+    this.dataValidationScanner.push(chunk, false)
     this.buffer = concatBytes(this.buffer, chunk)
     this.scanBufferedCells(false)
   }
 
   finish(): WorksheetFootprint {
     this.counter.finish()
+    const dataValidationSupport = this.dataValidationScanner.finish()
     this.scanBufferedCells(true)
     const counted = this.counter.counts()
     return {
       ...this.footprint,
       mergeCount: counted.mergeCount,
       conditionalFormatCount: counted.conditionalFormatCount,
-      dataValidationCount: counted.dataValidationCount,
+      dataValidationCount: dataValidationSupport.dataValidationCount,
+      largeSimpleUnsupportedDataValidationCount: dataValidationSupport.unsupportedDataValidationCount,
       largeSimpleUnsupportedElementCount: counted.largeSimpleUnsupportedElementCount,
     }
   }
@@ -488,7 +496,6 @@ class WorksheetElementStartCounter {
   private tail = new Uint8Array()
   private mergeCellCount = 0
   private conditionalFormattingCount = 0
-  private dataValidationCount = 0
   private largeSimpleUnsupportedElementCount = 0
 
   push(chunk: Uint8Array, final: boolean): void {
@@ -496,7 +503,6 @@ class WorksheetElementStartCounter {
     const scanEnd = final ? buffer.length : Math.max(0, buffer.length - countedElementTailLength)
     this.mergeCellCount += countElementStartsBytes(buffer, mergeCellElementNameBytes, 0, scanEnd)
     this.conditionalFormattingCount += countElementStartsBytes(buffer, conditionalFormattingElementNameBytes, 0, scanEnd)
-    this.dataValidationCount += countElementStartsBytes(buffer, dataValidationElementNameBytes, 0, scanEnd)
     for (const elementName of unsupportedLargeSimpleElementNameBytes) {
       this.largeSimpleUnsupportedElementCount += countElementStartsBytes(buffer, elementName, 0, scanEnd)
     }
@@ -507,14 +513,10 @@ class WorksheetElementStartCounter {
     this.push(new Uint8Array(), true)
   }
 
-  counts(): Pick<
-    WorksheetFootprint,
-    'conditionalFormatCount' | 'dataValidationCount' | 'largeSimpleUnsupportedElementCount' | 'mergeCount'
-  > {
+  counts(): Pick<WorksheetFootprint, 'conditionalFormatCount' | 'largeSimpleUnsupportedElementCount' | 'mergeCount'> {
     return {
       mergeCount: this.mergeCellCount,
       conditionalFormatCount: this.conditionalFormattingCount,
-      dataValidationCount: this.dataValidationCount,
       largeSimpleUnsupportedElementCount: this.largeSimpleUnsupportedElementCount,
     }
   }
@@ -768,9 +770,7 @@ const closeCellElementBytes = asciiBytes('</c>')
 const closeFormulaElementBytes = asciiBytes('</f>')
 const mergeCellElementNameBytes = asciiBytes('mergeCell')
 const conditionalFormattingElementNameBytes = asciiBytes('conditionalFormatting')
-const dataValidationElementNameBytes = asciiBytes('dataValidation')
 const unsupportedLargeSimpleElementNameBytes = [
-  asciiBytes('dataValidations'),
   asciiBytes('legacyDrawing'),
   asciiBytes('oleObjects'),
   asciiBytes('picture'),
@@ -780,7 +780,6 @@ const countedElementTailLength =
   Math.max(
     mergeCellElementNameBytes.length,
     conditionalFormattingElementNameBytes.length,
-    dataValidationElementNameBytes.length,
     ...unsupportedLargeSimpleElementNameBytes.map((entry) => entry.length),
   ) + 2
 

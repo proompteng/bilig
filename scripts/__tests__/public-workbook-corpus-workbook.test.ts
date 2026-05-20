@@ -158,6 +158,20 @@ describe('public workbook corpus workbook helpers', () => {
     expect(footprint.largeSimpleXlsxImport).toEqual({ eligible: true, blockers: [] })
   })
 
+  it('marks supported data validations eligible for the large simple import budget', () => {
+    const footprint = inspectWorkbookFootprint(buildWorkbookWithSupportedDataValidations(), 'data-validations.xlsx')
+
+    expect(footprint.featureCounts.dataValidationCount).toBe(3)
+    expect(footprint.largeSimpleXlsxImport).toEqual({ eligible: true, blockers: [] })
+  })
+
+  it('keeps unsupported data validations out of the large simple import budget', () => {
+    const footprint = inspectWorkbookFootprint(buildWorkbookWithUnsupportedDataValidation(), 'unsupported-data-validation.xlsx')
+
+    expect(footprint.featureCounts.dataValidationCount).toBe(0)
+    expect(footprint.largeSimpleXlsxImport).toEqual({ eligible: false, blockers: ['unsupported-data-validations=1'] })
+  })
+
   it('marks shared formula worksheets eligible for the large simple import budget', () => {
     const footprint = inspectWorkbookFootprint(buildWorkbookWithSharedFormulaCell(), 'shared-formula.xlsx')
 
@@ -494,6 +508,75 @@ function buildWorkbookWithConditionalFormatting(): Uint8Array {
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
         '<sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData>',
         '<conditionalFormatting sqref="A1"><cfRule type="cellIs" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>',
+        '</worksheet>',
+      ].join(''),
+    },
+  ])
+}
+
+function buildWorkbookWithSupportedDataValidations(): Uint8Array {
+  return buildZip([
+    {
+      path: 'xl/workbook.xml',
+      text: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ',
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+        '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+      ].join(''),
+    },
+    {
+      path: 'xl/_rels/workbook.xml.rels',
+      text: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" ',
+        'Target="worksheets/sheet1.xml"/></Relationships>',
+      ].join(''),
+    },
+    {
+      path: 'xl/worksheets/sheet1.xml',
+      text: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData>',
+        '<dataValidations count="2">',
+        '<dataValidation type="list" sqref="A1"><formula1>"Open,Closed"</formula1></dataValidation>',
+        '<dataValidation type="whole" operator="between" sqref="B1 B2"><formula1>1</formula1><formula2>10</formula2></dataValidation>',
+        '</dataValidations>',
+        '</worksheet>',
+      ].join(''),
+    },
+  ])
+}
+
+function buildWorkbookWithUnsupportedDataValidation(): Uint8Array {
+  return buildZip([
+    {
+      path: 'xl/workbook.xml',
+      text: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ',
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+        '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+      ].join(''),
+    },
+    {
+      path: 'xl/_rels/workbook.xml.rels',
+      text: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" ',
+        'Target="worksheets/sheet1.xml"/></Relationships>',
+      ].join(''),
+    },
+    {
+      path: 'xl/worksheets/sheet1.xml',
+      text: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData>',
+        '<dataValidations count="1"><dataValidation type="custom" sqref="A1"><formula1>A1&gt;0</formula1></dataValidation></dataValidations>',
         '</worksheet>',
       ].join(''),
     },
