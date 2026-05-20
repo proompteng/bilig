@@ -54,7 +54,6 @@ import {
   readElementXml,
   readPackedCellAddressAttributeFromTag,
   readXmlAttributeFromTag,
-  readXmlAttributeRangeFromTag,
   readXmlTagName,
 } from './xlsx-large-simple-worksheet-stream-xml.js'
 import {
@@ -62,11 +61,17 @@ import {
   richTextRunPattern,
   unsupportedWorksheetTagNames,
 } from './xlsx-large-simple-worksheet-scan-constants.js'
-import type { LargeSimpleWorksheetMergeRef, LargeSimpleWorksheetScannedMetadata } from './xlsx-large-simple-worksheet-metadata.js'
+import type {
+  LargeSimpleWorksheetCellMetadataRef,
+  LargeSimpleWorksheetMergeRef,
+  LargeSimpleWorksheetScannedMetadata,
+} from './xlsx-large-simple-worksheet-metadata.js'
 
 const lessThan = 60
 const slash = 47
 const emptyBytes = new Uint8Array(0)
+const extensionElementPattern = /<(?:[A-Za-z_][\w.-]*:)?ext\b[^>]*(?:\/>|>[\s\S]*?<\/(?:[A-Za-z_][\w.-]*:)?ext>)/gu
+const slicerListElementPattern = /<(?:[A-Za-z_][\w.-]*:)?slicerList\b/u
 type StreamedMetadataElement = 'mergeCells' | 'tableParts'
 
 export interface LargeSimpleWorksheetStreamScan {
@@ -142,6 +147,7 @@ class LargeSimpleWorksheetChunkScanner {
   private conditionalFormats: WorkbookConditionalFormatSnapshot[] | undefined
   private conditionalFormatIdCounter = 0
   private conditionalFormattingXml: string[] | undefined
+  private cellMetadataRefs: LargeSimpleWorksheetCellMetadataRef[] | undefined
   private drawingRelationshipId: string | undefined
   private filters: LargeSimpleWorksheetScannedMetadata['filters']
   private hyperlinks: LargeSimpleWorksheetScannedMetadata['hyperlinks']
@@ -150,6 +156,7 @@ class LargeSimpleWorksheetChunkScanner {
   private mergeRefs: LargeSimpleWorksheetMergeRef[] | undefined
   private printPageSetup: LargeSimpleWorksheetScannedMetadata['printPageSetup']
   private sheetFormatPr: LargeSimpleWorksheetScannedMetadata['sheetFormatPr']
+  private sheetSlicerListExtXml: string | undefined
   private tableRelationshipIds: string[] | undefined
   private readonly metadataSnippets: string[] = []
   private readonly hasSharedStrings: boolean
@@ -158,7 +165,6 @@ class LargeSimpleWorksheetChunkScanner {
   private readonly deferSharedStrings: boolean
   private readonly retainMetadataXml: boolean
   private readonly allowUnsupportedFormulaText: boolean
-  private readonly allowUnsupportedCellMetadata: boolean
   private readonly preserveBlankStyleCells: boolean
   private activeMetadataElement: StreamedMetadataElement | null = null
 
@@ -181,7 +187,6 @@ class LargeSimpleWorksheetChunkScanner {
     },
   ) {
     this.allowUnsupportedFormulaText = options.allowUnsupportedFormulaText === true
-    this.allowUnsupportedCellMetadata = options.allowUnsupportedCellMetadata === true
     this.preserveBlankStyleCells = options.preserveBlankStyleCells
     this.formulas = new LargeSimpleFormulaRecords(this.allowUnsupportedFormulaText)
     this.arena = new ImportedWorkbookArena(options.stringPool, {
@@ -287,6 +292,7 @@ class LargeSimpleWorksheetChunkScanner {
         ? { entries: this.rowEntries ?? [], metadata: this.rowMetadata ?? [] }
         : undefined
     const metadata: LargeSimpleWorksheetScannedMetadata = {
+      ...(this.cellMetadataRefs && this.cellMetadataRefs.length > 0 ? { cellMetadataRefs: this.cellMetadataRefs } : {}),
       ...(columns ? { columns } : {}),
       ...(this.conditionalFormats && this.conditionalFormats.length > 0 ? { conditionalFormats: this.conditionalFormats } : {}),
       ...(this.conditionalFormattingXml && this.conditionalFormattingXml.length > 0
@@ -299,6 +305,7 @@ class LargeSimpleWorksheetChunkScanner {
       ...(this.mergeRefs && this.mergeRefs.length > 0 ? { merges: this.mergeRefs } : {}),
       ...(this.printPageSetup ? { printPageSetup: this.printPageSetup } : {}),
       ...(this.sheetFormatPr ? { sheetFormatPr: this.sheetFormatPr } : {}),
+      ...(this.sheetSlicerListExtXml ? { sheetSlicerListExtXml: this.sheetSlicerListExtXml } : {}),
       ...(this.tableRelationshipIds && this.tableRelationshipIds.length > 0 ? { tableRelationshipIds: this.tableRelationshipIds } : {}),
     }
     return Object.keys(metadata).length > 0 ? metadata : undefined
@@ -331,10 +338,7 @@ class LargeSimpleWorksheetChunkScanner {
         }
         return
       }
-      if (
-        unsupportedWorksheetTagNames.has(tag.localName) ||
-        (!this.allowUnsupportedCellMetadata && this.hasUnsupportedCellMetadata(tag.localName, tag.endIndex, tagEnd))
-      ) {
+      if (unsupportedWorksheetTagNames.has(tag.localName)) {
         this.failed = true
         return
       }
@@ -364,14 +368,6 @@ class LargeSimpleWorksheetChunkScanner {
       }
       this.index = tagEnd + 1
     }
-  }
-
-  private hasUnsupportedCellMetadata(localName: string, nameEnd: number, tagEnd: number): boolean {
-    return (
-      localName === 'c' &&
-      (readXmlAttributeRangeFromTag(this.buffer, nameEnd, tagEnd, 'cm') ||
-        readXmlAttributeRangeFromTag(this.buffer, nameEnd, tagEnd, 'vm')) !== null
-    )
   }
 
   private readDimension(nameEnd: number, tagEnd: number): void {
@@ -415,6 +411,7 @@ class LargeSimpleWorksheetChunkScanner {
     }
     const row = packedAddressRow(packedAddress)
     const column = packedAddressColumn(packedAddress)
+    this.collectCellMetadataRef(row, column, nameEnd, tagEnd)
     const cellType = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 't')
     if ((!this.hasSharedStrings && cellType === 's') || (!this.retainCells && cellType === 'inlineStr')) {
       this.failed = true
@@ -503,6 +500,23 @@ class LargeSimpleWorksheetChunkScanner {
     return true
   }
 
+  private collectCellMetadataRef(row: number, column: number, nameEnd: number, tagEnd: number): void {
+    if (!this.retainMetadataXml) {
+      return
+    }
+    const cm = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 'cm')
+    const vm = readXmlAttributeFromTag(this.buffer, nameEnd, tagEnd, 'vm')
+    if (!cm && !vm) {
+      return
+    }
+    this.cellMetadataRefs ??= []
+    this.cellMetadataRefs.push({
+      address: encodeCellAddress(row, column),
+      ...(cm ? { cm } : {}),
+      ...(vm ? { vm } : {}),
+    })
+  }
+
   private collectMetadataElement(localName: string, tagEnd: number, final: boolean): boolean {
     if (isSelfClosingTag(this.buffer, tagEnd)) {
       const handled = this.retainMetadataXml && this.collectTypedMetadataElement(localName, this.index, tagEnd + 1)
@@ -562,6 +576,14 @@ class LargeSimpleWorksheetChunkScanner {
     }
     if (localName === 'sheetFormatPr') {
       this.sheetFormatPr = readLargeSimpleSheetFormatPrTagFromBytes(this.buffer, startIndex, endIndex) ?? this.sheetFormatPr
+      return true
+    }
+    if (localName === 'extLst') {
+      const sheetSlicerListExtXml = readSlicerListExtensionXml(decodeBytes(this.buffer, startIndex, endIndex))
+      if (!sheetSlicerListExtXml) {
+        return false
+      }
+      this.sheetSlicerListExtXml = sheetSlicerListExtXml
       return true
     }
     if (localName === 'drawing') {
@@ -713,6 +735,11 @@ class LargeSimpleWorksheetChunkScanner {
   }
 
   private reportRetainedBufferLength: () => void = () => {}
+}
+
+function readSlicerListExtensionXml(xml: string): string | undefined {
+  extensionElementPattern.lastIndex = 0
+  return [...xml.matchAll(extensionElementPattern)].find((match) => slicerListElementPattern.test(match[0]))?.[0]
 }
 
 function readInlineStringCellValue(bytes: Uint8Array, contentStart: number, contentEnd: number): string | undefined {

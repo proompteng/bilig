@@ -137,7 +137,7 @@ function readWorksheetCellMetadataRefs(sheetXml: string | null): ImportedCellMet
   return refs
 }
 
-function readWorkbookCellMetadataPart(zip: XlsxZipEntries): WorkbookCellMetadataSnapshot | undefined {
+export function readImportedWorkbookCellMetadataPart(zip: XlsxZipEntries): WorkbookCellMetadataSnapshot | undefined {
   const relationship = parseRelationships(getZipText(zip, 'xl/_rels/workbook.xml.rels')).find(
     (entry) => entry.type === sheetMetadataRelationshipType,
   )
@@ -158,7 +158,7 @@ export function readImportedWorkbookCellMetadata(source: XlsxZipSource, sheetNam
     }
   })
 
-  const workbookMetadata = readWorkbookCellMetadataPart(zip)
+  const workbookMetadata = readImportedWorkbookCellMetadataPart(zip)
   return {
     refsBySheet,
     ...(workbookMetadata ? { workbookMetadata } : {}),

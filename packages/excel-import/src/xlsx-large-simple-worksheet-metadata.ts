@@ -22,7 +22,14 @@ export interface LargeSimpleWorksheetMergeRef {
   readonly endAddress: string
 }
 
+export interface LargeSimpleWorksheetCellMetadataRef {
+  readonly address: string
+  readonly cm?: string
+  readonly vm?: string
+}
+
 export interface LargeSimpleWorksheetScannedMetadata {
+  readonly cellMetadataRefs?: readonly LargeSimpleWorksheetCellMetadataRef[]
   readonly columns?: LargeSimpleWorksheetAxisMetadata
   readonly conditionalFormats?: readonly WorkbookConditionalFormatSnapshot[]
   readonly conditionalFormattingXml?: readonly string[]
@@ -34,6 +41,7 @@ export interface LargeSimpleWorksheetScannedMetadata {
   readonly merges?: readonly LargeSimpleWorksheetMergeRef[]
   readonly printPageSetup?: PrintPageSetupSnapshot
   readonly sheetFormatPr?: WorkbookSheetFormatPrSnapshot
+  readonly sheetSlicerListExtXml?: string
   readonly tableRelationshipIds?: readonly string[]
 }
 

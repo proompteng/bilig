@@ -636,6 +636,149 @@ describe('large simple XLSX import fast path', () => {
     ])
   })
 
+  it('preserves Power Pivot data model artifacts on the streaming path without releasing their lazy ZIP source', () => {
+    const modelBytes = deterministicBytes(1_000_000)
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1"/>',
+        '<sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData>',
+        '</worksheet>',
+      ].join(''),
+      extraEntries: {
+        'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rIdModel" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/powerPivotData" Target="model/item.data"/>
+</Relationships>`,
+        'xl/model/item.data': modelBytes,
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'power-pivot-model.xlsx', readXlsxZipEntriesLazy(bytes), {
+      minByteLength: 0,
+      releaseZipSource: true,
+    })
+    const parts = imported?.snapshot.workbook.metadata?.dataModelArtifacts?.parts ?? []
+    const modelPart = parts.find((part) => part.path === 'xl/model/item.data')
+
+    expect(imported?.stats.cellCount).toBe(1)
+    expect(parts.map((part) => part.path)).toEqual(['xl/model/item.data'])
+    expect(modelPart?.byteLength).toBe(modelBytes.byteLength)
+    expect(decodeBase64(modelPart?.dataBase64 ?? '')).toEqual(modelBytes)
+  })
+
+  it('preserves streamed cell metadata references without falling back to SheetJS', () => {
+    const metadataXml =
+      '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><metadataTypes count="1"><metadataType name="XLRICHVALUE" minSupportedVersion="120000"/></metadataTypes><valueMetadata count="1"><bk><rc t="1" v="0"/></bk></valueMetadata></metadata>'
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1"/>',
+        '<sheetData><row r="1"><c r="A1" vm="1"><v>7</v></c></row></sheetData>',
+        '</worksheet>',
+      ].join(''),
+      extraEntries: {
+        'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rIdCellMetadata" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" Target="metadata.xml"/>
+</Relationships>`,
+        'xl/metadata.xml': metadataXml,
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'cell-metadata.xlsx', readXlsxZipEntriesLazy(bytes), { minByteLength: 0 })
+
+    expect(imported?.stats.cellCount).toBe(1)
+    expect(imported?.snapshot.workbook.metadata?.cellMetadata).toEqual({
+      relationshipTarget: 'metadata.xml',
+      metadataXml,
+    })
+    expect(imported?.snapshot.sheets[0]?.metadata?.cellMetadataRefs).toEqual([
+      {
+        address: 'A1',
+        vm: '1',
+        cellSignature: JSON.stringify({ value: 7, formula: null, format: null }),
+      },
+    ])
+  })
+
+  it('preserves slicer connection artifacts on the streaming path without inflating worksheet XML for metadata', () => {
+    const sheetSlicerListExtXml =
+      '<ext uri="{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}" xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"><x14:slicerList><x14:slicer r:id="rIdSlicer"/></x14:slicerList></ext>'
+    const workbookSlicerCachesExtXml =
+      '<ext uri="{BBE1A952-AA13-448e-AADC-164F8A28A991}" xmlns:x15="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"><x15:slicerCaches><x15:slicerCache r:id="rIdSlicerCache"/></x15:slicerCaches></ext>'
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+        '<dimension ref="A1"/>',
+        '<sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData>',
+        `<extLst>${sheetSlicerListExtXml}</extLst>`,
+        '</worksheet>',
+      ].join(''),
+      sheetRelationshipsXml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdSlicer" Type="http://schemas.microsoft.com/office/2007/relationships/slicer" Target="../slicers/slicer1.xml"/>
+</Relationships>`,
+      extraEntries: {
+        'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets>
+  <extLst>${workbookSlicerCachesExtXml}</extLst>
+</workbook>`,
+        'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rIdSlicerCache" Type="http://schemas.microsoft.com/office/2007/relationships/slicerCache" Target="slicerCaches/slicerCache1.xml"/>
+  <Relationship Id="rIdConnections" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/connections" Target="connections.xml"/>
+</Relationships>`,
+        'xl/connections.xml': '<connections xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0"/>',
+        'xl/slicerCaches/slicerCache1.xml':
+          '<slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"/>',
+        'xl/slicers/slicer1.xml': '<slicer xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" name="Region"/>',
+      },
+    })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('slicer metadata should use streamed extLst records instead of inflating worksheet XML')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'slicer-connections.xlsx', zip, { minByteLength: 0 })
+    const artifacts = imported?.snapshot.workbook.metadata?.slicerConnectionArtifacts
+
+    expect(imported?.stats.cellCount).toBe(1)
+    expect(artifacts?.workbookSlicerCachesExtXml).toBe(workbookSlicerCachesExtXml)
+    expect(artifacts?.sheetArtifacts).toEqual([
+      {
+        sheetName: 'Data',
+        sheetSlicerListExtXml,
+        relationships: [
+          {
+            id: 'rIdSlicer',
+            type: 'http://schemas.microsoft.com/office/2007/relationships/slicer',
+            target: '../slicers/slicer1.xml',
+          },
+        ],
+      },
+    ])
+    expect(artifacts?.parts.map((part) => part.path).toSorted()).toEqual([
+      'xl/connections.xml',
+      'xl/slicerCaches/slicerCache1.xml',
+      'xl/slicers/slicer1.xml',
+    ])
+  })
+
   it('imports worksheet auto filters without falling back to SheetJS', () => {
     const bytes = buildLargeSimpleWorkbook({
       includeSharedStrings: false,
@@ -1183,6 +1326,10 @@ function deterministicBytes(length: number): Uint8Array {
     bytes[index] = (state >>> 24) & 0xff
   }
   return bytes
+}
+
+function decodeBase64(value: string): Uint8Array {
+  return new Uint8Array(Buffer.from(value, 'base64'))
 }
 
 function encodeColumnName(index: number): string {

@@ -9,7 +9,14 @@ import type {
   WorkbookSlicerConnectionSheetArtifactsSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
-import { getZipText, normalizeZipPath, readXlsxZipEntries, type XlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
+import {
+  getZipText,
+  normalizeZipPath,
+  readXlsxZipEntries,
+  readXlsxZipEntryUncompressedSize,
+  type XlsxZipEntries,
+  type XlsxZipSource,
+} from './xlsx-zip.js'
 import {
   buildRelationshipsXml,
   ensureRelationshipNamespace,
@@ -39,6 +46,12 @@ const slicerCachePartPathPattern = /^xl\/slicerCaches\/slicerCache[1-9][0-9]*\.x
 const slicerCacheRelationshipPartPathPattern = /^xl\/slicerCaches\/_rels\/slicerCache[1-9][0-9]*\.xml\.rels$/u
 const slicerPartPathPattern = /^xl\/slicers\/slicer[1-9][0-9]*\.xml$/u
 const slicerRelationshipPartPathPattern = /^xl\/slicers\/_rels\/slicer[1-9][0-9]*\.xml\.rels$/u
+
+export interface ImportedWorkbookSlicerConnectionSheetSource {
+  readonly sheetName: string
+  readonly sheetPath: string
+  readonly sheetSlicerListExtXml?: string
+}
 
 function encodeBinaryString(bytes: Uint8Array): string {
   let binary = ''
@@ -79,6 +92,37 @@ function encodedPartSnapshot(path: string, bytes: Uint8Array): WorkbookPreserved
     dataBase64: encodeBase64(bytes),
     byteLength: bytes.byteLength,
   }
+}
+
+class LazyEncodedPartSnapshot implements WorkbookPreservedPackagePartSnapshot {
+  readonly storage = 'base64' as const
+  declare readonly dataBase64: string
+  private dataBase64Cache: string | undefined
+
+  constructor(
+    readonly path: string,
+    readonly byteLength: number,
+    private readonly readBytes: () => Uint8Array | undefined,
+  ) {
+    Object.defineProperty(this, 'dataBase64', {
+      configurable: true,
+      enumerable: true,
+      get: () => this.getDataBase64(),
+    })
+  }
+
+  private getDataBase64(): string {
+    this.dataBase64Cache ??= encodeBase64(this.readBytes() ?? new Uint8Array())
+    return this.dataBase64Cache
+  }
+}
+
+function lazyEncodedPartSnapshot(
+  path: string,
+  byteLength: number,
+  readBytes: () => Uint8Array | undefined,
+): WorkbookPreservedPackagePartSnapshot {
+  return new LazyEncodedPartSnapshot(path, byteLength, readBytes)
 }
 
 function decodedPartBytes(part: WorkbookPreservedPackagePartSnapshot): Uint8Array | undefined {
@@ -200,6 +244,10 @@ function relationshipPartPath(partPath: string): string {
   return directory.length > 0 ? `${directory}/_rels/${fileName}.rels` : `_rels/${fileName}.rels`
 }
 
+function hasZipEntry(zip: XlsxZipEntries, path: string): boolean {
+  return Object.hasOwn(zip, normalizeZipPath(path))
+}
+
 function isPreservedPackagePartPath(path: string): boolean {
   const normalized = normalizeZipPath(path)
   return (
@@ -259,18 +307,20 @@ function insertExtensionXml(
   )
 }
 
-function readSheetArtifacts(zip: XlsxZipEntries, sheetNames: readonly string[]): WorkbookSlicerConnectionSheetArtifactsSnapshot[] {
-  return sheetNames.flatMap((sheetName, sheetIndex) => {
-    const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
-    const relationshipsPath = `xl/worksheets/_rels/sheet${String(sheetIndex + 1)}.xml.rels`
-    const sheetSlicerListExtXml = extensionXmlWithChild(getZipText(zip, sheetPath), 'slicerList')
+function readSheetArtifacts(
+  zip: XlsxZipEntries,
+  sheets: readonly ImportedWorkbookSlicerConnectionSheetSource[],
+): WorkbookSlicerConnectionSheetArtifactsSnapshot[] {
+  return sheets.flatMap((sheet) => {
+    const relationshipsPath = relationshipPartPath(sheet.sheetPath)
+    const sheetSlicerListExtXml = sheet.sheetSlicerListExtXml ?? extensionXmlWithChild(getZipText(zip, sheet.sheetPath), 'slicerList')
     const relationships = parseRelationships(getZipText(zip, relationshipsPath)).filter(isSlicerRelationship).map(relationshipSnapshot)
     if (!sheetSlicerListExtXml && relationships.length === 0) {
       return []
     }
     return [
       {
-        sheetName,
+        sheetName: sheet.sheetName,
         ...(sheetSlicerListExtXml ? { sheetSlicerListExtXml } : {}),
         ...(relationships.length > 0 ? { relationships } : {}),
       },
@@ -285,27 +335,27 @@ function addRelationshipTargetPartPath(
   relationship: WorkbookPackageRelationshipSnapshot,
 ): void {
   const targetPath = normalizeZipPath(resolveTargetPath(basePartPath, relationship.target))
-  if (isPreservedPackagePartPath(targetPath) && zip[targetPath]) {
+  if (isPreservedPackagePartPath(targetPath) && hasZipEntry(zip, targetPath)) {
     partPaths.add(targetPath)
   }
 }
 
 function readSlicerConnectionPartPaths(
   zip: XlsxZipEntries,
-  sheetNames: readonly string[],
+  sheets: readonly ImportedWorkbookSlicerConnectionSheetSource[],
   workbookRelationships: readonly WorkbookPackageRelationshipSnapshot[],
   sheetArtifacts: readonly WorkbookSlicerConnectionSheetArtifactsSnapshot[],
 ): string[] {
+  const sheetPathsByName = new Map(sheets.map((sheet) => [sheet.sheetName, sheet.sheetPath]))
   const partPaths = new Set<string>()
   for (const relationship of workbookRelationships) {
     addRelationshipTargetPartPath(partPaths, zip, workbookPath, relationship)
   }
   for (const sheetArtifact of sheetArtifacts) {
-    const sheetIndex = sheetNames.indexOf(sheetArtifact.sheetName)
-    if (sheetIndex < 0) {
+    const sheetPath = sheetPathsByName.get(sheetArtifact.sheetName)
+    if (!sheetPath) {
       continue
     }
-    const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
     for (const relationship of sheetArtifact.relationships ?? []) {
       addRelationshipTargetPartPath(partPaths, zip, sheetPath, relationship)
     }
@@ -319,7 +369,7 @@ function readSlicerConnectionPartPaths(
   const allPartPaths = new Set<string>(partPaths)
   for (const partPath of partPaths) {
     const relsPath = relationshipPartPath(partPath)
-    if (zip[relsPath]) {
+    if (hasZipEntry(zip, relsPath)) {
       allPartPaths.add(relsPath)
     }
   }
@@ -423,16 +473,50 @@ export function readImportedWorkbookSlicerConnectionArtifacts(
   source: XlsxZipSource,
   sheetNames: readonly string[],
 ): WorkbookSlicerConnectionArtifactsSnapshot | undefined {
+  return readImportedWorkbookSlicerConnectionArtifactsFromSheets(
+    source,
+    sheetNames.map((sheetName, sheetIndex) => ({
+      sheetName,
+      sheetPath: `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`,
+    })),
+  )
+}
+
+export function readImportedWorkbookSlicerConnectionArtifactsFromSheets(
+  source: XlsxZipSource,
+  sheets: readonly ImportedWorkbookSlicerConnectionSheetSource[],
+  options: {
+    readonly workbookXml?: string
+    readonly workbookRelationshipsXml?: string
+  } = {},
+): WorkbookSlicerConnectionArtifactsSnapshot | undefined {
   const zip = readXlsxZipEntries(source)
-  const workbookSlicerCachesExtXml = extensionXmlWithChild(getZipText(zip, workbookPath), 'slicerCaches')
-  const workbookRelationships = parseRelationships(getZipText(zip, workbookRelationshipsPath))
+  const workbookSlicerCachesExtXml = extensionXmlWithChild(options.workbookXml ?? getZipText(zip, workbookPath), 'slicerCaches')
+  const workbookRelationships = parseRelationships(options.workbookRelationshipsXml ?? getZipText(zip, workbookRelationshipsPath))
     .filter(isWorkbookArtifactRelationship)
     .map(relationshipSnapshot)
-  const sheetArtifacts = readSheetArtifacts(zip, sheetNames)
-  const partPaths = readSlicerConnectionPartPaths(zip, sheetNames, workbookRelationships, sheetArtifacts)
+  const sheetArtifacts = readSheetArtifacts(zip, sheets)
+  const partPaths = readSlicerConnectionPartPaths(zip, sheets, workbookRelationships, sheetArtifacts)
   const parts = partPaths.flatMap((path) => {
+    const byteLength = readXlsxZipEntryUncompressedSize(zip, path)
+    if (byteLength !== undefined) {
+      return [
+        lazyEncodedPartSnapshot(path, byteLength, () => {
+          const bytes = zip[path]
+          if (bytes) {
+            Reflect.deleteProperty(zip, path)
+          }
+          return bytes
+        }),
+      ]
+    }
     const bytes = zip[path]
-    return bytes ? [encodedPartSnapshot(path, bytes)] : []
+    if (!bytes) {
+      return []
+    }
+    const snapshot = encodedPartSnapshot(path, bytes)
+    Reflect.deleteProperty(zip, path)
+    return [snapshot]
   })
   if (parts.length === 0 && !workbookSlicerCachesExtXml && workbookRelationships.length === 0 && sheetArtifacts.length === 0) {
     return undefined
