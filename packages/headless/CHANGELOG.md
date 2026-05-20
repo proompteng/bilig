@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.6
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.5
+- Manual override: no
+
+## Fixes
+- fix(xlsx): reduce lazy snapshot materialization memory (07ee4e89)
+
 ## 0.40.5
 
 - Release type: patch
