@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 
 import * as XLSX from 'xlsx'
 
-import { importXlsx } from '../packages/excel-import/src/index.js'
+import { importXlsx, type ImportedWorkbook } from '../packages/excel-import/src/index.js'
 import { readImportedExternalWorkbookReferences } from '../packages/excel-import/src/xlsx-external-references.js'
 import { readXlsxZipEntries } from '../packages/excel-import/src/xlsx-zip.js'
 import { ErrorCode, ValueTag } from '../packages/protocol/src/enums.js'
@@ -52,6 +52,30 @@ export function countWorkbookFeatures(snapshot: WorkbookSnapshot, warnings: read
   }
 }
 
+export function countImportedWorkbookFeatures(imported: ImportedWorkbook): PublicWorkbookFeatureCounts {
+  const stats = imported.stats
+  if (!stats) {
+    return countWorkbookFeatures(imported.snapshot, imported.warnings)
+  }
+  const metadata = imported.snapshot.workbook.metadata
+  return {
+    sheetCount: stats.sheetCount,
+    cellCount: stats.cellCount,
+    formulaCellCount: stats.formulaCellCount,
+    valueCellCount: stats.valueCellCount,
+    definedNameCount: stats.definedNameCount,
+    tableCount: Math.max(stats.tableCount, metadata?.tables?.length ?? 0),
+    chartCount: metadata?.charts?.length ?? 0,
+    pivotCount: metadata?.pivots?.length ?? 0,
+    mergeCount: stats.mergeCount,
+    styleRangeCount: imported.snapshot.sheets.reduce((sum, sheet) => sum + (sheet.metadata?.styleRanges?.length ?? 0), 0),
+    conditionalFormatCount: stats.conditionalFormatCount,
+    dataValidationCount: stats.dataValidationCount,
+    macroPayloadCount: metadata?.macroPayloads?.length ?? 0,
+    warningCount: imported.warnings.length,
+  }
+}
+
 export function workbookMetadata(snapshot: WorkbookSnapshot): PublicWorkbookCorpusCase['workbookMetadata'] {
   return {
     workbookName: snapshot.workbook.name,
@@ -77,6 +101,24 @@ export function workbookMetadata(snapshot: WorkbookSnapshot): PublicWorkbookCorp
           usedRange,
         }
       }),
+  }
+}
+
+export function importedWorkbookMetadata(imported: ImportedWorkbook): PublicWorkbookCorpusCase['workbookMetadata'] {
+  const stats = imported.stats
+  if (!stats) {
+    return workbookMetadata(imported.snapshot)
+  }
+  return {
+    workbookName: imported.snapshot.workbook.name,
+    sheetNames: imported.snapshot.sheets.toSorted((left, right) => left.order - right.order).map((sheet) => sheet.name),
+    dimensions: stats.dimensions.map((dimension) => ({
+      sheetName: dimension.sheetName,
+      rowCount: dimension.rowCount,
+      columnCount: dimension.columnCount,
+      nonEmptyCellCount: dimension.nonEmptyCellCount,
+      usedRange: dimension.usedRange,
+    })),
   }
 }
 

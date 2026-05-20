@@ -3,10 +3,16 @@ import { deflateRawSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 
-import { exportXlsx } from '../../packages/excel-import/src/index.js'
+import { exportXlsx, XLSX_CONTENT_TYPE, type ImportedWorkbook } from '../../packages/excel-import/src/index.js'
 import { ValueTag } from '../../packages/protocol/src/enums.js'
 import type { WorkbookSnapshot } from '../../packages/protocol/src/types.js'
-import { extractFormulaOracles, inspectWorkbookFootprint, inspectWorkbookFootprintForWorker } from '../public-workbook-corpus-workbook.ts'
+import {
+  countImportedWorkbookFeatures,
+  extractFormulaOracles,
+  importedWorkbookMetadata,
+  inspectWorkbookFootprint,
+  inspectWorkbookFootprintForWorker,
+} from '../public-workbook-corpus-workbook.ts'
 
 describe('public workbook corpus workbook helpers', () => {
   it('extracts formula oracles from broad sparse worksheet refs', () => {
@@ -20,6 +26,78 @@ describe('public workbook corpus workbook helpers', () => {
       },
     ])
   }, 15_000)
+
+  it('uses imported large-simple stats without walking lazy sheet cells', () => {
+    const cells = new Proxy([], {
+      get(target, property, receiver) {
+        if (property === 'length') {
+          return 42
+        }
+        if (property === Symbol.iterator || property === 'filter') {
+          throw new Error('lazy cells should not be materialized for stats-backed verifier summaries')
+        }
+        return Reflect.get(target, property, receiver)
+      },
+    }) as WorkbookSnapshot['sheets'][number]['cells']
+    const imported: ImportedWorkbook = {
+      snapshot: {
+        version: 1,
+        workbook: { name: 'Stats Backed' },
+        sheets: [{ id: 1, name: 'Sheet1', order: 0, cells }],
+      },
+      workbookName: 'Stats Backed',
+      sheetNames: ['Sheet1'],
+      warnings: ['Some cell styles were ignored during XLSX import.'],
+      preview: {
+        workbookName: 'Stats Backed',
+        fileName: 'stats-backed.xlsx',
+        fileSizeBytes: 123,
+        contentType: XLSX_CONTENT_TYPE,
+        sheetCount: 0,
+        sheets: [],
+        warnings: ['Some cell styles were ignored during XLSX import.'],
+      },
+      stats: {
+        sheetCount: 1,
+        cellCount: 42,
+        formulaCellCount: 0,
+        valueCellCount: 42,
+        definedNameCount: 0,
+        tableCount: 0,
+        mergeCount: 1,
+        conditionalFormatCount: 0,
+        dataValidationCount: 0,
+        warningCount: 1,
+        dimensions: [
+          {
+            sheetName: 'Sheet1',
+            rowCount: 7,
+            columnCount: 6,
+            nonEmptyCellCount: 42,
+            usedRange: { startRow: 0, startColumn: 0, endRow: 6, endColumn: 5 },
+          },
+        ],
+        phaseTelemetry: [],
+      },
+    }
+
+    expect(countImportedWorkbookFeatures(imported)).toMatchObject({
+      sheetCount: 1,
+      cellCount: 42,
+      valueCellCount: 42,
+      mergeCount: 1,
+      warningCount: 1,
+    })
+    expect(importedWorkbookMetadata(imported).dimensions).toEqual([
+      {
+        sheetName: 'Sheet1',
+        rowCount: 7,
+        columnCount: 6,
+        nonEmptyCellCount: 42,
+        usedRange: { startRow: 0, startColumn: 0, endRow: 6, endColumn: 5 },
+      },
+    ])
+  })
 
   it('records explicit used ranges from actual populated cells instead of broad worksheet refs', () => {
     const footprint = inspectWorkbookFootprint(buildBroadSparseWorkbookBytes(), 'sparse.xlsx')

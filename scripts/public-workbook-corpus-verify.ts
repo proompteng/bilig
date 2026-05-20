@@ -42,6 +42,7 @@ import {
 import { inspectWorkbookFootprintIsolated, type PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus-footprint.ts'
 import {
   importResourceLimitPreflight,
+  formulaOracleFormulaCountResourceLimitPreflight,
   formulaOracleResourceLimitPreflight,
   roundTripResourceLimitPreflight,
   structuralSmokeResourceLimitPreflight,
@@ -61,13 +62,14 @@ import {
 import { FileBackedXlsxZipByteSource } from './public-workbook-corpus-xlsx-byte-source.ts'
 import {
   cellValuesMatchOracle,
+  countImportedWorkbookFeatures,
   countWorkbookFeatures,
   extractFormulaOracles,
   formatCellValue,
+  importedWorkbookMetadata,
   inspectWorkbookFootprint,
   isUnsupportedCycleOracleMismatch,
   sha256HexSync,
-  workbookMetadata,
 } from './public-workbook-corpus-workbook.ts'
 import type {
   BuildScorecardArgs,
@@ -259,14 +261,19 @@ export async function verifyCachedWorkbookArtifact(
     }
     const { imported, featureCounts, metadata } = await timeVerificationPhase(runtimeMetrics, workerOptions, 'import-xlsx', () => {
       const importedWorkbook = importXlsxFromZipByteSource(source, artifact.fileName)
-      const importedFeatureCounts = countWorkbookFeatures(importedWorkbook.snapshot, importedWorkbook.warnings)
+      const importedFeatureCounts = countImportedWorkbookFeatures(importedWorkbook)
       return {
         imported: importedWorkbook,
         featureCounts: mergeImportedAndFootprintFeatureCounts(importedFeatureCounts, footprint.featureCounts),
-        metadata: workbookMetadata(importedWorkbook.snapshot),
+        metadata: importedWorkbookMetadata(importedWorkbook),
       }
     })
-    const formulaOracleResourceLimit = formulaOracleResourceLimitPreflight(imported.snapshot)
+    const formulaOracleFormulaCountResourceLimit = formulaOracleFormulaCountResourceLimitPreflight({
+      formulaCellCount: featureCounts.formulaCellCount,
+    })
+    const formulaOracleResourceLimit =
+      formulaOracleFormulaCountResourceLimit ??
+      (featureCounts.formulaCellCount === 0 ? null : formulaOracleResourceLimitPreflight(imported.snapshot))
     const formulaOracleBlockingWarning = hasFormulaOracleBlockingWarning(imported.warnings)
     const formulaOracleNeedsWorkbookBytes =
       !formulaOracleResourceLimit && footprint.featureCounts.formulaCellCount > 0 && !formulaOracleBlockingWarning
