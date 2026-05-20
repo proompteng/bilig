@@ -7,9 +7,11 @@ import {
   getZipText,
   readLazyXlsxZipSource,
   readLazyXlsxZipSourceByteLength,
+  readXlsxZipEntriesLazyFromByteSource,
   readXlsxZipEntries,
   readXlsxZipEntriesLazy,
   releaseLazyXlsxZipSource,
+  type XlsxZipByteSource,
 } from '../xlsx-zip.js'
 
 describe('XLSX ZIP reader', () => {
@@ -54,11 +56,31 @@ describe('XLSX ZIP reader', () => {
 
     expect(() => forEachInflatedXlsxZipEntryChunk(zip, path, () => undefined)).toThrow()
   })
+
+  it('streams highly compressed large entries without inflating the whole entry first', () => {
+    const path = 'xl/worksheets/sheet1.xml'
+    const payload = semiCompressibleBytes(2 * 1024 * 1024)
+    const source = new CountingZipByteSource(buildStreamedZip(path, payload))
+    const zip = readXlsxZipEntriesLazyFromByteSource(source)
+    const chunks: Uint8Array[] = []
+    source.maxReadLength = 0
+
+    expect(zip).not.toBeNull()
+    expect(
+      forEachInflatedXlsxZipEntryChunk(zip!, path, (chunk) => chunks.push(chunk), {
+        chunkSize: 512,
+      }),
+    ).toBe(true)
+
+    expect(Buffer.concat(chunks)).toEqual(Buffer.from(payload))
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(source.maxReadLength).toBeLessThan(16 * 1024)
+  })
 })
 
-function buildStreamedZip(path: string, text: string): Uint8Array {
+function buildStreamedZip(path: string, text: string | Uint8Array): Uint8Array {
   const fileName = Buffer.from(path)
-  const payload = Buffer.from(text)
+  const payload = typeof text === 'string' ? Buffer.from(text) : Buffer.from(text)
   const compressed = deflateRawSync(payload)
   const localHeader = Buffer.alloc(30)
   localHeader.writeUInt32LE(0x04034b50, 0)
@@ -91,6 +113,30 @@ function buildStreamedZip(path: string, text: string): Uint8Array {
   endOfCentralDirectory.writeUInt32LE(centralDirectoryOffset, 16)
 
   return Buffer.concat([localHeader, fileName, compressed, dataDescriptor, centralDirectory, fileName, endOfCentralDirectory])
+}
+
+class CountingZipByteSource implements XlsxZipByteSource {
+  readonly byteLength: number
+  maxReadLength = 0
+
+  constructor(private readonly bytes: Uint8Array) {
+    this.byteLength = bytes.byteLength
+  }
+
+  readRange(start: number, end: number): Uint8Array {
+    this.maxReadLength = Math.max(this.maxReadLength, end - start)
+    return this.bytes.subarray(start, end)
+  }
+}
+
+function semiCompressibleBytes(length: number): Uint8Array {
+  const bytes = new Uint8Array(length)
+  let state = 0x12345678
+  for (let index = 0; index < bytes.length; index += 1) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+    bytes[index] = index % 10 === 0 ? state & 0xff : 65 + (index % 26)
+  }
+  return bytes
 }
 
 function corruptFirstCompressedByte(bytes: Uint8Array): Uint8Array {

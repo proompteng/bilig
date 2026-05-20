@@ -94,6 +94,7 @@ export function forEachInflatedXlsxZipEntryChunk(
   }
   inflateCentralDirectoryEntryChunks(source, entry.localHeaderOffset, entry.compressedSize, entry.compressionMethod, onChunk, {
     chunkSize: options.chunkSize ?? defaultZipEntryChunkSize,
+    uncompressedSize: entry.uncompressedSize,
   })
   return true
 }
@@ -138,6 +139,7 @@ const zip64Sentinel = 0xffffffff
 const maxEndOfCentralDirectorySearch = 65_557
 const defaultZipEntryChunkSize = 64 * 1024
 const syncChunkedInflateCompressedSizeLimit = 256 * 1024
+const syncChunkedInflateUncompressedSizeLimit = 512 * 1024
 const xlsxZipCentralDirectorySourceSymbol: unique symbol = Symbol('bilig.xlsxZipCentralDirectorySource')
 const textDecoder = new TextDecoder()
 
@@ -301,7 +303,7 @@ function inflateCentralDirectoryEntryChunks(
   compressedSize: number,
   compressionMethod: number,
   onChunk: (chunk: Uint8Array) => void,
-  options: { readonly chunkSize: number },
+  options: { readonly chunkSize: number; readonly uncompressedSize: number },
 ): void {
   const localHeader = source.readRange(localHeaderOffset, localHeaderOffset + 30)
   if (readUint32(localHeader, 0) !== localFileHeaderSignature) {
@@ -319,7 +321,7 @@ function inflateCentralDirectoryEntryChunks(
     return
   }
   if (compressionMethod === deflatedCompressionMethod) {
-    if (compressedSize <= syncChunkedInflateCompressedSizeLimit) {
+    if (compressedSize <= syncChunkedInflateCompressedSizeLimit && options.uncompressedSize <= syncChunkedInflateUncompressedSizeLimit) {
       const inflated = inflateCentralDirectoryEntry(source, localHeaderOffset, compressedSize, compressionMethod)
       for (let offset = 0; offset < inflated.byteLength; offset += options.chunkSize) {
         onChunk(inflated.subarray(offset, Math.min(inflated.byteLength, offset + options.chunkSize)))
