@@ -30,6 +30,7 @@ export function resolveWorkbookGridSurfaceDisplaySelection(input: {
   readonly isEditingCell: boolean
   readonly isFillHandleDragging: boolean
   readonly isRangeMoveDragging: boolean
+  readonly hasPendingLocalSelection?: boolean | undefined
   readonly renderGridSelection: GridSelection
   readonly renderSelectionRange?: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null | undefined
   readonly selectedCell: Item
@@ -38,6 +39,9 @@ export function resolveWorkbookGridSurfaceDisplaySelection(input: {
     return input.committedCellSelection
   }
   if (input.isFillHandleDragging || input.isRangeMoveDragging || input.activeHeaderDrag) {
+    return input.renderGridSelection
+  }
+  if (input.hasPendingLocalSelection) {
     return input.renderGridSelection
   }
   const currentCell = input.renderGridSelection.current?.cell ?? null
@@ -183,9 +187,15 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     () => createGridSelection(displaySelectionCol, displaySelectionRow),
     [displaySelectionCol, displaySelectionRow],
   )
+  const hasPendingLocalSelection = renderState.gridRuntimeHost.input.hasPendingLocalSelection({
+    currentSelection: renderState.gridSelection,
+    externalSnapshot: props.selectionSnapshot,
+    sheetName: props.sheetName,
+  })
   const displayGridSelection = resolveWorkbookGridSurfaceDisplaySelection({
     activeHeaderDrag: renderState.activeHeaderDrag,
     committedCellSelection,
+    hasPendingLocalSelection,
     isEditingCell: props.isEditingCell,
     isFillHandleDragging: renderState.isFillHandleDragging,
     isRangeMoveDragging: renderState.isRangeMoveDragging,

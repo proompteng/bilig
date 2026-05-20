@@ -181,6 +181,32 @@ describe('WorkbookGridSurface selection autoscroll', () => {
     ).toBe(committedSelection)
   })
 
+  test('keeps pending local range selections visible while the committed active cell catches up', () => {
+    const committedSelection = createGridSelection(0, 0)
+    const pendingLocalRangeSelection = {
+      ...createGridSelection(3, 3),
+      current: {
+        cell: [3, 3] as const,
+        range: { x: 1, y: 1, width: 3, height: 3 },
+        rangeStack: [],
+      },
+    }
+
+    expect(
+      resolveWorkbookGridSurfaceDisplaySelection({
+        activeHeaderDrag: null,
+        committedCellSelection: committedSelection,
+        hasPendingLocalSelection: true,
+        isEditingCell: false,
+        isFillHandleDragging: false,
+        isRangeMoveDragging: false,
+        renderGridSelection: pendingLocalRangeSelection,
+        renderSelectionRange: pendingLocalRangeSelection.current?.range,
+        selectedCell: [0, 0],
+      }),
+    ).toBe(pendingLocalRangeSelection)
+  })
+
   test('rejects stale axis selections after the committed active cell changes', () => {
     const committedSelection = createGridSelection(6, 7)
     const staleColumnSelection = createColumnSliceSelection(2, 4, 0)

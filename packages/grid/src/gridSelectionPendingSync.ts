@@ -14,7 +14,7 @@ export interface GridSelectionPendingSyncResult {
   readonly pendingBaseSnapshot: GridSelectionSnapshot | null
 }
 
-function gridSelectionSnapshotsEqual(left: GridSelectionSnapshot, right: GridSelectionSnapshot): boolean {
+export function gridSelectionSnapshotsEqual(left: GridSelectionSnapshot, right: GridSelectionSnapshot): boolean {
   return (
     left.sheetName === right.sheetName &&
     left.address === right.address &&

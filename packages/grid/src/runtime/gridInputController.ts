@@ -2,7 +2,7 @@ import type { HeaderSelection } from '../gridPointer.js'
 import { clearGridPendingPointerActivation, type GridInteractionStateRefs } from '../gridInteractionState.js'
 import type { InternalClipboardRange } from '../gridInternalClipboard.js'
 import { selectionToSnapshot, snapshotToSelection } from '../gridSelection.js'
-import { resolveGridSelectionPendingSync } from '../gridSelectionPendingSync.js'
+import { gridSelectionSnapshotsEqual, resolveGridSelectionPendingSync } from '../gridSelectionPendingSync.js'
 import type { GridSelection, GridSelectionSnapshot, Item, Rectangle } from '../gridTypes.js'
 
 interface RuntimeRef<T> {
@@ -89,6 +89,23 @@ export class GridInputController {
     }
     clearGridPendingPointerActivation(this.interactionState)
     return snapshotToSelection(input.externalSnapshot)
+  }
+
+  hasPendingLocalSelection(input: {
+    readonly currentSelection: GridSelection
+    readonly externalSnapshot: GridSelectionSnapshot
+    readonly sheetName: string
+  }): boolean {
+    const pendingLocalSnapshot = this.pendingLocalSelectionSnapshotRef.current
+    if (!pendingLocalSnapshot) {
+      return false
+    }
+    const pendingBaseSnapshot = this.pendingLocalSelectionBaseSnapshotRef.current
+    if (pendingBaseSnapshot && !gridSelectionSnapshotsEqual(pendingBaseSnapshot, input.externalSnapshot)) {
+      return false
+    }
+    const currentSnapshot = selectionToSnapshot(input.currentSelection, input.sheetName, input.externalSnapshot.address)
+    return gridSelectionSnapshotsEqual(currentSnapshot, pendingLocalSnapshot)
   }
 
   noteLocalSelectionChange(input: {

@@ -109,6 +109,39 @@ describe('GridInputController', () => {
     expect(controller.interactionState.pendingPointerCellRef.current).toBeNull()
   })
 
+  it('identifies the current render selection as pending only while the external snapshot is still at the base selection', () => {
+    const controller = new GridInputController()
+    const localSelection = createGridSelection(1, 1)
+
+    controller.noteLocalSelectionChange({
+      baseSnapshot: SHEET1_A1,
+      nextSelection: localSelection,
+      sheetName: 'Sheet1',
+    })
+
+    expect(
+      controller.hasPendingLocalSelection({
+        currentSelection: localSelection,
+        externalSnapshot: SHEET1_A1,
+        sheetName: 'Sheet1',
+      }),
+    ).toBe(true)
+    expect(
+      controller.hasPendingLocalSelection({
+        currentSelection: createGridSelection(2, 2),
+        externalSnapshot: SHEET1_A1,
+        sheetName: 'Sheet1',
+      }),
+    ).toBe(false)
+    expect(
+      controller.hasPendingLocalSelection({
+        currentSelection: localSelection,
+        externalSnapshot: SHEET1_B2,
+        sheetName: 'Sheet1',
+      }),
+    ).toBe(false)
+  })
+
   it('syncs editor state and schedules focus after editor close', () => {
     const controller = new GridInputController()
     const focusGrid = vi.fn()
