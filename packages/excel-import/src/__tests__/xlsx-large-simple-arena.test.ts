@@ -25,6 +25,7 @@ describe('large simple XLSX import arena', () => {
     expect(snapshot.rows).toHaveLength(0)
     expect(snapshot.columns).toBeInstanceOf(Uint16Array)
     expect(snapshot.numberValues).toBeUndefined()
+    expect(snapshot.integerValues).toBeUndefined()
     expect(snapshot.booleanValues).toBeUndefined()
     expect(snapshot.strings).toHaveLength(0)
     expect(snapshot.formulas).toHaveLength(0)
@@ -189,13 +190,14 @@ describe('large simple XLSX import arena', () => {
     expect(materialized).toBe(1)
   })
 
-  it('packs deferred shared-string indexes into numeric storage for mixed large sheets', () => {
+  it('packs deferred shared-string indexes into float storage when a mixed sheet needs doubles', () => {
     const arena = new ImportedWorkbookArena()
     arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 0, sharedStringIndex: 1 })
     arena.addCell({ sheetIndex: 0, row: 0, column: 1, value: 42 })
+    arena.addCell({ sheetIndex: 0, row: 0, column: 2, value: 42.5 })
 
-    expect(arena.snapshot().stringIds).toBeUndefined()
-    expect(arena.snapshot().numberValues).toEqual(new Float64Array([1, 42]))
+    expect(arena.snapshot().integerValues).toEqual(new Int32Array([0, 42, 0]))
+    expect(arena.snapshot().numberValues).toEqual(new Float64Array([1, Number.NaN, 42.5]))
 
     expect(
       arena.retainSharedStringReferences([
@@ -206,6 +208,7 @@ describe('large simple XLSX import arena', () => {
     expect(arena.materializeSheetCells(0)).toEqual([
       { address: 'A1', value: 'Packed shared label' },
       { address: 'B1', value: 42 },
+      { address: 'C1', value: 42.5 },
     ])
   })
 
@@ -238,7 +241,8 @@ describe('large simple XLSX import arena', () => {
     expect(arena.snapshot().sheetIndex).toBe(4)
     expect(arena.snapshot().sheetIndexes).toBeUndefined()
     expect(arena.snapshot().columns).toBeInstanceOf(Uint16Array)
-    expect(arena.snapshot().numberValues).toEqual(new Float64Array([1]))
+    expect(arena.snapshot().integerValues).toEqual(new Int32Array([1]))
+    expect(arena.snapshot().numberValues).toBeUndefined()
     expect(arena.snapshot().stringIds).toBeUndefined()
     expect(arena.snapshot().booleanValues).toBeUndefined()
     expect(arena.snapshot().formulaIds).toBeUndefined()
@@ -282,26 +286,49 @@ describe('large simple XLSX import arena', () => {
     const stringOnlyArena = new ImportedWorkbookArena()
     stringOnlyArena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 'Only text' })
     expect(stringOnlyArena.snapshot().numberValues).toBeUndefined()
+    expect(stringOnlyArena.snapshot().integerValues).toBeUndefined()
     expect(stringOnlyArena.materializeSheetCells(0)).toEqual([{ address: 'A1', value: 'Only text' }])
 
     const arena = new ImportedWorkbookArena()
     const numericCell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })
 
-    expect(arena.snapshot().numberValues).toEqual(new Float64Array([42]))
+    expect(arena.snapshot().integerValues).toEqual(new Int32Array([42]))
+    expect(arena.snapshot().numberValues).toBeUndefined()
     expect(arena.snapshot().stringIds).toBeUndefined()
     expect(arena.snapshot().booleanValues).toBeUndefined()
     expect(arena.snapshot().formulaIds).toBeUndefined()
 
-    arena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 'Label' })
-    expect(arena.snapshot().stringIds).toEqual(new Uint32Array([0xffffffff, 0]))
+    arena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 42.25 })
+    expect(arena.snapshot().numberValues).toEqual(new Float64Array([Number.NaN, 42.25]))
+
+    arena.addCell({ sheetIndex: 0, row: 2, column: 0, value: 'Label' })
+    expect(arena.snapshot().stringIds).toEqual(new Uint32Array([0xffffffff, 0xffffffff, 0]))
     expect(arena.snapshot().booleanValues).toBeUndefined()
     expect(arena.snapshot().formulaIds).toBeUndefined()
 
-    arena.addCell({ sheetIndex: 0, row: 2, column: 0, value: true })
-    expect(arena.snapshot().booleanValues).toEqual(new Uint8Array([0, 0, 1]))
+    arena.addCell({ sheetIndex: 0, row: 3, column: 0, value: true })
+    expect(arena.snapshot().booleanValues).toEqual(new Uint8Array([0, 0, 0, 1]))
 
     arena.setFormula(numericCell, '1+1')
-    expect(arena.snapshot().formulaIds).toEqual(new Uint32Array([0, 0xffffffff, 0xffffffff]))
+    expect(arena.snapshot().formulaIds).toEqual(new Uint32Array([0, 0xffffffff, 0xffffffff, 0xffffffff]))
+  })
+
+  it('keeps non-integer and negative-zero numbers in float storage for exact JS semantics', () => {
+    const arena = new ImportedWorkbookArena()
+    arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: -0 })
+    arena.addCell({ sheetIndex: 0, row: 0, column: 1, value: 2147483648 })
+    arena.addCell({ sheetIndex: 0, row: 0, column: 2, value: -2147483649 })
+    arena.addCell({ sheetIndex: 0, row: 0, column: 3, value: 2147483647 })
+
+    expect(arena.snapshot().numberValues).toEqual(new Float64Array([-0, 2147483648, -2147483649, Number.NaN]))
+    expect(arena.snapshot().integerValues).toEqual(new Int32Array([0, 0, 0, 2147483647]))
+    expect(arena.materializeSheetCells(0)).toEqual([
+      { address: 'A1', value: -0 },
+      { address: 'B1', value: 2147483648 },
+      { address: 'C1', value: -2147483649 },
+      { address: 'D1', value: 2147483647 },
+    ])
+    expect(Object.is(arena.materializeSheetCells(0)[0]?.value, -0)).toBe(true)
   })
 
   it('keeps preview values in fixed slots without overriding values with formulas', () => {
