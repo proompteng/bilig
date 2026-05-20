@@ -497,8 +497,8 @@ export function createOperationDirectPostRecalcMarkers(args: {
       if (
         canUseCleanTerminalWrites &&
         (tags[formulaCellIndex] !== ValueTag.Number ||
-          (stringIds[formulaCellIndex] ?? 0) !== 0 ||
-          (errors[formulaCellIndex] ?? ErrorCode.None) !== ErrorCode.None ||
+          (stringIds?.[formulaCellIndex] ?? 0) !== 0 ||
+          (errors?.[formulaCellIndex] ?? ErrorCode.None) !== ErrorCode.None ||
           ((flags[formulaCellIndex] ?? 0) & formulaOutputFlags) !== 0)
       ) {
         canUseCleanTerminalWrites = false
@@ -536,6 +536,7 @@ export function createOperationDirectPostRecalcMarkers(args: {
     }
     if (canUseValidatedTerminalWrites) {
       postRecalcDirectFormulaIndices.markScalarDeltaCellsValidated()
+      postRecalcDirectFormulaIndices.markScalarDeltaCellsTrustedDirectScalarFormulas()
       if (canUseCleanTerminalWrites) {
         postRecalcDirectFormulaIndices.markScalarDeltaCellsCleanNumber()
       }

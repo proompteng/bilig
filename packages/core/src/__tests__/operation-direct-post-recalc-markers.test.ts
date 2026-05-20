@@ -120,6 +120,7 @@ describe('operation direct post-recalc markers', () => {
     expect(collection.getDelta(30)).toBe(3)
     expect(collection.hasCompleteScalarDeltas()).toBe(true)
     expect(collection.hasValidatedScalarDeltaCells()).toBe(true)
+    expect(collection.hasTrustedDirectScalarDeltaCells()).toBe(true)
   })
 
   it('uses the all-column-version skip gate for linear scalar closures', () => {
@@ -159,6 +160,7 @@ describe('operation direct post-recalc markers', () => {
     expect(allSkipCalls).toBe(1)
     expect(perCellSkipCalls).toBe(0)
     expect(collection.hasValidatedScalarDeltaCells()).toBe(true)
+    expect(collection.hasTrustedDirectScalarDeltaCells()).toBe(true)
   })
 
   it('marks right-input affine scalar closures without falling back to graph traversal', () => {
@@ -187,6 +189,7 @@ describe('operation direct post-recalc markers', () => {
     expect(collection.getDelta(30)).toBe(-6)
     expect(collection.hasCompleteScalarDeltas()).toBe(true)
     expect(collection.hasValidatedScalarDeltaCells()).toBe(true)
+    expect(collection.hasTrustedDirectScalarDeltaCells()).toBe(true)
   })
 
   it('falls back to graph scalar closure when the dependent path branches', () => {

@@ -199,11 +199,14 @@ export function createOperationDirectFormulaDeltas(args: {
     }
     const cellStore = args.state.workbook.cellStore
     const hasValidatedTerminalWrites = collection.hasValidatedScalarDeltaCells()
+    const hasTrustedDirectScalarFormulas = collection.hasTrustedDirectScalarDeltaCells()
     if (collection.hasCleanScalarDeltaCells()) {
       const cellIndices = collection.getCellIndicesForRead()
-      for (let index = 0; index < cellIndices.length; index += 1) {
-        if (!hasActiveDirectScalarFormula(cellIndices[index]!)) {
-          return undefined
+      if (!hasTrustedDirectScalarFormulas) {
+        for (let index = 0; index < cellIndices.length; index += 1) {
+          if (!hasActiveDirectScalarFormula(cellIndices[index]!)) {
+            return undefined
+          }
         }
       }
       const changed = captureChanged
@@ -223,9 +226,11 @@ export function createOperationDirectFormulaDeltas(args: {
     }
     if (constantDelta !== undefined && hasValidatedTerminalWrites) {
       const cellIndices = collection.getCellIndicesForRead()
-      for (let index = 0; index < cellIndices.length; index += 1) {
-        if (!hasActiveDirectScalarFormula(cellIndices[index]!)) {
-          return undefined
+      if (!hasTrustedDirectScalarFormulas) {
+        for (let index = 0; index < cellIndices.length; index += 1) {
+          if (!hasActiveDirectScalarFormula(cellIndices[index]!)) {
+            return undefined
+          }
         }
       }
       const changed = captureChanged

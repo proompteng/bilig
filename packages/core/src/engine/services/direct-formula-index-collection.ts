@@ -39,6 +39,7 @@ export class DirectFormulaIndexCollection {
   private constantDelta: number | undefined
   private validatedScalarDeltaSize = -1
   private cleanScalarDeltaSize = -1
+  private trustedDirectScalarDeltaSize = -1
   private linearHasProbeCount = 0
 
   get size(): number {
@@ -48,6 +49,7 @@ export class DirectFormulaIndexCollection {
   add(cellIndex: number): void {
     this.validatedScalarDeltaSize = -1
     this.cleanScalarDeltaSize = -1
+    this.trustedDirectScalarDeltaSize = -1
     this.materializeConstantDeltas()
     if (this.indexByCell) {
       if (this.indexByCell.has(cellIndex)) {
@@ -129,6 +131,7 @@ export class DirectFormulaIndexCollection {
   private addDeltaWithKind(cellIndex: number, delta: number, kind: 'scalar' | undefined): void {
     this.validatedScalarDeltaSize = -1
     this.cleanScalarDeltaSize = -1
+    this.trustedDirectScalarDeltaSize = -1
     if (this.constantDelta !== undefined) {
       const existingIndex = this.findIndex(cellIndex)
       if (existingIndex === -1 && Object.is(this.constantDelta, delta)) {
@@ -172,6 +175,7 @@ export class DirectFormulaIndexCollection {
     }
     this.validatedScalarDeltaSize = -1
     this.cleanScalarDeltaSize = -1
+    this.trustedDirectScalarDeltaSize = -1
     if (this.size !== 0) {
       if (cellIndices.length > 16 || this.size > 16) {
         this.appendPreparedDeltas(cellIndices, deltas, kind)
@@ -203,6 +207,7 @@ export class DirectFormulaIndexCollection {
     }
     this.validatedScalarDeltaSize = -1
     this.cleanScalarDeltaSize = -1
+    this.trustedDirectScalarDeltaSize = -1
     if (this.size !== 0) {
       if (cellIndices.length > 16 || this.size > 16) {
         this.appendPreparedConstantDelta(cellIndices, delta, kind)
@@ -251,6 +256,7 @@ export class DirectFormulaIndexCollection {
   addCurrentResult(cellIndex: number, result: DirectScalarCurrentOperand): void {
     this.validatedScalarDeltaSize = -1
     this.cleanScalarDeltaSize = -1
+    this.trustedDirectScalarDeltaSize = -1
     this.materializeConstantDeltas()
     const index = this.ensureIndex(cellIndex)
     this.currentResults ??= []
@@ -299,12 +305,20 @@ export class DirectFormulaIndexCollection {
     this.cleanScalarDeltaSize = this.size
   }
 
+  markScalarDeltaCellsTrustedDirectScalarFormulas(): void {
+    this.trustedDirectScalarDeltaSize = this.size
+  }
+
   hasValidatedScalarDeltaCells(): boolean {
     return this.validatedScalarDeltaSize === this.size && this.hasCompleteScalarDeltas()
   }
 
   hasCleanScalarDeltaCells(): boolean {
     return this.cleanScalarDeltaSize === this.size && this.validatedScalarDeltaSize === this.size && this.hasCompleteScalarDeltas()
+  }
+
+  hasTrustedDirectScalarDeltaCells(): boolean {
+    return this.trustedDirectScalarDeltaSize === this.size && this.hasCompleteScalarDeltas()
   }
 
   getScalarDeltaAt(index: number): number | undefined {
