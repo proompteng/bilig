@@ -4,6 +4,19 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.35.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.34.1
+- Manual override: no
+
+## Features
+- feat(recalc): cover incumbent xlsx formula bridges (bb5da689)
+
+## Fixes
+- perf(formula): retune native direct scalar initialization (f5b076ac)
+- perf(headless): skip scalar inspection compiles (fc973438)
+
 ## 0.34.1
 
 - Release type: patch

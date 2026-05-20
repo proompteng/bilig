@@ -1,6 +1,6 @@
 {
   "name": "@bilig/workbook-domain",
-  "version": "0.34.1",
+  "version": "0.35.0",
   "description": "Transport-neutral workbook domain ops and batch types for bilig.",
   "keywords": [
     "bilig",
