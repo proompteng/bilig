@@ -1,6 +1,6 @@
 {
   "name": "@bilig/excel-import",
-  "version": "0.40.2",
+  "version": "0.40.3",
   "description": "CSV/XLSX workbook snapshot import and supported XLSX export helpers for bilig.",
   "keywords": [
     "bilig",
