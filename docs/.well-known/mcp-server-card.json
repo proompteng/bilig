@@ -4,7 +4,7 @@
   "protocolVersion": "2025-11-25",
   "serverInfo": {
     "name": "Bilig WorkPaper",
-    "version": "0.33.1",
+    "version": "0.34.0",
     "description": "Formula-backed WorkPaper MCP tools for workbook reads, input edits, recalculation, formula validation, and JSON persistence."
   },
   "repository": {
@@ -20,7 +20,7 @@
   "transport": {
     "type": "stdio",
     "command": "npm",
-    "args": ["exec", "--package", "@bilig/headless@0.33.1", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
+    "args": ["exec", "--package", "@bilig/headless@0.34.0", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
   },
   "transports": [
     {
@@ -32,7 +32,7 @@
     {
       "type": "stdio",
       "command": "npm",
-      "args": ["exec", "--package", "@bilig/headless@0.33.1", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
+      "args": ["exec", "--package", "@bilig/headless@0.34.0", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
     }
   ],
   "capabilities": {

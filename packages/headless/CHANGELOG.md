@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.34.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.33.1
+- Manual override: no
+
+## Features
+- feat(recalc): ship package-native formula proof CLIs (b9d6bfd8)
+
+## Fixes
+- perf(core): reuse safe inline initial formulas (3944959a)
+
 ## 0.33.1
 
 - Release type: patch
