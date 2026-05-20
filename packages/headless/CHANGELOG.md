@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.24
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.23
+- Manual override: no
+
+## Fixes
+- perf(xlsx): stream conditional format metadata (2a33eb95)
+
 ## 0.40.23
 
 - Release type: patch
