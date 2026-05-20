@@ -357,6 +357,30 @@ describe('large simple XLSX import fast path', () => {
     expect(imported?.snapshot.sheets[0]?.metadata?.merges).toEqual([{ sheetName: 'Data', startAddress: 'A1', endAddress: 'B1' }])
   })
 
+  it('falls back before inflating worksheet XML when streamed metadata cannot be typed exactly', () => {
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+        '<dimension ref="A1:A1"/>',
+        '<sheetData><row r="1"><c r="A1"><v>42</v></c></row></sheetData>',
+        '<hyperlinks><hyperlink ref="A1:A2000" r:id="rIdHyperlink1"/></hyperlinks>',
+        '</worksheet>',
+      ].join(''),
+    })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('unsupported streamed metadata should fall back without inflating worksheet XML')
+      },
+    })
+
+    expect(tryImportLargeSimpleXlsx(bytes, 'unsupported-hyperlink-range.xlsx', zip, { minByteLength: 0 })).toBeNull()
+  })
+
   it('streams only referenced shared strings for materialized imports', () => {
     const richStringXml = '<si><r><rPr><b/></rPr><t>Rich</t></r><r><t xml:space="preserve"> Value</t></r></si>'
     const bytes = buildLargeSimpleWorkbook({

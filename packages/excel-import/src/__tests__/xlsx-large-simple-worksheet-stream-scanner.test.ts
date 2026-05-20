@@ -315,13 +315,12 @@ describe('large simple worksheet stream scanners', () => {
     expect(pool.count).toBe(2)
   })
 
-  it('retains hyperlink XML when range expansion would lose fidelity', () => {
+  it('rejects hyperlink metadata when range expansion would lose fidelity', () => {
     const scan = parseLargeSimpleWorksheetCellsFromChunks(splitAfterTagOpen(oversizedHyperlinkWorksheetXml()), 0, {
       hasSharedStrings: false,
     })
 
-    expect(scan?.metadata?.hyperlinks).toBeUndefined()
-    expect(scan?.metadataXml).toContain('<hyperlinks>')
+    expect(scan).toBeNull()
   })
 
   it('rejects unsupported data validation rules instead of dropping them from streamed metadata', () => {

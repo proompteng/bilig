@@ -23,7 +23,7 @@ import { readImportedWorkbookDrawingArtifactsFromWorksheetRelationships } from '
 import { readImportedWorkbookExternalLinkArtifacts } from './xlsx-external-link-artifacts.js'
 import { readImportedSheetAutoFilters } from './xlsx-filters.js'
 import { readImportedWorkbookChartDrawingArtifacts } from './xlsx-import-chart-drawing-artifacts.js'
-import { decodeXmlText, readWorkbookDefinedNames, readXmlAttribute, resolveTargetPath } from './xlsx-large-simple-defined-names.js'
+import { readWorkbookDefinedNames } from './xlsx-large-simple-defined-names.js'
 import { readLargeSimpleSheetHyperlinks, resolveLargeSimpleSheetHyperlinks } from './xlsx-large-simple-hyperlinks.js'
 import { LargeSimpleXlsxImportPhaseRecorder, type LargeSimpleXlsxImportPhaseTelemetry } from './xlsx-large-simple-import-telemetry.js'
 import { prepareLargeSimplePackageArtifactsForZipRelease } from './xlsx-large-simple-package-artifact-release.js'
@@ -41,6 +41,7 @@ import {
 import { collectLargeSimpleImportGarbage } from './xlsx-large-simple-garbage.js'
 import { mergeWorkbookRichTextCells } from './xlsx-large-simple-lazy-rich-text-cells.js'
 import { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
+import { readWorkbookSheets, readWorksheetPathsByRelationshipId } from './xlsx-large-simple-workbook-metadata.js'
 import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import {
   largeSimpleControlArtifactSheetSources,
@@ -132,17 +133,6 @@ export interface LargeSimpleXlsxSheetDimension {
   readonly usedRange: ImportedWorksheetCellScan['usedRange']
 }
 
-interface WorkbookSheetEntry {
-  readonly name: string
-  readonly relationshipId: string
-}
-
-interface WorkbookRelationship {
-  readonly id: string
-  readonly type: string
-  readonly target: string
-}
-
 interface ParsedWorksheet {
   readonly sheet: WorkbookSnapshot['sheets'][number]
   readonly preview: ReturnType<typeof createSheetPreview>
@@ -189,7 +179,6 @@ const workbookPath = 'xl/workbook.xml'
 const workbookRelationshipsPath = 'xl/_rels/workbook.xml.rels'
 const sharedStringsPath = 'xl/sharedStrings.xml'
 const stylesPath = 'xl/styles.xml'
-const worksheetRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'
 const unsupportedPackagePathPattern = /^xl\/(?:ctrlProps|threadedComments|vbaProject\.bin)/u
 export function tryImportLargeSimpleXlsx(
   source: LargeSimpleXlsxImportSource,
@@ -308,7 +297,10 @@ export function tryImportLargeSimpleXlsx(
         order,
         { hasSharedStrings },
       )
-      if (headless && (hasSharedStrings || headless.valueCellCount > 0)) {
+      if (!headless) {
+        return null
+      }
+      if (hasSharedStrings || headless.valueCellCount > 0) {
         cellScan = importedWorksheetCellScanFromHeadless(headless)
         delete zip[entry.path]
       }
@@ -338,7 +330,10 @@ export function tryImportLargeSimpleXlsx(
           maxDimensionCellPreallocation: maxPreallocatedWorksheetCells(zip, entry.path),
         },
       )
-      if (streamed && (hasSharedStrings || streamed.cellScan.valueCellCount > 0)) {
+      if (!streamed) {
+        return null
+      }
+      if (hasSharedStrings || streamed.cellScan.valueCellCount > 0) {
         cellScan = streamed.cellScan
         streamedWorksheetXml = streamed.metadataXml
         streamedMetadataScan = streamed.metadata
@@ -962,38 +957,4 @@ function importedWorksheetCellScanFromHeadless(scan: HeadlessLargeSimpleWorkshee
     columnCount: scan.columnCount,
     usedRange: scan.usedRange,
   }
-}
-
-function readWorkbookSheets(workbookXml: string, stringPool?: ImportedWorkbookStringPool): WorkbookSheetEntry[] {
-  return [...workbookXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?sheet\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gu)].flatMap((match) => {
-    const tag = match[0]
-    const name = readXmlAttribute(tag, 'name')
-    const relationshipId = readXmlAttribute(tag, 'r:id') ?? readXmlAttribute(tag, 'id')
-    if (!name || !relationshipId) {
-      return []
-    }
-    const decodedName = decodeXmlText(name)
-    return [{ name: stringPool?.intern(decodedName) ?? decodedName, relationshipId }]
-  })
-}
-
-function readWorksheetPathsByRelationshipId(workbookRelationshipsXml: string): Map<string, string> {
-  return new Map(
-    readRelationships(workbookRelationshipsXml).flatMap((relationship) => {
-      if (relationship.type !== worksheetRelationshipType && !relationship.target.includes('worksheets/')) {
-        return []
-      }
-      return [[relationship.id, normalizeZipPath(resolveTargetPath(workbookPath, relationship.target))]]
-    }),
-  )
-}
-
-function readRelationships(relationshipsXml: string): WorkbookRelationship[] {
-  return [...relationshipsXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?Relationship\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gu)].flatMap((match) => {
-    const tag = match[0]
-    const id = readXmlAttribute(tag, 'Id')
-    const type = readXmlAttribute(tag, 'Type')
-    const target = readXmlAttribute(tag, 'Target')
-    return id && type && target ? [{ id, type, target }] : []
-  })
 }
