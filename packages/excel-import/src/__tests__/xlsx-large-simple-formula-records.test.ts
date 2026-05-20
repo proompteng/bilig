@@ -22,4 +22,25 @@ describe('large simple XLSX formula records', () => {
       { address: 'A3', value: 3, formula: 'B2+1' },
     ])
   })
+
+  it('pools repeated raw formula text when unsupported formula text is allowed', () => {
+    const arena = new ImportedWorkbookArena()
+    const records = new LargeSimpleFormulaRecords(true)
+    const formula = "'[external.xlsx]Sheet1'!A1"
+    const firstCell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 1 })
+    const secondCell = arena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 2 })
+    const thirdCell = arena.addCell({ sheetIndex: 0, row: 2, column: 0, value: 3 })
+
+    records.add(firstCell, 0, 0, readLargeSimpleFormulaTypeCode(null), null, formula)
+    records.add(secondCell, 1, 0, readLargeSimpleFormulaTypeCode(null), null, formula)
+    records.add(thirdCell, 2, 0, readLargeSimpleFormulaTypeCode(null), null, formula)
+
+    expect(records.rawFormulaPoolCount).toBe(1)
+    expect(records.resolveIntoArena(arena)).toBe(true)
+    expect(arena.materializeSheetCells(0)).toEqual([
+      { address: 'A1', value: 1, formula },
+      { address: 'A2', value: 2, formula },
+      { address: 'A3', value: 3, formula },
+    ])
+  })
 })

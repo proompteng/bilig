@@ -34,6 +34,7 @@ const publicWorkbookMaxRssBytes = 112 * mib
 const synthetic750kMaxRssBytes = 112 * mib
 const syntheticRepeatedStringMaxRssBytes = 112 * mib
 const syntheticFormulaHeavyMaxRssBytes = 112 * mib
+const syntheticCachedExternalFormulaMaxRssBytes = 112 * mib
 const hardMaxRssBytes = 192 * mib
 const defaultCacheDir = join(rootDir, '.cache', 'public-workbook-corpus')
 const defaultManifestPath = join(defaultCacheDir, 'manifest.json')
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
   results.push(await runSynthetic750kGate(syntheticCacheDir))
   results.push(await runSyntheticRepeatedStringGate(syntheticCacheDir))
   results.push(await runSyntheticFormulaHeavyGate(syntheticCacheDir))
+  results.push(await runSyntheticCachedExternalFormulaGate(syntheticCacheDir))
 
   const failed = results.filter((result) => result.status === 'failed')
   process.stdout.write(
@@ -72,6 +74,7 @@ async function main(): Promise<void> {
           synthetic750kMaxRssBytes,
           syntheticRepeatedStringMaxRssBytes,
           syntheticFormulaHeavyMaxRssBytes,
+          syntheticCachedExternalFormulaMaxRssBytes,
           hardMaxRssBytes,
         },
         results,
@@ -150,6 +153,20 @@ async function runSyntheticFormulaHeavyGate(cacheDir: string): Promise<MemoryGat
       artifactId: artifact.id,
       label: artifact.fileName,
       maxRssBytes: syntheticFormulaHeavyMaxRssBytes,
+    },
+    artifact,
+    cacheDir,
+    join(cacheDir, 'manifest.json'),
+  )
+}
+
+async function runSyntheticCachedExternalFormulaGate(cacheDir: string): Promise<MemoryGateResult> {
+  const artifact = writeSyntheticCachedExternalFormulaWorkbook(cacheDir)
+  return runGateTarget(
+    {
+      artifactId: artifact.id,
+      label: artifact.fileName,
+      maxRssBytes: syntheticCachedExternalFormulaMaxRssBytes,
     },
     artifact,
     cacheDir,
@@ -318,6 +335,40 @@ function writeSyntheticFormulaHeavyWorkbook(cacheDir: string): PublicWorkbookArt
   })
 }
 
+function writeSyntheticCachedExternalFormulaWorkbook(cacheDir: string): PublicWorkbookArtifact {
+  const rowCount = 25_000
+  const columnCount = 5
+  const formula = "'[external.xlsx]Sheet1'!A1"
+  const rows: string[] = []
+  const calcChainCells: string[] = []
+  for (let row = 1; row <= rowCount; row += 1) {
+    const cells: string[] = []
+    for (let column = 0; column < columnCount; column += 1) {
+      const address = `${String.fromCharCode(65 + column)}${String(row)}`
+      cells.push(`<c r="${address}"><f>${formula}</f><v>${String(row + column)}</v></c>`)
+      calcChainCells.push(`<c r="${address}" i="1"/>`)
+    }
+    rows.push(`<row r="${String(row)}">${cells.join('')}</row>`)
+  }
+  return writeSyntheticWorkbookArtifact(cacheDir, {
+    id: 'synthetic-cached-external-formula-memory-v4',
+    fileName: 'synthetic-cached-external-formula-memory-v4.xlsx',
+    sourceId: 'synthetic-cached-external-formula-memory-v4',
+    worksheetXml: [
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+      `<dimension ref="A1:E${String(rowCount)}"/>`,
+      `<sheetData>${rows.join('')}</sheetData>`,
+      '</worksheet>',
+    ].join(''),
+    extraEntries: {
+      'xl/calcChain.xml': strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${calcChainCells.join('')}</calcChain>`),
+      'docProps/padding.bin': deterministicBytes(1_200_000),
+    },
+  })
+}
+
 function writeSyntheticWorkbookArtifact(
   cacheDir: string,
   input: {
@@ -331,13 +382,16 @@ function writeSyntheticWorkbookArtifact(
       readonly worksheetXml: string
     }[]
     readonly sharedStringsXml?: string
+    readonly extraEntries?: Readonly<Record<string, Uint8Array>>
   },
 ): PublicWorkbookArtifact {
   const filesDir = join(cacheDir, 'files')
   mkdirSync(filesDir, { recursive: true })
   const sheets = input.sheets ?? [{ name: 'Data', path: 'xl/worksheets/sheet1.xml', worksheetXml: input.worksheetXml ?? '' }]
   const bytes = zipSync({
-    '[Content_Types].xml': strToU8(contentTypesXml(sheets, input.sharedStringsXml !== undefined)),
+    '[Content_Types].xml': strToU8(
+      contentTypesXml(sheets, input.sharedStringsXml !== undefined, input.extraEntries?.['xl/calcChain.xml'] !== undefined),
+    ),
     '_rels/.rels': strToU8(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
     ),
@@ -358,6 +412,7 @@ ${sheets
 </Relationships>`),
     ...(input.sharedStringsXml !== undefined ? { 'xl/sharedStrings.xml': strToU8(input.sharedStringsXml) } : {}),
     ...Object.fromEntries(sheets.map((sheet) => [sheet.path, strToU8(sheet.worksheetXml)])),
+    ...input.extraEntries,
   })
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   const cachePath = `files/${sha256}.xlsx`
@@ -379,7 +434,7 @@ ${sheets
   return artifact
 }
 
-function contentTypesXml(sheets: readonly { readonly path: string }[], hasSharedStrings: boolean): string {
+function contentTypesXml(sheets: readonly { readonly path: string }[], hasSharedStrings: boolean, hasCalcChain = false): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -396,7 +451,22 @@ function contentTypesXml(sheets: readonly { readonly path: string }[], hasShared
       ? '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
       : ''
   }
+  ${
+    hasCalcChain
+      ? '<Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/>'
+      : ''
+  }
 </Types>`
+}
+
+function deterministicBytes(length: number): Uint8Array {
+  const bytes = new Uint8Array(length)
+  let state = 0x12345678
+  for (let index = 0; index < length; index += 1) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+    bytes[index] = (state >>> 24) & 0xff
+  }
+  return bytes
 }
 
 function writeSyntheticManifest(cacheDir: string, artifact: PublicWorkbookArtifact): void {

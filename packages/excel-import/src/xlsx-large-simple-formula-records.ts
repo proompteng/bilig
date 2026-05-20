@@ -4,6 +4,7 @@ import { formulaReferencesExternalWorkbook, formulaReferencesVolatileFunction } 
 import type { ImportedWorkbookArena } from './xlsx-large-simple-arena.js'
 
 const initialFormulaCapacity = 128
+const boundedRawFormulaDedupeMaxEntries = 8192
 const noPoolId = 0xffffffff
 const formulaTypeNormal = 0
 const formulaTypeShared = 1
@@ -17,12 +18,19 @@ export class LargeSimpleFormulaRecords {
   private rawFormulaIds: Uint32Array<ArrayBuffer> = filledUint32Array(initialFormulaCapacity, noPoolId)
   private readonly rawFormulas: string[] = []
   private readonly rawFormulaIdsByValue = new Map<string, number>()
+  private readonly boundedRawFormulaKeys: string[] = []
+  private boundedRawFormulaEvictionIndex = 0
+  private readonly normalizedFormulas: (string | null | undefined)[] = []
   private length = 0
 
   constructor(private readonly allowUnsupportedFormulaText = false) {}
 
   get count(): number {
     return this.length
+  }
+
+  get rawFormulaPoolCount(): number {
+    return this.rawFormulas.length
   }
 
   add(cellIndex: number, row: number, column: number, typeCode: number, sharedIndex: number | null, rawFormulaText: string): void {
@@ -43,7 +51,7 @@ export class LargeSimpleFormulaRecords {
       if (this.typeCodes[index] !== formulaTypeShared || !this.hasRawFormulaText(index)) {
         continue
       }
-      const normalized = normalizeLargeSimpleFormula(this.rawFormulaText(index), this.allowUnsupportedFormulaText)
+      const normalized = this.normalizedFormulaAt(index)
       const sharedIndex = this.sharedIndexes[index] ?? noPoolId
       if (normalized === null || sharedIndex === noPoolId) {
         return false
@@ -76,7 +84,7 @@ export class LargeSimpleFormulaRecords {
         }
         continue
       }
-      const normalized = normalizeLargeSimpleFormula(this.rawFormulaText(index), this.allowUnsupportedFormulaText)
+      const normalized = this.normalizedFormulaAt(index)
       if (normalized === null) {
         return false
       }
@@ -94,12 +102,20 @@ export class LargeSimpleFormulaRecords {
     return rawFormulaId === noPoolId ? '' : (this.rawFormulas[rawFormulaId] ?? '')
   }
 
-  private internRawFormula(value: string): number {
-    if (this.allowUnsupportedFormulaText) {
-      const next = this.rawFormulas.length
-      this.rawFormulas.push(value)
-      return next
+  private normalizedFormulaAt(index: number): string | null {
+    const rawFormulaId = this.rawFormulaIds[index] ?? noPoolId
+    if (rawFormulaId === noPoolId) {
+      return null
     }
+    if (rawFormulaId < this.normalizedFormulas.length && this.normalizedFormulas[rawFormulaId] !== undefined) {
+      return this.normalizedFormulas[rawFormulaId] ?? null
+    }
+    const normalized = normalizeLargeSimpleFormula(this.rawFormulas[rawFormulaId], this.allowUnsupportedFormulaText)
+    this.normalizedFormulas[rawFormulaId] = normalized
+    return normalized
+  }
+
+  private internRawFormula(value: string): number {
     const existing = this.rawFormulaIdsByValue.get(value)
     if (existing !== undefined) {
       return existing
@@ -107,7 +123,28 @@ export class LargeSimpleFormulaRecords {
     const next = this.rawFormulas.length
     this.rawFormulas.push(value)
     this.rawFormulaIdsByValue.set(value, next)
+    if (this.allowUnsupportedFormulaText) {
+      this.rememberBoundedRawFormulaKey(value)
+    }
     return next
+  }
+
+  private rememberBoundedRawFormulaKey(value: string): void {
+    this.boundedRawFormulaKeys.push(value)
+    while (this.boundedRawFormulaKeys.length - this.boundedRawFormulaEvictionIndex > boundedRawFormulaDedupeMaxEntries) {
+      const evicted = this.boundedRawFormulaKeys[this.boundedRawFormulaEvictionIndex]
+      this.boundedRawFormulaEvictionIndex += 1
+      if (evicted !== undefined) {
+        this.rawFormulaIdsByValue.delete(evicted)
+      }
+    }
+    if (
+      this.boundedRawFormulaEvictionIndex > boundedRawFormulaDedupeMaxEntries &&
+      this.boundedRawFormulaEvictionIndex * 2 > this.boundedRawFormulaKeys.length
+    ) {
+      this.boundedRawFormulaKeys.splice(0, this.boundedRawFormulaEvictionIndex)
+      this.boundedRawFormulaEvictionIndex = 0
+    }
   }
 
   private ensureCapacity(nextLength: number): void {
