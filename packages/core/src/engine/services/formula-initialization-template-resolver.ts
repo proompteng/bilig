@@ -1,12 +1,12 @@
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import {
   translateSimpleDirectScalarFormula,
-  translateSimpleDirectScalarFormulaWithParsedRefs,
+  translateTrustedSimpleDirectScalarFormula,
 } from '../../formula/simple-direct-scalar-compile.js'
 import {
   translateInitialPrefixSumFormula,
   tryBuildInitialPrefixSumTemplateKey,
-  tryBuildInitialSimpleRowRelativeBinaryTemplate,
+  tryBuildInitialSimpleRowRelativeBinaryTemplateKeyInfo,
   type InitialTemplateFormulaCacheEntry,
 } from './formula-initialization-template-keys.js'
 
@@ -15,16 +15,15 @@ export function createInitialTemplateFormulaResolver(
 ): (source: string, row: number, col: number) => FormulaTemplateResolution {
   const simpleTemplateCache = new Map<string | number, InitialTemplateFormulaCacheEntry>()
   return (source, row, col) => {
-    const simpleTemplate = tryBuildInitialSimpleRowRelativeBinaryTemplate(source, row, col)
-    const templateKey = simpleTemplate?.key
+    const simpleTemplateKey = tryBuildInitialSimpleRowRelativeBinaryTemplateKeyInfo(source, row, col)
+    const templateKey = simpleTemplateKey?.key
     const cached = templateKey === undefined ? undefined : simpleTemplateCache.get(templateKey)
-    if (cached) {
+    if (cached && simpleTemplateKey !== undefined) {
       const anchorRowDelta = row - cached.anchorRow
       const anchorColDelta = col - cached.anchorCol
-      const compiled =
-        simpleTemplate !== undefined && !simpleTemplate.usesRowLiteralSuffix
-          ? translateSimpleDirectScalarFormulaWithParsedRefs(cached.anchorCompiled, source, simpleTemplate.parsedRefs)
-          : translateSimpleDirectScalarFormula(cached.anchorCompiled, anchorRowDelta, anchorColDelta, source)
+      const compiled = simpleTemplateKey.usesRowLiteralSuffix
+        ? translateSimpleDirectScalarFormula(cached.anchorCompiled, anchorRowDelta, anchorColDelta, source)
+        : translateTrustedSimpleDirectScalarFormula(cached.anchorCompiled, anchorRowDelta, anchorColDelta, source)
       if (compiled) {
         return {
           ...cached.resolution,

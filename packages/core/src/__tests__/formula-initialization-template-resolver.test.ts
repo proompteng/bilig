@@ -8,6 +8,53 @@ import {
 import { createInitialTemplateFormulaResolver } from '../engine/services/formula-initialization-template-resolver.js'
 
 describe('initial template formula resolver', () => {
+  it('reuses simple row-relative binary templates without recompiling each row', () => {
+    const templateBank = createTemplateBank()
+    const compileTemplateFormula = vi.fn((source: string, row: number, col: number) => templateBank.resolve(source, row, col))
+    const resolve = createInitialTemplateFormulaResolver(compileTemplateFormula)
+
+    const first = resolve('A1+B1', 0, 4)
+    const second = resolve('A2+B2', 1, 4)
+    const third = resolve('A3+B3', 2, 4)
+
+    expect(compileTemplateFormula).toHaveBeenCalledTimes(1)
+    expect(second.templateId).toBe(first.templateId)
+    expect(third.templateId).toBe(first.templateId)
+    expect(second.compiled.source).toBe('A2+B2')
+    expect(third.compiled.deps).toEqual(['A3', 'B3'])
+    expect(third.compiled.parsedSymbolicRefs).toEqual([
+      {
+        address: 'A3',
+        col: 0,
+        colAbsolute: false,
+        row: 2,
+        rowAbsolute: false,
+      },
+      {
+        address: 'B3',
+        col: 1,
+        colAbsolute: false,
+        row: 2,
+        rowAbsolute: false,
+      },
+    ])
+  })
+
+  it('reuses row-relative binary templates with row-literal suffixes', () => {
+    const templateBank = createTemplateBank()
+    const compileTemplateFormula = vi.fn((source: string, row: number, col: number) => templateBank.resolve(source, row, col))
+    const resolve = createInitialTemplateFormulaResolver(compileTemplateFormula)
+
+    const first = resolve('E2*2+2', 1, 5)
+    const second = resolve('E3*2+3', 2, 5)
+
+    expect(compileTemplateFormula).toHaveBeenCalledTimes(1)
+    expect(second.templateId).toBe(first.templateId)
+    expect(second.compiled.source).toBe('E3*2+3')
+    expect(Array.from(second.compiled.constants)).toEqual([2, 3])
+    expect(second.compiled.deps).toEqual(['E3'])
+  })
+
   it('reuses anchored prefix SUM compilation while preserving row-specific ranges', () => {
     const templateBank = createTemplateBank()
     const compileTemplateFormula = vi.fn((source: string, row: number, col: number) => templateBank.resolve(source, row, col))

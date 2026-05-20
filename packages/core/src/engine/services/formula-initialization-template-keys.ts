@@ -35,6 +35,11 @@ export interface InitialSimpleRowRelativeBinaryTemplate {
 
 const INITIAL_PREFIX_SUM_RE = /^SUM\(([A-Z]+)1:\1([1-9]\d*)\)$/
 
+export interface InitialSimpleRowRelativeBinaryTemplateKey {
+  readonly key: string
+  readonly usesRowLiteralSuffix: boolean
+}
+
 function initialColumnToIndex(column: string): number {
   let value = 0
   for (let index = 0; index < column.length; index += 1) {
@@ -163,7 +168,46 @@ function initialReadRelativeCellToken(
 }
 
 export function tryBuildInitialSimpleRowRelativeBinaryTemplateKey(source: string, ownerRow: number, ownerCol: number): string | undefined {
-  return tryBuildInitialSimpleRowRelativeBinaryTemplate(source, ownerRow, ownerCol)?.key
+  return tryBuildInitialSimpleRowRelativeBinaryTemplateKeyInfo(source, ownerRow, ownerCol)?.key
+}
+
+export function tryBuildInitialSimpleRowRelativeBinaryTemplateKeyInfo(
+  source: string,
+  ownerRow: number,
+  ownerCol: number,
+): InitialSimpleRowRelativeBinaryTemplateKey | undefined {
+  let index = source.charCodeAt(0) === 61 ? 1 : 0
+  const left = initialReadRelativeCellToken(source, index, ownerRow, ownerCol)
+  if (!left) {
+    return undefined
+  }
+  index = left.next
+  const operator = source[index]
+  if (operator !== '+' && operator !== '-' && operator !== '*' && operator !== '/') {
+    return undefined
+  }
+  index += 1
+  const rightCell = initialReadRelativeCellToken(source, index, ownerRow, ownerCol)
+  if (rightCell) {
+    if (rightCell.next === source.length) {
+      return { key: `${left.token}${operator}${rightCell.token}`, usesRowLiteralSuffix: false }
+    }
+    const suffix = initialReadRowLiteralSuffix(source, rightCell.next, ownerRow)
+    return suffix && suffix.next === source.length
+      ? { key: `${left.token}${operator}${rightCell.token}${suffix.token}`, usesRowLiteralSuffix: true }
+      : undefined
+  }
+  const rightNumber = initialReadNumberLiteral(source, index)
+  if (!rightNumber) {
+    return undefined
+  }
+  if (rightNumber.next === source.length) {
+    return { key: `${left.token}${operator}n${rightNumber.text}`, usesRowLiteralSuffix: false }
+  }
+  const suffix = initialReadRowLiteralSuffix(source, rightNumber.next, ownerRow)
+  return suffix && suffix.next === source.length
+    ? { key: `${left.token}${operator}n${rightNumber.text}${suffix.token}`, usesRowLiteralSuffix: true }
+    : undefined
 }
 
 export function tryBuildInitialSimpleRowRelativeBinaryTemplate(
