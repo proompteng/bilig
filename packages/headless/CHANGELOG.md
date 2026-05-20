@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.37.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.36.2
+- Manual override: no
+
+## Features
+- feat(xlsx): expose sheetjs recalc command (ad9ad52f)
+
+## Fixes
+- perf(formula): add native predicate criteria aggregation (e5aabb7b)
+
 ## 0.36.2
 
 - Release type: patch
