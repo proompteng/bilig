@@ -17,7 +17,15 @@ const MCP_SERVER_CARD_ENDPOINTS = [
   '/.well-known/mcp-server-card.json',
 ] as const
 const MCP_ALLOWED_METHODS = 'POST, GET, DELETE, OPTIONS'
-const DEFAULT_ALLOWED_ORIGINS = ['https://claude.ai', 'https://www.claude.ai', 'https://claude.com', 'https://www.claude.com'] as const
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://chatgpt.com',
+  'https://www.chatgpt.com',
+  'https://chat.openai.com',
+  'https://claude.ai',
+  'https://www.claude.ai',
+  'https://claude.com',
+  'https://www.claude.com',
+] as const
 
 interface WorkPaperMcpRemoteRouteOptions {
   env?: Record<string, string | undefined>

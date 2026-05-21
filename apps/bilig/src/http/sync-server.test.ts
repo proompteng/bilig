@@ -519,6 +519,48 @@ describe('sync-server remote WorkPaper MCP', () => {
     }
   })
 
+  it('allows ChatGPT Apps to call the hosted WorkPaper MCP endpoint', async () => {
+    const { app } = createSyncServer({ logger: false })
+
+    try {
+      const preflight = await app.inject({
+        method: 'OPTIONS',
+        url: '/mcp',
+        headers: {
+          origin: 'https://chatgpt.com',
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'accept, content-type, mcp-protocol-version',
+        },
+      })
+
+      expect(preflight.statusCode).toBe(204)
+      expect(preflight.headers['access-control-allow-origin']).toBe('https://chatgpt.com')
+      expect(preflight.headers['vary']).toBe('Origin')
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        headers: {
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+          'mcp-protocol-version': '2025-11-25',
+          origin: 'https://chatgpt.com',
+        },
+        payload: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'tools',
+          method: 'tools/list',
+        }),
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['access-control-allow-origin']).toBe('https://chatgpt.com')
+      expect(readMcpToolNames(response.json())).toContain('set_cell_contents')
+    } finally {
+      await app.close()
+    }
+  })
+
   it('lists directory-friendly WorkPaper MCP tools over the HTTP alias', async () => {
     const { app } = createSyncServer({ logger: false })
 
