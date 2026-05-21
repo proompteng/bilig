@@ -62,7 +62,7 @@ test('@browser-ci web app paints deep querystring-selected cell content in the v
   await expect(formulaInput).toHaveValue('Month 1')
   await expect
     .poll(readRendererSurfaceState(page), {
-      message: 'TypeGPU should stay visible after its frame is presented; the Canvas2D fallback must not mask the grid',
+      message: 'TypeGPU should stay visible after its frame is presented without a fallback renderer masking the grid',
       timeout: 5_000,
     })
     .toMatchObject({
@@ -106,7 +106,7 @@ test('@browser-ci web app paints deep querystring-selected cell content in the v
   }
 })
 
-test('@browser-ci web app keeps table gridlines visible even when TypeGPU compositing is delayed', async ({ page }) => {
+test('@browser-ci web app keeps table gridlines visible through TypeGPU without fallback masking', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-visible-gridline-floor')
   await page.setViewportSize({ width: 1000, height: 760 })
   await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
@@ -114,8 +114,7 @@ test('@browser-ci web app keeps table gridlines visible even when TypeGPU compos
 
   await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-renderer-mode', 'typegpu-v3')
   await expect.poll(async () => await page.getByTestId('grid-pane-renderer').getAttribute('data-v3-frame-proof-status')).toBe('presented')
-  await expect(page.getByTestId('grid-pane-renderer-floor')).toBeVisible()
-  await expect(page.getByTestId('grid-pane-renderer-floor')).toHaveAttribute('data-v3-draw-text', 'false')
+  await expect(page.getByTestId('grid-pane-renderer-floor')).toHaveCount(0)
   await expect(page.getByTestId('grid-pane-renderer-fallback')).toHaveCount(0)
 
   await expect

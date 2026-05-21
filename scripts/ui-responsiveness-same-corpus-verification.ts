@@ -96,31 +96,16 @@ async function readBiligRenderedSurfaceState(page: Page): Promise<BiligRenderedS
     }
     const typeGpu = document.querySelector('[data-testid="grid-pane-renderer"]')
     const fallback = document.querySelector('[data-testid="grid-pane-renderer-fallback"]')
-    let fallbackState: BiligRenderedCanvasState | null = null
-    if (fallback instanceof HTMLCanvasElement) {
-      const context = fallback.getContext('2d', { willReadFrequently: true })
-      const sampleWidth = Math.min(fallback.width, 256)
-      const sampleHeight = Math.min(fallback.height, 128)
-      const data = context && sampleWidth > 0 && sampleHeight > 0 ? context.getImageData(0, 0, sampleWidth, sampleHeight).data : null
-      const pixelCount = sampleWidth * sampleHeight
-      const stride = Math.max(1, Math.floor(pixelCount / 2048))
-      let visiblePixels = 0
-      if (data) {
-        for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += stride) {
-          if ((data[pixelIndex * 4 + 3] ?? 0) > 0) {
-            visiblePixels += 1
+    const fallbackState: BiligRenderedCanvasState | null =
+      fallback instanceof HTMLCanvasElement
+        ? {
+            headerPaneCount: Number.parseInt(fallback.getAttribute('data-v3-header-pane-count') ?? '0', 10) || 0,
+            mode: fallback.getAttribute('data-renderer-mode'),
+            pixelHeight: fallback.height,
+            pixelWidth: fallback.width,
+            tilePaneCount: Number.parseInt(fallback.getAttribute('data-v3-tile-pane-count') ?? '0', 10) || 0,
           }
-        }
-      }
-      fallbackState = {
-        headerPaneCount: Number.parseInt(fallback.getAttribute('data-v3-header-pane-count') ?? '0', 10) || 0,
-        mode: fallback.getAttribute('data-renderer-mode'),
-        pixelHeight: fallback.height,
-        pixelWidth: fallback.width,
-        tilePaneCount: Number.parseInt(fallback.getAttribute('data-v3-tile-pane-count') ?? '0', 10) || 0,
-        visiblePixelCount: visiblePixels,
-      }
-    }
+        : null
     const typeGpuState: BiligRenderedCanvasState | null =
       typeGpu instanceof HTMLCanvasElement
         ? {

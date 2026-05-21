@@ -77,7 +77,6 @@ interface HostSize {
 export function IsolatedWorkbookPaneRendererRoute() {
   const [host, setHost] = useState<HTMLDivElement | null>(null)
   const [hostSize, setHostSize] = useState<HostSize>({ width: 0, height: 0 })
-  const forceCanvasFallback = new URLSearchParams(window.location.search).get('canvasFallback') === '1'
 
   useEffect(() => {
     if (!host) {
@@ -116,7 +115,6 @@ export function IsolatedWorkbookPaneRendererRoute() {
         {host ? (
           <WorkbookPaneRendererV3
             active
-            enableCanvasFallback={forceCanvasFallback}
             geometry={null}
             headerPanes={rendererState.headerPanes}
             host={host}

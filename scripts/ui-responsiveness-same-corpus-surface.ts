@@ -19,18 +19,14 @@ export function isBiligRenderedSurfaceReady(state: BiligRenderedSurfaceState | n
   if (!state || state.gridWidth <= 0 || state.gridHeight <= 0) {
     return false
   }
+  if (state.fallback) {
+    return false
+  }
   const hasPaneData = (state.typeGpu?.tilePaneCount ?? 0) > 0 && (state.typeGpu?.headerPaneCount ?? 0) > 0
   if (!hasPaneData) {
     return false
   }
-  if (state.typeGpu?.mode === 'typegpu-v3' && canvasPixelsMatchViewport(state.typeGpu, state)) {
-    return true
-  }
-  return (
-    state.fallback?.mode === 'canvas2d-v3-fallback' &&
-    canvasPixelsMatchViewport(state.fallback, state) &&
-    (state.fallback.visiblePixelCount ?? 0) > 16
-  )
+  return state.typeGpu?.mode === 'typegpu-v3' && canvasPixelsMatchViewport(state.typeGpu, state)
 }
 
 function canvasPixelsMatchViewport(canvas: BiligRenderedCanvasState, state: BiligRenderedSurfaceState): boolean {

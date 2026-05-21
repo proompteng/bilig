@@ -9,18 +9,15 @@ import { GridCameraStore } from '../runtime/gridCameraStore.js'
 import {
   TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS,
   WorkbookPaneRendererV3,
-  resolveWorkbookPaneNativeTextPresentedScrollSnapshotV3,
   resolveWorkbookPanePresentedRevisionV3,
   resolveWorkbookPaneTileSceneCameraSeqV3,
   resolveWorkbookPaneTileSceneRevisionV3,
-  resolveWorkbookPaneTypeGpuCanvasOpacityV3,
   resolveTypeGpuV3DrawScrollSnapshot,
-  shouldMountWorkbookCanvasProofLayerV3,
   shouldDeferTypeGpuV3PreloadSync,
 } from '../renderer-v3/WorkbookPaneRendererV3.js'
-import { WorkbookPaneCanvasFallbackV3 } from '../renderer-v3/WorkbookPaneCanvasFallbackV3.js'
 import { GridDrawSchedulerV3 } from '../renderer-v3/draw-scheduler.js'
 import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
+import { buildNativeRectLayerRectsForPaneV3 } from '../renderer-v3/WorkbookPaneNativeRectLayerV3.js'
 import { GridRenderLoop } from '../renderer-v3/gridRenderLoop.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
@@ -99,6 +96,29 @@ function createTextTilePane(rowStart = 0): WorkbookRenderTilePaneState {
   }
 }
 
+function createRectTilePane(): WorkbookRenderTilePaneState {
+  const pane = createTilePane()
+  const rectInstances = new Float32Array(20)
+  rectInstances[0] = 10
+  rectInstances[1] = 12
+  rectInstances[2] = 80
+  rectInstances[3] = 1
+  rectInstances[8] = 221 / 255
+  rectInstances[9] = 216 / 255
+  rectInstances[10] = 204 / 255
+  rectInstances[11] = 1
+  rectInstances[13] = 1
+  return {
+    ...pane,
+    tile: {
+      ...pane.tile,
+      rectCount: 1,
+      rectInstances,
+      rectSignature: 'gridline',
+    },
+  }
+}
+
 function createOverlayBatch(overrides: Partial<DynamicGridOverlayBatchV3> = {}): DynamicGridOverlayBatchV3 {
   return {
     borderRectCount: 1,
@@ -150,7 +170,7 @@ describe('WorkbookPaneRendererV3', () => {
     document.body.innerHTML = ''
   })
 
-  test('falls back when the V3 TypeGPU backend is unavailable', async () => {
+  test('does not mount a fallback renderer when the V3 TypeGPU backend is unavailable', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const host = document.createElement('div')
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 640 })
@@ -167,40 +187,19 @@ describe('WorkbookPaneRendererV3', () => {
 
     const canvas = host.querySelector('[data-testid="grid-pane-renderer"]')
     const fallbackCanvas = host.querySelector('[data-testid="grid-pane-renderer-fallback"]')
+    const unavailableProof = host.querySelector('[data-testid="grid-pane-renderer-unavailable"]')
     expect(canvas).toBeNull()
-    expect(fallbackCanvas).toBeInstanceOf(HTMLCanvasElement)
-    expect(fallbackCanvas?.getAttribute('data-renderer-mode')).toBe('canvas2d-v3-fallback')
+    expect(fallbackCanvas).toBeNull()
+    expect(unavailableProof).toBeInstanceOf(HTMLDivElement)
+    expect(unavailableProof?.getAttribute('data-renderer-mode')).toBe('typegpu-v3-unavailable')
+    expect(unavailableProof?.getAttribute('data-v3-canvas-proof-layer')).toBe('disabled')
 
     await act(async () => {
       root.unmount()
     })
   })
 
-  test('mounts the Canvas2D fallback only when explicitly enabled', async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-    const host = document.createElement('div')
-    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 640 })
-    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 360 })
-    const root = createRoot(host)
-    const rendererHost = document.createElement('div')
-    Object.defineProperty(rendererHost, 'clientWidth', { configurable: true, value: 640 })
-    Object.defineProperty(rendererHost, 'clientHeight', { configurable: true, value: 360 })
-    host.appendChild(rendererHost)
-
-    await act(async () => {
-      root.render(<WorkbookPaneRendererV3 active enableCanvasFallback host={rendererHost} geometry={null} tilePanes={[createTilePane()]} />)
-    })
-
-    const fallbackCanvas = host.querySelector('[data-testid="grid-pane-renderer-fallback"]')
-    expect(fallbackCanvas).toBeInstanceOf(HTMLCanvasElement)
-    expect(fallbackCanvas?.getAttribute('data-renderer-mode')).toBe('canvas2d-v3-fallback')
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
-  test('keeps workbook text on the native DOM layer while the Canvas2D fallback is mounted', async () => {
+  test('keeps workbook text on the native DOM layer without a fallback renderer', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const host = document.createElement('div')
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 640 })
@@ -217,8 +216,7 @@ describe('WorkbookPaneRendererV3', () => {
 
     const fallbackCanvas = host.querySelector('[data-testid="grid-pane-renderer-fallback"]')
     const nativeTextLayer = host.querySelector('[data-testid="grid-native-text-layer"]')
-    expect(fallbackCanvas).toBeInstanceOf(HTMLCanvasElement)
-    expect(fallbackCanvas?.getAttribute('data-v3-draw-text')).toBe('false')
+    expect(fallbackCanvas).toBeNull()
     expect(nativeTextLayer?.textContent).toContain('Expense Recognized')
 
     await act(async () => {
@@ -226,7 +224,7 @@ describe('WorkbookPaneRendererV3', () => {
     })
   })
 
-  test('labels the non-text Canvas2D grid floor separately from fallback rendering', async () => {
+  test('mounts native vector rects from V3 tile packets without a fallback canvas', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const host = document.createElement('div')
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 640 })
@@ -238,31 +236,34 @@ describe('WorkbookPaneRendererV3', () => {
     host.appendChild(rendererHost)
 
     await act(async () => {
-      root.render(
-        <WorkbookPaneCanvasFallbackV3
-          active
-          drawText={false}
-          geometry={null}
-          headerPanes={[]}
-          host={rendererHost}
-          layer="grid-floor"
-          overlay={null}
-          scrollTransformStore={null}
-          tilePanes={[createTilePane()]}
-        />,
-      )
+      root.render(<WorkbookPaneRendererV3 active host={rendererHost} geometry={null} tilePanes={[createRectTilePane()]} />)
     })
 
-    const gridFloorCanvas = host.querySelector('[data-testid="grid-pane-renderer-floor"]')
-    expect(gridFloorCanvas).toBeInstanceOf(HTMLCanvasElement)
-    expect(gridFloorCanvas?.className).toContain('z-[4]')
-    expect(gridFloorCanvas?.getAttribute('data-renderer-mode')).toBe('canvas2d-v3-grid-floor')
-    expect(gridFloorCanvas?.getAttribute('data-v3-draw-text')).toBe('false')
     expect(host.querySelector('[data-testid="grid-pane-renderer-fallback"]')).toBeNull()
+    const rectLayer = host.querySelector('[data-testid="grid-native-rect-layer"]')
+    expect(rectLayer).toBeInstanceOf(HTMLDivElement)
+    expect(rectLayer?.getAttribute('data-v3-native-rect-count')).toBe('1')
 
     await act(async () => {
       root.unmount()
     })
+  })
+
+  test('builds native rect layer geometry from packed V3 border instances', () => {
+    const rects = buildNativeRectLayerRectsForPaneV3({
+      pane: createRectTilePane(),
+      scrollSnapshot: { tx: 0, ty: 0 },
+    })
+
+    expect(rects).toEqual([
+      expect.objectContaining({
+        color: 'rgba(221, 216, 204, 1.0000)',
+        height: 1,
+        left: 10,
+        top: 12,
+        width: 80,
+      }),
+    ])
   })
 
   test('exposes visible workbook revisions only after frame proof is presented', () => {
@@ -271,139 +272,6 @@ describe('WorkbookPaneRendererV3', () => {
     expect(resolveWorkbookPanePresentedRevisionV3('presented', null)).toBeNull()
     expect(resolveWorkbookPanePresentedRevisionV3('pending', 14)).toBeNull()
     expect(resolveWorkbookPanePresentedRevisionV3('idle', 14)).toBeNull()
-  })
-
-  test('uses the Canvas2D proof layer only before the first visible TypeGPU frame presents', () => {
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'ready',
-        frameProofStatus: 'pending',
-        headerPaneCount: 1,
-        tilePaneCount: 1,
-      }),
-    ).toBe(true)
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'ready',
-        frameProofStatus: 'presented',
-        headerPaneCount: 1,
-        tilePaneCount: 1,
-      }),
-    ).toBe(false)
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'ready',
-        frameProofStatus: 'pending',
-        hasPresentedAnyVisibleFrame: true,
-        headerPaneCount: 1,
-        tilePaneCount: 1,
-      }),
-    ).toBe(false)
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'ready',
-        frameProofStatus: 'pending',
-        hasPresentedVisibleFrame: true,
-        headerPaneCount: 1,
-        tilePaneCount: 1,
-      }),
-    ).toBe(false)
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'initializing',
-        hasPresentedAnyVisibleFrame: true,
-        headerPaneCount: 1,
-        tilePaneCount: 1,
-      }),
-    ).toBe(false)
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'ready',
-        frameProofStatus: 'idle',
-        headerPaneCount: 0,
-        tilePaneCount: 0,
-      }),
-    ).toBe(false)
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'initializing',
-        hasPresentedFrame: true,
-        headerPaneCount: 1,
-        tilePaneCount: 1,
-      }),
-    ).toBe(false)
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'unavailable',
-        hasPresentedFrame: true,
-        headerPaneCount: 1,
-        tilePaneCount: 1,
-      }),
-    ).toBe(true)
-    expect(
-      shouldMountWorkbookCanvasProofLayerV3({
-        backendStatus: 'initializing',
-        headerPaneCount: 0,
-        tilePaneCount: 0,
-      }),
-    ).toBe(true)
-  })
-
-  test('lets the current Canvas2D proof layer cover stale TypeGPU pixels while a replacement frame is pending', () => {
-    expect(
-      resolveWorkbookPaneTypeGpuCanvasOpacityV3({
-        frameProofStatus: 'pending',
-        hasPresentedVisibleFrame: false,
-        showCanvasFallback: true,
-      }),
-    ).toBe(0)
-    expect(
-      resolveWorkbookPaneTypeGpuCanvasOpacityV3({
-        frameProofStatus: 'pending',
-        hasPresentedVisibleFrame: true,
-        showCanvasFallback: true,
-      }),
-    ).toBe(1)
-    expect(
-      resolveWorkbookPaneTypeGpuCanvasOpacityV3({
-        frameProofStatus: 'presented',
-        hasPresentedVisibleFrame: true,
-        showCanvasFallback: false,
-      }),
-    ).toBe(1)
-  })
-
-  test('keeps native text on live scroll while Canvas2D fallback owns the visible frame', () => {
-    const presentedScrollSnapshot = {
-      renderTx: 208,
-      renderTy: 88,
-      scrollLeft: 208,
-      scrollTop: 88,
-      tx: 12,
-      ty: 8,
-    }
-    const presentedVisualFrame = {
-      cameraSeq: 14,
-      overlayCameraSeq: null,
-      overlayRectCount: 0,
-      overlayRectSignature: null,
-      overlaySeq: null,
-      scrollSnapshot: presentedScrollSnapshot,
-      surface: { dpr: 2, height: 360, pixelHeight: 720, pixelWidth: 1280, width: 640 },
-    }
-
-    expect(
-      resolveWorkbookPaneNativeTextPresentedScrollSnapshotV3({
-        presentedVisualFrame,
-        showCanvasFallback: false,
-      }),
-    ).toBe(presentedScrollSnapshot)
-    expect(
-      resolveWorkbookPaneNativeTextPresentedScrollSnapshotV3({
-        presentedVisualFrame,
-        showCanvasFallback: true,
-      }),
-    ).toBeNull()
   })
 
   test('includes surface size and device scale in frame proof identity', () => {

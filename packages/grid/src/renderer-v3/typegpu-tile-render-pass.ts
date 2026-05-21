@@ -33,6 +33,8 @@ export interface TypeGpuTileDrawSurface {
   readonly dpr: number
 }
 
+const TYPEGPU_WORKBOOK_CLEAR_COLOR = { r: 1, g: 1, b: 1, a: 1 } as const
+
 export function hasCompleteTypeGpuBodyTileContentV3(input: {
   readonly drawText?: boolean | undefined
   readonly surface?: TypeGpuTileDrawSurface | undefined
@@ -93,7 +95,7 @@ export function drawTypeGpuTilePanesV3(input: {
     colorAttachments: [
       {
         view: input.artifacts.context.getCurrentTexture().createView(),
-        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        clearValue: TYPEGPU_WORKBOOK_CLEAR_COLOR,
         loadOp: 'clear',
         storeOp: 'store',
       },

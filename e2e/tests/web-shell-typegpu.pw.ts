@@ -242,7 +242,7 @@ async function exerciseClickAwayEditCommit(
   expect(samples.every((sample) => sample.nativeTextRunCount > 0)).toBe(true)
   expect(samples.every((sample) => sample.rowHeaderRunCount >= 10)).toBe(true)
   expect(samples.filter((sample) => sample.fallbackCanvases !== 0)).toEqual([])
-  expect(samples.filter((sample) => sample.canvasProofLayer === 'mounted')).toEqual([])
+  expect(samples.filter((sample) => sample.canvasProofLayer !== 'disabled')).toEqual([])
 
   await expect(page.getByTestId('status-selection')).toHaveText(input.awaySelection)
   await expect(cellEditor).toHaveCount(0)
@@ -252,7 +252,7 @@ async function exerciseClickAwayEditCommit(
   await clickProductCell(page, input.col, input.row)
   await expect(input.formulaInput).toHaveValue(input.text)
   await expect.poll(async () => await input.renderer.getAttribute('data-v3-frame-proof-status')).toBe('presented')
-  await expect(input.renderer).toHaveAttribute('data-v3-canvas-proof-layer', 'not-mounted')
+  await expect(input.renderer).toHaveAttribute('data-v3-canvas-proof-layer', 'disabled')
 }
 
 async function dragProductSelectionBorder(page: Page, startColumn: number, startRow: number, targetColumn: number, targetRow: number) {
@@ -317,18 +317,6 @@ test('@browser-webgpu isolated workbook pane renderer draws grid content through
   expect(textRuns.matches.number).toBe(true)
 
   await saveReadbackArtifact(page, testInfo, 'isolated-pane-renderer-readback.png', 'isolated-pane-renderer-readback')
-})
-
-test('@browser-ci isolated workbook pane renderer keeps native text visible when Canvas2D fallback owns presentation', async ({ page }) => {
-  await page.setViewportSize({ width: 640, height: 480 })
-  await gotoWorkbookShell(page, `${ISOLATED_WORKBOOK_PANE_RENDERER_PATH}?canvasFallback=1`)
-  await page.waitForSelector('[data-testid="isolated-pane-renderer-route"]', { timeout: 15_000 })
-
-  await expect(page.getByTestId('grid-pane-renderer-fallback')).toBeVisible()
-  await expect(page.getByTestId('grid-pane-renderer-fallback')).toHaveAttribute('data-v3-draw-text', 'false')
-  await expect(page.getByTestId('grid-native-text-layer')).toBeVisible()
-  await expect(page.getByTestId('grid-native-text-layer')).toContainText('North')
-  await expect(page.getByTestId('grid-native-text-layer')).toContainText('168')
 })
 
 test('main workbook shell mounts typegpu-v3 as the only grid renderer', async ({ page }) => {
@@ -396,7 +384,7 @@ test('@browser-webgpu @browser-serial main workbook shell grid renders and updat
   expect(initialReadback.hasGpu).toBe(true)
   expect(initialReadback.width).toBeGreaterThan(400)
   expect(initialReadback.height).toBeGreaterThan(250)
-  expect(initialReadback.points.bodyBlank).toMatchObject({ r: 0, g: 0, b: 0, a: 0 })
+  expect(initialReadback.points.bodyBlank).toMatchObject({ r: 255, g: 255, b: 255, a: 255 })
   expect(initialReadback.opaquePixelCounts.columnHeaderText).toBeGreaterThan(100)
   expect(initialReadback.opaquePixelCounts.rowHeaderText).toBeGreaterThan(100)
   expect(initialTextRuns.matches.columnHeaderA).toBe(true)
@@ -449,8 +437,8 @@ test('@browser-webgpu @browser-serial main workbook shell grid renders and updat
     return result.sequence > valueReadback.sequence
   })
 
-  expect(rangeReadback.points.activeCellFill).toMatchObject({ r: 0, g: 0, b: 0, a: 0 })
-  expect(rangeReadback.points.selectedRangeFill).toMatchObject({ r: 0, g: 0, b: 0, a: 0 })
+  expect(rangeReadback.points.activeCellFill).toMatchObject({ r: 255, g: 255, b: 255, a: 255 })
+  expect(rangeReadback.points.selectedRangeFill).toMatchObject({ r: 255, g: 255, b: 255, a: 255 })
   expect(rangeReadback.points.topHeaderSelectionFill).toMatchObject({ r: 243, g: 242, b: 238, a: 255 })
   await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-v3-presented-overlay-rect-count', '0')
   await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-v3-presented-overlay-rect-signature', /^[a-z0-9-]+$/)
@@ -476,15 +464,9 @@ test('@browser-webgpu @browser-serial main workbook shell grid renders and updat
     .evaluateAll((nodes) => nodes.map((node) => window.getComputedStyle(node).opacity))
   expect(domSelectionChromeOpacity.length).toBeGreaterThan(0)
   expect(domSelectionChromeOpacity.every((opacity) => opacity !== '0')).toBe(true)
-  const rendererLayerOrder = await page.evaluate(() => {
-    const floor = document.querySelector('[data-testid="grid-pane-renderer-floor"]')
-    const typeGpu = document.querySelector('[data-testid="grid-pane-renderer"]')
-    return {
-      floorZ: floor ? Number(window.getComputedStyle(floor).zIndex) : Number.NaN,
-      typeGpuZ: typeGpu ? Number(window.getComputedStyle(typeGpu).zIndex) : Number.NaN,
-    }
-  })
-  expect(rendererLayerOrder.typeGpuZ).toBeGreaterThan(rendererLayerOrder.floorZ)
+  await expect(page.getByTestId('grid-pane-renderer-floor')).toHaveCount(0)
+  await expect(page.getByTestId('grid-pane-renderer-fallback')).toHaveCount(0)
+  await expect(page.getByTestId('grid-pane-renderer')).toHaveCSS('opacity', '1')
 
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-readback.png', 'main-workbook-grid-readback')
 })
@@ -603,7 +585,7 @@ test('@browser-webgpu @browser-serial main workbook shell keeps the live typegpu
 
   const renderer = page.getByTestId('grid-pane-renderer')
   await expect.poll(async () => await renderer.getAttribute('data-v3-frame-proof-status')).toBe('presented')
-  await expect(renderer).toHaveAttribute('data-v3-canvas-proof-layer', 'not-mounted')
+  await expect(renderer).toHaveAttribute('data-v3-canvas-proof-layer', 'disabled')
   await expect(page.getByTestId('grid-pane-renderer-fallback')).toHaveCount(0)
 
   const formulaInput = page.getByTestId('formula-input')
@@ -1235,7 +1217,7 @@ test('@browser-webgpu @browser-deep moved content delete preserves selected fill
 
   const deleteSamples = await collectRendererPresentationSamplesDuring(page, () => grid.press('Delete'), 30)
   expect(deleteSamples.filter((sample) => sample.fallbackCanvases !== 0)).toEqual([])
-  expect(deleteSamples.filter((sample) => sample.canvasProofLayer === 'mounted')).toEqual([])
+  expect(deleteSamples.filter((sample) => sample.canvasProofLayer !== 'disabled')).toEqual([])
 
   const afterDeleteReadback = await waitForReadback(
     page,

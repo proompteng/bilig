@@ -1,4 +1,4 @@
-import type { TypeGpuRendererArtifacts } from './typegpu-primitives.js'
+import { TYPEGPU_WORKBOOK_CANVAS_ALPHA_MODE, type TypeGpuRendererArtifacts } from './typegpu-primitives.js'
 import { noteTypeGpuConfigure, noteTypeGpuSurfaceResize } from '../grid-render-counters.js'
 
 export interface TypeGpuSurfaceSize {
@@ -64,7 +64,7 @@ export function syncTypeGpuCanvasSurface(input: {
   }
 
   artifacts.context.configure({
-    alphaMode: 'premultiplied',
+    alphaMode: TYPEGPU_WORKBOOK_CANVAS_ALPHA_MODE,
     device: artifacts.device,
     format: artifacts.format,
   })

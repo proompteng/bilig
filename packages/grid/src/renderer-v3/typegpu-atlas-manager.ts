@@ -60,7 +60,7 @@ type AtlasContextLike = CanvasRenderingContext2D | OffscreenCanvasRenderingConte
 type WorkbookFontKerning = 'auto' | 'normal' | 'none'
 type WorkbookTextRendering = 'auto' | 'optimizeSpeed' | 'optimizeLegibility' | 'geometricPrecision'
 
-const CANVAS_2D_READBACK_SETTINGS: CanvasRenderingContext2DSettings = { willReadFrequently: true }
+const ATLAS_READBACK_SETTINGS: CanvasRenderingContext2DSettings = { willReadFrequently: true }
 
 export interface TextContextConfigurationTarget {
   fontKerning?: WorkbookFontKerning
@@ -114,7 +114,7 @@ function createAtlasCanvas(width: number, height: number): AtlasCanvasLike | nul
 }
 
 function getAtlasContext(canvas: AtlasCanvasLike): AtlasContextLike | null {
-  const context = canvas.getContext('2d', CANVAS_2D_READBACK_SETTINGS) as AtlasContextLike | null
+  const context = canvas.getContext('2d', ATLAS_READBACK_SETTINGS) as AtlasContextLike | null
   if (!context || !('fillText' in context) || !('measureText' in context)) {
     return null
   }

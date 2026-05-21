@@ -4,23 +4,20 @@ import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { Rectangle } from '../gridTypes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
-import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
-import { WorkbookPaneCanvasFallbackV3 } from './WorkbookPaneCanvasFallbackV3.js'
+import type { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 export { TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS, GridDrawSchedulerV3, shouldDeferTypeGpuV3PreloadSync } from './draw-scheduler.js'
 export { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-runtime.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
+import { WorkbookPaneNativeRectLayerV3 } from './WorkbookPaneNativeRectLayerV3.js'
 import { WorkbookPaneNativeTextLayerV3, type SuppressedNativeTextCellV3 } from './WorkbookPaneNativeTextLayerV3.js'
 import { WorkbookPaneRendererHostRuntimeV3 } from './workbook-pane-renderer-host-runtime.js'
-import type { WorkbookPanePresentedVisualFrameV3 } from './workbook-pane-renderer-runtime.js'
-import type { WorkbookPaneSurfaceBackendStatusV3 } from './workbook-pane-surface-runtime.js'
 
 export interface WorkbookPaneRendererV3Props {
   readonly active: boolean
   readonly host: HTMLDivElement | null
   readonly geometry: GridGeometrySnapshot | null
   readonly cameraStore?: GridCameraStore | null
-  readonly enableCanvasFallback?: boolean | undefined
   readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
   readonly tilePanes: readonly WorkbookRenderTilePaneState[]
   readonly preloadTilePanes?: readonly WorkbookRenderTilePaneState[] | undefined
@@ -35,7 +32,6 @@ export interface WorkbookPaneRendererV3Props {
 export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   active,
   cameraStore = null,
-  enableCanvasFallback = false,
   geometry,
   headerPanes = [],
   host,
@@ -97,23 +93,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   const tileTextRunCount = tilePanes.reduce((total, pane) => total + pane.tile.textRuns.length, 0)
   const hasNativeTextRuns = headerTextRunCount + tileTextRunCount > 0
   const showNativeTextLayer = active && hasNativeTextRuns
-  const hasVisiblePaneContent = hasWorkbookPaneVisibleContentV3({
-    headerPaneCount: headerPanes.length,
-    overlayRectCount: overlay?.rectCount ?? 0,
-    tilePaneCount: tilePanes.length,
-  })
-  const showCanvasFallback = shouldMountWorkbookCanvasProofLayerV3({
-    backendStatus,
-    enableCanvasFallback,
-    frameProofStatus,
-    hasPresentedAnyVisibleFrame,
-    hasPresentedVisibleFrame,
-    headerPaneCount: headerPanes.length,
-    overlayRectCount: overlay?.rectCount ?? 0,
-    tilePaneCount: tilePanes.length,
-  })
   const showTypeGpuCanvas = backendStatus !== 'unavailable'
-  const showCanvasGridFloor = showTypeGpuCanvas && hasVisiblePaneContent
 
   useLayoutEffect(() => {
     hostRuntime.updateProps({
@@ -165,11 +145,6 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   if (!active || !host) {
     return null
   }
-  const typeGpuCanvasOpacity = resolveWorkbookPaneTypeGpuCanvasOpacityV3({
-    frameProofStatus,
-    hasPresentedVisibleFrame,
-    showCanvasFallback,
-  })
   const tileSceneRevision = resolveWorkbookPaneTileSceneRevisionV3(tilePanes)
   const tileSceneCameraSeq = resolveWorkbookPaneTileSceneCameraSeqV3(tilePanes)
   const visibleRenderRevision = resolveWorkbookPanePresentedRevisionV3(frameProofStatus, tileSceneRevision)
@@ -180,42 +155,9 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     frameProofStatus,
     renderRevisionSnapshot?.authoritativeRevision,
   )
-  const nativeTextPresentedScrollSnapshot = resolveWorkbookPaneNativeTextPresentedScrollSnapshotV3({
-    presentedVisualFrame,
-    showCanvasFallback,
-  })
 
   return (
     <>
-      {showCanvasGridFloor ? (
-        <WorkbookPaneCanvasFallbackV3
-          active={active}
-          cameraStore={cameraStore}
-          drawText={false}
-          geometry={geometry}
-          headerPanes={headerPanes}
-          host={host}
-          layer="grid-floor"
-          overlay={overlay ?? null}
-          overlayBuilder={overlayBuilder ?? null}
-          scrollTransformStore={scrollTransformStore}
-          tilePanes={tilePanes}
-        />
-      ) : null}
-      {showCanvasFallback ? (
-        <WorkbookPaneCanvasFallbackV3
-          active={active}
-          cameraStore={cameraStore}
-          drawText={!showNativeTextLayer}
-          geometry={geometry}
-          headerPanes={headerPanes}
-          host={host}
-          overlay={overlay ?? null}
-          overlayBuilder={overlayBuilder ?? null}
-          scrollTransformStore={scrollTransformStore}
-          tilePanes={tilePanes}
-        />
-      ) : null}
       {showTypeGpuCanvas ? (
         <canvas
           aria-hidden="true"
@@ -226,7 +168,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           data-v3-backend-status={backendStatus}
           data-v3-body-world-x={geometry?.camera.bodyWorldX ?? 0}
           data-v3-body-world-y={geometry?.camera.bodyWorldY ?? 0}
-          data-v3-canvas-proof-layer={showCanvasFallback ? 'mounted' : 'not-mounted'}
+          data-v3-canvas-proof-layer="disabled"
           data-v3-draw-text={showNativeTextLayer ? 'false' : 'true'}
           data-v3-frame-proof-status={frameProofStatus}
           data-v3-frame-proof-signature={frameProofSignature}
@@ -259,16 +201,35 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           data-v3-visible-render-camera-seq={visibleRenderCameraSeq ?? ''}
           data-v3-visible-render-revision={visibleRenderRevision ?? ''}
           ref={setCanvasRef}
-          style={{ backgroundColor: 'transparent', contain: 'strict', height: '100%', opacity: typeGpuCanvasOpacity, width: '100%' }}
+          style={{ backgroundColor: 'transparent', contain: 'strict', height: '100%', opacity: 1, width: '100%' }}
         />
       ) : null}
+      {!showTypeGpuCanvas ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10"
+          data-renderer-mode="typegpu-v3-unavailable"
+          data-testid="grid-pane-renderer-unavailable"
+          data-v3-backend-status={backendStatus}
+          data-v3-canvas-proof-layer="disabled"
+        />
+      ) : null}
+      <WorkbookPaneNativeRectLayerV3
+        active={active}
+        cameraStore={cameraStore}
+        geometry={geometry}
+        headerPanes={headerPanes}
+        presentedScrollSnapshot={presentedVisualFrame?.scrollSnapshot ?? null}
+        scrollTransformStore={scrollTransformStore}
+        tilePanes={tilePanes}
+      />
       {showNativeTextLayer ? (
         <WorkbookPaneNativeTextLayerV3
           active={active}
           cameraStore={cameraStore}
           geometry={geometry}
           headerPanes={headerPanes}
-          presentedScrollSnapshot={nativeTextPresentedScrollSnapshot}
+          presentedScrollSnapshot={presentedVisualFrame?.scrollSnapshot ?? null}
           scrollTransformStore={scrollTransformStore}
           selectionOcclusionRanges={selectionOcclusionRanges}
           suppressedTextCell={suppressedTextCell}
@@ -278,77 +239,6 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     </>
   )
 })
-
-export function resolveWorkbookPaneNativeTextPresentedScrollSnapshotV3(input: {
-  readonly presentedVisualFrame: WorkbookPanePresentedVisualFrameV3 | null
-  readonly showCanvasFallback: boolean
-}): WorkbookGridScrollSnapshot | null {
-  if (input.showCanvasFallback) {
-    return null
-  }
-  return input.presentedVisualFrame?.scrollSnapshot ?? null
-}
-
-export function shouldMountWorkbookCanvasProofLayerV3(input: {
-  readonly backendStatus: WorkbookPaneSurfaceBackendStatusV3
-  readonly enableCanvasFallback?: boolean | undefined
-  readonly frameProofStatus?: 'idle' | 'pending' | 'presented' | undefined
-  readonly hasPresentedAnyVisibleFrame?: boolean | undefined
-  readonly hasPresentedFrame?: boolean | undefined
-  readonly hasPresentedVisibleFrame?: boolean | undefined
-  readonly headerPaneCount: number
-  readonly overlayRectCount?: number | undefined
-  readonly tilePaneCount: number
-}): boolean {
-  if (input.enableCanvasFallback) {
-    return true
-  }
-  if (input.backendStatus === 'unavailable') {
-    return true
-  }
-  const hasVisiblePaneContent = hasWorkbookPaneVisibleContentV3(input)
-  const hasPresentedAnyVisibleFrame = Boolean(
-    input.hasPresentedAnyVisibleFrame || input.hasPresentedVisibleFrame || input.hasPresentedFrame,
-  )
-  if (input.backendStatus !== 'ready') {
-    return !hasPresentedAnyVisibleFrame
-  }
-  if (hasPresentedAnyVisibleFrame) {
-    return false
-  }
-  if (input.frameProofStatus === 'pending') {
-    return hasVisiblePaneContent
-  }
-  if (input.frameProofStatus === 'presented') {
-    return false
-  }
-  if (input.hasPresentedVisibleFrame || input.hasPresentedFrame) {
-    return false
-  }
-  return hasVisiblePaneContent
-}
-
-export function resolveWorkbookPaneTypeGpuCanvasOpacityV3(input: {
-  readonly frameProofStatus: 'idle' | 'pending' | 'presented'
-  readonly hasPresentedVisibleFrame: boolean
-  readonly showCanvasFallback: boolean
-}): number {
-  if (!input.showCanvasFallback) {
-    return 1
-  }
-  if (input.frameProofStatus === 'pending' && input.hasPresentedVisibleFrame) {
-    return 1
-  }
-  return 0
-}
-
-export function hasWorkbookPaneVisibleContentV3(input: {
-  readonly headerPaneCount: number
-  readonly overlayRectCount?: number | undefined
-  readonly tilePaneCount: number
-}): boolean {
-  return input.tilePaneCount > 0 || input.headerPaneCount > 0 || (input.overlayRectCount ?? 0) > 0
-}
 
 export function resolveWorkbookPaneTileSceneRevisionV3(tilePanes: readonly WorkbookRenderTilePaneState[]): number | null {
   return maxTilePaneField(tilePanes, (pane) => pane.tile.lastBatchId)

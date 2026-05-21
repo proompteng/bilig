@@ -21,8 +21,9 @@ import type { GlyphAtlasDirtyPageUpload } from './typegpu-atlas-manager.js'
 
 const UNIT_QUAD = new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1])
 const UNIT_QUAD_VERTEX_COUNT = 6
-const CANVAS_2D_READBACK_SETTINGS: CanvasRenderingContext2DSettings = { willReadFrequently: true }
-type Canvas2DReadbackContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+const ATLAS_READBACK_SETTINGS: CanvasRenderingContext2DSettings = { willReadFrequently: true }
+type AtlasReadbackContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+export const TYPEGPU_WORKBOOK_CANVAS_ALPHA_MODE = 'premultiplied' as const
 const surfaceUniformSchema = d.struct({
   origin: d.vec2f,
   viewportSize: d.vec2f,
@@ -256,7 +257,7 @@ export async function createTypeGpuRenderer(canvas: HTMLCanvasElement): Promise<
   const root = typegpuCore.initFromDevice({ device })
   const format = navigator.gpu.getPreferredCanvasFormat()
   const context = root.configureContext({
-    alphaMode: 'premultiplied',
+    alphaMode: TYPEGPU_WORKBOOK_CANVAS_ALPHA_MODE,
     canvas,
     format,
   })
@@ -595,6 +596,6 @@ function writeAtlasCanvasRegionToTexture(input: {
   )
 }
 
-function getAtlasCanvasReadbackContext(atlasCanvas: HTMLCanvasElement | OffscreenCanvas): Canvas2DReadbackContext | null {
-  return atlasCanvas.getContext('2d', CANVAS_2D_READBACK_SETTINGS) as Canvas2DReadbackContext | null
+function getAtlasCanvasReadbackContext(atlasCanvas: HTMLCanvasElement | OffscreenCanvas): AtlasReadbackContext | null {
+  return atlasCanvas.getContext('2d', ATLAS_READBACK_SETTINGS) as AtlasReadbackContext | null
 }
