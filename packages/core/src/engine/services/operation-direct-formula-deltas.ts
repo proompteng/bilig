@@ -11,11 +11,6 @@ export function createOperationDirectFormulaDeltas(args: {
   readonly canSkipTerminalFormulaColumnVersion: (cellIndex: number) => boolean
   readonly canSkipDirectFormulaColumnVersion: (cellIndex: number) => boolean
 }) {
-  const hasActiveDirectFormula = (cellIndex: number): boolean => {
-    const formula = args.state.formulas.get(cellIndex)
-    return formula?.directAggregate !== undefined || formula?.directCriteria !== undefined || formula?.directScalar !== undefined
-  }
-
   const hasActiveDirectScalarFormula = (cellIndex: number): boolean => args.state.formulas.get(cellIndex)?.directScalar !== undefined
 
   const applyDirectFormulaNumericDelta = (cellIndex: number, delta: number): boolean => {
@@ -139,21 +134,27 @@ export function createOperationDirectFormulaDeltas(args: {
       return undefined
     }
     const cellStore = args.state.workbook.cellStore
+    const flags = cellStore.flags
+    const tags = cellStore.tags
+    const numbers = cellStore.numbers
+    const stringIds = cellStore.stringIds
+    const errors = cellStore.errors
+    const versions = cellStore.versions
     const changed = captureChanged ? new Uint32Array(collection.size) : EMPTY_CHANGED_CELLS
     let directAggregateDeltaApplicationCount = 0
     let directScalarDeltaApplicationCount = 0
     let canUseTerminalFormulaWrites = true
     for (let index = 0; index < collection.size; index += 1) {
       const cellIndex = collection.getCellIndexAt(index)
+      const formula = args.state.formulas.get(cellIndex)
       if (
-        ((cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0 ||
-        cellStore.tags[cellIndex] !== ValueTag.Number ||
+        ((flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0 ||
+        tags[cellIndex] !== ValueTag.Number ||
         collection.getDeltaAt(index) === undefined ||
-        !hasActiveDirectFormula(cellIndex)
+        (formula?.directAggregate === undefined && formula?.directCriteria === undefined && formula?.directScalar === undefined)
       ) {
         return undefined
       }
-      const formula = args.state.formulas.get(cellIndex)
       if (formula?.directAggregate !== undefined || formula?.directCriteria !== undefined) {
         directAggregateDeltaApplicationCount += 1
       }
@@ -168,13 +169,31 @@ export function createOperationDirectFormulaDeltas(args: {
       }
     }
     const applyDeltas = (): void => {
+      const formulaOutputFlags = CellFlags.SpillChild | CellFlags.PivotOutput
+      const clearFormulaOutputFlags = ~formulaOutputFlags
       for (let index = 0; index < collection.size; index += 1) {
         const cellIndex = captureChanged ? changed[index]! : collection.getCellIndexAt(index)
-        const applied = canUseTerminalFormulaWrites
-          ? applyTerminalDirectFormulaNumericDelta(cellIndex, collection.getDeltaAt(index)!)
-          : applyDirectFormulaNumericDelta(cellIndex, collection.getDeltaAt(index)!)
-        if (!applied) {
-          throw new Error('Failed to apply direct formula delta')
+        const delta = collection.getDeltaAt(index)!
+        const beforeNumber = numbers[cellIndex] ?? 0
+        const nextNumber = beforeNumber + delta
+        const currentFlags = flags[cellIndex] ?? 0
+        if ((currentFlags & formulaOutputFlags) !== 0) {
+          flags[cellIndex] = currentFlags & clearFormulaOutputFlags
+        }
+        numbers[cellIndex] = nextNumber
+        if ((stringIds[cellIndex] ?? 0) !== 0) {
+          stringIds[cellIndex] = 0
+        }
+        if ((errors[cellIndex] ?? 0) !== 0) {
+          errors[cellIndex] = 0
+        }
+        versions[cellIndex] = (versions[cellIndex] ?? 0) + 1
+        if (!canUseTerminalFormulaWrites) {
+          if (cellStore.onSetValue) {
+            cellStore.onSetValue(cellIndex)
+          } else if (!Object.is(beforeNumber, nextNumber)) {
+            args.state.workbook.notifyCellValueWritten(cellIndex)
+          }
         }
       }
     }

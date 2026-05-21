@@ -78,6 +78,33 @@ describe('createOperationDirectFormulaDeltas', () => {
     expect(counters.directScalarDeltaApplications).toBe(1)
   })
 
+  it('should validate complete direct formula deltas with one formula table read per cell', () => {
+    // Arrange
+    const { counters, formulas, helpers, sheet, workbook } = createHarness({
+      canSkipTerminalFormulaColumnVersion: () => true,
+    })
+    const first = createCell(workbook, sheet.id, { row: 0, col: 0, value: 5, version: 3 })
+    const second = createCell(workbook, sheet.id, { row: 1, col: 0, value: 7, version: 4 })
+    formulas.set(first, createRuntimeFormula(first, { directAggregate: TEST_DIRECT_AGGREGATE }))
+    formulas.set(second, createRuntimeFormula(second, { directScalar: TEST_DIRECT_SCALAR }))
+    const getFormula = vi.spyOn(formulas, 'get')
+
+    const collection = new DirectFormulaIndexCollection()
+    collection.addDelta(first, 2)
+    collection.addDelta(second, -1)
+
+    // Act
+    const changed = helpers.tryApplyDirectFormulaDeltas(collection)
+
+    // Assert
+    expect(Array.from(changed ?? [])).toEqual([first, second])
+    expect(getFormula).toHaveBeenCalledTimes(2)
+    expect(workbook.cellStore.numbers[first]).toBe(7)
+    expect(workbook.cellStore.numbers[second]).toBe(6)
+    expect(counters.directAggregateDeltaApplications).toBe(1)
+    expect(counters.directScalarDeltaApplications).toBe(1)
+  })
+
   it('should apply same-delta direct formulas through the batch writer', () => {
     // Arrange
     const { helpers, sheet, workbook } = createHarness()
