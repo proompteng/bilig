@@ -4,6 +4,20 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.31
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.30
+- Manual override: no
+
+## Fixes
+- perf(headless): replay numeric undo batches from typed history (553b29e3)
+- perf(excel-import): skip redundant calcchain inspection (6e6e03a4)
+
+## Internal runtime changes
+- refactor(excel-import): split large simple helpers (397fd290)
+- test(headless): expect packed numeric undo history (38acf175)
+
 ## 0.40.30
 
 - Release type: patch

@@ -37,7 +37,7 @@
     "args": [
       "exec",
       "--package",
-      "@bilig/workpaper@0.40.30",
+      "@bilig/workpaper@0.40.31",
       "--",
       "bilig-workpaper-mcp",
       "--workpaper",
@@ -76,14 +76,14 @@
       "type": "mcp-stdio-server",
       "docs": "https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html",
       "server_card": "https://proompteng.github.io/bilig/.well-known/mcp/server-card.json",
-      "challenge_command": "npm exec --package @bilig/workpaper@0.40.30 -- bilig-mcp-challenge"
+      "challenge_command": "npm exec --package @bilig/workpaper@0.40.31 -- bilig-mcp-challenge"
     },
     {
       "name": "claude-desktop-mcpb",
       "type": "mcpb-desktop-extension",
-      "package_version": "0.40.30",
-      "download_url": "https://github.com/proompteng/bilig/releases/download/libraries-v0.40.30/bilig-workpaper.mcpb",
-      "checksum_url": "https://github.com/proompteng/bilig/releases/download/libraries-v0.40.30/bilig-workpaper.mcpb.sha256",
+      "package_version": "0.40.31",
+      "download_url": "https://github.com/proompteng/bilig/releases/download/libraries-v0.40.31/bilig-workpaper.mcpb",
+      "checksum_url": "https://github.com/proompteng/bilig/releases/download/libraries-v0.40.31/bilig-workpaper.mcpb.sha256",
       "docs": "https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html"
     },
     {
@@ -99,7 +99,7 @@
     {
       "name": "formula-clinic",
       "type": "local-cli",
-      "command": "npm exec --package @bilig/workpaper@0.40.30 -- bilig-formula-clinic ./reduced.xlsx --cells \"Summary!B7,Inputs!B2\"",
+      "command": "npm exec --package @bilig/workpaper@0.40.31 -- bilig-formula-clinic ./reduced.xlsx --cells \"Summary!B7,Inputs!B2\"",
       "docs": "https://proompteng.github.io/bilig/formula-bug-clinic.html"
     }
   ],

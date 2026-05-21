@@ -3,7 +3,7 @@
   "name": "io.github.proompteng/bilig-workpaper",
   "title": "Bilig WorkPaper",
   "description": "WorkPaper MCP tools, resources, and prompts for readback, edits, and JSON persistence.",
-  "version": "0.40.30",
+  "version": "0.40.31",
   "repository": {
     "url": "https://github.com/proompteng/bilig",
     "source": "github"
@@ -18,7 +18,7 @@
     {
       "registryType": "npm",
       "identifier": "@bilig/headless",
-      "version": "0.40.30",
+      "version": "0.40.31",
       "transport": {
         "type": "stdio"
       }

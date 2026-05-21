@@ -1,6 +1,6 @@
 {
   "name": "xlsx-formula-recalc",
-  "version": "0.40.30",
+  "version": "0.40.31",
   "description": "Recalculate XLSX formulas in Node.js without Excel, LibreOffice, or browser automation.",
   "keywords": [
     "excel",
