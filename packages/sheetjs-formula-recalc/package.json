@@ -1,6 +1,6 @@
 {
   "name": "sheetjs-formula-recalc",
-  "version": "0.40.39",
+  "version": "0.40.40",
   "description": "Recalculate SheetJS and xlsx workbook formulas in Node.js without Excel, LibreOffice, or browser automation.",
   "keywords": [
     "excel",

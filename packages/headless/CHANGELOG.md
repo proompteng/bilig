@@ -4,6 +4,36 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.40
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.35
+- Manual override: no
+
+## Fixes
+- perf(core): index sliding aggregate dependent collection (e726b7b8)
+- perf(core): tighten direct formula delta batches (a55ac416)
+- perf(excel-import): stream control workbook artifacts (e8ee7810)
+- perf(core): preserve mixed direct delta batches (fd03a216)
+- perf(excel-import): trim fast xlsx import memory (7d0aa436)
+- perf(core): aggregate indexed mixed criteria (dd3290ae)
+- perf(excel-import): add headless external stress path (6a75ce87)
+- perf(excel-import): dedupe streamed shared strings (4180d45e)
+- perf(excel-import): report metadata in headless inspect (ed6f6b03)
+- perf(core): skip redundant fresh scalar chunk planning (fd617e24)
+- perf(excel-import): build previews after cell release (e96200c1)
+
+## Internal runtime changes
+- refactor(excel-import): split style artifact candidates (069bdf62)
+- ci(release): require full ci before npm publish (f191097b)
+- chore(release): runtime packages v0.40.36 (059f37b7)
+- chore(release): runtime packages v0.40.37 (809a0b3b)
+- chore(release): runtime packages v0.40.38 (f2d376da)
+- chore(release): runtime packages v0.40.39 (7622638e)
+- refactor(excel-import): split large simple import types (bb28d403)
+- ci(n8n): publish node from trusted workflow (3d47a4a5)
+- ci(n8n): gate runtime publish on manual dispatch (ba6b956e)
+
 ## 0.40.39
 
 - Release type: patch

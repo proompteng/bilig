@@ -102,7 +102,7 @@ product. Use Bilig WorkPaper MCP when recalculated readback is the product.
 Install and list the packaged server:
 
 ```sh
-npm exec --package @bilig/headless@0.40.39 -- bilig-workpaper-mcp
+npm exec --package @bilig/headless@0.40.40 -- bilig-workpaper-mcp
 ```
 
 Run the maintained JSON-RPC transcript from a clone:
@@ -121,7 +121,7 @@ the post-edit values.
 For a persisted workbook file:
 
 ```sh
-npm exec --package @bilig/headless@0.40.39 -- \
+npm exec --package @bilig/headless@0.40.40 -- \
   bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
 ```
 
