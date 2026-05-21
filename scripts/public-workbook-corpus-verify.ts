@@ -15,6 +15,7 @@ import {
   volatileFormulasWarning,
 } from '../packages/excel-import/src/index.js'
 import { importXlsxFromZipByteSource } from '../packages/excel-import/src/xlsx-byte-source-import.js'
+import { detachImportedXlsxSourceBytes } from '../packages/excel-import/src/xlsx-source-bytes.js'
 import type { XlsxZipByteSource } from '../packages/excel-import/src/xlsx-zip.js'
 import { ValueTag } from '../packages/protocol/src/enums.js'
 import type { CellValue, LiteralInput, WorkbookSnapshot } from '../packages/protocol/src/types.js'
@@ -260,7 +261,9 @@ export async function verifyCachedWorkbookArtifact(
       }
     }
     const { imported, featureCounts, metadata } = await timeVerificationPhase(runtimeMetrics, workerOptions, 'import-xlsx', () => {
-      const importedWorkbook = importXlsxFromZipByteSource(source, artifact.fileName)
+      const importedWorkbook = importXlsxFromZipByteSource(source, artifact.fileName, {
+        attachSourceReaderForUntouchedExport: false,
+      })
       const importedFeatureCounts = countImportedWorkbookFeatures(importedWorkbook)
       return {
         imported: importedWorkbook,
@@ -685,6 +688,7 @@ async function roundTripsSupportedSemantics(snapshot: WorkbookSnapshot): Promise
     ])
     const workbookName = snapshot.workbook.name
     const expectedDigest = roundTripSemanticsDigest(snapshot)
+    detachImportedXlsxSourceBytes(snapshot)
     collectGarbage()
     const exported = exportXlsx(snapshot)
     snapshot = createDetachedWorkbookSnapshot(workbookName)

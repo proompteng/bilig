@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 
 import { importXlsx } from '../index.js'
 import { exportXlsx } from '../xlsx-export.js'
+import { importXlsxFromZipByteSource } from '../xlsx-byte-source-import.js'
 import { tryInspectLargeSimpleXlsxHeadless } from '../xlsx-large-simple-headless-inspect.js'
 import { tryImportLargeSimpleXlsx } from '../xlsx-large-simple-import.js'
-import { readLazyXlsxZipSourceByteLength, readXlsxZipEntriesLazy } from '../xlsx-zip.js'
+import { detachImportedXlsxSourceBytes } from '../xlsx-source-bytes.js'
+import { readLazyXlsxZipSourceByteLength, readXlsxZipEntriesLazy, type XlsxZipByteSource } from '../xlsx-zip.js'
 
 describe('large simple XLSX import ZIP ownership', () => {
   it('records lazy ZIP source release before shared-string snapshot materialization', () => {
@@ -110,6 +112,58 @@ describe('large simple XLSX import ZIP ownership', () => {
       imported.snapshot.sheets[0]?.cells.map(({ address, value }) => ({ address, value })),
     )
   })
+
+  it('retains byte-source readers by default for unchanged export', () => {
+    const bytes = buildSharedStringWorkbook({
+      'docProps/padding.bin': deterministicBytes(1_200_000),
+    })
+    const source = trackedByteSource(bytes)
+
+    const imported = importXlsxFromZipByteSource(source, 'byte-source-export.xlsx', { limits: {} })
+
+    expect(source.fullReadCount()).toBe(0)
+    expect(exportXlsx(imported.snapshot)).toStrictEqual(bytes)
+    expect(source.fullReadCount()).toBe(1)
+  })
+
+  it('allows verifier imports to export generated semantics without rereading the source XLSX', () => {
+    const bytes = buildSharedStringWorkbook({
+      'docProps/padding.bin': deterministicBytes(1_200_000),
+    })
+    const source = trackedByteSource(bytes)
+
+    const imported = importXlsxFromZipByteSource(source, 'verifier-byte-source-export.xlsx', {
+      attachSourceReaderForUntouchedExport: false,
+      limits: {},
+    })
+    const exported = exportXlsx(imported.snapshot)
+    const roundTripped = importXlsx(exported, 'verifier-byte-source-roundtrip.xlsx')
+
+    expect(source.fullReadCount()).toBe(0)
+    expect(roundTripped.snapshot.sheets[0]?.cells.map(({ address, value }) => ({ address, value }))).toEqual([
+      { address: 'A1', value: 'Alpha' },
+      { address: 'B1', value: 'Beta' },
+    ])
+  })
+
+  it('detaches imported source readers before memory-sensitive semantic roundtrip', () => {
+    const bytes = buildSharedStringWorkbook({
+      'docProps/padding.bin': deterministicBytes(1_200_000),
+    })
+    const source = trackedByteSource(bytes)
+    const imported = importXlsxFromZipByteSource(source, 'detached-byte-source-export.xlsx', { limits: {} })
+
+    expect(detachImportedXlsxSourceBytes(imported.snapshot)).toBe(true)
+    expect(detachImportedXlsxSourceBytes(imported.snapshot)).toBe(false)
+
+    const roundTripped = importXlsx(exportXlsx(imported.snapshot), 'detached-byte-source-roundtrip.xlsx')
+
+    expect(source.fullReadCount()).toBe(0)
+    expect(roundTripped.snapshot.sheets[0]?.cells.map(({ address, value }) => ({ address, value }))).toEqual([
+      { address: 'A1', value: 'Alpha' },
+      { address: 'B1', value: 'Beta' },
+    ])
+  })
 })
 
 function buildSharedStringWorkbook(extraEntries: Readonly<Record<string, Uint8Array>> = {}): Uint8Array {
@@ -145,4 +199,20 @@ function deterministicBytes(length: number): Uint8Array {
     bytes[index] = (state >>> 24) & 0xff
   }
   return bytes
+}
+
+function trackedByteSource(bytes: Uint8Array): XlsxZipByteSource & { fullReadCount(): number } {
+  let fullReads = 0
+  return {
+    byteLength: bytes.byteLength,
+    readRange(start, end) {
+      if (start === 0 && end === bytes.byteLength) {
+        fullReads += 1
+      }
+      return bytes.subarray(start, end)
+    },
+    fullReadCount() {
+      return fullReads
+    },
+  }
 }

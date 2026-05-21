@@ -14,19 +14,23 @@ import {
   hasFullImporterOnlyPackageMetadata,
   shouldBypassLargeSimpleByteThresholdForPackageArtifacts,
 } from './xlsx-large-simple-package-artifact-threshold.js'
-import { attachImportedXlsxSourceReader } from './xlsx-source-bytes.js'
+import { attachImportedXlsxSourceReader, detachImportedXlsxSourceBytes } from './xlsx-source-bytes.js'
 import { readXlsxZipEntriesLazyFromByteSource, type XlsxZipByteSource } from './xlsx-zip.js'
 
 const largeCalcChainStreamingByteThreshold = 5_000_000
 
+export interface XlsxByteSourceImportOptions extends XlsxImportOptions {
+  readonly attachSourceReaderForUntouchedExport?: boolean
+}
+
 export function importXlsxFromZipByteSource(
   source: XlsxZipByteSource,
   fileName: string,
-  options: XlsxImportOptions = {},
+  options: XlsxByteSourceImportOptions = {},
 ): ImportedWorkbook {
   const workbookZip = readXlsxZipEntriesLazyFromByteSource(borrowXlsxZipByteSource(source))
   if (!workbookZip) {
-    return importXlsx(readAllSourceBytes(source), fileName, options)
+    return importXlsxFromMaterializedSource(source, fileName, options)
   }
   const limits = resolveXlsxImportLimits(options)
   const hasCalcChain = Object.hasOwn(workbookZip, 'xl/calcChain.xml')
@@ -68,13 +72,27 @@ export function importXlsxFromZipByteSource(
       : null
   }
   if (largeSimpleImport) {
-    attachImportedXlsxSourceReader(largeSimpleImport.snapshot, {
-      byteLength: source.byteLength,
-      readBytes: () => readAllSourceBytes(source),
-    })
+    if (options.attachSourceReaderForUntouchedExport !== false) {
+      attachImportedXlsxSourceReader(largeSimpleImport.snapshot, {
+        byteLength: source.byteLength,
+        readBytes: () => readAllSourceBytes(source),
+      })
+    }
     return largeSimpleImport
   }
-  return importXlsx(readAllSourceBytes(source), fileName, options)
+  return importXlsxFromMaterializedSource(source, fileName, options)
+}
+
+function importXlsxFromMaterializedSource(
+  source: XlsxZipByteSource,
+  fileName: string,
+  options: XlsxByteSourceImportOptions,
+): ImportedWorkbook {
+  const imported = importXlsx(readAllSourceBytes(source), fileName, options)
+  if (options.attachSourceReaderForUntouchedExport === false) {
+    detachImportedXlsxSourceBytes(imported.snapshot)
+  }
+  return imported
 }
 
 function inspectLargeSimpleXlsxSource(
