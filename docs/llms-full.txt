@@ -1506,15 +1506,11 @@ oracle and evaluate against the recalculated copy:
 
 ```sh
 OUT=.cache/excel-oracle-evaluation
-pnpm workpaper:xlsx-oracle -- prepare-oracle /path/to/xlsx-corpus "$OUT"
-pnpm workpaper:xlsx-oracle -- evaluate-cache /path/to/xlsx-corpus "$OUT"
-pnpm workpaper:xlsx-oracle -- evaluate-oracle /path/to/xlsx-corpus "$OUT/recalculated" "$OUT"
-pnpm workpaper:xlsx-oracle -- summarize "$OUT"
+pnpm workpaper:xlsx-corpus:check -- /path/to/xlsx-corpus
 ```
 
-`evaluate-cache` writes `cache-diagnostic.json` and stays non-authoritative.
-`evaluate-oracle` writes `excel-oracle-report.json`, and `summarize` writes
-`summary.md`. If Excel automation is unavailable, the harness marks cells as
+The Excel oracle harness should be provided by a workspace package, not a
+root-level one-off script. If Excel automation is unavailable, the harness marks cells as
 `missing_excel_oracle` instead of promoting cache mismatches to correctness
 bugs.
 
