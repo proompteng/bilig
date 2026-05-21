@@ -1,0 +1,27 @@
+identity:
+  author: proompteng
+  name: bilig
+  label:
+    en_US: Bilig WorkPaper
+  description:
+    en_US: Formula readback tools for Bilig WorkPaper.
+  icon: icon.svg
+  tags:
+    - productivity
+    - utilities
+credentials_for_provider:
+  base_url:
+    type: text-input
+    required: true
+    default: http://localhost:4321
+    label:
+      en_US: Bilig API base URL
+    placeholder:
+      en_US: http://localhost:4321
+    help:
+      en_US: Local or self-hosted Bilig app base URL.
+tools:
+  - tools/forecast_formula_readback.yaml
+extra:
+  python:
+    source: provider/bilig.py

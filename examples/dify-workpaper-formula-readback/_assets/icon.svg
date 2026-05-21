@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bilig WorkPaper">
+  <rect width="64" height="64" rx="12" fill="#151713"/>
+  <path d="M14 16h36v32H14z" fill="#f4f1e8"/>
+  <path d="M14 25h36M14 34h36M14 43h36M25 16v32M38 16v32" stroke="#151713" stroke-width="2"/>
+  <path d="M20 22h8M41 39h5M41 43h5M31 29l5 5-5 5" fill="none" stroke="#4f7f63" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

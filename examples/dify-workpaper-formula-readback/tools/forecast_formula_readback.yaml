@@ -1,0 +1,43 @@
+identity:
+  name: forecast_formula_readback
+  author: proompteng
+  label:
+    en_US: Forecast Formula Readback
+description:
+  human:
+    en_US: Edit one forecast input cell and return computed formula readback proof.
+  llm: Edit one Bilig WorkPaper forecast input cell, recalculate formulas, and return verification checks for the computed output and restored WorkPaper JSON.
+parameters:
+  - name: address
+    type: string
+    required: true
+    default: B3
+    label:
+      en_US: Cell address
+    human_description:
+      en_US: One of B2, B3, B4, or B5 in the Inputs sheet.
+    llm_description: One of B2, B3, B4, or B5 in the Inputs sheet.
+    form: llm
+  - name: value
+    type: number
+    required: true
+    default: 0.4
+    label:
+      en_US: Input value
+    human_description:
+      en_US: Numeric value to write before formula readback.
+    llm_description: Numeric value to write before formula readback.
+    form: llm
+  - name: sheet_name
+    type: string
+    required: false
+    default: Inputs
+    label:
+      en_US: Sheet name
+    human_description:
+      en_US: Public demo sheet name. Leave as Inputs unless you run a compatible self-hosted Bilig route.
+    llm_description: Public demo sheet name. Leave as Inputs unless the user provides a compatible self-hosted Bilig route.
+    form: form
+extra:
+  python:
+    source: tools/forecast_formula_readback.py

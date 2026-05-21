@@ -1,0 +1,9 @@
+[project]
+name = "bilig-workpaper-dify-plugin"
+version = "0.1.0"
+description = "Dify tool plugin for Bilig WorkPaper formula readback proof"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dify-plugin>=0.5.1",
+]

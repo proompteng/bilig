@@ -481,6 +481,24 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://proompteng.github.io/bilig/n8n-workpaper-formula-readback.html</loc>
+    <lastmod>2026-05-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://proompteng.github.io/bilig/dify-workpaper-formula-readback.html</loc>
+    <lastmod>2026-05-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://proompteng.github.io/bilig/flowise-workpaper-formula-readback.html</loc>
+    <lastmod>2026-05-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://proompteng.github.io/bilig/llms.txt</loc>
     <lastmod>2026-05-18</lastmod>
     <changefreq>weekly</changefreq>

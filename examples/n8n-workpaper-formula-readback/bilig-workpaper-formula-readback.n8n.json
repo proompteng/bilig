@@ -1,0 +1,104 @@
+{
+  "name": "Bilig WorkPaper formula readback",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "c0e7ac17-26bb-4c57-901e-f6527d6804f0",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      baseUrl: 'http://localhost:4321',\n      sheetName: 'Inputs',\n      address: 'B3',\n      value: 0.4,\n      note: 'Change one forecast input, then require computed formula readback.'\n    }\n  }\n];"
+      },
+      "id": "5e7a19f7-01b2-42b9-8e91-2db1609272da",
+      "name": "Choose forecast input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl.replace(/\\/$/, '') + '/api/workpaper/n8n/forecast' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sheetName: $json.sheetName, address: $json.address, value: $json.value }) }}",
+        "options": {}
+      },
+      "id": "3948c07b-a5a9-4fd0-9a26-5f798a5fa8b3",
+      "name": "Call Bilig WorkPaper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const proof = $input.first().json;\n\nif (proof.verified !== true) {\n  throw new Error(`Bilig WorkPaper did not verify the edit: ${JSON.stringify(proof)}`);\n}\n\nif (typeof proof.editedCell !== 'string' || !proof.editedCell.startsWith('Inputs!')) {\n  throw new Error(`Expected an Inputs sheet edit, received ${proof.editedCell}`);\n}\n\nif (!proof.checks?.formulasPersisted || !proof.checks?.restoredMatchesAfter || !proof.checks?.computedOutputChanged) {\n  throw new Error(`Formula proof checks failed: ${JSON.stringify(proof.checks)}`);\n}\n\nif (typeof proof.after?.expectedArr !== 'number' || typeof proof.after?.targetGap !== 'number') {\n  throw new Error(`Unexpected formula output: ${JSON.stringify(proof.after)}`);\n}\n\nreturn [\n  {\n    json: {\n      verdict: 'verified',\n      editedCell: proof.editedCell,\n      beforeExpectedArr: proof.before.expectedArr,\n      afterExpectedArr: proof.after.expectedArr,\n      targetGap: proof.after.targetGap,\n      checks: proof.checks,\n      github: 'https://github.com/proompteng/bilig'\n    }\n  }\n];"
+      },
+      "id": "60f5c34b-49a1-4e4d-a6bc-230b5c9d4e34",
+      "name": "Verify formula readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Choose forecast input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose forecast input": {
+      "main": [
+        [
+          {
+            "node": "Call Bilig WorkPaper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Bilig WorkPaper": {
+      "main": [
+        [
+          {
+            "node": "Verify formula readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f7fd1803-57df-4e99-a13c-a4c04c7734db",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "id": "BiligWorkPaperFormulaReadback",
+  "tags": []
+}
