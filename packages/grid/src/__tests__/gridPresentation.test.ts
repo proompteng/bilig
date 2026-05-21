@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { getEditorPresentation, getOverlayStyle } from '../gridPresentation.js'
+import { getEditorPresentation, getEditorTextAlign, getOverlayStyle } from '../gridPresentation.js'
 
 describe('gridPresentation', () => {
   test('uses the cell fill and text styling for the in-cell editor', () => {
@@ -24,6 +24,7 @@ describe('gridPresentation', () => {
       color: '#f9fafb',
       font: 'italic 700 14px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
       fontSize: 14,
+      textAlign: 'left',
       underline: true,
     })
   })
@@ -49,8 +50,17 @@ describe('gridPresentation', () => {
       color: '#202124',
       font: '400 13px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
       fontSize: 13,
+      textAlign: 'left',
       underline: false,
     })
+  })
+
+  test('keeps explicit cell alignment authoritative while editing', () => {
+    expect(getEditorTextAlign('draft', 'center')).toBe('center')
+    expect(getEditorTextAlign('123', 'center')).toBe('center')
+    expect(getEditorTextAlign('draft', 'right')).toBe('right')
+    expect(getEditorTextAlign('123', 'left')).toBe('right')
+    expect(getEditorTextAlign('draft', 'left')).toBe('left')
   })
 
   test('matches the edited cell bounds exactly instead of expanding the overlay frame', () => {

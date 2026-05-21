@@ -43,6 +43,12 @@ test('@browser-ci web app keeps active in-cell undo and redo local to the draft 
 
   const formulaInput = page.getByTestId('formula-input')
   const cellEditor = page.getByTestId('cell-editor-input')
+  const redoShortcut = PRIMARY_MODIFIER === 'Meta' ? `${PRIMARY_MODIFIER}+Shift+Z` : `${PRIMARY_MODIFIER}+Y`
+
+  await clickProductCell(page, 3, 3)
+  await formulaInput.fill('workbook-history-sentinel')
+  await formulaInput.press('Enter')
+  await expect(formulaInput).toHaveValue('workbook-history-sentinel')
 
   await clickProductCell(page, 1, 1)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
@@ -54,15 +60,15 @@ test('@browser-ci web app keeps active in-cell undo and redo local to the draft 
   await cellEditor.press('c')
   await expect(cellEditor).toHaveValue('abc')
 
-  await cellEditor.press('Control+Z')
+  await cellEditor.press(`${PRIMARY_MODIFIER}+Z`)
   await expect(cellEditor).toHaveValue('ab')
   await expect(formulaInput).toHaveValue('ab')
 
-  await cellEditor.press('Control+Z')
+  await cellEditor.press(`${PRIMARY_MODIFIER}+Z`)
   await expect(cellEditor).toHaveValue('a')
   await expect(formulaInput).toHaveValue('a')
 
-  await cellEditor.press('Control+Y')
+  await cellEditor.press(redoShortcut)
   await expect(cellEditor).toHaveValue('ab')
   await expect(formulaInput).toHaveValue('ab')
 
@@ -73,6 +79,8 @@ test('@browser-ci web app keeps active in-cell undo and redo local to the draft 
   await expect.poll(() => nativeTextRunsInclude(page, 'ab')).toBe(true)
   await clickProductCell(page, 1, 1)
   await expect(formulaInput).toHaveValue('ab')
+  await clickProductCell(page, 3, 3)
+  await expect(formulaInput).toHaveValue('workbook-history-sentinel')
 })
 
 async function nativeTextRunsInclude(page: Page, text: string): Promise<boolean> {

@@ -201,4 +201,62 @@ describe('useWorkbookEditorOverlayAnchor', () => {
       root.unmount()
     })
   })
+
+  it('keeps centered cell alignment when the edited draft looks numeric', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const cameraStore = new GridCameraStore()
+    const scrollStore = new WorkbookGridScrollStore()
+    const engine: GridEngineLike = {
+      workbook: {
+        getSheet: () => undefined,
+      },
+      getCell: () => createSnapshot(),
+      getCellStyle: () => ({
+        alignment: { horizontal: 'center' },
+        id: 'style-centered',
+      }),
+      subscribeCells: () => () => undefined,
+    }
+    let latestState: WorkbookEditorOverlayAnchorState | null = null
+
+    function Harness() {
+      const [hostElement, setHostElement] = useState<HTMLDivElement | null>(null)
+      const handleHostRef = useCallback((node: HTMLDivElement | null) => {
+        if (node) {
+          node.getBoundingClientRect = createHostRect
+        }
+        setHostElement(node)
+      }, [])
+      latestState = useWorkbookEditorOverlayAnchor({
+        editorValue: '123',
+        engine,
+        getCellLocalBounds: () => ({ height: 24, width: 104, x: 20, y: 30 }),
+        gridCameraStore: cameraStore,
+        hostElement,
+        isEditingCell: true,
+        scrollTransformStore: scrollStore,
+        selectedCellSnapshot: createSnapshot('style-centered'),
+        selectedCol: 1,
+        selectedRow: 1,
+      })
+      return <div ref={handleHostRef} />
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness />)
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(latestState?.editorPresentation.textAlign).toBe('center')
+    expect(latestState?.editorTextAlign).toBe('center')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

@@ -78,6 +78,38 @@ describe('CellEditorOverlay', () => {
     const overlay = host.querySelector<HTMLElement>("[data-testid='cell-editor-overlay']")
     expect(overlay?.getAttribute('class')).not.toContain('rounded-')
     expect(overlay?.getAttribute('class')).not.toContain('shadow-')
+    expect(overlay?.getAttribute('class')).not.toContain('border-[var(--wb-accent)]')
+    expect(overlay?.style.borderColor).toBe('rgb(26, 115, 232)')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('supports centered editor alignment for centered cells', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <CellEditorOverlay
+          label="Sheet1!B2"
+          targetSelection={makeTargetSelection()}
+          onCancel={() => {}}
+          onChange={() => {}}
+          onCommit={() => {}}
+          resolvedValue=""
+          textAlign="center"
+          value="123"
+        />,
+      )
+    })
+
+    const textarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
+    expect(textarea?.style.textAlign).toBe('center')
 
     await act(async () => {
       root.unmount()

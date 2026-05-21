@@ -11,7 +11,7 @@ const EDITOR_ANCHOR_RUNTIME = new GridEditorAnchorRuntime()
 
 export interface WorkbookEditorOverlayAnchorState {
   readonly editorPresentation: GridEditorPresentation
-  readonly editorTextAlign: 'left' | 'right'
+  readonly editorTextAlign: 'left' | 'center' | 'right'
   readonly overlayStyle: GridEditorAnchorOverlayStyle
 }
 
@@ -104,7 +104,10 @@ export function useWorkbookEditorOverlayAnchor(input: {
       }),
     [engine, selectedCellSnapshot],
   )
-  const editorTextAlign = useMemo<'left' | 'right'>(() => EDITOR_ANCHOR_RUNTIME.resolveTextAlign(editorValue), [editorValue])
+  const editorTextAlign = useMemo<'left' | 'center' | 'right'>(
+    () => EDITOR_ANCHOR_RUNTIME.resolveTextAlign(editorValue, editorPresentation.textAlign),
+    [editorPresentation.textAlign, editorValue],
+  )
 
   return {
     editorPresentation,

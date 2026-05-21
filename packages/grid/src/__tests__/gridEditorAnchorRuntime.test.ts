@@ -132,8 +132,11 @@ describe('GridEditorAnchorRuntime', () => {
 
     expect(presentation.backgroundColor).toBe('#1f2937')
     expect(presentation.color).toBe('#f8fafc')
+    expect(presentation.textAlign).toBe('left')
     expect(runtime.resolveTextAlign('123')).toBe('right')
     expect(runtime.resolveTextAlign('draft')).toBe('left')
+    expect(runtime.resolveTextAlign('123', 'center')).toBe('center')
+    expect(runtime.resolveTextAlign('draft', 'right')).toBe('right')
     expect(runtime.resolveOverlayStyle(true, { height: 24, width: 104, x: 120, y: 230 })).toMatchObject({
       height: 24,
       left: 120,

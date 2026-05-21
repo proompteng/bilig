@@ -331,6 +331,19 @@ test('@browser-ci web app keeps reverse-drag range selection chrome geometricall
   await expect(page.locator('[data-grid-selection-visual-role="fill-handle"]')).toHaveCSS('background-color', 'rgb(26, 115, 232)')
 })
 
+test('@browser-ci web app keeps the in-cell editor on the same blue selection chrome', async ({ page }) => {
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-editor-selection-chrome'))}&persist=0`)
+  await waitForWorkbookReady(page)
+
+  await clickProductCell(page, 2, 4)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C5')
+  await page.getByTestId('sheet-grid-focus-target').press('F2')
+
+  await expect(page.getByTestId('cell-editor-overlay')).toBeVisible()
+  await expect(page.getByTestId('cell-editor-overlay')).toHaveCSS('border-color', 'rgb(26, 115, 232)')
+  await expect(page.locator('[data-grid-selection-visual-role="fill-handle"]')).toHaveCount(0)
+})
+
 test('@browser-ci web app collapses a locally dragged range when the active address is explicitly reselected', async ({ page }) => {
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-range-same-address-collapse'))}&persist=0`)
   await waitForWorkbookReady(page)

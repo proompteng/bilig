@@ -14,6 +14,7 @@ export interface GridEditorPresentation {
   readonly color: string
   readonly font: string
   readonly fontSize: number
+  readonly textAlign: 'left' | 'center' | 'right'
   readonly underline: boolean
 }
 
@@ -31,7 +32,10 @@ export function getOverlayStyle(isEditingCell: boolean, overlayBounds: Rectangle
   }
 }
 
-export function getEditorTextAlign(editorValue: string): 'left' | 'right' {
+export function getEditorTextAlign(editorValue: string, baseAlign: 'left' | 'center' | 'right' = 'left'): 'left' | 'center' | 'right' {
+  if (baseAlign !== 'left') {
+    return baseAlign
+  }
   return isNumericEditorSeed(editorValue) ? 'right' : 'left'
 }
 
@@ -45,6 +49,7 @@ export function getEditorPresentation(options: {
     color: renderCell.color,
     font: renderCell.font,
     fontSize: renderCell.fontSize,
+    textAlign: renderCell.align,
     underline: renderCell.underline,
   }
 }

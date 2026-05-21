@@ -25,6 +25,10 @@
     --wb-accent: #21563a;
     --wb-accent-soft: #e8f1eb;
     --wb-accent-ring: #bfd5c4;
+    --wb-selection-accent: #1a73e8;
+    --wb-selection-fill: rgba(26, 115, 232, 0.16);
+    --wb-selection-header-fill: rgba(26, 115, 232, 0.14);
+    --wb-selection-ring: rgba(26, 115, 232, 0.34);
     --wb-muted: #f0ece3;
     --wb-muted-strong: #e4ddd0;
     --wb-success: #21563a;
@@ -64,7 +68,7 @@
   }
 
   ::selection {
-    background: var(--wb-accent-ring);
+    background: var(--wb-selection-ring);
     color: #0f172a;
   }
 }

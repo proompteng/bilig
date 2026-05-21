@@ -501,7 +501,7 @@ function styleForRect(rect: GridSelectionVisualRect, geometryOnly = false): CSSP
   if (rect.role === 'hover-fill') {
     return {
       ...base,
-      backgroundColor: 'rgba(31, 122, 67, 0.05)',
+      backgroundColor: workbookThemeColors.hoverFill,
     }
   }
   return {

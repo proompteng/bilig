@@ -201,7 +201,7 @@ function appendHoverOverlay(input: {
     y: rect.y + 1,
     width: Math.max(0, rect.width - 2),
     height: Math.max(0, rect.height - 2),
-    color: parseGpuColor('rgba(31, 122, 67, 0.05)'),
+    color: parseGpuColor(workbookThemeColors.hoverFill),
   })
 }
 
@@ -411,8 +411,8 @@ function appendResizeGuides(input: {
   readonly resizeGuideRowHeight: number | null
   readonly borderRects: GridGpuRect[]
 }): void {
-  const color = parseGpuColor('rgba(33, 86, 58, 0.72)')
-  const glowColor = parseGpuColor('rgba(191, 213, 196, 0.28)')
+  const color = parseGpuColor(workbookThemeColors.selectionAccent)
+  const glowColor = parseGpuColor(workbookThemeColors.selectionFill)
   if (input.resizeGuideColumn !== null) {
     const rect = resolveColumnResizeGuideRect(input.geometry, input.resizeGuideColumn, input.resizeGuideColumnWidth)
     if (rect) {
@@ -493,7 +493,7 @@ function appendHeaderDragGuides(input: {
   if (!input.activeHeaderDrag || !input.gridSelection) {
     return
   }
-  const color = parseGpuColor('rgba(33, 86, 58, 0.72)')
+  const color = parseGpuColor(workbookThemeColors.selectionAccent)
   const host = hostRect(input.geometry)
   if (input.activeHeaderDrag.kind === 'column' && input.gridSelection.columns.length > 0) {
     const start = input.gridSelection.columns.first()

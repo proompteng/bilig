@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import type { EditMovement, EditTargetSelection } from './SheetGridView.js'
-import { WORKBOOK_DEFAULT_FONT_SIZE, workbookFontPointSizeToCssPx } from './workbookTheme.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE, workbookFontPointSizeToCssPx, workbookThemeColors } from './workbookTheme.js'
 import { workbookTextControlProps } from './workbookTextControls.js'
 import { workbookNativeTextQualityStyle } from './workbookTextQuality.js'
 
@@ -129,7 +129,7 @@ interface CellEditorOverlayProps {
   value: string
   resolvedValue: string
   selectionBehavior?: 'select-all' | 'caret-end'
-  textAlign?: 'left' | 'right'
+  textAlign?: 'left' | 'center' | 'right'
   backgroundColor?: string
   color?: string
   font?: string
@@ -687,11 +687,15 @@ export function CellEditorOverlay({
 
   return (
     <div
-      className="cell-editor-overlay box-border overflow-hidden border border-[var(--wb-accent)] bg-[var(--wb-surface)]"
+      className="cell-editor-overlay box-border overflow-hidden border bg-[var(--wb-surface)]"
       data-completing={isCompleting ? 'true' : undefined}
       data-testid="cell-editor-overlay"
       ref={overlayRef}
-      style={isCompleting ? { ...style, backgroundColor, pointerEvents: 'none' } : { ...style, backgroundColor }}
+      style={
+        isCompleting
+          ? { ...style, backgroundColor, borderColor: workbookThemeColors.selectionAccent, pointerEvents: 'none' }
+          : { ...style, backgroundColor, borderColor: workbookThemeColors.selectionAccent }
+      }
     >
       <textarea
         aria-label={`${label} editor`}

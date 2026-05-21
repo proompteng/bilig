@@ -56,7 +56,7 @@ export class GridEditorAnchorRuntime {
     })
   }
 
-  resolveTextAlign(editorValue: string): 'left' | 'right' {
-    return getEditorTextAlign(editorValue)
+  resolveTextAlign(editorValue: string, baseAlign: 'left' | 'center' | 'right' = 'left'): 'left' | 'center' | 'right' {
+    return getEditorTextAlign(editorValue, baseAlign)
   }
 }
