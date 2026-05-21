@@ -1,0 +1,14 @@
+{
+  "node": "@bilig/n8n-nodes-workpaper",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["Development", "Developer Tools"],
+  "resources": {
+    "credentialDocumentation": [],
+    "primaryDocumentation": [
+      {
+        "url": "https://github.com/proompteng/bilig/tree/main/integrations/n8n-nodes-workpaper#readme"
+      }
+    ]
+  }
+}

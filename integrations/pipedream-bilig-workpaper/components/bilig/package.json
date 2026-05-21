@@ -1,0 +1,21 @@
+{
+  "name": "@pipedream/bilig",
+  "version": "0.0.1",
+  "description": "Pipedream components for Bilig WorkPaper formula readback",
+  "keywords": [
+    "bilig",
+    "formula",
+    "pipedream",
+    "spreadsheet",
+    "workpaper"
+  ],
+  "homepage": "https://github.com/proompteng/bilig",
+  "author": "Greg Konush <12027037+gregkonush@users.noreply.github.com>",
+  "main": "bilig.app.mjs",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@pipedream/platform": "^3.1.1"
+  }
+}

@@ -12,16 +12,16 @@ The workflow uses only built-in n8n nodes:
 - HTTP Request
 - Code
 
-It calls a Bilig app route. The importable workflow defaults to a local or
-self-hosted app so the artifact does not depend on a hosted route that may not
-be deployed yet:
+It calls a Bilig app route. The importable workflow defaults to the hosted demo
+endpoint so someone can import it and run the proof without deploying Bilig
+first:
 
 ```text
-POST http://localhost:4321/api/workpaper/n8n/forecast
+POST https://bilig.proompteng.ai/api/workpaper/n8n/forecast
 ```
 
-Change `baseUrl` in the `Choose forecast input` node when you deploy the route
-behind another Bilig app URL.
+Change `baseUrl` in the `Choose forecast input` node if you want to point the
+workflow at your own Bilig app.
 
 The route edits one input cell in a demo forecast WorkPaper, recalculates the
 summary formulas, exports and restores the WorkPaper JSON, and returns proof

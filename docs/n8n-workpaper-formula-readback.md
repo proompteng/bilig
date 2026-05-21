@@ -26,16 +26,15 @@ editor. See the n8n workflow import/export docs:
 
 ## Proof Route
 
-The workflow calls a Bilig app route. It defaults to local or self-hosted Bilig
-so imported workflows do not point at a hosted endpoint before that route is
-deployed:
+The workflow calls a Bilig app route. It defaults to the hosted demo endpoint so
+someone can import it and run the proof before deploying Bilig:
 
 ```text
-POST http://localhost:4321/api/workpaper/n8n/forecast
+POST https://bilig.proompteng.ai/api/workpaper/n8n/forecast
 ```
 
-Change `baseUrl` in the `Choose forecast input` node if your Bilig app is
-hosted somewhere else.
+Change `baseUrl` in the `Choose forecast input` node if you want to use your
+own Bilig app.
 
 Request:
 

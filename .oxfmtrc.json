@@ -10,6 +10,7 @@
     "**/build/**",
     "**/coverage/**",
     "**/test-results/**",
+    "integrations/n8n-nodes-workpaper/eslint.config.mjs",
     "packages/protocol/src/enums.ts",
     "packages/protocol/src/opcodes.ts",
     "packages/wasm-kernel/assembly/protocol.ts"
