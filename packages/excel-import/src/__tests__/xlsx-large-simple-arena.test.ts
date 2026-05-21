@@ -25,6 +25,10 @@ describe('large simple XLSX import arena', () => {
     expect(snapshot.rows).toHaveLength(0)
     expect(snapshot.columns).toBeInstanceOf(Uint16Array)
     expect(snapshot.numberValues).toBeUndefined()
+    expect(snapshot.tinyIntegerValues).toBeUndefined()
+    expect(snapshot.smallIntegerValues).toBeUndefined()
+    expect(snapshot.sparseSmallIntegerCellIndexes).toBeUndefined()
+    expect(snapshot.sparseSmallIntegerValues).toBeUndefined()
     expect(snapshot.integerValues).toBeUndefined()
     expect(snapshot.sparseIntegerCellIndexes).toBeUndefined()
     expect(snapshot.sparseIntegerValues).toBeUndefined()
@@ -270,7 +274,8 @@ describe('large simple XLSX import arena', () => {
     arena.addCell({ sheetIndex: 0, row: 0, column: 1, value: 42 })
     arena.addCell({ sheetIndex: 0, row: 0, column: 2, value: 42.5 })
 
-    expect(arena.snapshot().smallIntegerValues).toEqual(new Int16Array([0, 42, 0]))
+    expect(arena.snapshot().tinyIntegerValues).toEqual(new Int8Array([0, 42, 0]))
+    expect(arena.snapshot().smallIntegerValues).toBeUndefined()
     expect(arena.snapshot().integerValues).toBeUndefined()
     expect(arena.snapshot().numberValues).toEqual(new Float64Array([1, Number.NaN, 42.5]))
 
@@ -316,7 +321,8 @@ describe('large simple XLSX import arena', () => {
     expect(arena.snapshot().sheetIndex).toBe(4)
     expect(arena.snapshot().sheetIndexes).toBeUndefined()
     expect(arena.snapshot().columns).toBeInstanceOf(Uint16Array)
-    expect(arena.snapshot().smallIntegerValues).toEqual(new Int16Array([1]))
+    expect(arena.snapshot().tinyIntegerValues).toEqual(new Int8Array([1]))
+    expect(arena.snapshot().smallIntegerValues).toBeUndefined()
     expect(arena.snapshot().integerValues).toBeUndefined()
     expect(arena.snapshot().numberValues).toBeUndefined()
     expect(arena.snapshot().stringIds).toBeUndefined()
@@ -378,7 +384,10 @@ describe('large simple XLSX import arena', () => {
     const stringOnlyArena = new ImportedWorkbookArena()
     stringOnlyArena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 'Only text' })
     expect(stringOnlyArena.snapshot().numberValues).toBeUndefined()
+    expect(stringOnlyArena.snapshot().tinyIntegerValues).toBeUndefined()
     expect(stringOnlyArena.snapshot().smallIntegerValues).toBeUndefined()
+    expect(stringOnlyArena.snapshot().sparseSmallIntegerCellIndexes).toBeUndefined()
+    expect(stringOnlyArena.snapshot().sparseSmallIntegerValues).toBeUndefined()
     expect(stringOnlyArena.snapshot().integerValues).toBeUndefined()
     expect(stringOnlyArena.snapshot().sparseIntegerCellIndexes).toBeUndefined()
     expect(stringOnlyArena.snapshot().sparseIntegerValues).toBeUndefined()
@@ -387,7 +396,10 @@ describe('large simple XLSX import arena', () => {
     const arena = new ImportedWorkbookArena()
     const numericCell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })
 
-    expect(arena.snapshot().smallIntegerValues).toEqual(new Int16Array([42]))
+    expect(arena.snapshot().tinyIntegerValues).toEqual(new Int8Array([42]))
+    expect(arena.snapshot().smallIntegerValues).toBeUndefined()
+    expect(arena.snapshot().sparseSmallIntegerCellIndexes).toBeUndefined()
+    expect(arena.snapshot().sparseSmallIntegerValues).toBeUndefined()
     expect(arena.snapshot().integerValues).toBeUndefined()
     expect(arena.snapshot().sparseIntegerCellIndexes).toBeUndefined()
     expect(arena.snapshot().sparseIntegerValues).toBeUndefined()
@@ -397,7 +409,8 @@ describe('large simple XLSX import arena', () => {
     expect(arena.snapshot().formulaIds).toBeUndefined()
 
     arena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 42.25 })
-    expect(arena.snapshot().smallIntegerValues).toEqual(new Int16Array([42, 0]))
+    expect(arena.snapshot().tinyIntegerValues).toEqual(new Int8Array([42, 0]))
+    expect(arena.snapshot().smallIntegerValues).toBeUndefined()
     expect(arena.snapshot().numberValues).toEqual(new Float64Array([Number.NaN, 42.25]))
 
     arena.addCell({ sheetIndex: 0, row: 2, column: 0, value: 'Label' })
@@ -422,7 +435,9 @@ describe('large simple XLSX import arena', () => {
     arena.addCell({ sheetIndex: 0, row: 0, column: 5, value: 32768 })
 
     expect(arena.snapshot().numberValues).toEqual(new Float64Array([-0, 2147483648, -2147483649, Number.NaN, Number.NaN, Number.NaN]))
-    expect(arena.snapshot().smallIntegerValues).toEqual(new Int16Array([0, 0, 0, 0, 32767, 0]))
+    expect(arena.snapshot().smallIntegerValues).toBeUndefined()
+    expect(arena.snapshot().sparseSmallIntegerCellIndexes).toEqual(new Uint32Array([4]))
+    expect(arena.snapshot().sparseSmallIntegerValues).toEqual(new Int16Array([32767]))
     expect(arena.snapshot().integerValues).toBeUndefined()
     expect(arena.snapshot().sparseIntegerCellIndexes).toEqual(new Uint32Array([3, 5]))
     expect(arena.snapshot().sparseIntegerValues).toEqual(new Int32Array([2147483647, 32768]))
@@ -437,20 +452,36 @@ describe('large simple XLSX import arena', () => {
     expect(Object.is(arena.materializeSheetCells(0)[0]?.value, -0)).toBe(true)
   })
 
-  it('keeps rare larger integers sparse and densifies common larger integers', () => {
+  it('keeps tiny integers dense while rarer wider integers stay sparse', () => {
     const sparseArena = new ImportedWorkbookArena()
     sparseArena.reserveDenseRowMajorCellCapacity(0, 1, 1024)
     sparseArena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 42 })
-    sparseArena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 32768 })
+    sparseArena.addCell({ sheetIndex: 0, row: 1, column: 0, value: 32767 })
+    sparseArena.addCell({ sheetIndex: 0, row: 2, column: 0, value: 32768 })
 
-    expect(sparseArena.snapshot().smallIntegerValues).toEqual(new Int16Array([42, 0]))
+    expect(sparseArena.snapshot().tinyIntegerValues).toEqual(new Int8Array([42, 0, 0]))
+    expect(sparseArena.snapshot().smallIntegerValues).toBeUndefined()
+    expect(sparseArena.snapshot().sparseSmallIntegerCellIndexes).toEqual(new Uint32Array([1]))
+    expect(sparseArena.snapshot().sparseSmallIntegerValues).toEqual(new Int16Array([32767]))
     expect(sparseArena.snapshot().integerValues).toBeUndefined()
-    expect(sparseArena.snapshot().sparseIntegerCellIndexes).toEqual(new Uint32Array([1]))
+    expect(sparseArena.snapshot().sparseIntegerCellIndexes).toEqual(new Uint32Array([2]))
     expect(sparseArena.snapshot().sparseIntegerValues).toEqual(new Int32Array([32768]))
     expect(sparseArena.materializeSheetCells(0)).toEqual([
       { address: 'A1', value: 42 },
-      { address: 'A2', value: 32768 },
+      { address: 'A2', value: 32767 },
+      { address: 'A3', value: 32768 },
     ])
+
+    const denseSmallArena = new ImportedWorkbookArena()
+    for (let row = 0; row < 257; row += 1) {
+      denseSmallArena.addCell({ sheetIndex: 0, row, column: 0, value: 128 + row })
+    }
+
+    expect(denseSmallArena.snapshot().smallIntegerValues?.[0]).toBe(128)
+    expect(denseSmallArena.snapshot().smallIntegerValues?.[256]).toBe(384)
+    expect(denseSmallArena.snapshot().sparseSmallIntegerCellIndexes).toBeUndefined()
+    expect(denseSmallArena.snapshot().sparseSmallIntegerValues).toBeUndefined()
+    expect(denseSmallArena.materializeSheetCells(0)[256]).toEqual({ address: 'A257', value: 384 })
 
     const denseArena = new ImportedWorkbookArena()
     for (let row = 0; row < 257; row += 1) {

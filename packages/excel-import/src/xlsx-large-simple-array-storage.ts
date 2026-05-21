@@ -10,6 +10,12 @@ export function growUint8Array(source: Uint8Array<ArrayBuffer>, nextCapacity: nu
   return output
 }
 
+export function growInt8Array(source: Int8Array<ArrayBuffer>, nextCapacity: number): Int8Array<ArrayBuffer> {
+  const output = new Int8Array(nextCapacity)
+  output.set(source)
+  return output
+}
+
 export function growUint32Array(source: Uint32Array<ArrayBuffer>, nextCapacity: number, fillValue?: number): Uint32Array<ArrayBuffer> {
   const output = new Uint32Array(nextCapacity)
   output.set(source)
