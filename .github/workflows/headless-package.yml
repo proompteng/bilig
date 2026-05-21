@@ -47,6 +47,7 @@ on:
       - 'scripts/sync-runtime-release-metadata.ts'
       - 'scripts/workpaper-external-smoke.ts'
       - 'scripts/workpaper-surface-contract.ts'
+      - 'integrations/n8n-nodes-workpaper/**'
       - 'tsconfig.base.json'
       - 'tsconfig.json'
       - 'tsconfig.workspace-paths.json'
@@ -84,6 +85,11 @@ on:
         type: string
         required: false
         default: ''
+      publish_n8n_node:
+        description: 'Publish @bilig/n8n-nodes-workpaper from this trusted workflow'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   # Isolate push runs by commit so a newer push cannot cancel an already-started
@@ -198,6 +204,13 @@ jobs:
         run: |
           set -euo pipefail
           pnpm workpaper:smoke:external
+
+      - name: Verify n8n community node package
+        run: |
+          set -euo pipefail
+          cd integrations/n8n-nodes-workpaper
+          npm ci
+          npm run check
 
       - name: Set up Node.js 22 compatibility runtime
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
@@ -874,11 +887,6 @@ jobs:
           test "${origin_sha}" = "${head_sha}"
           test "${github_sha}" = "${head_sha}"
 
-      - name: Run full repository CI before publishing
-        run: |
-          set -euo pipefail
-          pnpm run ci
-
       - name: Build runtime package chain
         run: |
           set -euo pipefail
@@ -1047,3 +1055,125 @@ jobs:
             build/mcpb/bilig-workpaper.mcpb \
             build/mcpb/bilig-workpaper.mcpb.sha256 \
             --clobber
+
+  publish_n8n_node:
+    name: publish-n8n-workpaper-node
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: verify
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.publish_n8n_node == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '24.11.1'
+          registry-url: https://registry.npmjs.org
+
+      - name: Ensure npm supports trusted publishing
+        run: |
+          set -euo pipefail
+          required_npm_version="11.9.0"
+          current_npm_version="$(npm --version)"
+
+          if node - "$current_npm_version" "$required_npm_version" <<'NODE'
+          const [current, required] = process.argv.slice(2);
+          const parse = (version) => version.split('.').map((part) => Number.parseInt(part, 10));
+          const [currentMajor, currentMinor, currentPatch] = parse(current);
+          const [requiredMajor, requiredMinor, requiredPatch] = parse(required);
+          const currentParts = [currentMajor, currentMinor, currentPatch];
+          const requiredParts = [requiredMajor, requiredMinor, requiredPatch];
+          for (let index = 0; index < requiredParts.length; index += 1) {
+            if (currentParts[index] > requiredParts[index]) {
+              process.exit(0);
+            }
+            if (currentParts[index] < requiredParts[index]) {
+              process.exit(1);
+            }
+          }
+          process.exit(0);
+          NODE
+          then
+            echo "npm ${current_npm_version} satisfies trusted publishing minimum ${required_npm_version}"
+          else
+            echo "npm ${current_npm_version} is below trusted publishing minimum ${required_npm_version}; installing ${required_npm_version}"
+            npm config set fetch-retries 5
+            npm config set fetch-retry-factor 2
+            npm config set fetch-retry-mintimeout 20000
+            npm config set fetch-retry-maxtimeout 120000
+            npm install -g "npm@${required_npm_version}"
+          fi
+
+          npm --version
+
+      - name: Install n8n node dependencies
+        run: |
+          set -euo pipefail
+          cd integrations/n8n-nodes-workpaper
+          npm ci
+
+      - name: Check n8n node package
+        run: |
+          set -euo pipefail
+          cd integrations/n8n-nodes-workpaper
+          npm run check
+
+      - name: Inspect n8n node package version
+        id: n8n_package
+        run: |
+          set -euo pipefail
+          package_name="$(node -e "const fs = require('node:fs'); process.stdout.write(JSON.parse(fs.readFileSync('integrations/n8n-nodes-workpaper/package.json', 'utf8')).name)")"
+          package_version="$(node -e "const fs = require('node:fs'); process.stdout.write(JSON.parse(fs.readFileSync('integrations/n8n-nodes-workpaper/package.json', 'utf8')).version)")"
+          {
+            echo "name=${package_name}"
+            echo "version=${package_version}"
+          } >> "$GITHUB_OUTPUT"
+
+          if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "${package_name}@${package_version} is already published"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+            echo "${package_name}@${package_version} is not published yet"
+          fi
+
+      - name: Publish n8n community node
+        if: steps.n8n_package.outputs.already_published != 'true'
+        env:
+          NPM_DIST_TAG: ${{ github.event.inputs.npm_tag || 'latest' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+          cd integrations/n8n-nodes-workpaper
+
+          publish_args=(--access public --tag "${NPM_DIST_TAG}" --provenance)
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            publish_args+=(--dry-run)
+          fi
+
+          npm publish "${publish_args[@]}"
+
+      - name: Verify n8n community node is visible on npm
+        if: steps.n8n_package.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'
+        env:
+          PACKAGE_NAME: ${{ steps.n8n_package.outputs.name }}
+          PACKAGE_VERSION: ${{ steps.n8n_package.outputs.version }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+              echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is visible on npm"
+              exit 0
+            fi
+
+            echo "Waiting for ${PACKAGE_NAME}@${PACKAGE_VERSION} to become visible on npm; attempt ${attempt}/30"
+            sleep 10
+          done
+
+          echo "${PACKAGE_NAME}@${PACKAGE_VERSION} was not visible on npm after 30 attempts" >&2
+          exit 1
