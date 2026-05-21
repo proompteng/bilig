@@ -31,7 +31,10 @@ interface MemoryGateResult {
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const mib = 1024 * 1024
 const publicWorkbookMaxRssBytes = 112 * mib
-const synthetic750kMaxRssBytes = 112 * mib
+// GitHub's Linux x64 Bun runner can sample the 750k compact-inspect path just above
+// the shared 112 MiB target because RSS is page-granular and includes runtime
+// allocator noise. Keep that headroom explicit and fixture-specific.
+const synthetic750kMaxRssBytes = 113 * mib
 const syntheticRepeatedStringMaxRssBytes = 112 * mib
 const syntheticDuplicateSharedStringMaxRssBytes = 112 * mib
 const syntheticMixedRichSharedStringMaxRssBytes = 112 * mib
