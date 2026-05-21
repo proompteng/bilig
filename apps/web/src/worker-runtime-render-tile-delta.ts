@@ -398,7 +398,7 @@ function markDirtyAxisXSpans(
   },
 ): void {
   const colStart = Math.max(0, Math.min(MAX_COLS - 1, input.colStart))
-  const colEnd = Math.max(colStart, Math.min(MAX_COLS - 1, input.colEnd))
+  const colEnd = (input.mask & DirtyMaskV3.AxisX) !== 0 ? MAX_COLS - 1 : Math.max(colStart, Math.min(MAX_COLS - 1, input.colEnd))
   resolveInterestedTileKeys(input.subscription).forEach((tileKey) => {
     const fields = unpackTileKey53(tileKey)
     const tileColStart = fields.colTile * VIEWPORT_TILE_COLUMN_COUNT
@@ -431,7 +431,7 @@ function markDirtyAxisYSpans(
   },
 ): void {
   const rowStart = Math.max(0, Math.min(MAX_ROWS - 1, input.rowStart))
-  const rowEnd = Math.max(rowStart, Math.min(MAX_ROWS - 1, input.rowEnd))
+  const rowEnd = (input.mask & DirtyMaskV3.AxisY) !== 0 ? MAX_ROWS - 1 : Math.max(rowStart, Math.min(MAX_ROWS - 1, input.rowEnd))
   resolveInterestedTileKeys(input.subscription).forEach((tileKey) => {
     const fields = unpackTileKey53(tileKey)
     const tileRowStart = fields.rowTile * VIEWPORT_TILE_ROW_COUNT

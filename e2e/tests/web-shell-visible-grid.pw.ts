@@ -8,6 +8,7 @@ import {
   countGreenFillPixelsInCell,
   createTestDocumentId,
   dragProductBodySelection,
+  dragProductHeaderSelection,
   getProductColumnLeft,
   getProductColumnWidth,
   getProductRowHeight,
@@ -637,6 +638,61 @@ test('@browser-ci web app moves background fill presentation without source or t
   await expect
     .poll(() => countBlueFillPixelsInCell(page, 3, 3), {
       message: 'move must clear stale target blue fill instead of blending or retaining old tile color',
+      timeout: 5_000,
+    })
+    .toBeLessThan(12)
+})
+
+test('@browser-ci web app repaints shifted styled survivors after structural row delete', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-structural-row-delete-visual-survivor')
+  const survivorText = 'row-delete-survivor'
+  await page.setViewportSize({ width: 1280, height: 1040 })
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 1, 39)
+  await formulaInput.fill(survivorText)
+  await formulaInput.press('Enter')
+  await pickToolbarPresetColor(page, 'Fill color', 'green')
+  await expect
+    .poll(() => nativeTextRunTextAt(page, 1, 39), {
+      message: 'test setup should render the styled survivor before deleting an earlier row',
+      timeout: 5_000,
+    })
+    .toBe(survivorText)
+  await expect.poll(() => countGreenFillPixelsInCell(page, 1, 39)).toBeGreaterThan(120)
+
+  await dragProductHeaderSelection(page, 'row', 1, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!2:2')
+  await page.keyboard.down(PRIMARY_MODIFIER)
+  await page.keyboard.down('Alt')
+  await page.keyboard.press('Minus')
+  await page.keyboard.up('Alt')
+  await page.keyboard.up(PRIMARY_MODIFIER)
+
+  await expect
+    .poll(() => nativeTextRunTextAt(page, 1, 38), {
+      message: 'text below a deleted row must shift up in the native text layer',
+      timeout: 5_000,
+    })
+    .toBe(survivorText)
+  await expect
+    .poll(() => nativeTextRunTextAt(page, 1, 39), {
+      message: 'the old row tile must not keep ghost text after structural delete',
+      timeout: 5_000,
+    })
+    .toBe('')
+  await expect
+    .poll(() => countGreenFillPixelsInCell(page, 1, 38), {
+      message: 'the shifted survivor should keep its green fill',
+      timeout: 5_000,
+    })
+    .toBeGreaterThan(120)
+  await expect
+    .poll(() => countGreenFillPixelsInCell(page, 1, 39), {
+      message: 'the old row tile should not keep stale green fill',
       timeout: 5_000,
     })
     .toBeLessThan(12)

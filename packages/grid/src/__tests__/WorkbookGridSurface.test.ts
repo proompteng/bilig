@@ -208,6 +208,32 @@ describe('WorkbookGridSurface selection autoscroll', () => {
     ).toBe(pendingLocalRangeSelection)
   })
 
+  test('rejects incoherent pending local ranges before they can paint detached selection chrome', () => {
+    const committedSelection = createGridSelection(6, 7)
+    const detachedPendingSelection = {
+      ...createGridSelection(6, 7),
+      current: {
+        cell: [6, 7] as const,
+        range: { x: 1, y: 1, width: 3, height: 3 },
+        rangeStack: [],
+      },
+    }
+
+    expect(
+      resolveWorkbookGridSurfaceDisplaySelection({
+        activeHeaderDrag: null,
+        committedCellSelection: committedSelection,
+        hasPendingLocalSelection: true,
+        isEditingCell: false,
+        isFillHandleDragging: false,
+        isRangeMoveDragging: false,
+        renderGridSelection: detachedPendingSelection,
+        renderSelectionRange: detachedPendingSelection.current?.range,
+        selectedCell: [6, 7],
+      }),
+    ).toBe(committedSelection)
+  })
+
   test('uses the resolved display selection cell while local range selection is ahead of committed state', () => {
     const pendingLocalRangeSelection = {
       ...createGridSelection(3, 5),

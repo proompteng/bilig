@@ -38,13 +38,24 @@ export function resolveWorkbookGridSurfaceDisplaySelection(input: {
   if (input.isEditingCell) {
     return input.committedCellSelection
   }
+  const currentCell = input.renderGridSelection.current?.cell ?? null
+  const renderRangeContainsCurrent =
+    currentCell !== null &&
+    input.renderSelectionRange !== null &&
+    input.renderSelectionRange !== undefined &&
+    currentCell[0] >= input.renderSelectionRange.x &&
+    currentCell[0] < input.renderSelectionRange.x + input.renderSelectionRange.width &&
+    currentCell[1] >= input.renderSelectionRange.y &&
+    currentCell[1] < input.renderSelectionRange.y + input.renderSelectionRange.height
+  if (!renderRangeContainsCurrent) {
+    return input.committedCellSelection
+  }
   if (input.isFillHandleDragging || input.isRangeMoveDragging || input.activeHeaderDrag) {
     return input.renderGridSelection
   }
   if (input.hasPendingLocalSelection) {
     return input.renderGridSelection
   }
-  const currentCell = input.renderGridSelection.current?.cell ?? null
   const currentCellMatchesSelected = currentCell?.[0] === input.selectedCell[0] && currentCell[1] === input.selectedCell[1]
   const renderRangeContainsSelected =
     input.renderSelectionRange !== null &&

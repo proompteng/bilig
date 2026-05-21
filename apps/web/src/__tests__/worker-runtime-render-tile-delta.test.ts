@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
-import { ValueTag, type CellSnapshot, type EngineEvent, type RecalcMetrics } from '@bilig/protocol'
+import {
+  VIEWPORT_TILE_COLUMN_COUNT,
+  VIEWPORT_TILE_ROW_COUNT,
+  ValueTag,
+  type CellSnapshot,
+  type EngineEvent,
+  type RecalcMetrics,
+} from '@bilig/protocol'
 import { TextOverflowIndexV3 } from '../../../../packages/grid/src/renderer-v3/text-overflow-index.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../../../../packages/grid/src/renderer-v3/rect-instance-buffer.js'
 import { DirtyMaskV3 } from '../../../../packages/grid/src/renderer-v3/tile-damage-index.js'
@@ -98,6 +105,19 @@ function createColumnInvalidationEvent(startIndex: number, endIndex = startIndex
     invalidatedRanges: [],
     invalidatedRows: [],
     invalidatedColumns: [{ sheetName: 'Sheet1', startIndex, endIndex }],
+    metrics,
+  }
+}
+
+function createRowInvalidationEvent(startIndex: number, endIndex = startIndex): EngineEvent {
+  return {
+    kind: 'batch',
+    invalidation: 'cells',
+    changedCellIndices: new Uint32Array(),
+    changedCells: [],
+    invalidatedRanges: [],
+    invalidatedRows: [{ sheetName: 'Sheet1', startIndex, endIndex }],
+    invalidatedColumns: [],
     metrics,
   }
 }
@@ -629,5 +649,80 @@ describe('worker-runtime-render-tile-delta', () => {
     expect(replacement?.kind === 'tileReplace' ? replacement.dirtyMasks : null).toEqual(
       new Uint32Array([DirtyMaskV3.AxisX | DirtyMaskV3.Text | DirtyMaskV3.Rect, DirtyMaskV3.Text]),
     )
+  })
+
+  it('dirties every shifted visible tile after structural row and column invalidations', () => {
+    const axisMask = DirtyMaskV3.AxisX | DirtyMaskV3.Text | DirtyMaskV3.Rect
+    const rowAxisMask = DirtyMaskV3.AxisY | DirtyMaskV3.Text | DirtyMaskV3.Rect
+    const columnSubscription = {
+      sheetId: 7,
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: VIEWPORT_TILE_ROW_COUNT - 1,
+      colStart: 0,
+      colEnd: VIEWPORT_TILE_COLUMN_COUNT * 3 - 1,
+      dprBucket: 1,
+      cameraSeq: 26,
+    }
+    const rowSubscription = {
+      sheetId: 7,
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: VIEWPORT_TILE_ROW_COUNT * 3 - 1,
+      colStart: 0,
+      colEnd: VIEWPORT_TILE_COLUMN_COUNT - 1,
+      dprBucket: 1,
+      cameraSeq: 27,
+    }
+
+    const columnBatch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      event: createColumnInvalidationEvent(2),
+      generation: 19,
+      subscription: columnSubscription,
+    })
+    const rowBatch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      event: createRowInvalidationEvent(2),
+      generation: 20,
+      subscription: rowSubscription,
+    })
+
+    const columnReplacements = columnBatch.mutations.filter((mutation) => mutation.kind === 'tileReplace')
+    const rowReplacements = rowBatch.mutations.filter((mutation) => mutation.kind === 'tileReplace')
+
+    expect(columnReplacements.map((mutation) => mutation.coord.colTile)).toEqual([0, 1, 2])
+    expect(columnReplacements.map((mutation) => mutation.dirtyLocalCols)).toEqual([
+      new Uint32Array([2, VIEWPORT_TILE_COLUMN_COUNT - 1]),
+      new Uint32Array([0, VIEWPORT_TILE_COLUMN_COUNT - 1]),
+      new Uint32Array([0, VIEWPORT_TILE_COLUMN_COUNT - 1]),
+    ])
+    expect(columnReplacements.map((mutation) => mutation.dirtyLocalRows)).toEqual([
+      new Uint32Array([0, VIEWPORT_TILE_ROW_COUNT - 1]),
+      new Uint32Array([0, VIEWPORT_TILE_ROW_COUNT - 1]),
+      new Uint32Array([0, VIEWPORT_TILE_ROW_COUNT - 1]),
+    ])
+    expect(columnReplacements.map((mutation) => mutation.dirtyMasks)).toEqual([
+      new Uint32Array([axisMask]),
+      new Uint32Array([axisMask]),
+      new Uint32Array([axisMask]),
+    ])
+
+    expect(rowReplacements.map((mutation) => mutation.coord.rowTile)).toEqual([0, 1, 2])
+    expect(rowReplacements.map((mutation) => mutation.dirtyLocalRows)).toEqual([
+      new Uint32Array([2, VIEWPORT_TILE_ROW_COUNT - 1]),
+      new Uint32Array([0, VIEWPORT_TILE_ROW_COUNT - 1]),
+      new Uint32Array([0, VIEWPORT_TILE_ROW_COUNT - 1]),
+    ])
+    expect(rowReplacements.map((mutation) => mutation.dirtyLocalCols)).toEqual([
+      new Uint32Array([0, VIEWPORT_TILE_COLUMN_COUNT - 1]),
+      new Uint32Array([0, VIEWPORT_TILE_COLUMN_COUNT - 1]),
+      new Uint32Array([0, VIEWPORT_TILE_COLUMN_COUNT - 1]),
+    ])
+    expect(rowReplacements.map((mutation) => mutation.dirtyMasks)).toEqual([
+      new Uint32Array([rowAxisMask]),
+      new Uint32Array([rowAxisMask]),
+      new Uint32Array([rowAxisMask]),
+    ])
   })
 })
