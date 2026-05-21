@@ -56,10 +56,11 @@ export function selectionToAddresses(
   startAddress: string
   endAddress: string
 } {
-  const selectedColumnStart = selection.columns.first()
-  const selectedColumnEnd = selection.columns.last()
-  const selectedRowStart = selection.rows.first()
-  const selectedRowEnd = selection.rows.last()
+  const normalizedSelection = normalizeGridSelection(selection)
+  const selectedColumnStart = normalizedSelection.columns.first()
+  const selectedColumnEnd = normalizedSelection.columns.last()
+  const selectedRowStart = normalizedSelection.rows.first()
+  const selectedRowEnd = normalizedSelection.rows.last()
 
   if (selectedColumnStart === 0 && selectedColumnEnd === MAX_COLS - 1 && selectedRowStart === 0 && selectedRowEnd === MAX_ROWS - 1) {
     return {
@@ -82,7 +83,7 @@ export function selectionToAddresses(
     }
   }
 
-  const range = selection.current?.range
+  const range = normalizedSelection.current?.range
   if (!range) {
     return {
       startAddress: fallbackAddress,
@@ -94,14 +95,15 @@ export function selectionToAddresses(
 }
 
 export function selectionToSnapshot(selection: GridSelection, sheetName: string, fallbackAddress: string): GridSelectionSnapshot {
-  const range = selectionToAddresses(selection, fallbackAddress)
-  const currentCell = selection.current?.cell
+  const normalizedSelection = normalizeGridSelection(selection)
+  const range = selectionToAddresses(normalizedSelection, fallbackAddress)
+  const currentCell = normalizedSelection.current?.cell
   const address = currentCell ? formatAddress(currentCell[1], currentCell[0]) : fallbackAddress
   let kind: GridSelectionKind = 'cell'
-  const selectedColumnStart = selection.columns.first()
-  const selectedColumnEnd = selection.columns.last()
-  const selectedRowStart = selection.rows.first()
-  const selectedRowEnd = selection.rows.last()
+  const selectedColumnStart = normalizedSelection.columns.first()
+  const selectedColumnEnd = normalizedSelection.columns.last()
+  const selectedRowStart = normalizedSelection.rows.first()
+  const selectedRowEnd = normalizedSelection.rows.last()
 
   if (selectedColumnStart === 0 && selectedColumnEnd === MAX_COLS - 1 && selectedRowStart === 0 && selectedRowEnd === MAX_ROWS - 1) {
     kind = 'sheet'
@@ -234,11 +236,53 @@ export function createRectangleSelectionFromRange(range: Rectangle): GridSelecti
   }
 }
 
+export function gridSelectionCurrentCellInRange(selection: GridSelection): boolean {
+  const current = selection.current
+  if (!current) {
+    return true
+  }
+  const [col, row] = current.cell
+  const range = current.range
+  return col >= range.x && col < range.x + range.width && row >= range.y && row < range.y + range.height
+}
+
+export function gridSelectionCurrentCellInAxisSelections(selection: GridSelection): boolean {
+  const current = selection.current
+  if (!current) {
+    return true
+  }
+  const [col, row] = current.cell
+  if (selection.columns.length > 0 && !selection.columns.hasIndex(col)) {
+    return false
+  }
+  if (selection.rows.length > 0 && !selection.rows.hasIndex(row)) {
+    return false
+  }
+  return true
+}
+
+export function isGridSelectionCoherent(selection: GridSelection): boolean {
+  return gridSelectionCurrentCellInRange(selection) && gridSelectionCurrentCellInAxisSelections(selection)
+}
+
+export function normalizeGridSelection(selection: GridSelection): GridSelection {
+  if (isGridSelectionCoherent(selection)) {
+    return selection
+  }
+  const cell = selection.current?.cell
+  if (!cell) {
+    return selection
+  }
+  const [col, row] = clampCell(cell)
+  return createGridSelection(col, row)
+}
+
 export function formatSelectionSummary(selection: GridSelection, fallbackAddress: string): string {
-  const selectedColumnStart = selection.columns.first()
-  const selectedColumnEnd = selection.columns.last()
-  const selectedRowStart = selection.rows.first()
-  const selectedRowEnd = selection.rows.last()
+  const normalizedSelection = normalizeGridSelection(selection)
+  const selectedColumnStart = normalizedSelection.columns.first()
+  const selectedColumnEnd = normalizedSelection.columns.last()
+  const selectedRowStart = normalizedSelection.rows.first()
+  const selectedRowEnd = normalizedSelection.rows.last()
   if (selectedColumnStart === 0 && selectedColumnEnd === MAX_COLS - 1 && selectedRowStart === 0 && selectedRowEnd === MAX_ROWS - 1) {
     return 'All'
   }
@@ -255,7 +299,7 @@ export function formatSelectionSummary(selection: GridSelection, fallbackAddress
     return start === end ? `${start}:${start}` : `${start}:${end}`
   }
 
-  const range = selection.current?.range
+  const range = normalizedSelection.current?.range
   if (!range) {
     return fallbackAddress
   }

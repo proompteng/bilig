@@ -1,7 +1,7 @@
 import { resolveFillHandlePreviewBounds } from '../gridFillHandle.js'
 import type { GridHoverState } from '../gridHover.js'
 import type { HeaderSelection } from '../gridPointer.js'
-import { createGridSelection, isSheetSelection } from '../gridSelection.js'
+import { createGridSelection, isSheetSelection, normalizeGridSelection } from '../gridSelection.js'
 import type { GridSelection, Rectangle } from '../gridTypes.js'
 import { resolveRequiresLiveViewportState } from '../useGridSelectionState.js'
 
@@ -60,7 +60,17 @@ export class GridInteractionOverlayRuntime {
   }
 
   setGridSelection(action: RuntimeStateAction<GridSelection>): void {
-    this.update('gridSelection', action)
+    const current = this.snapshotValue.gridSelection
+    const next = typeof action === 'function' ? (action as (current: GridSelection) => GridSelection)(current) : action
+    const normalized = normalizeGridSelection(next)
+    if (Object.is(current, normalized)) {
+      return
+    }
+    this.snapshotValue = {
+      ...this.snapshotValue,
+      gridSelection: normalized,
+    }
+    this.emit()
   }
 
   setHoverState(action: RuntimeStateAction<GridHoverState>): void {

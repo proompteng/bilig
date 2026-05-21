@@ -5,7 +5,7 @@ import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { GridSelectionVisualOverlay } from './GridSelectionVisualOverlay.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
-import { createGridSelection } from './gridSelection.js'
+import { createGridSelection, isGridSelectionCoherent } from './gridSelection.js'
 import { WorkbookPaneRendererV3 } from './renderer-v3/WorkbookPaneRendererV3.js'
 import { buildDynamicGridOverlayBatchV3 } from './renderer-v3/dynamic-overlay-batch.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
@@ -36,6 +36,9 @@ export function resolveWorkbookGridSurfaceDisplaySelection(input: {
   readonly selectedCell: Item
 }): GridSelection {
   if (input.isEditingCell) {
+    return input.committedCellSelection
+  }
+  if (!isGridSelectionCoherent(input.renderGridSelection)) {
     return input.committedCellSelection
   }
   const currentCell = input.renderGridSelection.current?.cell ?? null

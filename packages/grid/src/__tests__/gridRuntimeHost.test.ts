@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from '../grid-engine.js'
 import type { Rectangle } from '../gridTypes.js'
+import { createGridSelection } from '../gridSelection.js'
 import { unpackTileKey53 } from '../renderer-v3/tile-key.js'
 import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
 
@@ -158,6 +159,29 @@ describe('GridRuntimeHost', () => {
       requiresLiveViewportState: true,
       selectionRange: { height: 1, width: 1, x: 3, y: 4 },
     })
+  })
+
+  it('normalizes detached active cells before overlay state can render stale area chrome', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 60,
+      viewportWidth: 250,
+    })
+
+    host.interactionOverlays.setGridSelection({
+      ...createGridSelection(6, 7),
+      current: {
+        cell: [6, 7],
+        range: { height: 3, width: 3, x: 1, y: 1 },
+        rangeStack: [],
+      },
+    })
+
+    expect(host.interactionOverlays.snapshot().gridSelection).toEqual(createGridSelection(6, 7))
   })
 
   it('owns input interaction refs for the workbook runtime lifetime', () => {

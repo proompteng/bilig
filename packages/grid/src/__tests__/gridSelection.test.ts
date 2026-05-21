@@ -8,6 +8,7 @@ import {
   createSheetSelection,
   formatSelectionSummary,
   isSheetSelection,
+  normalizeGridSelection,
   rectangleToAddresses,
   selectionToAddresses,
   selectionToSnapshot,
@@ -100,6 +101,41 @@ describe('gridSelection', () => {
         startAddress: 'A1',
         endAddress: 'XFD1048576',
       },
+    })
+  })
+
+  test('collapses incoherent selections before formatting or snapshotting them', () => {
+    const detachedRangeSelection = {
+      ...createGridSelection(5, 6),
+      current: {
+        cell: [5, 6] as const,
+        range: { x: 1, y: 1, width: 2, height: 2 },
+        rangeStack: [],
+      },
+    }
+    const detachedAxisSelection = {
+      ...createColumnSliceSelection(1, 2, 4),
+      current: {
+        cell: [5, 4] as const,
+        range: { x: 1, y: 4, width: 2, height: 1 },
+        rangeStack: [],
+      },
+    }
+
+    expect(normalizeGridSelection(detachedRangeSelection)).toEqual(createGridSelection(5, 6))
+    expect(formatSelectionSummary(detachedRangeSelection, 'A1')).toBe('F7')
+    expect(selectionToSnapshot(detachedRangeSelection, 'Sheet1', 'A1')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'F7',
+      kind: 'cell',
+      range: {
+        startAddress: 'F7',
+        endAddress: 'F7',
+      },
+    })
+    expect(selectionToAddresses(detachedAxisSelection, 'A1')).toEqual({
+      startAddress: 'F5',
+      endAddress: 'F5',
     })
   })
 
