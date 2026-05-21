@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  collectReferencedLargeSimpleRichSharedStringIndexes,
   createLargeSimpleSharedStringSubset,
   readLargeSimpleSharedStrings,
   readLargeSimpleReferencedSharedStringsFromChunks,
@@ -152,5 +153,20 @@ describe('large simple shared string streaming', () => {
     expect(subset?.[0]).toBeUndefined()
     expect(subset?.[1]).toEqual({ text: 'Alpha', rich: false })
     expect(subset?.[3]).toEqual({ text: 'Beta', rich: false })
+  })
+
+  it('collects only rich shared-string indexes for sheet-scoped retention', () => {
+    const richIndexes = collectReferencedLargeSimpleRichSharedStringIndexes(
+      [
+        { text: 'Plain A', rich: false },
+        { text: 'Rich B', rich: true, xml: '<si><r><t>Rich B</t></r></si>' },
+        { text: 'Plain C', rich: false },
+        { text: 'Rich D', rich: true, xml: '<si><r><t>Rich D</t></r></si>' },
+      ],
+      new Set([0, 1, 3]),
+    )
+
+    expect(richIndexes).toEqual(new Set([1, 3]))
+    expect(collectReferencedLargeSimpleRichSharedStringIndexes([{ text: 'Only', rich: false }], new Set([2]))).toBeNull()
   })
 })

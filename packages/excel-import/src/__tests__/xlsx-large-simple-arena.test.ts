@@ -140,6 +140,38 @@ describe('large simple XLSX import arena', () => {
     expect([...lazyCells]).toEqual([{ address: 'A1', value: 'Shared label', formula: 'A1&""' }])
   })
 
+  it('resolves plain shared strings while retaining only rich shared-string references', () => {
+    const arena = new ImportedWorkbookArena()
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 0, sharedStringIndex: 1 })
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 1, sharedStringIndex: 2 })
+    arena.addSharedStringCell({ sheetIndex: 0, row: 0, column: 2, sharedStringIndex: 1 })
+
+    const sharedStrings = [
+      { text: 'unused', rich: false },
+      { text: 'Plain shared', rich: false },
+      { text: 'Rich shared', rich: true, xml: '<si><r><t>Rich shared</t></r></si>' },
+    ]
+
+    expect(arena.resolveSharedStringsExcept(sharedStrings, new Set([2]))).toBe(true)
+    expect(arena.snapshot().strings).toEqual(['Plain shared'])
+    expect(arena.readPreviewText(0, 0)).toBe('Plain shared')
+    expect(arena.readPreviewText(0, 1)).toBe('Rich shared')
+
+    expect(arena.retainSharedStringReferences(sharedStrings)).toEqual([
+      {
+        address: 'B1',
+        text: 'Rich shared',
+        storage: 'sharedString',
+        xml: '<si><r><t>Rich shared</t></r></si>',
+      },
+    ])
+    expect(arena.materializeSheetCells(0)).toEqual([
+      { address: 'A1', value: 'Plain shared' },
+      { address: 'B1', value: 'Rich shared' },
+      { address: 'C1', value: 'Plain shared' },
+    ])
+  })
+
   it('compacts rare retained shared-string indexes for mostly numeric lazy sheets', () => {
     const arena = new ImportedWorkbookArena()
     arena.reserveDenseRowMajorCellCapacity(0, 10, 100)

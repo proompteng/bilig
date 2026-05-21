@@ -34,6 +34,7 @@ const publicWorkbookMaxRssBytes = 112 * mib
 const synthetic750kMaxRssBytes = 112 * mib
 const syntheticRepeatedStringMaxRssBytes = 112 * mib
 const syntheticDuplicateSharedStringMaxRssBytes = 112 * mib
+const syntheticMixedRichSharedStringMaxRssBytes = 112 * mib
 const syntheticFormulaHeavyMaxRssBytes = 112 * mib
 const syntheticCachedExternalFormulaMaxRssBytes = 112 * mib
 const hardMaxRssBytes = 192 * mib
@@ -63,6 +64,7 @@ async function main(): Promise<void> {
   results.push(await runSynthetic750kGate(syntheticCacheDir))
   results.push(await runSyntheticRepeatedStringGate(syntheticCacheDir))
   results.push(await runSyntheticDuplicateSharedStringGate(syntheticCacheDir))
+  results.push(await runSyntheticMixedRichSharedStringGate(syntheticCacheDir))
   results.push(await runSyntheticFormulaHeavyGate(syntheticCacheDir))
   results.push(await runSyntheticCachedExternalFormulaGate(syntheticCacheDir))
 
@@ -76,6 +78,7 @@ async function main(): Promise<void> {
           synthetic750kMaxRssBytes,
           syntheticRepeatedStringMaxRssBytes,
           syntheticDuplicateSharedStringMaxRssBytes,
+          syntheticMixedRichSharedStringMaxRssBytes,
           syntheticFormulaHeavyMaxRssBytes,
           syntheticCachedExternalFormulaMaxRssBytes,
           hardMaxRssBytes,
@@ -156,6 +159,20 @@ async function runSyntheticDuplicateSharedStringGate(cacheDir: string): Promise<
       artifactId: artifact.id,
       label: artifact.fileName,
       maxRssBytes: syntheticDuplicateSharedStringMaxRssBytes,
+    },
+    artifact,
+    cacheDir,
+    join(cacheDir, 'manifest.json'),
+  )
+}
+
+async function runSyntheticMixedRichSharedStringGate(cacheDir: string): Promise<MemoryGateResult> {
+  const artifact = writeSyntheticMixedRichSharedStringWorkbook(cacheDir)
+  return runGateTarget(
+    {
+      artifactId: artifact.id,
+      label: artifact.fileName,
+      maxRssBytes: syntheticMixedRichSharedStringMaxRssBytes,
     },
     artifact,
     cacheDir,
@@ -349,6 +366,47 @@ function writeSyntheticDuplicateSharedStringWorkbook(cacheDir: string): PublicWo
     sharedStringsXml: [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${String(sharedStringIndex)}" uniqueCount="1">`,
+      sharedStrings.join(''),
+      '</sst>',
+    ].join(''),
+    worksheetXml: [
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+      `<dimension ref="A1:E${String(rowCount)}"/>`,
+      `<sheetData>${rows.join('')}</sheetData>`,
+      '</worksheet>',
+    ].join(''),
+  })
+}
+
+function writeSyntheticMixedRichSharedStringWorkbook(cacheDir: string): PublicWorkbookArtifact {
+  const rowCount = 25_000
+  const columnCount = 5
+  const rows: string[] = []
+  const sharedStrings: string[] = []
+  let sharedStringIndex = 0
+  const richSharedStringIndex = rowCount * columnCount - 1
+  for (let row = 1; row <= rowCount; row += 1) {
+    const cells: string[] = []
+    for (let column = 0; column < columnCount; column += 1) {
+      const address = `${String.fromCharCode(65 + column)}${String(row)}`
+      cells.push(`<c r="${address}" t="s"><v>${String(sharedStringIndex)}</v></c>`)
+      sharedStrings.push(
+        sharedStringIndex === richSharedStringIndex
+          ? '<si><r><rPr><b/></rPr><t>Rich vendor label</t></r></si>'
+          : '<si><t>Repeated vendor label</t></si>',
+      )
+      sharedStringIndex += 1
+    }
+    rows.push(`<row r="${String(row)}">${cells.join('')}</row>`)
+  }
+  return writeSyntheticWorkbookArtifact(cacheDir, {
+    id: 'synthetic-mixed-rich-shared-string-memory-v4',
+    fileName: 'synthetic-mixed-rich-shared-string-memory-v4.xlsx',
+    sourceId: 'synthetic-mixed-rich-shared-string-memory-v4',
+    sharedStringsXml: [
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+      `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${String(sharedStringIndex)}" uniqueCount="2">`,
       sharedStrings.join(''),
       '</sst>',
     ].join(''),

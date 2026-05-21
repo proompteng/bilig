@@ -97,6 +97,23 @@ export function hasReferencedLargeSimpleRichSharedStrings(
   return false
 }
 
+export function collectReferencedLargeSimpleRichSharedStringIndexes(
+  sharedStrings: LargeSimpleSharedStrings,
+  referencedIndexes: ReadonlySet<number>,
+): Set<number> | null {
+  const richIndexes = new Set<number>()
+  for (const index of referencedIndexes) {
+    const entry = sharedStrings[index]
+    if (!entry) {
+      return null
+    }
+    if (entry.rich) {
+      richIndexes.add(index)
+    }
+  }
+  return richIndexes
+}
+
 export function readLargeSimpleRichTextCellArtifact(
   address: string,
   openingTag: string,

@@ -218,6 +218,35 @@ export class ImportedWorkbookArena extends ImportedWorkbookArenaBase {
     )
   }
 
+  resolveSharedStringsExcept(sharedStrings: LargeSimpleSharedStrings, retainedSharedStringIndexes: ReadonlySet<number>): boolean {
+    for (let index = 0; index < this.length; index += 1) {
+      if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
+        continue
+      }
+      const sharedStringIndex = this.sharedStringIndexAt(index)
+      const entry = sharedStringIndex === noPoolId ? undefined : sharedStrings[sharedStringIndex]
+      if (!entry) {
+        return false
+      }
+      const row = this.rowAt(index)
+      const column = this.columnAt(index)
+      if (retainedSharedStringIndexes.has(sharedStringIndex)) {
+        if (isPreviewCell(row, column)) {
+          this.setPreviewValue(row, column, entry.text)
+        }
+        continue
+      }
+      this.valueKinds[index] = valueKindString
+      this.sharedStringRefCount = Math.max(0, this.sharedStringRefCount - 1)
+      this.stringValueCount += 1
+      this.ensureStringIdStorage()[index] = this.internString(entry.text)
+      if (isPreviewCell(row, column)) {
+        this.setPreviewValue(row, column, entry.text)
+      }
+    }
+    return true
+  }
+
   snapshot(): ImportedWorkbookArenaSnapshot {
     this.materializeCoordinateStorage(this.length)
     const stringIds = this.snapshotStringIds()

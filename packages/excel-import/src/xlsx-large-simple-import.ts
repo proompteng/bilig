@@ -32,8 +32,8 @@ import { prepareLargeSimplePackageArtifactsForZipRelease } from './xlsx-large-si
 import { readLargeSimpleSheetPrintMetadata, readLargeSimpleSheetPrintPageSetup } from './xlsx-large-simple-printer-settings.js'
 import { readAllLargeSimpleSharedStrings, readReferencedLargeSimpleSharedStrings } from './xlsx-large-simple-referenced-shared-strings.js'
 import {
+  collectReferencedLargeSimpleRichSharedStringIndexes,
   createLargeSimpleSharedStringSubset,
-  hasReferencedLargeSimpleRichSharedStrings,
   type LargeSimpleSharedStrings,
 } from './xlsx-large-simple-shared-strings.js'
 import { shouldUseSharedStringlessFastPathBytes } from './xlsx-large-simple-shared-stringless-fast-path.js'
@@ -475,7 +475,11 @@ export function tryImportLargeSimpleXlsx(
       if (!scanned || scanned.sharedStringIndexes.size === 0) {
         continue
       }
-      if (!hasReferencedLargeSimpleRichSharedStrings(sharedStrings, scanned.sharedStringIndexes)) {
+      const richSharedStringIndexes = collectReferencedLargeSimpleRichSharedStringIndexes(sharedStrings, scanned.sharedStringIndexes)
+      if (!richSharedStringIndexes) {
+        return null
+      }
+      if (richSharedStringIndexes.size === 0) {
         if (scanned.cellScan.arena.resolveSharedStrings(sharedStrings) === null) {
           return null
         }
@@ -486,7 +490,10 @@ export function tryImportLargeSimpleXlsx(
         }
         continue
       }
-      const sheetSharedStrings = createLargeSimpleSharedStringSubset(sharedStrings, scanned.sharedStringIndexes)
+      if (!scanned.cellScan.arena.resolveSharedStringsExcept(sharedStrings, richSharedStringIndexes)) {
+        return null
+      }
+      const sheetSharedStrings = createLargeSimpleSharedStringSubset(sharedStrings, richSharedStringIndexes)
       if (sheetSharedStrings === null) {
         return null
       }
