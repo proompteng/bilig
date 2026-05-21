@@ -197,7 +197,7 @@ export class LargeSimpleWorksheetStreamMetadataCollector {
         readElementAttribute(tagXml, 'r:id') ?? readElementAttribute(tagXml, 'id') ?? this.legacyDrawingRelationshipId
       return true
     }
-    if (localName === 'oleObjects') {
+    if (localName === 'controls' || localName === 'oleObjects') {
       this.controlArtifactsXml ??= []
       this.controlArtifactsXml.push(decodeBytes(buffer, startIndex, endIndex))
       return true

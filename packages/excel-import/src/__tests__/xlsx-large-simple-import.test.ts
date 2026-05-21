@@ -1070,7 +1070,7 @@ describe('large simple XLSX import fast path', () => {
       { range: { sheetName: 'Data', startAddress: 'A2', endAddress: 'A2' }, styleId },
     ])
     expect(imported?.snapshot.workbook.metadata?.styles).toEqual([{ id: styleId, fill: { backgroundColor: '#ffcc00' } }])
-    expect(stylesStreamCount()).toBe(2)
+    expect(stylesStreamCount()).toBe(3)
   })
 
   it('compacts broad style-only blank templates into style ranges without SheetJS fallback', () => {
@@ -1101,6 +1101,46 @@ describe('large simple XLSX import fast path', () => {
 
     expect(imported?.snapshot.sheets[0]?.cells).toEqual([{ address: 'A1', value: 123 }])
     expect(styleRanges).toEqual([{ range: { sheetName: 'Data', startAddress: 'A1', endAddress: 'T3001' }, styleId }])
+  })
+
+  it('preserves number formats on populated and style-only blank cells without SheetJS fallback', () => {
+    const bytes = buildLargeSimpleWorkbook({
+      includeSharedStrings: false,
+      includeStyles: true,
+      worksheetXml: [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<dimension ref="A1:A2"/>',
+        '<sheetData><row r="1"><c r="A1" s="1"><v>123</v></c></row><row r="2"><c r="A2" s="1"/></row></sheetData>',
+        '</worksheet>',
+      ].join(''),
+      extraEntries: {
+        'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="1"><numFmt numFmtId="164" formatCode="00000"/></numFmts>
+  <fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/></cellXfs>
+</styleSheet>`,
+      },
+    })
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('number-formatted blank cells should be streamed instead of forcing SheetJS fallback')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'formatted-blanks.xlsx', zip, { minByteLength: 0 })
+
+    expect(imported?.warnings).toEqual([])
+    expect(imported?.snapshot.sheets[0]?.cells).toEqual([
+      { address: 'A1', value: 123, format: '00000' },
+      { address: 'A2', format: '00000' },
+    ])
   })
 
   it('imports simple formula cells with cached values without falling back to SheetJS', () => {

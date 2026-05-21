@@ -1,9 +1,10 @@
-export const unsupportedWorksheetTagNames = new Set(['controls', 'picture'])
+export const unsupportedWorksheetTagNames = new Set(['picture'])
 
 export const metadataWorksheetTagNames = new Set([
   'autoFilter',
   'colBreaks',
   'cols',
+  'controls',
   'conditionalFormatting',
   'dataValidations',
   'drawing',

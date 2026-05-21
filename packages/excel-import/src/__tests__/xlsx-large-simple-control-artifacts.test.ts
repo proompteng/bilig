@@ -9,6 +9,7 @@ import { readXlsxZipEntriesLazy } from '../xlsx-zip.js'
 const relationshipNamespace = 'http://schemas.openxmlformats.org/package/2006/relationships'
 const worksheetRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'
 const vmlDrawingRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing'
+const controlRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/control'
 const oleObjectRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject'
 const imageRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
 
@@ -58,6 +59,38 @@ describe('large simple XLSX control artifacts', () => {
     expect(inspected?.stats.cellCount).toBe(3)
     expect(inspected?.stats.sheetCount).toBe(2)
   })
+
+  it('streams controls metadata without forcing SheetJS fallback', () => {
+    const bytes = buildWorkbookWithControls()
+    const zip = readXlsxZipEntriesLazy(bytes)
+    Object.defineProperty(zip, 'xl/worksheets/sheet1.xml', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('sheet XML should be streamed instead of inflated')
+      },
+    })
+
+    const imported = tryImportLargeSimpleXlsx(bytes, 'controls.xlsx', zip, {
+      minByteLength: 0,
+      releaseZipSource: true,
+    })
+
+    expect(imported?.stats.cellCount).toBe(3)
+    expect(imported?.snapshot.workbook.metadata?.controlArtifacts?.parts.map((part) => part.path).toSorted()).toEqual([
+      'xl/activeX/activeX1.xml',
+      'xl/drawings/vmlDrawing1.vml',
+    ])
+    expect(imported?.snapshot.sheets[0]?.metadata?.controlArtifacts?.controlsXml).toContain('<controls>')
+    expect(
+      imported?.snapshot.sheets[0]?.metadata?.controlArtifacts?.relationships.map((relationship) => relationship.type).toSorted(),
+    ).toEqual([controlRelationshipType, vmlDrawingRelationshipType])
+
+    const exported = exportXlsx(imported!.snapshot)
+    expect(readZipText(exported, 'xl/worksheets/sheet1.xml')).toContain('<controls>')
+    expect(readZipText(exported, 'xl/activeX/activeX1.xml')).toBe(activeXControlXml)
+    expect(readZipText(exported, 'xl/drawings/vmlDrawing1.vml')).toBe(vmlDrawingXml)
+  })
 })
 
 function buildWorkbookWithOleObject(): Uint8Array {
@@ -71,6 +104,19 @@ function buildWorkbookWithOleObject(): Uint8Array {
     'xl/drawings/vmlDrawing1.vml': strToU8(vmlDrawingXml),
     'xl/embeddings/Microsoft_Word_97_-_2003_Document.doc': strToU8(embeddedDocumentText),
     'xl/media/image1.emf': strToU8(emfImageText),
+  })
+}
+
+function buildWorkbookWithControls(): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(contentTypesXml),
+    'xl/workbook.xml': strToU8(workbookXml),
+    'xl/_rels/workbook.xml.rels': strToU8(workbookRelationshipsXml),
+    'xl/worksheets/sheet1.xml': strToU8(controlsWorksheetXml),
+    'xl/worksheets/sheet2.xml': strToU8(dataWorksheetXml),
+    'xl/worksheets/_rels/sheet1.xml.rels': strToU8(controlsWorksheetRelationshipsXml),
+    'xl/drawings/vmlDrawing1.vml': strToU8(vmlDrawingXml),
+    'xl/activeX/activeX1.xml': strToU8(activeXControlXml),
   })
 }
 
@@ -150,5 +196,24 @@ const readMeWorksheetRelationshipsXml = [
 ].join('')
 
 const vmlDrawingXml = '<xml xmlns:v="urn:schemas-microsoft-com:vml"><v:shape id="_x0000_s1025"/></xml>'
+const controlsWorksheetXml = [
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+  '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ',
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+  '<dimension ref="A1"/>',
+  '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Run control</t></is></c></row></sheetData>',
+  '<legacyDrawing r:id="rId3"/>',
+  '<controls><control shapeId="1025" name="Button 1" r:id="rId4"/></controls>',
+  '</worksheet>',
+].join('')
+const controlsWorksheetRelationshipsXml = [
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+  `<Relationships xmlns="${relationshipNamespace}">`,
+  `<Relationship Id="rId3" Type="${vmlDrawingRelationshipType}" Target="../drawings/vmlDrawing1.vml"/>`,
+  `<Relationship Id="rId4" Type="${controlRelationshipType}" Target="../activeX/activeX1.xml"/>`,
+  '</Relationships>',
+].join('')
+const activeXControlXml =
+  '<ax:ocx xmlns:ax="http://schemas.microsoft.com/office/2006/activeX" classid="{00000000-0000-0000-0000-000000000000}"/>'
 const embeddedDocumentText = 'embedded-doc-fixture'
 const emfImageText = 'emf-image-fixture'

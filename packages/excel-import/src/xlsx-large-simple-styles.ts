@@ -1,4 +1,11 @@
-import type { CellStyleFontSnapshot, CellStyleRecord } from '@bilig/protocol'
+import type {
+  CellHorizontalAlignment,
+  CellStyleAlignmentSnapshot,
+  CellStyleFontSnapshot,
+  CellStyleProtectionSnapshot,
+  CellStyleRecord,
+  CellVerticalAlignment,
+} from '@bilig/protocol'
 
 type ImportedCellStyle = Omit<CellStyleRecord, 'id'>
 
@@ -34,24 +41,27 @@ export function readLargeSimpleWorkbookStyles(
     if (!openingTag) {
       return null
     }
-    const numFmtId = readNonNegativeIntegerAttribute(openingTag, 'numFmtId')
-    if (numFmtId !== null && numFmtId !== 0) {
-      return null
-    }
     const fillId = readNonNegativeIntegerAttribute(openingTag, 'fillId')
     const fontId = readNonNegativeIntegerAttribute(openingTag, 'fontId')
     const borderId = readNonNegativeIntegerAttribute(openingTag, 'borderId')
-    if (isApplied(openingTag, 'applyBorder', borderId) || hasChildElement(xfXml, 'alignment') || hasChildElement(xfXml, 'protection')) {
+    if (isApplied(openingTag, 'applyBorder', borderId)) {
       return null
     }
     const fill = isApplied(openingTag, 'applyFill', fillId) ? fills[fillId ?? -1] : undefined
     const font = isApplied(openingTag, 'applyFont', fontId) ? fonts[fontId ?? -1] : undefined
+    const alignment = readBooleanAttribute(readAttribute(openingTag, 'applyAlignment')) === true ? readAlignmentStyle(xfXml) : undefined
+    const protection =
+      readBooleanAttribute(readAttribute(openingTag, 'applyProtection')) === true
+        ? (readProtectionStyle(xfXml) ?? {})
+        : readProtectionStyle(xfXml)
     if (fill === null || font === null) {
       return null
     }
     const style: ImportedCellStyle = {
       ...(fill ? { fill } : {}),
       ...(font ? { font } : {}),
+      ...(alignment ? { alignment } : {}),
+      ...(protection !== undefined ? { protection } : {}),
     }
     if (Object.keys(style).length > 0) {
       styles.set(styleIndex, style)
@@ -107,6 +117,8 @@ export function readLargeSimpleWorkbookStylesFromChunks(
     const style: ImportedCellStyle = {
       ...(fill ? { fill } : {}),
       ...(font ? { font } : {}),
+      ...(refs.alignment ? { alignment: refs.alignment } : {}),
+      ...(refs.protection !== undefined ? { protection: refs.protection } : {}),
     }
     if (Object.keys(style).length > 0) {
       styles.set(styleIndex, style)
@@ -120,6 +132,8 @@ interface StyleComponentRefs {
   readonly fontId: number | null
   readonly fillApplied: boolean
   readonly fontApplied: boolean
+  readonly alignment?: CellStyleAlignmentSnapshot
+  readonly protection?: CellStyleProtectionSnapshot
 }
 
 function readStyleComponentRefs(xfXml: string): StyleComponentRefs | null {
@@ -127,21 +141,24 @@ function readStyleComponentRefs(xfXml: string): StyleComponentRefs | null {
   if (!openingTag) {
     return null
   }
-  const numFmtId = readNonNegativeIntegerAttribute(openingTag, 'numFmtId')
-  if (numFmtId !== null && numFmtId !== 0) {
-    return null
-  }
   const fillId = readNonNegativeIntegerAttribute(openingTag, 'fillId')
   const fontId = readNonNegativeIntegerAttribute(openingTag, 'fontId')
   const borderId = readNonNegativeIntegerAttribute(openingTag, 'borderId')
-  if (isApplied(openingTag, 'applyBorder', borderId) || hasChildElement(xfXml, 'alignment') || hasChildElement(xfXml, 'protection')) {
+  if (isApplied(openingTag, 'applyBorder', borderId)) {
     return null
   }
+  const alignment = readBooleanAttribute(readAttribute(openingTag, 'applyAlignment')) === true ? readAlignmentStyle(xfXml) : undefined
+  const protection =
+    readBooleanAttribute(readAttribute(openingTag, 'applyProtection')) === true
+      ? (readProtectionStyle(xfXml) ?? {})
+      : readProtectionStyle(xfXml)
   return {
     fillId,
     fontId,
     fillApplied: isApplied(openingTag, 'applyFill', fillId),
     fontApplied: isApplied(openingTag, 'applyFont', fontId),
+    ...(alignment ? { alignment } : {}),
+    ...(protection !== undefined ? { protection } : {}),
   }
 }
 
@@ -207,10 +224,6 @@ function extractElementXml(xml: string, elementName: string): string | null {
   return pattern.exec(xml)?.[0] ?? null
 }
 
-function hasChildElement(xml: string, elementName: string): boolean {
-  return new RegExp(`<(?:[A-Za-z_][\\w.-]*:)?${elementName}\\b`, 'u').test(xml.replace(/^<[^>]*>/u, ''))
-}
-
 function readElementValue(xml: string, elementName: string): string | undefined {
   const elementXml = extractElementXml(xml, elementName)
   if (!elementXml) {
@@ -251,6 +264,90 @@ function readColor(xml: string, elementName: string): string | undefined {
     return `#${normalized.toLocaleLowerCase('en-US')}`
   }
   return undefined
+}
+
+function readAlignmentStyle(xfXml: string): CellStyleAlignmentSnapshot | undefined {
+  const alignmentXml = extractElementXml(xfXml, 'alignment')
+  if (!alignmentXml) {
+    return undefined
+  }
+  const openingTag = /<(?:[A-Za-z_][\w.-]*:)?alignment\b(?:[^>"']|"[^"]*"|'[^']*')*(?:\/>|>)/u.exec(alignmentXml)?.[0]
+  if (!openingTag) {
+    return undefined
+  }
+  const horizontal = readHorizontalAlignment(readAttribute(openingTag, 'horizontal'))
+  const vertical = readVerticalAlignment(readAttribute(openingTag, 'vertical'))
+  const indent = readNumberAttribute(openingTag, 'indent')
+  const readingOrder = readNumberAttribute(openingTag, 'readingOrder')
+  const textRotation = readNumberAttribute(openingTag, 'textRotation')
+  const alignment: CellStyleAlignmentSnapshot = {
+    ...(horizontal ? { horizontal } : {}),
+    ...(vertical ? { vertical } : {}),
+    ...(readBooleanAttribute(readAttribute(openingTag, 'wrapText')) === true ? { wrap: true } : {}),
+    ...(indent !== null && indent >= 0 ? { indent } : {}),
+    ...(readBooleanAttribute(readAttribute(openingTag, 'shrinkToFit')) === true ? { shrinkToFit: true } : {}),
+    ...(readingOrder !== null ? { readingOrder } : {}),
+    ...(textRotation !== null ? { textRotation } : {}),
+    ...(readBooleanAttribute(readAttribute(openingTag, 'justifyLastLine')) === true ? { justifyLastLine: true } : {}),
+  }
+  return Object.keys(alignment).length > 0 ? alignment : undefined
+}
+
+function readProtectionStyle(xfXml: string): CellStyleProtectionSnapshot | undefined {
+  const protectionXml = extractElementXml(xfXml, 'protection')
+  if (!protectionXml) {
+    return undefined
+  }
+  const openingTag = /<(?:[A-Za-z_][\w.-]*:)?protection\b(?:[^>"']|"[^"]*"|'[^']*')*(?:\/>|>)/u.exec(protectionXml)?.[0]
+  if (!openingTag) {
+    return undefined
+  }
+  const locked = readBooleanAttribute(readAttribute(openingTag, 'locked'))
+  const hidden = readBooleanAttribute(readAttribute(openingTag, 'hidden'))
+  return {
+    ...(locked !== undefined ? { locked } : {}),
+    ...(hidden !== undefined ? { hidden } : {}),
+  }
+}
+
+function readHorizontalAlignment(value: string | undefined): CellHorizontalAlignment | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  switch (value) {
+    case 'general':
+    case 'left':
+    case 'center':
+    case 'right':
+    case 'fill':
+    case 'justify':
+    case 'centerContinuous':
+    case 'distributed':
+      return value
+    default:
+      return undefined
+  }
+}
+
+function readVerticalAlignment(value: string | undefined): CellVerticalAlignment | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  switch (value) {
+    case 'top':
+      return 'top'
+    case 'center':
+    case 'middle':
+      return 'middle'
+    case 'bottom':
+      return 'bottom'
+    case 'justify':
+      return 'justify'
+    case 'distributed':
+      return 'distributed'
+    default:
+      return undefined
+  }
 }
 
 function collectIndexedXmlElementsFromChunks(
@@ -589,6 +686,25 @@ function readNonNegativeIntegerAttribute(tag: string, attributeName: string): nu
   }
   const number = Number(value)
   return Number.isSafeInteger(number) ? number : null
+}
+
+function readNumberAttribute(tag: string, attributeName: string): number | null {
+  const value = readAttribute(tag, attributeName)
+  if (value === undefined || value.trim().length === 0) {
+    return null
+  }
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function readBooleanAttribute(value: string | undefined): boolean | undefined {
+  if (value === '1' || value?.toLocaleLowerCase('en-US') === 'true') {
+    return true
+  }
+  if (value === '0' || value?.toLocaleLowerCase('en-US') === 'false') {
+    return false
+  }
+  return undefined
 }
 
 function readAttribute(tag: string, attributeName: string): string | undefined {

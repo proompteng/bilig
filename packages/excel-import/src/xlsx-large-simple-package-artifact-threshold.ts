@@ -7,11 +7,5 @@ export function shouldBypassLargeSimpleByteThresholdForPackageArtifacts(workbook
 }
 
 export function hasFullImporterOnlyPackageMetadata(workbookZip: Unzipped): boolean {
-  return Object.keys(workbookZip).some(
-    (path) =>
-      path.startsWith('xl/comments') ||
-      path.startsWith('xl/threadedComments/') ||
-      path.endsWith('.vml') ||
-      path.includes('/printerSettings/'),
-  )
+  return Object.keys(workbookZip).some((path) => path.startsWith('xl/comments') || path.startsWith('xl/threadedComments/'))
 }

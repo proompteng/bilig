@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Unzipped } from 'fflate'
 
-import { shouldBypassLargeSimpleByteThresholdForPackageArtifacts } from '../xlsx-large-simple-package-artifact-threshold.js'
+import {
+  hasFullImporterOnlyPackageMetadata,
+  shouldBypassLargeSimpleByteThresholdForPackageArtifacts,
+} from '../xlsx-large-simple-package-artifact-threshold.js'
 
 describe('large simple XLSX package artifact threshold', () => {
   it('bypasses the byte threshold for data-model package artifacts', () => {
@@ -16,6 +19,13 @@ describe('large simple XLSX package artifact threshold', () => {
         zipWith(['xl/pivotTables/pivotTable1.xml', 'xl/pivotCache/pivotCacheDefinition1.xml']),
       ),
     ).toBe(false)
+  })
+
+  it('does not force SheetJS fallback for package metadata the streaming importer preserves', () => {
+    expect(hasFullImporterOnlyPackageMetadata(zipWith(['xl/comments1.xml']))).toBe(true)
+    expect(hasFullImporterOnlyPackageMetadata(zipWith(['xl/threadedComments/threadedComment1.xml']))).toBe(true)
+    expect(hasFullImporterOnlyPackageMetadata(zipWith(['xl/printerSettings/printerSettings1.bin']))).toBe(false)
+    expect(hasFullImporterOnlyPackageMetadata(zipWith(['xl/drawings/vmlDrawing1.vml']))).toBe(false)
   })
 })
 
