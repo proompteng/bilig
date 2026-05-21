@@ -19,6 +19,7 @@ function readHeadlessPackageVersion(): string {
 }
 
 export const homepageRequiredLinks = [
+  'https://context7.com/proompteng/bilig',
   './why-use-bilig.html',
   './why-agents-need-workbook-apis.html',
   './stop-driving-spreadsheets-with-screenshots.html',
@@ -69,6 +70,8 @@ export const homepageRequiredLinks = [
 
 export const llmsRequiredLinks = [
   'repository: https://github.com/proompteng/bilig',
+  'context7 indexed docs: https://context7.com/proompteng/bilig',
+  'context7 library id: /proompteng/bilig',
   'npm workpaper package: https://www.npmjs.com/package/@bilig/workpaper',
   'npm xlsx recalculation package: https://www.npmjs.com/package/@bilig/xlsx-formula-recalc',
   'npm SheetJS recalculation package: https://www.npmjs.com/package/@bilig/sheetjs-formula-recalc',
@@ -87,6 +90,7 @@ export const llmsRequiredLinks = [
   'https://proompteng.github.io/bilig/agent.json',
   'https://proompteng.github.io/bilig/skill.txt',
   'https://proompteng.github.io/bilig/llms-full.txt',
+  'https://context7.com/proompteng/bilig',
   'https://proompteng.github.io/bilig/why-use-bilig.html',
   'https://proompteng.github.io/bilig/sheetjs-formula-result-not-updating-node.html',
   'https://github.com/proompteng/bilig/blob/main/docs/why-use-bilig.md',

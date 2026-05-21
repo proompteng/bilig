@@ -5,6 +5,8 @@
 
 site: https://proompteng.github.io/bilig/
 repository: https://github.com/proompteng/bilig
+context7 indexed docs: https://context7.com/proompteng/bilig
+context7 library id: /proompteng/bilig
 npm workpaper package: https://www.npmjs.com/package/@bilig/workpaper
 npm xlsx recalculation package: https://www.npmjs.com/package/@bilig/xlsx-formula-recalc
 npm SheetJS recalculation package: https://www.npmjs.com/package/@bilig/sheetjs-formula-recalc
@@ -73,6 +75,7 @@ restoring it, and confirming the restored value matches. Return `editedCell`,
 - https://proompteng.github.io/bilig/AGENTS.md
 - https://proompteng.github.io/bilig/skill.txt
 - https://proompteng.github.io/bilig/llms-full.txt
+- https://context7.com/proompteng/bilig
 - https://proompteng.github.io/bilig/stop-driving-spreadsheets-with-screenshots.html
 - https://proompteng.github.io/bilig/show-hn-formula-workbooks-node-services.html
 - https://proompteng.github.io/bilig/formula-workbooks-node-services-agent-tools.html
