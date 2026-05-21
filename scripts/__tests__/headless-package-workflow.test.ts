@@ -130,6 +130,7 @@ describe('headless package workflow', () => {
     expect(source).toContain("github.event.inputs.publish_runtime_packages != 'false'")
     expect(source).toContain('publish-n8n-workpaper-node')
     expect(source).toContain('id-token: write')
+    expect(source).toContain('unset NODE_AUTH_TOKEN')
     expect(source).toContain("npm publish \"${publish_args[@]}\"")
     expect(source).toContain('npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version')
   })

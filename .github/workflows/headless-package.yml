@@ -1161,6 +1161,7 @@ jobs:
             publish_args+=(--dry-run)
           fi
 
+          unset NODE_AUTH_TOKEN
           npm publish "${publish_args[@]}"
 
       - name: Verify n8n community node is visible on npm
