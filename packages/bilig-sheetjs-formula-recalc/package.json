@@ -1,6 +1,6 @@
 {
   "name": "@bilig/sheetjs-formula-recalc",
-  "version": "0.40.40",
+  "version": "0.40.41",
   "description": "Scoped SheetJS formula recalculation package for Node.js without Excel, LibreOffice, or browser automation.",
   "keywords": [
     "bilig",

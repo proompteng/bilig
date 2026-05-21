@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.41
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.40
+- Manual override: no
+
+## Fixes
+- perf(excel-import): retain only rich shared string refs (8c14a27a)
+
+## Internal runtime changes
+- ci(n8n): prefer oidc for npm publish (a16fffe0)
+
 ## 0.40.40
 
 - Release type: patch
