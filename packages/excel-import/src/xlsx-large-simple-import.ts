@@ -1,10 +1,4 @@
-import type {
-  CellStyleRecord,
-  WorkbookConditionalFormatSnapshot,
-  SheetMetadataSnapshot,
-  WorkbookSnapshot,
-  WorkbookTableSnapshot,
-} from '@bilig/protocol'
+import type { CellStyleRecord, SheetMetadataSnapshot, WorkbookSnapshot, WorkbookTableSnapshot } from '@bilig/protocol'
 import { attachRuntimeImage } from '@bilig/core'
 import { createSheetPreview, normalizeWorkbookName } from './workbook-import-helpers.js'
 import { XLSX_CONTENT_TYPE } from './workbook-import-content-types.js'
@@ -27,6 +21,11 @@ import { buildLargeSimpleCellMetadataReferenceSnapshots } from './xlsx-large-sim
 import { readWorkbookDefinedNames } from './xlsx-large-simple-defined-names.js'
 import { readLargeSimpleSheetHyperlinks, resolveLargeSimpleSheetHyperlinks } from './xlsx-large-simple-hyperlinks.js'
 import { LargeSimpleXlsxImportPhaseRecorder, type LargeSimpleXlsxImportPhaseTelemetry } from './xlsx-large-simple-import-telemetry.js'
+import {
+  appendLargeSimpleConditionalFormats,
+  normalizeLargeSimpleConditionalFormatIds,
+  readLargeSimpleConditionalFormattingBlockCount,
+} from './xlsx-large-simple-conditional-format-helpers.js'
 import { internLargeSimpleWorksheetMetadata } from './xlsx-large-simple-metadata-interning.js'
 import { prepareLargeSimplePackageArtifactsForZipRelease } from './xlsx-large-simple-package-artifact-release.js'
 import { readLargeSimpleSheetPrintMetadata, readLargeSimpleSheetPrintPageSetup } from './xlsx-large-simple-printer-settings.js'
@@ -48,16 +47,14 @@ import { collectLargeSimpleImportGarbage } from './xlsx-large-simple-garbage.js'
 import { mergeWorkbookRichTextCells } from './xlsx-large-simple-lazy-rich-text-cells.js'
 import { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 import { readWorkbookSheets, readWorksheetPathsByRelationshipId } from './xlsx-large-simple-workbook-metadata.js'
-import { ImportedWorkbookArena, ImportedWorksheetStyleIndexArena, type ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
+import type { ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import {
   largeSimpleControlArtifactSheetSources,
   largeSimpleLegacyCommentVmlSheetSources,
   largeSimpleSlicerConnectionSheetSources,
 } from './xlsx-large-simple-package-artifact-sources.js'
-import {
-  parseHeadlessLargeSimpleWorksheetFromChunks,
-  type HeadlessLargeSimpleWorksheetScan,
-} from './xlsx-large-simple-headless-worksheet-scanner.js'
+import { parseHeadlessLargeSimpleWorksheetFromChunks } from './xlsx-large-simple-headless-worksheet-scanner.js'
+import { importedWorksheetCellScanFromHeadless } from './xlsx-large-simple-headless-cell-scan.js'
 import {
   hasUnsupportedLargeSimpleWorksheetTags,
   needsLargeSimpleWorksheetMetadataXml,
@@ -427,7 +424,7 @@ export function tryImportLargeSimpleXlsx(
         const conditionalFormatArtifacts = hasConditionalFormats
           ? readImportedSheetConditionalFormatArtifactsFromWorksheetXml(worksheetXml)
           : undefined
-        metadataInput = appendConditionalFormats(
+        metadataInput = appendLargeSimpleConditionalFormats(
           {
             ...(hyperlinks ? { hyperlinks } : {}),
             ...(filters.length > 0 ? { filters } : {}),
@@ -436,11 +433,11 @@ export function tryImportLargeSimpleXlsx(
           conditionalFormats,
         )
       } else {
-        metadataInput = appendConditionalFormats(metadataInput, conditionalFormats)
+        metadataInput = appendLargeSimpleConditionalFormats(metadataInput, conditionalFormats)
       }
     }
     if (streamedMetadataScan?.conditionalFormats && streamedMetadataScan.conditionalFormats.length > 0) {
-      metadataInput = appendConditionalFormats(metadataInput, streamedMetadataScan.conditionalFormats)
+      metadataInput = appendLargeSimpleConditionalFormats(metadataInput, streamedMetadataScan.conditionalFormats)
     }
     if (materializeMetadata && streamedMetadataScan?.conditionalFormattingXml && streamedMetadataScan.conditionalFormattingXml.length > 0) {
       const conditionalFormats = readImportedSheetConditionalFormatsFromElementXml(
@@ -451,7 +448,7 @@ export function tryImportLargeSimpleXlsx(
       const conditionalFormatArtifacts = materializeCells
         ? readImportedSheetConditionalFormatArtifactsFromElementXml(streamedMetadataScan.conditionalFormattingXml)
         : undefined
-      metadataInput = appendConditionalFormats(
+      metadataInput = appendLargeSimpleConditionalFormats(
         {
           ...metadataInput,
           ...(conditionalFormatArtifacts ? { conditionalFormatArtifacts } : {}),
@@ -848,32 +845,6 @@ export function tryImportLargeSimpleXlsx(
   }
 }
 
-function appendConditionalFormats(
-  input: LargeSimpleSheetMetadataInput,
-  conditionalFormats: readonly WorkbookConditionalFormatSnapshot[] | undefined,
-): LargeSimpleSheetMetadataInput {
-  if (!conditionalFormats || conditionalFormats.length === 0) {
-    return input
-  }
-  return {
-    ...input,
-    conditionalFormats: [...(input.conditionalFormats ?? []), ...conditionalFormats],
-  }
-}
-
-function normalizeConditionalFormatIds(
-  sheetName: string,
-  conditionalFormats: readonly WorkbookConditionalFormatSnapshot[] | undefined,
-): SheetMetadataSnapshot['conditionalFormats'] | undefined {
-  if (!conditionalFormats || conditionalFormats.length === 0) {
-    return undefined
-  }
-  return conditionalFormats.map((format, index) => ({
-    ...format,
-    id: `xlsx-cf:${sheetName}:${format.range.startAddress}:${format.range.endAddress}:${String(index + 1)}`,
-  }))
-}
-
 function buildParsedWorksheet(
   sheetName: string,
   order: number,
@@ -897,8 +868,8 @@ function buildParsedWorksheet(
   const sheetFormatPr = metadataScan?.sheetFormatPr ?? (worksheetXml ? readLargeSimpleSheetFormatPr(worksheetXml) : undefined)
   const conditionalFormatCount =
     input.conditionalFormats?.length ??
-    (worksheetXml ? readConditionalFormattingBlockCount(worksheetXml) : (cellScan.conditionalFormatCount ?? 0))
-  const conditionalFormats = normalizeConditionalFormatIds(sheetName, input.conditionalFormats)
+    (worksheetXml ? readLargeSimpleConditionalFormattingBlockCount(worksheetXml) : (cellScan.conditionalFormatCount ?? 0))
+  const conditionalFormats = normalizeLargeSimpleConditionalFormatIds(sheetName, input.conditionalFormats)
   const dataValidationCount = input.validations?.length ?? cellScan.dataValidationCount ?? 0
   const styleRanges =
     options.materializeCells && options.styleCatalog && options.stylesByIndex
@@ -996,28 +967,4 @@ function drawingRelationshipIdForScannedWorksheet(scanned: ScannedWorksheet): st
     scanned.metadataScan?.drawingRelationshipId ??
     (scanned.worksheetXml ? readLargeSimpleDrawingRelationshipId(scanned.worksheetXml) : undefined)
   )
-}
-
-function readConditionalFormattingBlockCount(worksheetXml: string): number {
-  return [...worksheetXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?conditionalFormatting\b/gu)].length
-}
-
-function importedWorksheetCellScanFromHeadless(scan: HeadlessLargeSimpleWorksheetScan): ImportedWorksheetCellScan {
-  return {
-    arena: new ImportedWorkbookArena(),
-    sheetIndex: scan.sheetIndex,
-    richTextCells: [],
-    styleIndexes: new ImportedWorksheetStyleIndexArena(),
-    blankStyleCellCount: 0,
-    cellCount: scan.cellCount,
-    valueCellCount: scan.valueCellCount,
-    formulaCellCount: scan.formulaCellCount,
-    mergeCount: scan.mergeCount,
-    conditionalFormatCount: scan.conditionalFormatCount,
-    dataValidationCount: scan.dataValidationCount ?? 0,
-    tableCount: scan.tableCount,
-    rowCount: scan.rowCount,
-    columnCount: scan.columnCount,
-    usedRange: scan.usedRange,
-  }
 }

@@ -1,0 +1,12 @@
+export const initialCellCapacity = 1024
+export const noPoolId = 0xffffffff
+export const valueKindEmpty = 0
+export const valueKindNumber = 1
+export const valueKindString = 2
+export const valueKindBoolean = 3
+export const valueKindNull = 4
+export const valueKindSharedStringRef = 5
+export const valueKindInteger = 6
+export const valueKindSmallInteger = 7
+export const valueKindTinyInteger = 8
+export const initialSparseIntegerCapacity = 16
