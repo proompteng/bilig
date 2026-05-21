@@ -6,11 +6,28 @@ import {
   readLargeSimpleSharedStrings,
   readLargeSimpleReferencedSharedStringsFromChunks,
 } from '../xlsx-large-simple-shared-strings.js'
+import { LargeSimpleSharedStringIndexCollector } from '../xlsx-large-simple-shared-string-indexes.js'
 import { ImportedWorkbookStringPool } from '../xlsx-large-simple-string-pool.js'
 
 const encoder = new TextEncoder()
 
 describe('large simple shared string streaming', () => {
+  it('finalizes shared-string references into sorted unique typed membership', () => {
+    const collector = new LargeSimpleSharedStringIndexCollector()
+    collector.add(17)
+    collector.add(2)
+    collector.add(17)
+    collector.add(9)
+
+    const indexes = collector.finalize()
+    collector.release()
+
+    expect(indexes.size).toBe(3)
+    expect([...indexes]).toEqual([2, 9, 17])
+    expect(indexes.has(9)).toBe(true)
+    expect(indexes.has(10)).toBe(false)
+  })
+
   it('discards unreferenced shared-string bodies while waiting for the closing tag', () => {
     const retainedBufferLengths: number[] = []
     const largeUnreferencedText = 'x'.repeat(100_000)

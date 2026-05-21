@@ -3,6 +3,7 @@ import type { ImportedWorkbookSheetPreview } from './workbook-import-helpers.js'
 import type { ImportedWorkbookPreview } from './workbook-import-preview.js'
 import type { ImportedWorksheetCellScan } from './xlsx-large-simple-arena.js'
 import type { LargeSimpleXlsxImportPhaseTelemetry } from './xlsx-large-simple-import-telemetry.js'
+import type { LargeSimpleSharedStringIndexSet } from './xlsx-large-simple-shared-string-indexes.js'
 import type { LargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
 import type { LargeSimpleWorksheetScannedMetadata } from './xlsx-large-simple-worksheet-metadata.js'
 
@@ -81,7 +82,7 @@ export interface ScannedWorksheet {
   readonly worksheetXml: string | undefined
   readonly metadataScan: LargeSimpleWorksheetScannedMetadata | undefined
   readonly metadataInput: LargeSimpleSheetMetadataInput
-  readonly sharedStringIndexes: Set<number>
+  readonly sharedStringIndexes: LargeSimpleSharedStringIndexSet
   readonly sharedStrings?: LargeSimpleSharedStrings
   readonly hasUnresolvedSharedStringReferences?: boolean
 }

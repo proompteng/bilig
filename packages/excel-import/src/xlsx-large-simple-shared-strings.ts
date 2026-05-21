@@ -1,6 +1,7 @@
 import type { WorkbookRichTextCellSnapshot } from '@bilig/protocol'
 import { decodeExcelEscapedText } from './xlsx-escaped-text.js'
 import type { ImportedWorkbookArenaDedupeMode } from './xlsx-large-simple-arena-types.js'
+import type { LargeSimpleSharedStringIndexSet } from './xlsx-large-simple-shared-string-indexes.js'
 import type { ImportedWorkbookStringPool } from './xlsx-large-simple-string-pool.js'
 
 export interface LargeSimpleSharedStringEntry {
@@ -52,7 +53,7 @@ export function readLargeSimpleSharedStrings(
 
 export function readLargeSimpleReferencedSharedStringsFromChunks(
   readChunks: (onChunk: (chunk: Uint8Array) => void) => boolean,
-  referencedIndexes: ReadonlySet<number>,
+  referencedIndexes: LargeSimpleSharedStringIndexSet,
   options: LargeSimpleReferencedSharedStringScanOptions = {},
 ): LargeSimpleSharedStrings | null {
   if (referencedIndexes.size === 0) {
@@ -67,7 +68,7 @@ export function readLargeSimpleReferencedSharedStringsFromChunks(
 
 export function createLargeSimpleSharedStringSubset(
   sharedStrings: LargeSimpleSharedStrings,
-  referencedIndexes: ReadonlySet<number>,
+  referencedIndexes: LargeSimpleSharedStringIndexSet,
 ): LargeSimpleSharedStrings | null {
   if (referencedIndexes.size === 0) {
     return []
@@ -87,7 +88,7 @@ export function createLargeSimpleSharedStringSubset(
 
 export function hasReferencedLargeSimpleRichSharedStrings(
   sharedStrings: LargeSimpleSharedStrings,
-  referencedIndexes: ReadonlySet<number>,
+  referencedIndexes: LargeSimpleSharedStringIndexSet,
 ): boolean {
   for (const index of referencedIndexes) {
     if (sharedStrings[index]?.rich) {
@@ -99,7 +100,7 @@ export function hasReferencedLargeSimpleRichSharedStrings(
 
 export function collectReferencedLargeSimpleRichSharedStringIndexes(
   sharedStrings: LargeSimpleSharedStrings,
-  referencedIndexes: ReadonlySet<number>,
+  referencedIndexes: LargeSimpleSharedStringIndexSet,
 ): Set<number> | null {
   const richIndexes = new Set<number>()
   for (const index of referencedIndexes) {
@@ -159,7 +160,7 @@ class LargeSimpleSharedStringChunkScanner {
   private readonly readOptions: LargeSimpleSharedStringReadOptions
 
   constructor(
-    private readonly referencedIndexes: ReadonlySet<number>,
+    private readonly referencedIndexes: LargeSimpleSharedStringIndexSet,
     private readonly options: LargeSimpleReferencedSharedStringScanOptions,
   ) {
     this.readOptions = sharedStringReadOptions(options)

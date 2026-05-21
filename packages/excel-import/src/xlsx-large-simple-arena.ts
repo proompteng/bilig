@@ -11,6 +11,7 @@ import type {
 } from './xlsx-large-simple-arena-types.js'
 import { createLazyWorkbookRichTextCells } from './xlsx-large-simple-lazy-rich-text-cells.js'
 import { createLazyWorkbookSheetCells } from './xlsx-large-simple-lazy-sheet-cells.js'
+import type { LargeSimpleSharedStringIndexSet, LargeSimpleSharedStringIndexSink } from './xlsx-large-simple-shared-string-indexes.js'
 import type { LargeSimpleSharedStrings } from './xlsx-large-simple-shared-strings.js'
 import { decodeCellAddress } from './xlsx-large-simple-xml-byte-utils.js'
 export type { ImportedWorksheetCellScan } from './xlsx-large-simple-cell-scan.js'
@@ -128,7 +129,7 @@ export class ImportedWorkbookArena extends ImportedWorkbookArenaBase {
     return toDisplayText(this.readPreviewValue(row, column))
   }
 
-  collectSharedStringIndexes(output: Set<number>): void {
+  collectSharedStringIndexes(output: LargeSimpleSharedStringIndexSink): void {
     for (let index = 0; index < this.length; index += 1) {
       if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
         continue
@@ -218,7 +219,10 @@ export class ImportedWorkbookArena extends ImportedWorkbookArenaBase {
     )
   }
 
-  resolveSharedStringsExcept(sharedStrings: LargeSimpleSharedStrings, retainedSharedStringIndexes: ReadonlySet<number>): boolean {
+  resolveSharedStringsExcept(
+    sharedStrings: LargeSimpleSharedStrings,
+    retainedSharedStringIndexes: LargeSimpleSharedStringIndexSet,
+  ): boolean {
     for (let index = 0; index < this.length; index += 1) {
       if ((this.valueKinds[index] ?? valueKindEmpty) !== valueKindSharedStringRef) {
         continue
@@ -323,6 +327,7 @@ export class ImportedWorkbookArena extends ImportedWorkbookArenaBase {
 
   releaseMaterializationScratch(): void {
     this.compactSparseStringIds()
+    this.compactRetainedStorage()
     this.stringIdsByValue.clear()
     this.stringDedupeKeys.length = 0
     this.stringDedupeEvictionIndex = 0
@@ -331,6 +336,58 @@ export class ImportedWorkbookArena extends ImportedWorkbookArenaBase {
     this.formulaDedupeEvictionIndex = 0
     this.previewValues.fill(undefined)
     this.previewValueSet.fill(0)
+  }
+
+  private compactRetainedStorage(): void {
+    if (this.sheetIndexes && this.sheetIndexes.length !== this.length) {
+      this.sheetIndexes = this.sheetIndexes.slice(0, this.length)
+    }
+    if (this.linearCellIndexes && this.linearCellIndexes.length !== this.length) {
+      this.linearCellIndexes = this.linearCellIndexes.slice(0, this.length)
+    } else if (this.denseRowMajorWidth === null) {
+      if (this.rows.length !== this.length) {
+        this.rows = this.rows.slice(0, this.length)
+      }
+      if (this.columns.length !== this.length) {
+        this.columns = this.columns.slice(0, this.length)
+      }
+    }
+    if (this.valueKinds.length !== this.length) {
+      this.valueKinds = this.valueKinds.slice(0, this.length)
+    }
+    if (this.numberValues && this.numberValues.length !== this.length) {
+      this.numberValues = this.numberValues.slice(0, this.length)
+    }
+    if (this.tinyIntegerValues && this.tinyIntegerValues.length !== this.length) {
+      this.tinyIntegerValues = this.tinyIntegerValues.slice(0, this.length)
+    }
+    if (this.smallIntegerValues && this.smallIntegerValues.length !== this.length) {
+      this.smallIntegerValues = this.smallIntegerValues.slice(0, this.length)
+    }
+    if (this.integerValues && this.integerValues.length !== this.length) {
+      this.integerValues = this.integerValues.slice(0, this.length)
+    }
+    if (this.stringIds && this.stringIds.length !== this.length) {
+      this.stringIds = this.stringIds.slice(0, this.length)
+    }
+    if (this.booleanValues && this.booleanValues.length !== this.length) {
+      this.booleanValues = this.booleanValues.slice(0, this.length)
+    }
+    if (this.formulaIds && this.formulaIds.length !== this.length) {
+      this.formulaIds = this.formulaIds.slice(0, this.length)
+    }
+    if (this.sparseSmallIntegerCellIndexes && this.sparseSmallIntegerCellIndexes.length !== this.sparseSmallIntegerCount) {
+      this.sparseSmallIntegerCellIndexes = this.sparseSmallIntegerCellIndexes.slice(0, this.sparseSmallIntegerCount)
+    }
+    if (this.sparseSmallIntegerValues && this.sparseSmallIntegerValues.length !== this.sparseSmallIntegerCount) {
+      this.sparseSmallIntegerValues = this.sparseSmallIntegerValues.slice(0, this.sparseSmallIntegerCount)
+    }
+    if (this.sparseIntegerCellIndexes && this.sparseIntegerCellIndexes.length !== this.sparseIntegerCount) {
+      this.sparseIntegerCellIndexes = this.sparseIntegerCellIndexes.slice(0, this.sparseIntegerCount)
+    }
+    if (this.sparseIntegerValues && this.sparseIntegerValues.length !== this.sparseIntegerCount) {
+      this.sparseIntegerValues = this.sparseIntegerValues.slice(0, this.sparseIntegerCount)
+    }
   }
 
   private materializeCellAtArenaIndex(

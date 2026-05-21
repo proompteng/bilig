@@ -4,13 +4,14 @@ import {
   type LargeSimpleSharedStrings,
   type LargeSimpleReferencedSharedStringScanOptions,
 } from './xlsx-large-simple-shared-strings.js'
+import type { LargeSimpleSharedStringIndexSet } from './xlsx-large-simple-shared-string-indexes.js'
 import { forEachInflatedXlsxZipEntryChunk, getZipText, type XlsxZipEntries } from './xlsx-zip.js'
 
 const sharedStringsPath = 'xl/sharedStrings.xml'
 
 export function readReferencedLargeSimpleSharedStrings(
   zip: XlsxZipEntries,
-  referencedIndexes: ReadonlySet<number>,
+  referencedIndexes: LargeSimpleSharedStringIndexSet,
   options: LargeSimpleReferencedSharedStringScanOptions = {},
 ): LargeSimpleSharedStrings | null {
   const streamed = readLargeSimpleReferencedSharedStringsFromChunks(

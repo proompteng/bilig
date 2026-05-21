@@ -96,15 +96,18 @@ describe('large simple XLSX import arena', () => {
   it('releases preview and de-duplication scratch while lazy cells stay readable', () => {
     const pool = new ImportedWorkbookStringPool()
     const arena = new ImportedWorkbookArena(pool)
+    arena.reserveDenseRowMajorCellCapacity(0, 1, 1024)
     const cell = arena.addCell({ sheetIndex: 0, row: 0, column: 0, value: 'Alpha' })
     arena.setFormula(cell, 'B1')
     const lazyCells = arena.createLazySheetCells(0)
+    const retainedBeforeScratchRelease = arena.retainedStorageByteLength()
 
     expect(arena.readPreviewText(0, 0)).toBe('Alpha')
 
     arena.releaseMaterializationScratch()
 
     expect(arena.readPreviewText(0, 0)).toBe('')
+    expect(arena.retainedStorageByteLength()).toBeLessThan(retainedBeforeScratchRelease)
     expect(lazyCells).toHaveLength(1)
     expect(lazyCells[0]).toEqual({ address: 'A1', value: 'Alpha', formula: 'B1' })
     expect([...lazyCells]).toEqual([{ address: 'A1', value: 'Alpha', formula: 'B1' }])

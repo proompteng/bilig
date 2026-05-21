@@ -188,6 +188,7 @@ describe('large simple XLSX import materialization lifetime', () => {
     expect(cells).toHaveLength(rowCount)
     expect(cells?.[0]).toEqual({ address: 'A1', value: 'Repeated shared label' })
     expect(cells?.at(-1)).toEqual({ address: `A${String(rowCount)}`, value: 'Repeated shared label' })
+    expect(imported?.preview.sheets[0]?.previewRows[0]?.[0]).toBe('Repeated shared label')
     expect(imported?.snapshot.sheets[0]?.metadata?.richTextArtifacts).toBeUndefined()
     expect(readLazyXlsxZipSourceByteLength(zip)).toBe(0)
   })
