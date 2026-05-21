@@ -3,22 +3,14 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { unzipSync } from 'fflate'
-
-import { importXlsxFromZipByteSource } from '../packages/excel-import/src/xlsx-byte-source-import.js'
-import type { ImportedWorkbook } from '../packages/excel-import/src/workbook-import-result.js'
-import { readFlagArg, readNumberArg, readStringArg } from './public-workbook-corpus-cli.ts'
-import { fetchBodyBytesWithTimeout } from './public-workbook-corpus-http.ts'
-import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './public-workbook-corpus-process.ts'
-import { FileBackedXlsxZipByteSource } from './public-workbook-corpus-xlsx-byte-source.ts'
+import type { ExternalXlsxStressWorkerSummary } from './external-xlsx-memory-stress-worker.ts'
+import { readNumberArg, readStringArg } from './public-workbook-corpus-cli.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
-const scriptPath = fileURLToPath(import.meta.url)
-const requireModule = createRequire(import.meta.url)
+const workerScriptPath = fileURLToPath(new URL('./external-xlsx-memory-stress-worker.ts', import.meta.url))
 const mib = 1024 * 1024
 const defaultCacheDir = join(rootDir, '.cache', 'external-xlsx-stress')
 const defaultMaxRssBytes = 512 * mib
@@ -86,6 +78,7 @@ export interface ExternalXlsxStressResult {
   readonly maxRssBytes: number
   readonly status: 'passed' | 'failed'
   readonly reason?: string
+  readonly importMode?: ExternalXlsxStressWorkerSummary['importMode']
   readonly sheets?: number
   readonly cells?: number
   readonly formulas?: number
@@ -101,21 +94,32 @@ interface ResolvedWorkbook {
   readonly sha256: string
 }
 
-interface WorkerSummary {
-  readonly sheets: number
-  readonly cells: number
-  readonly formulas: number
-  readonly warnings: number
-  readonly workbookMetadataKeys: readonly string[]
-  readonly sheetMetadataKeys: readonly string[]
-}
-
-interface PublicXlsxImportModule {
-  readonly importXlsx: (bytes: Uint8Array, fileName: string) => ImportedWorkbook
-}
-
 const powerBiSamplesRepositoryUrl = 'https://github.com/microsoft/powerbi-desktop-samples'
 const powerBiSamplesRawBaseUrl = 'https://raw.githubusercontent.com/microsoft/powerbi-desktop-samples/main'
+
+function powerBiSampleXlsxSource(args: {
+  readonly id: string
+  readonly workbookId: string
+  readonly path: string
+  readonly expectedMinBytes: number
+}): ExternalXlsxStressSource {
+  const encodedPath = args.path.split('/').map(encodeURIComponent).join('/')
+  const fileName = basename(args.path)
+  return {
+    id: args.id,
+    sourcePageUrl: `${powerBiSamplesRepositoryUrl}/blob/main/${encodedPath}`,
+    downloadUrl: `${powerBiSamplesRawBaseUrl}/${encodedPath}`,
+    fileName,
+    licenseTitle: 'MIT',
+    workbooks: [
+      {
+        id: args.workbookId,
+        fileName,
+        expectedMinBytes: args.expectedMinBytes,
+      },
+    ],
+  }
+}
 
 export const externalXlsxStressSources: readonly ExternalXlsxStressSource[] = [
   {
@@ -175,34 +179,66 @@ export const externalXlsxStressSources: readonly ExternalXlsxStressSource[] = [
       },
     ],
   },
-  {
-    id: 'powerbi-retail-analysis-xlsx',
-    sourcePageUrl: `${powerBiSamplesRepositoryUrl}/blob/main/powerbi-service-samples/Retail%20Analysis%20Sample-no-PV.xlsx`,
-    downloadUrl: `${powerBiSamplesRawBaseUrl}/powerbi-service-samples/Retail%20Analysis%20Sample-no-PV.xlsx`,
-    fileName: 'Retail Analysis Sample-no-PV.xlsx',
-    licenseTitle: 'MIT',
-    workbooks: [
-      {
-        id: 'powerbi-retail-analysis',
-        fileName: 'Retail Analysis Sample-no-PV.xlsx',
-        expectedMinBytes: 10 * mib,
-      },
-    ],
-  },
-  {
+  powerBiSampleXlsxSource({
+    id: 'powerbi-adventureworks-sales-xlsx',
+    workbookId: 'powerbi-adventureworks-sales',
+    path: 'AdventureWorks Sales Sample/AdventureWorks Sales.xlsx',
+    expectedMinBytes: 13 * mib,
+  }),
+  powerBiSampleXlsxSource({
+    id: 'powerbi-customer-feedback-xlsx',
+    workbookId: 'powerbi-customer-feedback',
+    path: 'Monthly Desktop Blog Samples/2019/customerfeedback.xlsx',
+    expectedMinBytes: 7 * mib,
+  }),
+  powerBiSampleXlsxSource({
     id: 'powerbi-customer-profitability-xlsx',
-    sourcePageUrl: `${powerBiSamplesRepositoryUrl}/blob/main/powerbi-service-samples/Customer%20Profitability%20Sample-no-PV.xlsx`,
-    downloadUrl: `${powerBiSamplesRawBaseUrl}/powerbi-service-samples/Customer%20Profitability%20Sample-no-PV.xlsx`,
-    fileName: 'Customer Profitability Sample-no-PV.xlsx',
-    licenseTitle: 'MIT',
-    workbooks: [
-      {
-        id: 'powerbi-customer-profitability',
-        fileName: 'Customer Profitability Sample-no-PV.xlsx',
-        expectedMinBytes: 2 * mib,
-      },
-    ],
-  },
+    workbookId: 'powerbi-customer-profitability',
+    path: 'powerbi-service-samples/Customer Profitability Sample-no-PV.xlsx',
+    expectedMinBytes: 2 * mib,
+  }),
+  powerBiSampleXlsxSource({
+    id: 'powerbi-human-resources-xlsx',
+    workbookId: 'powerbi-human-resources',
+    path: 'powerbi-service-samples/Human Resources Sample-no-PV.xlsx',
+    expectedMinBytes: 9 * mib,
+  }),
+  powerBiSampleXlsxSource({
+    id: 'powerbi-it-spend-analysis-xlsx',
+    workbookId: 'powerbi-it-spend-analysis',
+    path: 'powerbi-service-samples/IT Spend Analysis Sample-no-PV.xlsx',
+    expectedMinBytes: 1 * mib,
+  }),
+  powerBiSampleXlsxSource({
+    id: 'powerbi-opportunity-tracking-xlsx',
+    workbookId: 'powerbi-opportunity-tracking',
+    path: 'powerbi-service-samples/Opportunity Tracking Sample no PV.xlsx',
+    expectedMinBytes: 640 * 1024,
+  }),
+  powerBiSampleXlsxSource({
+    id: 'powerbi-procurement-analysis-xlsx',
+    workbookId: 'powerbi-procurement-analysis',
+    path: 'powerbi-service-samples/Procurement Analysis Sample-no-PV.xlsx',
+    expectedMinBytes: 14 * mib,
+  }),
+  powerBiSampleXlsxSource({
+    id: 'powerbi-retail-analysis-xlsx',
+    workbookId: 'powerbi-retail-analysis',
+    path: 'powerbi-service-samples/Retail Analysis Sample-no-PV.xlsx',
+    expectedMinBytes: 10 * mib,
+  }),
+  powerBiSampleXlsxSource({
+    id: 'powerbi-sales-marketing-xlsx',
+    workbookId: 'powerbi-sales-marketing',
+    path: 'powerbi-service-samples/Sales and Marketing Sample-no-PV.xlsx',
+    expectedMinBytes: 8 * mib,
+  }),
+  powerBiSampleXlsxSource({
+    id: 'powerbi-supplier-quality-xlsx',
+    workbookId: 'powerbi-supplier-quality',
+    path: 'powerbi-service-samples/Supplier Quality Analysis Sample-no-PV.xlsx',
+    expectedMinBytes: 700 * 1024,
+  }),
 ]
 
 export function buildExternalXlsxStressPlan(args: {
@@ -337,7 +373,7 @@ async function ensureExternalXlsxStressSource(
   const sourceCachePath = join(args.cacheDir, source.fileName)
   const sourceBytes = await readOrFetchSourceBytes(source, sourceCachePath, args)
   if (source.fileName.toLowerCase().endsWith('.zip')) {
-    return extractWorkbookEntries(source, sourceBytes, args.cacheDir)
+    return await extractWorkbookEntries(source, sourceBytes, args.cacheDir)
   }
   const workbook = source.workbooks[0]
   if (!workbook) {
@@ -367,6 +403,7 @@ async function readOrFetchSourceBytes(
   if (existsSync(sourceCachePath)) {
     return readFileSync(sourceCachePath)
   }
+  const { fetchBodyBytesWithTimeout } = await import('./public-workbook-corpus-http.ts')
   const { bytes } = await fetchBodyBytesWithTimeout(
     source.downloadUrl,
     {},
@@ -386,7 +423,12 @@ async function readOrFetchSourceBytes(
   return bytes
 }
 
-function extractWorkbookEntries(source: ExternalXlsxStressSource, sourceBytes: Uint8Array, cacheDir: string): ResolvedWorkbook[] {
+async function extractWorkbookEntries(
+  source: ExternalXlsxStressSource,
+  sourceBytes: Uint8Array,
+  cacheDir: string,
+): Promise<ResolvedWorkbook[]> {
+  const { unzipSync } = await import('fflate')
   const unzipped = unzipSync(sourceBytes)
   const sourceDir = join(cacheDir, source.id)
   mkdirSync(sourceDir, { recursive: true })
@@ -429,9 +471,10 @@ function assertResolvedWorkbook(input: { readonly fixture: ExternalXlsxStressWor
   }
 }
 
-function runStressWorker(workbook: ResolvedWorkbook, maxRssBytes: number, timeoutMs: number): Promise<ExternalXlsxStressResult> {
+async function runStressWorker(workbook: ResolvedWorkbook, maxRssBytes: number, timeoutMs: number): Promise<ExternalXlsxStressResult> {
+  const { startChildRssWatchdog, terminateChildProcess } = await import('./public-workbook-corpus-process.ts')
   return new Promise((resolvePromise) => {
-    const child = spawn(process.execPath, [scriptPath, 'worker', '--file', workbook.path, '--file-name', workbook.fixture.fileName], {
+    const child = spawn(process.execPath, [workerScriptPath, '--file', workbook.path, '--file-name', workbook.fixture.fileName], {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -507,6 +550,7 @@ function runStressWorker(workbook: ResolvedWorkbook, maxRssBytes: number, timeou
           peakRssBytes: peakRssBytes || null,
           maxRssBytes,
           status: 'passed',
+          importMode: parsedWorkerSummary.importMode,
           sheets: parsedWorkerSummary.sheets,
           cells: parsedWorkerSummary.cells,
           formulas: parsedWorkerSummary.formulas,
@@ -521,60 +565,13 @@ function runStressWorker(workbook: ResolvedWorkbook, maxRssBytes: number, timeou
   })
 }
 
-function runWorker(): void {
-  const filePath = resolve(readStringArg('--file', ''))
-  const fileName = readStringArg('--file-name', basename(filePath))
-  const usePublicImport = readFlagArg('--public-import')
-  const imported = usePublicImport ? importPublicXlsx(readFileSync(filePath), fileName) : importFileBackedXlsx(filePath, fileName)
-  collectGarbage()
-  process.stdout.write(`${JSON.stringify(workerSummary(imported))}\n`)
-}
-
-function importPublicXlsx(bytes: Uint8Array, fileName: string): ImportedWorkbook {
-  const importer = readPublicXlsxImportModule(requireModule('../packages/excel-import/src/index.js'))
-  return importer.importXlsx(bytes, fileName)
-}
-
-function importFileBackedXlsx(filePath: string, fileName: string): ImportedWorkbook {
-  const source = new FileBackedXlsxZipByteSource(filePath)
-  try {
-    return importXlsxFromZipByteSource(source, fileName, { attachSourceReaderForUntouchedExport: false })
-  } finally {
-    source.release()
-  }
-}
-
-function workerSummary(imported: ReturnType<typeof importXlsx>): WorkerSummary {
-  let cells = 0
-  let formulas = 0
-  const sheetMetadataKeys = new Set<string>()
-  for (const sheet of imported.snapshot.sheets) {
-    cells += sheet.cells.length
-    for (const cell of sheet.cells) {
-      if ('formula' in cell) {
-        formulas += 1
-      }
-    }
-    for (const key of Object.keys(sheet.metadata ?? {})) {
-      sheetMetadataKeys.add(key)
-    }
-  }
-  return {
-    sheets: imported.snapshot.sheets.length,
-    cells,
-    formulas,
-    warnings: imported.warnings.length,
-    workbookMetadataKeys: Object.keys(imported.snapshot.workbook.metadata ?? {}).toSorted(),
-    sheetMetadataKeys: [...sheetMetadataKeys].toSorted(),
-  }
-}
-
-function parseWorkerSummaryJson(stdout: string): WorkerSummary {
+function parseWorkerSummaryJson(stdout: string): ExternalXlsxStressWorkerSummary {
   const value: unknown = JSON.parse(stdout)
   if (!isRecord(value)) {
     throw new Error('Expected worker summary object')
   }
   return {
+    importMode: readWorkerImportMode(value),
     sheets: readWorkerNumber(value, 'sheets'),
     cells: readWorkerNumber(value, 'cells'),
     formulas: readWorkerNumber(value, 'formulas'),
@@ -582,6 +579,14 @@ function parseWorkerSummaryJson(stdout: string): WorkerSummary {
     workbookMetadataKeys: readWorkerStringArray(value, 'workbookMetadataKeys'),
     sheetMetadataKeys: readWorkerStringArray(value, 'sheetMetadataKeys'),
   }
+}
+
+function readWorkerImportMode(record: Readonly<Record<string, unknown>>): ExternalXlsxStressWorkerSummary['importMode'] {
+  const value = record['importMode']
+  if (value === 'headless-inspect' || value === 'public-snapshot') {
+    return value
+  }
+  throw new Error('Expected worker summary import mode')
 }
 
 function readWorkerNumber(record: Readonly<Record<string, unknown>>, key: string): number {
@@ -604,32 +609,23 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function readPublicXlsxImportModule(value: unknown): PublicXlsxImportModule {
-  if (isRecord(value) && typeof value['importXlsx'] === 'function') {
-    return { importXlsx: value['importXlsx'] }
-  }
-  throw new Error('Public XLSX importer module is missing required exports')
-}
-
 function compactWorkerOutput(value: string): string {
   return value.replace(/\s+/gu, ' ').trim().slice(0, 1_000)
 }
 
-function collectGarbage(): void {
-  if (typeof Bun !== 'undefined' && typeof Bun.gc === 'function') {
-    Bun.gc(true)
-    return
+function formatByteSize(bytes: number): string {
+  const gib = bytes / 1024 / 1024 / 1024
+  if (gib >= 1) {
+    return `${gib.toFixed(2)} GiB`
   }
-  const gc = Reflect.get(globalThis, 'gc')
-  if (typeof gc === 'function') {
-    gc()
-  }
+  return `${(bytes / mib).toFixed(1)} MiB`
 }
 
 async function main(): Promise<void> {
   const command = process.argv[2] ?? 'plan'
   if (command === 'worker') {
-    runWorker()
+    const { runExternalXlsxStressWorker } = await import('./external-xlsx-memory-stress-worker.ts')
+    runExternalXlsxStressWorker()
     return
   }
   const cacheDir = resolve(readStringArg('--cache-dir', defaultCacheDir))

@@ -74,6 +74,44 @@ export function prepareLargeSimpleStyleIndexes<T extends LargeSimpleStyleCoordin
   return true
 }
 
+export function prepareLargeSimpleStyleIndexForWorksheet(
+  zip: XlsxZipEntries,
+  worksheetEntries: readonly LargeSimpleStyleCoordinateWorksheetEntry[],
+  scanned: LargeSimpleStyleCoordinateScannedWorksheet,
+  options: {
+    readonly hasSharedStrings: boolean
+    readonly allowUnsupportedFormulaText?: boolean
+    readonly allowUnsupportedCellMetadata?: boolean
+  },
+): ImportedWorksheetCellScan['styleIndexes'] | null {
+  if (scanned.cellScan.styleIndexes.hasCoordinateStorage) {
+    return scanned.cellScan.styleIndexes
+  }
+  const entry = worksheetEntries[scanned.cellScan.sheetIndex]
+  if (!entry) {
+    return null
+  }
+  const streamed = parseLargeSimpleWorksheetCellsFromChunks(
+    (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
+    scanned.cellScan.sheetIndex,
+    {
+      hasSharedStrings: options.hasSharedStrings,
+      retainCells: false,
+      retainMetadataXml: false,
+      retainStyleIndexes: true,
+      retainStyleCoordinates: true,
+      maxDimensionCellPreallocation: maxPreallocatedWorksheetCells(zip, entry.path),
+      ...(options.allowUnsupportedFormulaText === undefined ? {} : { allowUnsupportedFormulaText: options.allowUnsupportedFormulaText }),
+      ...(options.allowUnsupportedCellMetadata === undefined ? {} : { allowUnsupportedCellMetadata: options.allowUnsupportedCellMetadata }),
+    },
+  )
+  if (!streamed) {
+    return null
+  }
+  scanned.cellScan.styleIndexes.release()
+  return streamed.cellScan.styleIndexes
+}
+
 export function rescanDeferredLargeSimpleStyleIndexes(
   zip: XlsxZipEntries,
   worksheetEntries: readonly LargeSimpleStyleCoordinateWorksheetEntry[],
@@ -93,27 +131,11 @@ export function rescanDeferredLargeSimpleStyleIndexes(
     if (!entry) {
       return null
     }
-    const streamed = parseLargeSimpleWorksheetCellsFromChunks(
-      (onChunk) => forEachInflatedXlsxZipEntryChunk(zip, entry.path, onChunk),
-      scanned.cellScan.sheetIndex,
-      {
-        hasSharedStrings: options.hasSharedStrings,
-        retainCells: false,
-        retainMetadataXml: false,
-        retainStyleIndexes: true,
-        retainStyleCoordinates: true,
-        maxDimensionCellPreallocation: maxPreallocatedWorksheetCells(zip, entry.path),
-        ...(options.allowUnsupportedFormulaText === undefined ? {} : { allowUnsupportedFormulaText: options.allowUnsupportedFormulaText }),
-        ...(options.allowUnsupportedCellMetadata === undefined
-          ? {}
-          : { allowUnsupportedCellMetadata: options.allowUnsupportedCellMetadata }),
-      },
-    )
-    if (!streamed) {
+    const styleIndexes = prepareLargeSimpleStyleIndexForWorksheet(zip, worksheetEntries, scanned, options)
+    if (!styleIndexes) {
       return null
     }
-    scanned.cellScan.styleIndexes.release()
-    rescannedStyleIndexes.set(index, streamed.cellScan.styleIndexes)
+    rescannedStyleIndexes.set(index, styleIndexes)
   }
   return rescannedStyleIndexes
 }
