@@ -248,6 +248,7 @@ function createMockZeroAgentHarness(input: {
 function AgentHarness(props: {
   readonly currentUserId?: string
   readonly previewCommandBundle?: Parameters<typeof useWorkbookAgentPane>[0]['previewCommandBundle']
+  readonly syncAuthoritativeRevision?: Parameters<typeof useWorkbookAgentPane>[0]['syncAuthoritativeRevision']
   readonly zero?: Parameters<typeof useWorkbookAgentPane>[0]['zero']
   readonly zeroEnabled?: boolean
   readonly apiEnabled?: boolean
@@ -269,6 +270,7 @@ function AgentHarness(props: {
       },
     }),
     previewCommandBundle: props.previewCommandBundle ?? vi.fn(async () => createPreviewSummary()),
+    ...(props.syncAuthoritativeRevision ? { syncAuthoritativeRevision: props.syncAuthoritativeRevision } : {}),
     ...(props.apiEnabled !== undefined ? { apiEnabled: props.apiEnabled } : {}),
     ...(props.zero ? { zero: props.zero } : {}),
     ...(props.zeroEnabled !== undefined ? { zeroEnabled: props.zeroEnabled } : {}),
@@ -3327,6 +3329,134 @@ describe('workbook agent pane', () => {
           },
         },
       })
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+    }
+  })
+
+  it('does not poll authoritative revisions only because an assistant turn is in progress', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    vi.useFakeTimers()
+    window.sessionStorage.setItem(
+      agentStorageKey(),
+      JSON.stringify({
+        threadId: 'thr-1',
+      }),
+    )
+    const syncAuthoritativeRevision = vi.fn(async () => undefined)
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: 'thr-1',
+              status: 'inProgress',
+              activeTurnId: 'turn-1',
+              executionRecords: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
+      }
+      if (url.endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(<AgentHarness syncAuthoritativeRevision={syncAuthoritativeRevision} />)
+      })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(syncAuthoritativeRevision).not.toHaveBeenCalled()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6_000)
+      })
+
+      expect(syncAuthoritativeRevision).not.toHaveBeenCalled()
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      vi.useRealTimers()
+    }
+  })
+
+  it('requests the exact authoritative revision from applied assistant execution records', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.sessionStorage.setItem(
+      agentStorageKey(),
+      JSON.stringify({
+        threadId: 'thr-1',
+      }),
+    )
+    const syncAuthoritativeRevision = vi.fn(async () => undefined)
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: 'thr-1',
+              executionRecords: [
+                {
+                  id: 'run-1',
+                  appliedRevision: 12,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
+      }
+      if (url.endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(<AgentHarness syncAuthoritativeRevision={syncAuthoritativeRevision} />)
+      })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(syncAuthoritativeRevision).toHaveBeenCalledTimes(1)
+      expect(syncAuthoritativeRevision).toHaveBeenCalledWith(12)
     } finally {
       await act(async () => {
         root.unmount()

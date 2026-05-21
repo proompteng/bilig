@@ -328,6 +328,30 @@ test('@browser-ci web app keeps reverse-drag range selection chrome geometricall
   })
 })
 
+test('@browser-ci web app collapses a locally dragged range when the active address is explicitly reselected', async ({ page }) => {
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-range-same-address-collapse'))}&persist=0`)
+  await waitForWorkbookReady(page)
+
+  await dragProductBodySelection(page, 1, 1, 3, 3)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:D4')
+  await expect(page.getByTestId('name-box')).toHaveValue('B2:D4')
+  await expect(page.locator('[data-grid-selection-visual-role="selection-fill"]')).toHaveCount(2)
+  await expect(page.locator('[data-grid-selection-visual-role="selection-border"]')).toHaveCount(1)
+
+  await selectAddress(page, 'B2')
+
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await expect(page.getByTestId('name-box')).toHaveValue('B2')
+  await expect(page.locator('[data-grid-selection-visual-role="selection-fill"]')).toHaveCount(0)
+  await expect(page.locator('[data-grid-selection-visual-role="selection-border"]')).toHaveCount(0)
+  await expect(page.locator('[data-grid-selection-visual-role="active-border"]')).toHaveCount(1)
+  await expectVisualRectNear(
+    page.locator('[data-grid-selection-visual-role="active-border"]'),
+    await getProductCellRangeBox(page, 1, 1, 1, 1),
+    'collapsed active cell border',
+  )
+})
+
 test('@browser-ci web app keeps fill-handle hit target aligned and pointer-only', async ({ page }) => {
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-fill-handle-hit-target'))}&persist=0`)
   await waitForWorkbookReady(page)

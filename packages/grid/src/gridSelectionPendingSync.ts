@@ -51,11 +51,7 @@ export function resolveGridSelectionPendingSync(input: GridSelectionPendingSyncI
       if (input.pendingBaseSnapshot && gridSelectionSnapshotsEqual(input.pendingLocalSnapshot, input.pendingBaseSnapshot)) {
         return clearPendingAndSyncExternal()
       }
-      return {
-        keepCurrentSelection: true,
-        pendingBaseSnapshot: input.pendingBaseSnapshot,
-        pendingLocalSnapshot: input.pendingLocalSnapshot,
-      }
+      return clearPendingAndSyncExternal()
     }
   }
 

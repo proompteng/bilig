@@ -115,22 +115,23 @@ describe('resolveGridSelectionPendingSync', () => {
     })
   })
 
-  test('preserves a fresh optimistic range through an intermediate external cell selection', () => {
+  test('drops a pending range when a newer external cell selection arrives at the same active address', () => {
     const base = snapshot('C4')
     const pending = snapshot('B2', 'C3')
+    const externalCell = snapshot('B2')
 
     expect(
       resolveGridSelectionPendingSync({
         currentSnapshot: pending,
-        externalSnapshot: snapshot('B2'),
+        externalSnapshot: externalCell,
         pendingBaseSnapshot: base,
         pendingLocalSnapshot: pending,
         sheetChanged: false,
       }),
     ).toEqual({
-      keepCurrentSelection: true,
-      pendingBaseSnapshot: base,
-      pendingLocalSnapshot: pending,
+      keepCurrentSelection: false,
+      pendingBaseSnapshot: null,
+      pendingLocalSnapshot: null,
     })
   })
 

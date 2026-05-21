@@ -643,20 +643,6 @@ export function useWorkbookAgentPane(input: {
   }, [closeStream, resetRecoveringStream, storageScope])
 
   useEffect(() => {
-    if (!showAssistantProgress || !syncAuthoritativeRevision) {
-      return
-    }
-    const refresh = () => {
-      void syncAuthoritativeRevision(0)
-    }
-    refresh()
-    const interval = window.setInterval(refresh, 2_000)
-    return () => {
-      window.clearInterval(interval)
-    }
-  }, [showAssistantProgress, syncAuthoritativeRevision])
-
-  useEffect(() => {
     if (contextVersion !== undefined) {
       return
     }
