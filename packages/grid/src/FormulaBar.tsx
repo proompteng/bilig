@@ -56,11 +56,11 @@ export function FormulaBar({
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
 
   useEffect(() => {
-    setFormulaCaret((current) => Math.min(value.length, current === 0 ? value.length : current))
+    setFormulaCaret((current) => (isFormulaFocused || localFormulaDraftDirtyRef.current ? Math.min(value.length, current) : value.length))
     if (dismissedAutocompleteValue !== null && dismissedAutocompleteValue !== value) {
       setDismissedAutocompleteValue(null)
     }
-  }, [dismissedAutocompleteValue, value])
+  }, [dismissedAutocompleteValue, isFormulaFocused, value])
 
   useEffect(() => {
     const pending = pendingSelectionRef.current
@@ -106,16 +106,19 @@ export function FormulaBar({
     }
   }, [])
 
+  const formulaAssistValue =
+    localFormulaDraftDirtyRef.current || localFormulaEditStartedRef.current ? localFormulaDraftValueRef.current : value
+  const isFormulaAssistActive = isEditing || localFormulaDraftDirtyRef.current || localFormulaEditStartedRef.current
   const assistState = useMemo(
     () =>
       resolveFormulaAssistState({
-        value,
+        value: formulaAssistValue,
         caret: formulaCaret,
         ...(definedNames ? { definedNames } : {}),
       }),
-    [definedNames, formulaCaret, value],
+    [definedNames, formulaCaret, formulaAssistValue],
   )
-  const showAutocomplete = isEditing && assistState.suggestions.length > 0 && dismissedAutocompleteValue !== value
+  const showAutocomplete = isFormulaAssistActive && assistState.suggestions.length > 0 && dismissedAutocompleteValue !== formulaAssistValue
 
   useEffect(() => {
     setHighlightedSuggestionIndex((current) => Math.min(current, Math.max(assistState.suggestions.length - 1, 0)))
@@ -167,13 +170,13 @@ export function FormulaBar({
       return
     }
     const next = applyFormulaSuggestion({
-      value,
+      value: formulaAssistValue,
       tokenStart: assistState.tokenStart,
       tokenEnd: assistState.tokenEnd,
       suggestion,
     })
     if (!isEditing) {
-      beginFormulaEdit(value)
+      beginFormulaEdit(formulaAssistValue)
     }
     localFormulaDraftDirtyRef.current = true
     localFormulaDraftValueRef.current = next.value
@@ -305,7 +308,7 @@ export function FormulaBar({
                 if (event.key === 'Escape') {
                   event.preventDefault()
                   if (showAutocomplete) {
-                    setDismissedAutocompleteValue(value)
+                    setDismissedAutocompleteValue(formulaAssistValue)
                     return
                   }
                   commitRequestedRef.current = true

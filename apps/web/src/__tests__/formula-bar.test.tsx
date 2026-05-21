@@ -63,6 +63,19 @@ function dispatchTextControlValue(input: HTMLInputElement | HTMLTextAreaElement,
   })
 }
 
+function dispatchTextControlValueAtSelection(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+  selectionStart: number,
+  selectionEnd = selectionStart,
+) {
+  flushSync(() => {
+    setNativeTextControlValue(input, value)
+    input.setSelectionRange(selectionStart, selectionEnd)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
 function setNativeTextControlValue(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
   const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value')
@@ -771,6 +784,88 @@ describe('FormulaBar', () => {
 
     expect(onCommit).toHaveBeenCalledTimes(1)
     expect(onCommit).toHaveBeenCalledWith('=A1="HELLO"', { address: 'B2', sheetName: 'Sheet1' }, undefined)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('preserves a formula-bar caret at the start across controlled value sync', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<FormulaBarHarness initialEditing initialValue="=S" />)
+    })
+
+    const input = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(input).not.toBeNull()
+    if (!input) {
+      throw new Error('Expected formula input')
+    }
+
+    await act(async () => {
+      input.focus()
+      dispatchTextControlValueAtSelection(input, '=SU', 0)
+    })
+
+    expect(input.selectionStart).toBe(0)
+    expect(host.querySelector("[data-testid='formula-autocomplete']")).toBeNull()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('offers autocomplete and commits suggestions against the live formula draft when the controlled prop lags', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const onChange = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <FormulaBar
+          address="B2"
+          isEditing={true}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onCancel={() => {}}
+          onChange={onChange}
+          onCommit={() => {}}
+          resolvedValue=""
+          sheetName="Sheet1"
+          value="=s+1"
+        />,
+      )
+    })
+
+    const input = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(input).not.toBeNull()
+    if (!input) {
+      throw new Error('Expected formula input')
+    }
+
+    await act(async () => {
+      input.focus()
+      dispatchTextControlValueAtSelection(input, '=su+1', 3)
+      input.setSelectionRange(3, 3)
+      input.dispatchEvent(new Event('select', { bubbles: true }))
+    })
+
+    const autocomplete = host.querySelector("[data-testid='formula-autocomplete']")
+    expect(autocomplete?.textContent).toContain('SUM')
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    })
+
+    expect(onChange).toHaveBeenLastCalledWith('=SUM()+1')
 
     await act(async () => {
       root.unmount()
