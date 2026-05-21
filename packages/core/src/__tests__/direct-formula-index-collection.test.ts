@@ -80,6 +80,7 @@ describe('direct formula index collection', () => {
     expect(constant.getDeltaAt(2)).toBe(7)
     expect(constant.getScalarDeltaAt(1)).toBe(7)
     expect(constant.getConstantScalarDelta()).toBe(7)
+    expect(constant.getConstantDelta()).toBe(7)
     expect(constant.hasCompleteScalarDeltas()).toBe(true)
     expect(constant.hasValidatedScalarDeltaCells()).toBe(false)
 
@@ -91,7 +92,30 @@ describe('direct formula index collection', () => {
     expect(constant.getConstantScalarDelta()).toBe(7)
 
     constant.addDelta(24, 7)
+    expect(constant.getConstantDelta()).toBe(7)
     expect(constant.getConstantScalarDelta()).toBeUndefined()
+
+    const mixedConstant = new DirectFormulaIndexCollection()
+    mixedConstant.appendConstantDelta(
+      Array.from({ length: 24 }, (_unused, index) => index + 200),
+      3,
+      'scalar',
+    )
+    mixedConstant.appendConstantDelta(
+      Array.from({ length: 24 }, (_unused, index) => index + 300),
+      3,
+    )
+
+    expect(mixedConstant.size).toBe(48)
+    expect(mixedConstant.getConstantDelta()).toBe(3)
+    expect(mixedConstant.getConstantScalarDelta()).toBeUndefined()
+    expect(mixedConstant.getDelta(223)).toBe(3)
+    expect(mixedConstant.getDelta(323)).toBe(3)
+
+    mixedConstant.appendConstantDelta(new Uint32Array([323, 400]), 3)
+    expect(mixedConstant.getConstantDelta()).toBeUndefined()
+    expect(mixedConstant.getDelta(323)).toBe(6)
+    expect(mixedConstant.getDelta(400)).toBe(3)
 
     const bulk = new DirectFormulaIndexCollection()
     bulk.appendConstantDelta(

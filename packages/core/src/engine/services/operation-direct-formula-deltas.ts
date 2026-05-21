@@ -133,6 +133,7 @@ export function createOperationDirectFormulaDeltas(args: {
     if (!collection.hasCompleteDeltas()) {
       return undefined
     }
+    const constantDelta = collection.getConstantDelta()
     const cellStore = args.state.workbook.cellStore
     const flags = cellStore.flags
     const tags = cellStore.tags
@@ -150,7 +151,7 @@ export function createOperationDirectFormulaDeltas(args: {
       if (
         ((flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0 ||
         tags[cellIndex] !== ValueTag.Number ||
-        collection.getDeltaAt(index) === undefined ||
+        (constantDelta === undefined && collection.getDeltaAt(index) === undefined) ||
         (formula?.directAggregate === undefined && formula?.directCriteria === undefined && formula?.directScalar === undefined)
       ) {
         return undefined
@@ -173,7 +174,7 @@ export function createOperationDirectFormulaDeltas(args: {
       const clearFormulaOutputFlags = ~formulaOutputFlags
       for (let index = 0; index < collection.size; index += 1) {
         const cellIndex = captureChanged ? changed[index]! : collection.getCellIndexAt(index)
-        const delta = collection.getDeltaAt(index)!
+        const delta = constantDelta ?? collection.getDeltaAt(index)!
         const beforeNumber = numbers[cellIndex] ?? 0
         const nextNumber = beforeNumber + delta
         const currentFlags = flags[cellIndex] ?? 0

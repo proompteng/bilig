@@ -293,6 +293,12 @@ export class DirectFormulaIndexCollection {
       : undefined
   }
 
+  getConstantDelta(): number | undefined {
+    return this.constantDelta !== undefined && this.deltaCount === this.size && this.currentResultAssigned === undefined
+      ? this.constantDelta
+      : undefined
+  }
+
   hasCompleteScalarDeltas(): boolean {
     return this.size > 0 && this.deltaCount === this.size && this.scalarDeltaCount === this.size && this.currentResultAssigned === undefined
   }
@@ -477,10 +483,56 @@ export class DirectFormulaIndexCollection {
   }
 
   private appendPreparedConstantDelta(cellIndices: readonly number[] | U32, delta: number, kind: 'scalar' | undefined): void {
+    if (this.tryAppendMatchingConstantDelta(cellIndices, delta, kind)) {
+      return
+    }
     this.prepareForBulkDeltaAppend()
     for (let index = 0; index < cellIndices.length; index += 1) {
       this.addPreparedDelta(cellIndices[index]!, delta, kind)
     }
+  }
+
+  private tryAppendMatchingConstantDelta(cellIndices: readonly number[] | U32, delta: number, kind: 'scalar' | undefined): boolean {
+    if (this.constantDelta === undefined || !Object.is(this.constantDelta, delta)) {
+      return false
+    }
+
+    if (!this.indexByCell && this.size > 16) {
+      this.materializeIndexByCell()
+    }
+    const seen = new Set<number>()
+    for (let index = 0; index < cellIndices.length; index += 1) {
+      const cellIndex = cellIndices[index]!
+      if (seen.has(cellIndex) || this.indexByCell?.has(cellIndex) === true) {
+        return false
+      }
+      if (!this.indexByCell) {
+        for (let existingIndex = 0; existingIndex < this.size; existingIndex += 1) {
+          if (this.getCellIndexAt(existingIndex) === cellIndex) {
+            return false
+          }
+        }
+      }
+      seen.add(cellIndex)
+    }
+
+    this.materializeSharedCellIndices()
+    if (this.indexByCell) {
+      for (let index = 0; index < cellIndices.length; index += 1) {
+        const cellIndex = cellIndices[index]!
+        this.indexByCell.set(cellIndex, this.cellIndices.length)
+        this.cellIndices.push(cellIndex)
+      }
+    } else {
+      for (let index = 0; index < cellIndices.length; index += 1) {
+        this.cellIndices.push(cellIndices[index]!)
+      }
+    }
+    this.deltaCount += cellIndices.length
+    if (kind === 'scalar') {
+      this.scalarDeltaCount += cellIndices.length
+    }
+    return true
   }
 
   private prepareForBulkDeltaAppend(): void {

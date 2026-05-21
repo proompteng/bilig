@@ -105,6 +105,40 @@ describe('createOperationDirectFormulaDeltas', () => {
     expect(counters.directScalarDeltaApplications).toBe(1)
   })
 
+  it('should apply mixed scalar and aggregate constant deltas without materializing per-cell deltas', () => {
+    // Arrange
+    const { counters, formulas, helpers, sheet, workbook } = createHarness({
+      canSkipTerminalFormulaColumnVersion: () => true,
+    })
+    const scalarCells: number[] = []
+    const aggregateCells: number[] = []
+    for (let row = 0; row < 24; row += 1) {
+      const cellIndex = createCell(workbook, sheet.id, { row, col: 1, value: row, version: 1 })
+      scalarCells.push(cellIndex)
+      formulas.set(cellIndex, createRuntimeFormula(cellIndex, { directScalar: TEST_DIRECT_SCALAR }))
+    }
+    for (let row = 0; row < 24; row += 1) {
+      const cellIndex = createCell(workbook, sheet.id, { row, col: 2, value: row * 10, version: 1 })
+      aggregateCells.push(cellIndex)
+      formulas.set(cellIndex, createRuntimeFormula(cellIndex, { directAggregate: TEST_DIRECT_AGGREGATE }))
+    }
+    const collection = new DirectFormulaIndexCollection()
+    collection.appendConstantDelta(Uint32Array.from(scalarCells), 5, 'scalar')
+    collection.appendConstantDelta(Uint32Array.from(aggregateCells), 5)
+
+    // Act
+    const changed = helpers.tryApplyDirectFormulaDeltas(collection)
+
+    // Assert
+    expect(collection.getConstantDelta()).toBe(5)
+    expect(collection.getConstantScalarDelta()).toBeUndefined()
+    expect(Array.from(changed ?? [])).toEqual([...scalarCells, ...aggregateCells])
+    expect(workbook.cellStore.numbers[scalarCells[23]]).toBe(28)
+    expect(workbook.cellStore.numbers[aggregateCells[23]]).toBe(235)
+    expect(counters.directScalarDeltaApplications).toBe(24)
+    expect(counters.directAggregateDeltaApplications).toBe(24)
+  })
+
   it('should apply same-delta direct formulas through the batch writer', () => {
     // Arrange
     const { helpers, sheet, workbook } = createHarness()
