@@ -1122,7 +1122,7 @@ describe('WorkPaper', () => {
       'cell-mutations',
     )
     expect(Reflect.get(undoStack?.[0], 'inverse') ? Reflect.get(Reflect.get(undoStack?.[0], 'inverse'), 'kind') : undefined).toBe(
-      'cell-mutations',
+      'existing-numeric-cell-mutations',
     )
   })
 
