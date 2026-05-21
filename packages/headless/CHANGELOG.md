@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.40.35
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.40.34
+- Manual override: no
+
+## Fixes
+- perf(excel-import): avoid byte-source fallback materialization (c1eb1103)
+
 ## 0.40.34
 
 - Release type: patch
