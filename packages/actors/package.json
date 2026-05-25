@@ -16,7 +16,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "xstate": "5.30.0"
+    "xstate": "5.31.1"
   },
   "engines": {
     "node": ">=24.0.0"
