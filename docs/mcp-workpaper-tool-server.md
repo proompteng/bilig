@@ -127,6 +127,40 @@ The npm package exposes the demo server as `bilig-workpaper-mcp` by default:
 npm exec --package @bilig/workpaper@latest -- bilig-workpaper-mcp
 ```
 
+### Cursor MCP Config
+
+Cursor versions can expose MCP settings in different UI locations, so add the
+server entry wherever your installation lets you edit MCP JSON:
+
+```json
+{
+  "mcpServers": {
+    "bilig-workpaper": {
+      "command": "npm",
+      "args": [
+        "exec",
+        "--yes",
+        "--package",
+        "@bilig/headless",
+        "--",
+        "bilig-workpaper-mcp"
+      ]
+    }
+  }
+}
+```
+
+This starts the published package's `bilig-workpaper-mcp` stdio server without
+cloning the monorepo. The server exposes `read_workpaper_summary` for summary
+range reads and `set_workpaper_input_cell` for verified input edits.
+
+Tiny smoke prompt:
+
+```text
+Use the bilig-workpaper MCP server. Read Summary!A1:B5, set Inputs!B3 to 0.4,
+and report expectedArr before and after the edit.
+```
+
 ## Remote Stateless Endpoint
 
 The hosted app runtime also exposes a JSON-only Streamable HTTP MCP endpoint for
