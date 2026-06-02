@@ -16,7 +16,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "effect": "3.21.0"
+    "effect": "3.21.2"
   },
   "engines": {
     "node": ">=24.0.0"

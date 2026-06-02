@@ -94,7 +94,7 @@
   },
   "devDependencies": {
     "ai": "6.0.182",
-    "zod": "4.3.6"
+    "zod": "4.4.3"
   },
   "peerDependencies": {
     "ai": ">=6.0.0",
