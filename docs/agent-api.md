@@ -13,10 +13,10 @@ Current summary for the monolith runtime.
 
 ## Proof points
 
-- [apps/bilig/src/http/sync-server.ts](/Users/gregkonush/github.com/bilig/apps/bilig/src/http/sync-server.ts)
-- [apps/bilig/src/workbook-runtime/document-session-manager.ts](/Users/gregkonush/github.com/bilig/apps/bilig/src/workbook-runtime/document-session-manager.ts)
-- [apps/bilig/src/workbook-runtime/local-document-supervisor.ts](/Users/gregkonush/github.com/bilig/apps/bilig/src/workbook-runtime/local-document-supervisor.ts)
-- [apps/bilig/src/workbook-runtime/worksheet-executor.ts](/Users/gregkonush/github.com/bilig/apps/bilig/src/workbook-runtime/worksheet-executor.ts)
+- [apps/bilig/src/http/sync-server.ts](../../../apps/bilig/src/http/sync-server.ts)
+- [apps/bilig/src/workbook-runtime/document-session-manager.ts](../../../apps/bilig/src/workbook-runtime/document-session-manager.ts)
+- [apps/bilig/src/workbook-runtime/local-document-supervisor.ts](../../../apps/bilig/src/workbook-runtime/local-document-supervisor.ts)
+- [apps/bilig/src/workbook-runtime/worksheet-executor.ts](../../../apps/bilig/src/workbook-runtime/worksheet-executor.ts)
 
 ## Historical note
 
