@@ -95,8 +95,8 @@
     "@bilig/protocol": "workspace:*",
     "@bilig/wasm-kernel": "workspace:*",
     "@bilig/xlsx": "workspace:*",
-    "fast-xml-parser": "5.7.3",
-    "fflate": "0.3.11",
+    "fast-xml-parser": "5.8.0",
+    "fflate": "0.8.3",
     "fflate-stream": "npm:fflate@0.8.3"
   },
   "engines": {
