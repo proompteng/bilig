@@ -101,7 +101,7 @@
     "bilig-workpaper": "workspace:*"
   },
   "devDependencies": {
-    "ai": "6.0.195",
+    "ai": "6.0.205",
     "zod": "4.3.6"
   },
   "peerDependencies": {
