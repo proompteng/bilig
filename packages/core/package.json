@@ -51,7 +51,7 @@
     "@bilig/protocol": "workspace:*",
     "@bilig/wasm-kernel": "workspace:*",
     "@bilig/workbook": "workspace:*",
-    "effect": "3.21.0"
+    "effect": "3.21.4"
   },
   "engines": {
     "node": ">=22.0.0"
