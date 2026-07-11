@@ -39,7 +39,7 @@
   "scripts": {
     "build": "n8n-node build",
     "build:watch": "tsc --watch",
-    "check": "npm run build && npm run lint && npm audit --omit=dev --audit-level=high && npm pack --dry-run",
+    "check": "npm run build && npm run lint && npm audit --omit=dev --audit-level=high --package-lock=false && npm pack --dry-run",
     "dev": "n8n-node dev",
     "lint": "n8n-node lint",
     "lint:fix": "n8n-node lint --fix",
