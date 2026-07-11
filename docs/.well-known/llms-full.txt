@@ -423,6 +423,11 @@ them, but the public proof starts with WorkPaper service readback. File
 compatibility diagnostics are a separate path for import/export boundaries, not
 the default runtime story.
 
+Need a custom workbook automation? See
+[Custom Automation](docs/custom-automation.md) for small integrations such as
+CSV/Excel validation, pricing calculators, payout models, report checks,
+GitHub Actions, and agent/MCP tools.
+
 Project site: <https://proompteng.github.io/bilig/>
 
 ## Start Here
@@ -1149,6 +1154,9 @@ The shortest public on-ramp is the
 [`starter issues`](docs/starter-issues.md) queue. It keeps code/test picks,
 example tasks, adapters, and focused docs work in one current list, with small
 acceptance commands for first patches.
+
+For business-shaped example ideas, see
+[`business starter issue drafts`](docs/business-starter-issue-drafts.md).
 
 If this is your first contribution to `bilig`, use the
 [`first-timers-only`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only)
