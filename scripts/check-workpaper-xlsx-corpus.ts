@@ -366,7 +366,10 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
     sheets[sheetName] = rows
   }
 
-  const importedSnapshot = workbook.hasUnresolvedFormulaMarkup ? importXlsx(workbookBytes, basename(filePath)).snapshot : null
+  const importedSnapshot =
+    workbook.hasUnresolvedFormulaMarkup && formulaCells.length > 0
+      ? importXlsxSnapshotIfAvailable(workbookBytes, basename(filePath))
+      : null
   if (importedSnapshot) {
     formulaCells = addFormulaAuditFallbackCells(sheets, formulaCells, importedSnapshot, skippedByReason)
   }
@@ -383,6 +386,21 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
     maxRows,
     maxColumns,
   }
+}
+
+function importXlsxSnapshotIfAvailable(workbookBytes: Uint8Array, fileName: string): WorkbookSnapshot | null {
+  try {
+    return importXlsx(workbookBytes, fileName).snapshot
+  } catch (error) {
+    if (isOptionalSheetJsUnavailable(error)) {
+      return null
+    }
+    throw error
+  }
+}
+
+function isOptionalSheetJsUnavailable(error: unknown): boolean {
+  return errorMessage(error).includes('SheetJS xlsx is not a production dependency of @bilig/excel-import')
 }
 
 function addFormulaAuditFallbackCells(

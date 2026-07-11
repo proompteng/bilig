@@ -114,6 +114,7 @@ expected formula family, persistence requirement, or import/export constraint.
 | Persistence round trip       | `npm run persistence`                        | save, restore, edit, and export                                                                                           |
 | Named expression update      | `npm run named-expression`                   | workbook-scoped names and dependent formulas                                                                              |
 | CSV-shaped input             | `npm run csv-shaped`                         | CSV-shaped data plus formula summary                                                                                      |
+| CSV report validator         | `npm run csv-report-validator`               | CSV-shaped report totals, formula validation, and mismatch count                                                           |
 | Invoice totals               | `npm run invoice-totals`                     | line items, subtotal, tax, total                                                                                          |
 | JSON records input           | `npm run json-records`                       | API records to formula-backed workbook                                                                                    |
 | JSON file input              | `npm run json-file`                          | disk JSON records to verified summary                                                                                     |

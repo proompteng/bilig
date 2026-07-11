@@ -41,6 +41,9 @@ Expected output includes:
 
 ## 2. CSV Report Validator Example
 
+Status: implemented by
+[`examples/headless-workpaper/csv-report-validator.ts`](../examples/headless-workpaper/csv-report-validator.ts).
+
 Title:
 
 ```text

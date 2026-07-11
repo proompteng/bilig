@@ -21,6 +21,7 @@
     "budget-variance": "node --disable-warning=DEP0205 --import tsx budget-variance-alerts.ts",
     "csv-shaped": "node --disable-warning=DEP0205 --import tsx csv-shaped-input.ts",
     "csv-shaped:malformed": "node --disable-warning=DEP0205 --import tsx csv-shaped-input.ts --malformed-smoke",
+    "csv-report-validator": "node --disable-warning=DEP0205 --import tsx csv-report-validator.ts",
     "formula-diagnostics": "node --disable-warning=DEP0205 --import tsx formula-diagnostics.ts",
     "fulfillment-capacity": "node --disable-warning=DEP0205 --import tsx fulfillment-capacity-plan.ts",
     "http-json-summary": "node --disable-warning=DEP0205 --import tsx http-json-summary.ts",
