@@ -388,7 +388,7 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
   }
 }
 
-function importXlsxSnapshotIfAvailable(workbookBytes: Uint8Array, fileName: string): WorkbookSnapshot | null {
+function importXlsxSnapshotIfAvailable(workbookBytes: Uint8Array, fileName: string) {
   try {
     return importXlsx(workbookBytes, fileName).snapshot
   } catch (error) {
