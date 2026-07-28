@@ -1,5 +1,7 @@
 # bilig
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.proompteng%2Fbilig-workpaper.svg)](https://mcptoplist.com/server/io.github.proompteng%2Fbilig-workpaper)
+
 [![CI](https://github.com/proompteng/bilig/actions/workflows/ci.yml/badge.svg)](https://github.com/proompteng/bilig/actions/workflows/ci.yml)
 [![npm: @bilig/workpaper](https://img.shields.io/npm/v/@bilig/workpaper?label=%40bilig%2Fworkpaper)](https://www.npmjs.com/package/@bilig/workpaper)
 [![CodeQL](https://github.com/proompteng/bilig/actions/workflows/codeql.yml/badge.svg)](https://github.com/proompteng/bilig/actions/workflows/codeql.yml)
