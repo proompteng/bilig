@@ -46,7 +46,7 @@
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/workbook": "workspace:*",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "engines": {
     "node": ">=24.0.0"
