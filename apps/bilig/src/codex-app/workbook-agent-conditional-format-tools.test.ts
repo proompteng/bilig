@@ -63,6 +63,7 @@ async function createEngine(): Promise<SpreadsheetEngine> {
 function createZeroSyncHarness(engine: SpreadsheetEngine) {
   const zeroSyncService: ZeroSyncService = {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {

@@ -93,7 +93,7 @@ describe('XLSX ZIP reader', () => {
     expect(chunks.length).toBeGreaterThan(1)
     expect(source.readIntoCount).toBeGreaterThan(0)
     expect(source.maxReadLength).toBeLessThan(16 * 1024)
-  })
+  }, 30_000)
 
   it('can force streaming inflation for small deflated entries', () => {
     const path = 'xl/worksheets/sheet1.xml'

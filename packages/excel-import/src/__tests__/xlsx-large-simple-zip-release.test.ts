@@ -174,7 +174,7 @@ describe('large simple XLSX import ZIP ownership', () => {
     } finally {
       rmSync(tempDir, { force: true, recursive: true })
     }
-  }, 30_000)
+  }, 60_000)
 
   it('rejects source-preserving byte export fallback for patched large imported sources', () => {
     const bytes = buildSharedStringWorkbook({

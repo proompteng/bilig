@@ -2,29 +2,6 @@ import type { FormulaInstanceSnapshot } from '../../formula/formula-instance-tab
 import type { RuntimeFormula } from '../runtime-state.js'
 import type { InitialFormulaEntryRefSource } from './formula-initialization-refs.js'
 
-export function noteDeferredFormulaInstance(
-  records: FormulaInstanceSnapshot[] | undefined,
-  prepared: {
-    readonly cellIndex: number
-    readonly row: number
-    readonly col: number
-    readonly ownerSheetName: string
-  },
-  formula: RuntimeFormula | undefined,
-): void {
-  if (!records || !formula) {
-    return
-  }
-  records.push({
-    cellIndex: prepared.cellIndex,
-    sheetName: prepared.ownerSheetName,
-    row: prepared.row,
-    col: prepared.col,
-    source: formula.source,
-    ...(formula.templateId !== undefined ? { templateId: formula.templateId } : {}),
-  })
-}
-
 export function writeDeferredFormulaInstance(
   records: FormulaInstanceSnapshot[] | undefined,
   index: number,

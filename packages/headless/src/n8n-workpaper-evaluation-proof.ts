@@ -23,64 +23,72 @@ const MAX_READ_CELL_COUNT = 100
 
 export function createN8nWorkPaperEvaluationProof(body: N8nWorkPaperEvaluationRequestBody = {}) {
   const workbook = readWorkbook(body.document)
-  const edits = readEdits(body)
-  const readCellTexts = readReadCellTexts(body.readCells, edits)
-  const readAddresses = readCellTexts.map((cell) => requireCellAddress(workbook, cell))
-  const before = readCells(workbook, readAddresses)
-  const previousValues = new Map<string, RawCellContent>()
+  try {
+    const edits = readEdits(body)
+    const readCellTexts = readReadCellTexts(body.readCells, edits)
+    const readAddresses = readCellTexts.map((cell) => requireCellAddress(workbook, cell))
+    const before = readCells(workbook, readAddresses)
+    const previousValues = new Map<string, RawCellContent>()
 
-  for (const edit of edits) {
-    const address = requireCellAddress(workbook, edit.cell)
-    const formattedCell = workbook.simpleCellAddressToString(address, { includeSheetName: true })
-    previousValues.set(formattedCell, workbook.getCellSerialized(address))
-    workbook.setCellContents(address, edit.value)
-  }
-
-  const after = readCells(workbook, readAddresses)
-  const exportedDocument = exportWorkPaperDocument(workbook, { includeConfig: true })
-  const serialized = serializeWorkPaperDocument(exportedDocument)
-  const restoredWorkbook = createWorkPaperFromDocument(parseWorkPaperDocument(serialized))
-  const restored = readCells(restoredWorkbook, readAddresses)
-  const editedCells = edits.map((edit) => {
-    const address = requireCellAddress(workbook, edit.cell)
-    const cell = workbook.simpleCellAddressToString(address, { includeSheetName: true })
-    return {
-      cell,
-      previousValue: previousValues.get(cell),
-      newValue: workbook.getCellSerialized(address),
+    for (const edit of edits) {
+      const address = requireCellAddress(workbook, edit.cell)
+      const formattedCell = workbook.simpleCellAddressToString(address, { includeSheetName: true })
+      previousValues.set(formattedCell, workbook.getCellSerialized(address))
+      workbook.setCellContents(address, edit.value)
     }
-  })
 
-  const response = {
-    verified: true,
-    editedCells,
-    readback: {
-      before,
-      after,
-      restored,
-    },
-    checks: {
-      restoredMatchesAfter: sameJson(after, restored),
-      formulasPersisted: sameJson(
-        after.map(({ cell, formula }) => ({ cell, formula })),
-        restored.map(({ cell, formula }) => ({ cell, formula })),
-      ),
-      computedOutputChanged: !sameJson(
-        before.map(({ cell, value, displayValue }) => ({ cell, value, displayValue })),
-        after.map(({ cell, value, displayValue }) => ({ cell, value, displayValue })),
-      ),
-      serializedBytes: new TextEncoder().encode(serialized).byteLength,
-    },
-  }
+    const after = readCells(workbook, readAddresses)
+    const exportedDocument = exportWorkPaperDocument(workbook, { includeConfig: true })
+    const serialized = serializeWorkPaperDocument(exportedDocument)
+    const restoredWorkbook = createWorkPaperFromDocument(parseWorkPaperDocument(serialized))
+    try {
+      const restored = readCells(restoredWorkbook, readAddresses)
+      const editedCells = edits.map((edit) => {
+        const address = requireCellAddress(workbook, edit.cell)
+        const cell = workbook.simpleCellAddressToString(address, { includeSheetName: true })
+        return {
+          cell,
+          previousValue: previousValues.get(cell),
+          newValue: workbook.getCellSerialized(address),
+        }
+      })
 
-  if (readBoolean(body.includeUpdatedDocument, true, 'includeUpdatedDocument')) {
-    return {
-      ...response,
-      updatedDocument: exportedDocument,
+      const response = {
+        verified: true,
+        editedCells,
+        readback: {
+          before,
+          after,
+          restored,
+        },
+        checks: {
+          restoredMatchesAfter: sameJson(after, restored),
+          formulasPersisted: sameJson(
+            after.map(({ cell, formula }) => ({ cell, formula })),
+            restored.map(({ cell, formula }) => ({ cell, formula })),
+          ),
+          computedOutputChanged: !sameJson(
+            before.map(({ cell, value, displayValue }) => ({ cell, value, displayValue })),
+            after.map(({ cell, value, displayValue }) => ({ cell, value, displayValue })),
+          ),
+          serializedBytes: new TextEncoder().encode(serialized).byteLength,
+        },
+      }
+
+      if (readBoolean(body.includeUpdatedDocument, true, 'includeUpdatedDocument')) {
+        return {
+          ...response,
+          updatedDocument: exportedDocument,
+        }
+      }
+
+      return response
+    } finally {
+      restoredWorkbook.dispose()
     }
+  } finally {
+    workbook.dispose()
   }
-
-  return response
 }
 
 function readWorkbook(document: unknown): WorkPaperInstance {

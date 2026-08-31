@@ -67,14 +67,30 @@ export function registerSyncServerRuntimeRoutes(
   },
 ): void {
   const webRuntimeConfig = resolveWebRuntimeConfig(options.env)
-
-  app.get('/healthz', async () => ({
-    ok: true,
+  const healthSnapshot = () => ({
     service: 'bilig-app',
     zeroSync: options.zeroSyncService?.enabled ?? false,
     web: options.webEnabled,
-    workbookAgent: options.workbookAgentService?.getObservabilitySnapshot() ?? { enabled: false },
-  }))
+    workbookAgent: options.workbookAgentService?.enabled ?? false,
+  })
+  const persistenceReady = () => {
+    const zeroSyncService = options.zeroSyncService
+    return !zeroSyncService || !zeroSyncService.enabled || zeroSyncService.isReady()
+  }
+
+  app.get('/healthz', async (_request, reply) => {
+    reply.header('cache-control', 'no-store')
+    return { ok: true, ...healthSnapshot() }
+  })
+
+  app.get('/readyz', async (_request, reply) => {
+    reply.header('cache-control', 'no-store')
+    const ready = persistenceReady()
+    if (!ready) {
+      reply.code(503)
+    }
+    return { ok: ready, ready, ...healthSnapshot() }
+  })
 
   app.get('/runtime-config.json', async (request, reply) => {
     const session = resolveSessionIdentity(request, reply, options.sessionResolver)

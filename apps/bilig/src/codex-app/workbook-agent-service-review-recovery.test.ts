@@ -48,7 +48,6 @@ describe('workbook agent service review apply and recovery', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           scope: 'shared',
           executionPolicy: 'ownerReview',
           context: {
@@ -191,7 +190,6 @@ describe('workbook agent service review apply and recovery', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           scope: 'shared',
           executionPolicy: 'ownerReview',
           context: {
@@ -409,7 +407,6 @@ describe('workbook agent service review apply and recovery', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           scope: 'shared',
           executionPolicy: 'ownerReview',
           context: {

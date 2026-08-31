@@ -128,6 +128,7 @@ function createReviewQueueItem() {
 function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncService {
   return {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {
@@ -240,6 +241,9 @@ describe('workbook agent workflow authority', () => {
           return 3
         },
         upsertWorkbookWorkflowRun,
+        async loadWorkbookAgentThreadState() {
+          return createThreadState()
+        },
       }),
       {
         codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => fakeCodex,

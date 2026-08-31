@@ -21,27 +21,12 @@ import {
 import { materializePivotTableRaw } from './raw-kernel-pivot-bridge.js'
 import { isRawKernelExports, type RawKernelExports } from './raw-kernel-exports.js'
 import { evalBatchRaw } from './raw-kernel-vm-bridge.js'
+import { float64ArraySpec, RawKernelArrayBridge, uint16ArraySpec, uint32ArraySpec, uint8ArraySpec } from './raw-kernel-array-bridge.js'
 import type { SpreadsheetKernel } from './kernel-types.js'
 import { RawWorksheetImportStorage, type WorksheetImportStorage } from './worksheet-import-storage.js'
 
 export type { SpreadsheetKernel } from './kernel-types.js'
 export type { WorksheetImportStorage, WorksheetImportStorageSnapshot } from './worksheet-import-storage.js'
-
-type TypedArrayValue = Uint8Array | Uint16Array | Uint32Array | Float64Array
-
-const ARRAY_BUFFER_CLASS_ID = 1
-const UINT8_ARRAY_CLASS_ID = 4
-const FLOAT64_ARRAY_CLASS_ID = 5
-const UINT16_ARRAY_CLASS_ID = 6
-const UINT32_ARRAY_CLASS_ID = 7
-
-interface LoweredArraySpec<T extends TypedArrayValue> {
-  align: number
-  classId: number
-  ctor: {
-    new (buffer: ArrayBufferLike, byteOffset: number, length: number): T
-  }
-}
 
 interface EnsureWasmBinaryPathForNodeOptions {
   readonly importMetaUrl: string
@@ -57,35 +42,11 @@ export function ensureWasmBinaryPathForNode(options: EnsureWasmBinaryPathForNode
   throw new Error(`Unable to locate wasm kernel binary at '${wasmPath}'. Run 'pnpm wasm:build' before using @bilig/wasm-kernel.`)
 }
 
-const uint8Spec: LoweredArraySpec<Uint8Array> = {
-  align: 0,
-  classId: UINT8_ARRAY_CLASS_ID,
-  ctor: Uint8Array,
-}
-
-const uint16Spec: LoweredArraySpec<Uint16Array> = {
-  align: 1,
-  classId: UINT16_ARRAY_CLASS_ID,
-  ctor: Uint16Array,
-}
-
-const uint32Spec: LoweredArraySpec<Uint32Array> = {
-  align: 2,
-  classId: UINT32_ARRAY_CLASS_ID,
-  ctor: Uint32Array,
-}
-
-const float64Spec: LoweredArraySpec<Float64Array> = {
-  align: 3,
-  classId: FLOAT64_ARRAY_CLASS_ID,
-  ctor: Float64Array,
-}
-
 class RawKernelBridge {
-  private dataView: DataView
+  private readonly arrayBridge: RawKernelArrayBridge
 
   constructor(private readonly raw: RawKernelExports) {
-    this.dataView = new DataView(raw.memory.buffer)
+    this.arrayBridge = new RawKernelArrayBridge(raw)
   }
 
   init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void {
@@ -113,10 +74,12 @@ class RawKernelBridge {
   }
 
   uploadPrograms(programs: Uint32Array, offsets: Uint32Array, lengths: Uint32Array, targets: Uint32Array): void {
-    const programsPtr = this.lowerTypedArray(programs, uint32Spec)
-    const offsetsPtr = this.lowerTypedArray(offsets, uint32Spec)
-    const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec)
-    const targetsPtr = this.lowerTypedArray(targets, uint32Spec)
+    const [programsPtr, offsetsPtr, lengthsPtr, targetsPtr] = this.arrayBridge.lowerTypedArrays([
+      [programs, uint32ArraySpec],
+      [offsets, uint32ArraySpec],
+      [lengths, uint32ArraySpec],
+      [targets, uint32ArraySpec],
+    ])
     try {
       this.raw.uploadPrograms(programsPtr, offsetsPtr, lengthsPtr, targetsPtr)
     } finally {
@@ -128,9 +91,11 @@ class RawKernelBridge {
   }
 
   uploadConstants(constants: Float64Array, offsets: Uint32Array, lengths: Uint32Array): void {
-    const constantsPtr = this.lowerTypedArray(constants, float64Spec)
-    const offsetsPtr = this.lowerTypedArray(offsets, uint32Spec)
-    const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec)
+    const [constantsPtr, offsetsPtr, lengthsPtr] = this.arrayBridge.lowerTypedArrays([
+      [constants, float64ArraySpec],
+      [offsets, uint32ArraySpec],
+      [lengths, uint32ArraySpec],
+    ])
     try {
       this.raw.uploadConstants(constantsPtr, offsetsPtr, lengthsPtr)
     } finally {
@@ -141,9 +106,11 @@ class RawKernelBridge {
   }
 
   uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void {
-    const membersPtr = this.lowerTypedArray(members, uint32Spec)
-    const offsetsPtr = this.lowerTypedArray(offsets, uint32Spec)
-    const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec)
+    const [membersPtr, offsetsPtr, lengthsPtr] = this.arrayBridge.lowerTypedArrays([
+      [members, uint32ArraySpec],
+      [offsets, uint32ArraySpec],
+      [lengths, uint32ArraySpec],
+    ])
     try {
       this.raw.uploadRangeMembers(membersPtr, offsetsPtr, lengthsPtr)
     } finally {
@@ -154,8 +121,10 @@ class RawKernelBridge {
   }
 
   uploadRangeShapes(rowCounts: Uint32Array, colCounts: Uint32Array): void {
-    const rowCountsPtr = this.lowerTypedArray(rowCounts, uint32Spec)
-    const colCountsPtr = this.lowerTypedArray(colCounts, uint32Spec)
+    const [rowCountsPtr, colCountsPtr] = this.arrayBridge.lowerTypedArrays([
+      [rowCounts, uint32ArraySpec],
+      [colCounts, uint32ArraySpec],
+    ])
     try {
       this.raw.uploadRangeShapes(rowCountsPtr, colCountsPtr)
     } finally {
@@ -169,7 +138,7 @@ class RawKernelBridge {
   }
 
   uploadVolatileRandomValues(values: Float64Array): void {
-    const valuesPtr = this.lowerTypedArray(values, float64Spec)
+    const [valuesPtr] = this.arrayBridge.lowerTypedArrays([[values, float64ArraySpec]])
     try {
       this.raw.uploadVolatileRandomValues(valuesPtr)
     } finally {
@@ -178,7 +147,7 @@ class RawKernelBridge {
   }
 
   uploadStringLengths(lengths: Uint32Array): void {
-    const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec)
+    const [lengthsPtr] = this.arrayBridge.lowerTypedArrays([[lengths, uint32ArraySpec]])
     try {
       this.raw.uploadStringLengths(lengthsPtr)
     } finally {
@@ -187,9 +156,11 @@ class RawKernelBridge {
   }
 
   uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void {
-    const offsetsPtr = this.lowerTypedArray(offsets, uint32Spec)
-    const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec)
-    const dataPtr = this.lowerTypedArray(data, uint16Spec)
+    const [offsetsPtr, lengthsPtr, dataPtr] = this.arrayBridge.lowerTypedArrays([
+      [offsets, uint32ArraySpec],
+      [lengths, uint32ArraySpec],
+      [data, uint16ArraySpec],
+    ])
     try {
       this.raw.uploadStrings(offsetsPtr, lengthsPtr, dataPtr)
     } finally {
@@ -200,10 +171,12 @@ class RawKernelBridge {
   }
 
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void {
-    const tagsPtr = this.lowerTypedArray(tags, uint8Spec)
-    const numbersPtr = this.lowerTypedArray(numbers, float64Spec)
-    const stringIdsPtr = this.lowerTypedArray(stringIds, uint32Spec)
-    const errorsPtr = this.lowerTypedArray(errors, uint16Spec)
+    const [tagsPtr, numbersPtr, stringIdsPtr, errorsPtr] = this.arrayBridge.lowerTypedArrays([
+      [tags, uint8ArraySpec],
+      [numbers, float64ArraySpec],
+      [stringIds, uint32ArraySpec],
+      [errors, uint16ArraySpec],
+    ])
     try {
       this.raw.writeCells(tagsPtr, numbersPtr, stringIdsPtr, errorsPtr)
     } finally {
@@ -329,30 +302,6 @@ class RawKernelBridge {
     valueAggregations: Uint8Array,
   ): void {
     materializePivotTableRaw(this.raw, sourceRangeIndex, sourceWidth, groupByColumnIndices, valueColumnIndices, valueAggregations)
-  }
-
-  private lowerTypedArray<T extends TypedArrayValue>(values: T, spec: LoweredArraySpec<T>): number {
-    const byteLength = values.length << spec.align
-    const bufferPtr = this.raw.__pin(this.raw.__new(byteLength, ARRAY_BUFFER_CLASS_ID))
-    const headerPtr = this.raw.__pin(this.raw.__new(12, spec.classId))
-    try {
-      this.setUint32(headerPtr, bufferPtr)
-      this.setUint32(headerPtr + 4, bufferPtr)
-      this.setUint32(headerPtr + 8, byteLength)
-      new spec.ctor(this.raw.memory.buffer, bufferPtr, values.length).set(values)
-      return headerPtr
-    } finally {
-      this.raw.__unpin(bufferPtr)
-    }
-  }
-
-  private setUint32(pointer: number, value: number): void {
-    try {
-      this.dataView.setUint32(pointer, value, true)
-    } catch {
-      this.dataView = new DataView(this.raw.memory.buffer)
-      this.dataView.setUint32(pointer, value, true)
-    }
   }
 }
 

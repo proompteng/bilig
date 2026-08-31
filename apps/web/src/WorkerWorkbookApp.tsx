@@ -123,11 +123,42 @@ function WorkerWorkbookAppInner({
   } = app
   const benchmarkCorpus = useMemo(() => new URLSearchParams(window.location.search).get('benchmarkCorpus'), [])
   const installedBenchmarkCorpusRef = useRef<string | null>(null)
-  const installingBenchmarkCorpusRef = useRef<string | null>(null)
   const { installBenchmarkCorpus, runtimeReady } = app
+  const installingBenchmarkCorpusRef = useRef<{ corpus: string; generation: number } | null>(null)
+  const benchmarkMountedRef = useRef(false)
+  const benchmarkLifecycleRef = useRef<{
+    corpus: string | null
+    runtimeReady: boolean
+    installBenchmarkCorpus: typeof installBenchmarkCorpus
+    generation: number
+  } | null>(null)
+  const previousBenchmarkLifecycle = benchmarkLifecycleRef.current
+  const benchmarkLifecycle =
+    previousBenchmarkLifecycle !== null &&
+    previousBenchmarkLifecycle.corpus === benchmarkCorpus &&
+    previousBenchmarkLifecycle.runtimeReady === runtimeReady &&
+    previousBenchmarkLifecycle.installBenchmarkCorpus === installBenchmarkCorpus
+      ? previousBenchmarkLifecycle
+      : {
+          corpus: benchmarkCorpus,
+          runtimeReady,
+          installBenchmarkCorpus,
+          generation: (previousBenchmarkLifecycle?.generation ?? 0) + 1,
+        }
+  if (benchmarkLifecycle !== previousBenchmarkLifecycle) {
+    benchmarkLifecycleRef.current = benchmarkLifecycle
+  }
+  const benchmarkGeneration = benchmarkLifecycle.generation
 
   useEffect(() => {
     getWorkbookScrollPerfCollector()
+  }, [])
+
+  useEffect(() => {
+    benchmarkMountedRef.current = true
+    return () => {
+      benchmarkMountedRef.current = false
+    }
   }, [])
 
   useEffect(() => {
@@ -137,7 +168,10 @@ function WorkerWorkbookAppInner({
     if (installedBenchmarkCorpusRef.current === benchmarkCorpus) {
       return
     }
-    if (installingBenchmarkCorpusRef.current === benchmarkCorpus) {
+    if (
+      installingBenchmarkCorpusRef.current?.corpus === benchmarkCorpus &&
+      installingBenchmarkCorpusRef.current.generation === benchmarkGeneration
+    ) {
       return
     }
     const collector = getWorkbookScrollPerfCollector()
@@ -145,21 +179,38 @@ function WorkerWorkbookAppInner({
       installedBenchmarkCorpusRef.current = benchmarkCorpus
       return
     }
-    installingBenchmarkCorpusRef.current = benchmarkCorpus
+    installingBenchmarkCorpusRef.current = { corpus: benchmarkCorpus, generation: benchmarkGeneration }
     void (async () => {
       try {
         await installBenchmarkCorpus(benchmarkCorpus)
+        if (
+          !benchmarkMountedRef.current ||
+          benchmarkLifecycleRef.current?.generation !== benchmarkGeneration ||
+          !benchmarkLifecycleRef.current?.runtimeReady
+        ) {
+          return
+        }
         installedBenchmarkCorpusRef.current = benchmarkCorpus
       } catch (error) {
+        if (
+          !benchmarkMountedRef.current ||
+          benchmarkLifecycleRef.current?.generation !== benchmarkGeneration ||
+          !benchmarkLifecycleRef.current?.runtimeReady
+        ) {
+          return
+        }
         getWorkbookScrollPerfCollector()?.setBenchmarkState('error', error instanceof Error ? error.message : String(error))
         reportRuntimeError(error)
       } finally {
-        if (installingBenchmarkCorpusRef.current === benchmarkCorpus) {
+        if (
+          installingBenchmarkCorpusRef.current?.corpus === benchmarkCorpus &&
+          installingBenchmarkCorpusRef.current.generation === benchmarkGeneration
+        ) {
           installingBenchmarkCorpusRef.current = null
         }
       }
     })()
-  }, [benchmarkCorpus, installBenchmarkCorpus, reportRuntimeError, runtimeReady])
+  }, [benchmarkCorpus, benchmarkGeneration, installBenchmarkCorpus, reportRuntimeError, runtimeReady])
   const reportAsyncError = useCallback(
     (task: Promise<unknown>): void => {
       void (async () => {

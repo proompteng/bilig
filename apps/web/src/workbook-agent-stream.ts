@@ -41,8 +41,10 @@ export function useWorkbookAgentStream(input: UseWorkbookAgentStreamInput) {
   const { client, perfSession, persistSessionSnapshot, sessionRef, setError, setIsLoading, setSnapshot } = input
   const eventSourceRef = useRef<EventSource | null>(null)
   const recoveringStreamRef = useRef(false)
+  const streamGenerationRef = useRef(0)
 
   const closeStream = useCallback(() => {
+    streamGenerationRef.current += 1
     eventSourceRef.current?.close()
     eventSourceRef.current = null
   }, [])
@@ -50,8 +52,13 @@ export function useWorkbookAgentStream(input: UseWorkbookAgentStreamInput) {
   const connectStream = useCallback(
     (threadId: string) => {
       closeStream()
+      recoveringStreamRef.current = false
+      const streamGeneration = streamGenerationRef.current
       const source = new EventSource(client.threadEventsUrl(threadId))
       source.addEventListener('message', (message) => {
+        if (eventSourceRef.current !== source || streamGenerationRef.current !== streamGeneration) {
+          return
+        }
         try {
           const payloadText = readMessageEventData(message)
           if (payloadText === null) {
@@ -77,10 +84,11 @@ export function useWorkbookAgentStream(input: UseWorkbookAgentStreamInput) {
         }
       })
       source.addEventListener('error', () => {
-        if (eventSourceRef.current === source) {
-          source.close()
-          eventSourceRef.current = null
+        if (eventSourceRef.current !== source || streamGenerationRef.current !== streamGeneration) {
+          return
         }
+        source.close()
+        eventSourceRef.current = null
         if (recoveringStreamRef.current) {
           return
         }
@@ -95,13 +103,24 @@ export function useWorkbookAgentStream(input: UseWorkbookAgentStreamInput) {
           try {
             setIsLoading(true)
             const nextSnapshot = await client.loadThreadSnapshot(storedSession.threadId)
+            if (eventSourceRef.current !== null || streamGenerationRef.current !== streamGeneration) {
+              return
+            }
+            if (sessionRef.current?.threadId !== storedSession.threadId) {
+              return
+            }
             persistSessionSnapshot(nextSnapshot)
             connectStream(nextSnapshot.threadId)
-          } catch (nextError) {
-            recoveringStreamRef.current = false
-            setError(nextError instanceof Error ? nextError.message : String(nextError))
-          } finally {
             setIsLoading(false)
+          } catch (nextError) {
+            if (streamGenerationRef.current === streamGeneration && sessionRef.current?.threadId === storedSession.threadId) {
+              recoveringStreamRef.current = false
+              setError(nextError instanceof Error ? nextError.message : String(nextError))
+            }
+          } finally {
+            if (streamGenerationRef.current === streamGeneration && sessionRef.current?.threadId === storedSession.threadId) {
+              setIsLoading(false)
+            }
           }
         })()
       })

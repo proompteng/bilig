@@ -503,59 +503,14 @@ describe('sync-server workbook agent public routes', () => {
     }
   })
 
-  it('includes workbook agent observability in healthz when the service is enabled', async () => {
+  it('serves minimal, non-cacheable health status when services are enabled', async () => {
+    const getObservabilitySnapshot = vi.fn(() => {
+      throw new Error('health checks must not collect detailed observability')
+    })
     const { app } = createSyncServer({
       logger: false,
       zeroSyncService: createZeroSyncStub(),
-      workbookAgentService: createWorkbookAgentServiceStub({
-        getObservabilitySnapshot() {
-          return {
-            enabled: true,
-            generatedAtUnixMs: 42,
-            featureFlags: {
-              sharedThreadsEnabled: true,
-              workflowRunnerEnabled: true,
-              autoApplyLowRiskEnabled: false,
-              formulaWorkflowFamilyEnabled: true,
-              formattingWorkflowFamilyEnabled: true,
-              importWorkflowFamilyEnabled: true,
-              rollupWorkflowFamilyEnabled: true,
-              structuralWorkflowFamilyEnabled: true,
-              allowlistedUserCount: 2,
-              allowlistedDocumentCount: 1,
-            },
-            sessions: {
-              sessionCount: 3,
-              subscriberThreadCount: 2,
-              subscriberCount: 4,
-              activeTurnCount: 1,
-              runningWorkflowCount: 1,
-              reviewQueueSessionCount: 1,
-              sharedPendingReviewCount: 1,
-            },
-            pool: {
-              slotCount: 1,
-              boundThreadCount: 2,
-              activeTurnCount: 1,
-              queuedTurnCount: 0,
-              maxClients: 4,
-              maxConcurrentTurnsPerClient: 1,
-              maxQueuedTurnsPerClient: 8,
-            },
-            counters: {
-              turnBackpressureCount: 1,
-              workflowStartedCount: 2,
-              workflowCompletedCount: 1,
-              workflowFailedCount: 0,
-              workflowCancelledCount: 0,
-              sharedReviewApprovedCount: 0,
-              sharedReviewRejectedCount: 0,
-              sharedRecommendationApprovedCount: 1,
-              sharedRecommendationRejectedCount: 0,
-            },
-          }
-        },
-      }),
+      workbookAgentService: createWorkbookAgentServiceStub({ getObservabilitySnapshot }),
     })
 
     try {
@@ -565,24 +520,66 @@ describe('sync-server workbook agent public routes', () => {
       })
 
       expect(response.statusCode).toBe(200)
-      expect(response.json()).toEqual(
-        expect.objectContaining({
-          ok: true,
-          zeroSync: true,
-          workbookAgent: expect.objectContaining({
-            enabled: true,
-            generatedAtUnixMs: 42,
-            featureFlags: expect.objectContaining({
-              allowlistedUserCount: 2,
-              allowlistedDocumentCount: 1,
-            }),
-            sessions: expect.objectContaining({
-              sessionCount: 3,
-              sharedPendingReviewCount: 1,
-            }),
-          }),
-        }),
-      )
+      expect(response.headers['cache-control']).toBe('no-store')
+      expect(response.json()).toEqual({
+        ok: true,
+        service: 'bilig-app',
+        zeroSync: true,
+        web: false,
+        workbookAgent: true,
+      })
+      expect(getObservabilitySnapshot).not.toHaveBeenCalled()
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('returns 503 from readyz until enabled persistence has finished initializing', async () => {
+    const { app } = createSyncServer({
+      logger: false,
+      zeroSyncService: createZeroSyncStub({ isReady: () => false }),
+    })
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/readyz',
+      })
+
+      expect(response.statusCode).toBe(503)
+      expect(response.headers['cache-control']).toBe('no-store')
+      expect(response.json()).toEqual({
+        ok: false,
+        ready: false,
+        service: 'bilig-app',
+        zeroSync: true,
+        web: false,
+        workbookAgent: false,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('reports readyz when persistence is disabled or initialized', async () => {
+    const { app } = createSyncServer({ logger: false })
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/readyz',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['cache-control']).toBe('no-store')
+      expect(response.json()).toEqual({
+        ok: true,
+        ready: true,
+        service: 'bilig-app',
+        zeroSync: false,
+        web: false,
+        workbookAgent: false,
+      })
     } finally {
       await app.close()
     }

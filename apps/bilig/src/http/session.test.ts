@@ -12,6 +12,7 @@ describe('resolveRequestSession', () => {
   it('ignores caller-controlled identity headers in explicit demo mode', () => {
     const resolver = createRequestSessionResolver({
       env: {
+        NODE_ENV: 'test',
         BILIG_AUTH_MODE: 'demo',
         BILIG_SESSION_SECRET: 'test-session-secret-that-is-at-least-32-bytes',
       },
@@ -39,6 +40,7 @@ describe('resolveRequestSession', () => {
   it('restores only a valid signed demo cookie', () => {
     const resolver = createRequestSessionResolver({
       env: {
+        NODE_ENV: 'test',
         BILIG_AUTH_MODE: 'demo',
         BILIG_SESSION_SECRET: 'test-session-secret-that-is-at-least-32-bytes',
       },
@@ -61,6 +63,7 @@ describe('resolveRequestSession', () => {
   it('replaces forged and malformed demo cookies without throwing', () => {
     const resolver = createRequestSessionResolver({
       env: {
+        NODE_ENV: 'test',
         BILIG_AUTH_MODE: 'demo',
         BILIG_SESSION_SECRET: 'test-session-secret-that-is-at-least-32-bytes',
       },
@@ -146,9 +149,71 @@ describe('resolveRequestSession', () => {
         env: {
           NODE_ENV: 'production',
           BILIG_AUTH_MODE: 'demo',
+          BILIG_SESSION_SECRET: 'production-demo-secret-that-is-at-least-32-bytes',
+        },
+      }),
+    ).toThrow('BILIG_AUTH_MODE=demo is not allowed in production; use signed-proxy')
+    expect(() =>
+      createRequestSessionResolver({
+        env: {
+          NODE_ENV: 'production',
+          BILIG_AUTH_MODE: 'signed-proxy',
+          BILIG_AUTH_PROXY_SECRET: 'production-proxy-secret-that-is-at-least-32-bytes',
           BILIG_SESSION_SECRET: 'short',
         },
       }),
     ).toThrow('BILIG_SESSION_SECRET must contain at least 32 bytes')
+  })
+
+  it('allows explicit demo mode for local and E2E environments', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      const resolver = createRequestSessionResolver({
+        env: {
+          NODE_ENV: nodeEnv,
+          BILIG_AUTH_MODE: 'demo',
+          BILIG_SESSION_SECRET: 'local-demo-secret-that-is-at-least-32-bytes',
+        },
+      })
+
+      expect(resolver.mode).toBe('demo')
+    }
+  })
+
+  it('rejects demo mode outside explicitly local environments', () => {
+    for (const nodeEnv of [undefined, '', ' ', 'staging', ' STAGING ', 'development ']) {
+      expect(() =>
+        createRequestSessionResolver({
+          env: {
+            NODE_ENV: nodeEnv,
+            BILIG_AUTH_MODE: 'demo',
+            BILIG_SESSION_SECRET: 'local-demo-secret-that-is-at-least-32-bytes',
+          },
+        }),
+      ).toThrow('BILIG_AUTH_MODE=demo is only allowed when NODE_ENV is explicitly "development" or "test"')
+    }
+  })
+
+  it('rejects an implicit demo mode without an explicitly local environment', () => {
+    expect(() =>
+      createRequestSessionResolver({
+        env: {
+          BILIG_SESSION_SECRET: 'local-demo-secret-that-is-at-least-32-bytes',
+        },
+      }),
+    ).toThrow('BILIG_AUTH_MODE must be explicitly configured outside development and test')
+  })
+
+  it('rejects empty and malformed authentication mode values', () => {
+    for (const authMode of ['', ' ', ' DEMO ', 'unknown']) {
+      expect(() =>
+        createRequestSessionResolver({
+          env: {
+            NODE_ENV: 'test',
+            BILIG_AUTH_MODE: authMode,
+            BILIG_SESSION_SECRET: 'local-demo-secret-that-is-at-least-32-bytes',
+          },
+        }),
+      ).toThrow(`BILIG_AUTH_MODE must be "demo" or "signed-proxy", got ${authMode}`)
+    }
   })
 })

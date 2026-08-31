@@ -133,6 +133,7 @@ function createPreviewSummary(input: { readonly sheetName: string; readonly addr
 function createZeroSyncService(engine: SpreadsheetEngine, input: { readonly revisionRef: { current: number } }): ZeroSyncService {
   return {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {
@@ -505,7 +506,6 @@ describe('workbook agent rendered freshness', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-rendered-fail-closed',
           context: renderedContext({
             value: 'stale-visible-value',
             capturedRevision: 1,
@@ -560,7 +560,6 @@ describe('workbook agent rendered freshness', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-rendered-freshness',
           context: renderedContext({
             value: null,
             capturedRevision: 2,

@@ -1,96 +1,5 @@
 import type { RawKernelExports } from './raw-kernel-exports.js'
-
-type TypedArrayValue = Uint8Array | Uint16Array | Uint32Array | Float64Array
-
-const ARRAY_BUFFER_CLASS_ID = 1
-const UINT8_ARRAY_CLASS_ID = 4
-const FLOAT64_ARRAY_CLASS_ID = 5
-const UINT16_ARRAY_CLASS_ID = 6
-const UINT32_ARRAY_CLASS_ID = 7
-
-interface LoweredArraySpec<T extends TypedArrayValue> {
-  align: number
-  classId: number
-  ctor: {
-    new (buffer: ArrayBufferLike, byteOffset: number, length: number): T
-  }
-}
-
-interface LoweringContext {
-  dataView: DataView
-}
-
-const uint8Spec: LoweredArraySpec<Uint8Array> = {
-  align: 0,
-  classId: UINT8_ARRAY_CLASS_ID,
-  ctor: Uint8Array,
-}
-
-const uint16Spec: LoweredArraySpec<Uint16Array> = {
-  align: 1,
-  classId: UINT16_ARRAY_CLASS_ID,
-  ctor: Uint16Array,
-}
-
-const uint32Spec: LoweredArraySpec<Uint32Array> = {
-  align: 2,
-  classId: UINT32_ARRAY_CLASS_ID,
-  ctor: Uint32Array,
-}
-
-const float64Spec: LoweredArraySpec<Float64Array> = {
-  align: 3,
-  classId: FLOAT64_ARRAY_CLASS_ID,
-  ctor: Float64Array,
-}
-
-function setUint32(raw: RawKernelExports, context: LoweringContext, pointer: number, value: number): void {
-  try {
-    context.dataView.setUint32(pointer, value, true)
-  } catch {
-    context.dataView = new DataView(raw.memory.buffer)
-    context.dataView.setUint32(pointer, value, true)
-  }
-}
-
-function getUint32(raw: RawKernelExports, context: LoweringContext, pointer: number): number {
-  try {
-    return context.dataView.getUint32(pointer, true)
-  } catch {
-    context.dataView = new DataView(raw.memory.buffer)
-    return context.dataView.getUint32(pointer, true)
-  }
-}
-
-function lowerTypedArray<T extends TypedArrayValue>(
-  raw: RawKernelExports,
-  context: LoweringContext,
-  values: T,
-  spec: LoweredArraySpec<T>,
-): number {
-  const byteLength = values.length << spec.align
-  const bufferPtr = raw.__pin(raw.__new(byteLength, ARRAY_BUFFER_CLASS_ID))
-  const headerPtr = raw.__pin(raw.__new(12, spec.classId))
-  try {
-    setUint32(raw, context, headerPtr, bufferPtr)
-    setUint32(raw, context, headerPtr + 4, bufferPtr)
-    setUint32(raw, context, headerPtr + 8, byteLength)
-    new spec.ctor(raw.memory.buffer, bufferPtr, values.length).set(values)
-    return headerPtr
-  } finally {
-    raw.__unpin(bufferPtr)
-  }
-}
-
-function copyLoweredTypedArray<T extends TypedArrayValue>(
-  raw: RawKernelExports,
-  context: LoweringContext,
-  pointer: number,
-  target: T,
-  spec: LoweredArraySpec<T>,
-): void {
-  target.set(new spec.ctor(raw.memory.buffer, getUint32(raw, context, pointer + 4), target.length))
-}
+import { float64ArraySpec, RawKernelArrayBridge, uint16ArraySpec, uint32ArraySpec, uint8ArraySpec } from './raw-kernel-array-bridge.js'
 
 export function evalUniformNumericLookupBatchRaw(
   raw: RawKernelExports,
@@ -106,18 +15,32 @@ export function evalUniformNumericLookupBatchRaw(
   outNumbers: Float64Array,
   outErrors: Uint16Array,
 ): void {
-  const context: LoweringContext = { dataView: new DataView(raw.memory.buffer) }
-  const kindsPtr = lowerTypedArray(raw, context, kinds, uint8Spec)
-  const matchModesPtr = lowerTypedArray(raw, context, matchModes, uint8Spec)
-  const startsPtr = lowerTypedArray(raw, context, starts, float64Spec)
-  const stepsPtr = lowerTypedArray(raw, context, steps, float64Spec)
-  const lengthsPtr = lowerTypedArray(raw, context, lengths, uint32Spec)
-  const repeatedRunLengthsPtr = lowerTypedArray(raw, context, repeatedRunLengths, uint32Spec)
-  const lookupTagsPtr = lowerTypedArray(raw, context, lookupTags, uint8Spec)
-  const lookupNumbersPtr = lowerTypedArray(raw, context, lookupNumbers, float64Spec)
-  const outTagsPtr = lowerTypedArray(raw, context, outTags, uint8Spec)
-  const outNumbersPtr = lowerTypedArray(raw, context, outNumbers, float64Spec)
-  const outErrorsPtr = lowerTypedArray(raw, context, outErrors, uint16Spec)
+  const arrayBridge = new RawKernelArrayBridge(raw)
+  const [
+    kindsPtr,
+    matchModesPtr,
+    startsPtr,
+    stepsPtr,
+    lengthsPtr,
+    repeatedRunLengthsPtr,
+    lookupTagsPtr,
+    lookupNumbersPtr,
+    outTagsPtr,
+    outNumbersPtr,
+    outErrorsPtr,
+  ] = arrayBridge.lowerTypedArrays([
+    [kinds, uint8ArraySpec],
+    [matchModes, uint8ArraySpec],
+    [starts, float64ArraySpec],
+    [steps, float64ArraySpec],
+    [lengths, uint32ArraySpec],
+    [repeatedRunLengths, uint32ArraySpec],
+    [lookupTags, uint8ArraySpec],
+    [lookupNumbers, float64ArraySpec],
+    [outTags, uint8ArraySpec],
+    [outNumbers, float64ArraySpec],
+    [outErrors, uint16ArraySpec],
+  ])
   try {
     raw.evalUniformNumericLookupBatch(
       kindsPtr,
@@ -132,9 +55,9 @@ export function evalUniformNumericLookupBatchRaw(
       outNumbersPtr,
       outErrorsPtr,
     )
-    copyLoweredTypedArray(raw, context, outTagsPtr, outTags, uint8Spec)
-    copyLoweredTypedArray(raw, context, outNumbersPtr, outNumbers, float64Spec)
-    copyLoweredTypedArray(raw, context, outErrorsPtr, outErrors, uint16Spec)
+    arrayBridge.copyTypedArray(outTagsPtr, outTags, uint8ArraySpec)
+    arrayBridge.copyTypedArray(outNumbersPtr, outNumbers, float64ArraySpec)
+    arrayBridge.copyTypedArray(outErrorsPtr, outErrors, uint16ArraySpec)
   } finally {
     raw.__unpin(kindsPtr)
     raw.__unpin(matchModesPtr)

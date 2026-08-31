@@ -77,6 +77,7 @@ function createZeroSyncHarness(
   const calculatedRevision = input?.calculatedRevision ?? headRevision
   return {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {

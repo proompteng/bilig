@@ -343,7 +343,6 @@ describe('workbook agent service workflow authority handoff', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           context: {
             selection: {
               sheetName: 'Revenue',
@@ -481,7 +480,6 @@ describe('workbook agent service workflow authority handoff', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           context: {
             selection: {
               sheetName: 'Revenue',
@@ -1003,7 +1001,6 @@ describe('workbook agent service workflow authority handoff', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           context: {
             selection: {
               sheetName: 'Sheet1',

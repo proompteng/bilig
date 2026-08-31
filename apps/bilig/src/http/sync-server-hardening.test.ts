@@ -157,6 +157,18 @@ describe('sync-server remote MCP origin policy', () => {
 })
 
 describe('sync-server request authentication', () => {
+  it('rejects demo authentication during production server startup', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('BILIG_AUTH_MODE', 'demo')
+    vi.stubEnv('BILIG_SESSION_SECRET', 'production-demo-secret-that-is-at-least-32-bytes')
+
+    try {
+      expect(() => createSyncServer({ logger: false })).toThrow('BILIG_AUTH_MODE=demo is not allowed in production; use signed-proxy')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('uses a signed anonymous demo cookie and ignores spoofed identity headers', async () => {
     const { app } = createSyncServer({ logger: false })
 

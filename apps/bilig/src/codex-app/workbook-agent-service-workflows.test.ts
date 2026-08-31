@@ -640,7 +640,6 @@ describe('workbook agent service durable workflow execution', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           context: {
             selection: {
               sheetName: 'Imports',
@@ -777,7 +776,6 @@ describe('workbook agent service durable workflow execution', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           context: {
             selection: {
               sheetName: 'Revenue',
@@ -892,7 +890,6 @@ describe('workbook agent service durable workflow execution', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           scope: 'shared',
           executionPolicy: 'ownerReview',
           context: {
@@ -1006,7 +1003,6 @@ describe('workbook agent service durable workflow execution', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           scope: 'shared',
           executionPolicy: 'ownerReview',
           context: {

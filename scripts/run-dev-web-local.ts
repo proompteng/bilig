@@ -566,6 +566,7 @@ function spawnAppDev(
 ): DevChildProcess {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    NODE_ENV: process.env['NODE_ENV'] ?? 'development',
     HOST: process.env['HOST'] ?? '0.0.0.0',
     PORT: appPort,
     BILIG_PUBLIC_SERVER_URL: publicServerUrl,

@@ -59,46 +59,6 @@ export function analyzeFreshDirectAggregateFormula(
   }
 }
 
-export function canSkipTopoRepairForFreshDirectAggregate(
-  args: CreateEngineOperationServiceArgs,
-  input: {
-    readonly priorHadFormula: boolean
-    readonly formulaCellIndex: number
-    readonly formula: RuntimeFormula | undefined
-  },
-): boolean {
-  return analyzeFreshDirectAggregateFormula(args, input).canSkipTopoRepair
-}
-
-export function tryEvaluateFreshDirectAggregateCurrentResult(
-  args: CreateEngineOperationServiceArgs,
-  formula: RuntimeFormula | undefined,
-): DirectScalarCurrentOperand | undefined {
-  if (
-    formula === undefined ||
-    formula.compiled.producesSpill ||
-    formula.directAggregate === undefined ||
-    formula.directCriteria !== undefined ||
-    formula.directLookup !== undefined ||
-    formula.directScalar !== undefined ||
-    formula.dependencyIndices.length !== 0 ||
-    formula.rangeDependencies.length !== 0 ||
-    formula.graphRangeDependencies.length !== 0
-  ) {
-    return undefined
-  }
-  const directAggregate = formula.directAggregate
-  const aggregateSheet = args.state.workbook.getSheet(directAggregate.sheetName)
-  if (!aggregateSheet) {
-    return undefined
-  }
-  const result = evaluateDirectAggregateFromCellStore(args, aggregateSheet, directAggregate)
-  if (result.kind === 'number' && directAggregate.resultOffset !== undefined) {
-    return { kind: 'number', value: result.value + directAggregate.resultOffset }
-  }
-  return result
-}
-
 export function markFreshDirectAggregateInputsCovered(
   args: CreateEngineOperationServiceArgs,
   input: {
@@ -146,61 +106,6 @@ export function bindFreshTemplateFormula(
   return args.bindPreparedFormula(cellIndex, sheetName, mutation.formula, template.compiled, template.templateId, {
     assumeFreshFormula: true,
   })
-}
-
-function evaluateDirectAggregateFromCellStore(
-  args: CreateEngineOperationServiceArgs,
-  aggregateSheet: NonNullable<ReturnType<CreateEngineOperationServiceArgs['state']['workbook']['getSheet']>>,
-  directAggregate: RuntimeDirectAggregateDescriptor,
-): DirectScalarCurrentOperand {
-  const cellStore = args.state.workbook.cellStore
-  let sum = 0
-  let count = 0
-  let averageCount = 0
-  let minimum = Number.POSITIVE_INFINITY
-  let maximum = Number.NEGATIVE_INFINITY
-  for (let col = directAggregate.col; col <= directAggregate.colEnd; col += 1) {
-    for (let row = directAggregate.rowStart; row <= directAggregate.rowEnd; row += 1) {
-      const memberCellIndex =
-        aggregateSheet.structureVersion === 1 ? aggregateSheet.grid.getPhysical(row, col) : aggregateSheet.grid.get(row, col)
-      if (memberCellIndex === -1) {
-        continue
-      }
-      const tag = (cellStore.tags[memberCellIndex] as ValueTag | undefined) ?? ValueTag.Empty
-      switch (tag) {
-        case ValueTag.Number: {
-          const value = cellStore.numbers[memberCellIndex] ?? 0
-          sum += value
-          count += 1
-          averageCount += 1
-          minimum = Math.min(minimum, value)
-          maximum = Math.max(maximum, value)
-          break
-        }
-        case ValueTag.Error:
-          if (directAggregate.aggregateKind !== 'count') {
-            return { kind: 'error', code: (cellStore.errors[memberCellIndex] as ErrorCode | undefined) ?? ErrorCode.None }
-          }
-          break
-        case ValueTag.Boolean:
-        case ValueTag.Empty:
-        case ValueTag.String:
-          break
-      }
-    }
-  }
-  switch (directAggregate.aggregateKind) {
-    case 'sum':
-      return { kind: 'number', value: sum }
-    case 'count':
-      return { kind: 'number', value: count }
-    case 'average':
-      return averageCount === 0 ? { kind: 'error', code: ErrorCode.Div0 } : { kind: 'number', value: sum / averageCount }
-    case 'min':
-      return { kind: 'number', value: minimum === Number.POSITIVE_INFINITY ? 0 : minimum }
-    case 'max':
-      return { kind: 'number', value: maximum === Number.NEGATIVE_INFINITY ? 0 : maximum }
-  }
 }
 
 function scanFreshDirectAggregateDependenciesForTopoSkip(

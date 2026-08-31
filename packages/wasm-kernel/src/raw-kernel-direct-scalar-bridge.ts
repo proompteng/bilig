@@ -1,96 +1,5 @@
 import type { RawKernelExports } from './raw-kernel-exports.js'
-
-type TypedArrayValue = Uint8Array | Uint16Array | Uint32Array | Float64Array
-
-const ARRAY_BUFFER_CLASS_ID = 1
-const UINT8_ARRAY_CLASS_ID = 4
-const FLOAT64_ARRAY_CLASS_ID = 5
-const UINT16_ARRAY_CLASS_ID = 6
-const UINT32_ARRAY_CLASS_ID = 7
-
-interface LoweredArraySpec<T extends TypedArrayValue> {
-  align: number
-  classId: number
-  ctor: {
-    new (buffer: ArrayBufferLike, byteOffset: number, length: number): T
-  }
-}
-
-interface LoweringContext {
-  dataView: DataView
-}
-
-const uint8Spec: LoweredArraySpec<Uint8Array> = {
-  align: 0,
-  classId: UINT8_ARRAY_CLASS_ID,
-  ctor: Uint8Array,
-}
-
-const uint16Spec: LoweredArraySpec<Uint16Array> = {
-  align: 1,
-  classId: UINT16_ARRAY_CLASS_ID,
-  ctor: Uint16Array,
-}
-
-const uint32Spec: LoweredArraySpec<Uint32Array> = {
-  align: 2,
-  classId: UINT32_ARRAY_CLASS_ID,
-  ctor: Uint32Array,
-}
-
-const float64Spec: LoweredArraySpec<Float64Array> = {
-  align: 3,
-  classId: FLOAT64_ARRAY_CLASS_ID,
-  ctor: Float64Array,
-}
-
-function setUint32(raw: RawKernelExports, context: LoweringContext, pointer: number, value: number): void {
-  try {
-    context.dataView.setUint32(pointer, value, true)
-  } catch {
-    context.dataView = new DataView(raw.memory.buffer)
-    context.dataView.setUint32(pointer, value, true)
-  }
-}
-
-function getUint32(raw: RawKernelExports, context: LoweringContext, pointer: number): number {
-  try {
-    return context.dataView.getUint32(pointer, true)
-  } catch {
-    context.dataView = new DataView(raw.memory.buffer)
-    return context.dataView.getUint32(pointer, true)
-  }
-}
-
-function lowerTypedArray<T extends TypedArrayValue>(
-  raw: RawKernelExports,
-  context: LoweringContext,
-  values: T,
-  spec: LoweredArraySpec<T>,
-): number {
-  const byteLength = values.length << spec.align
-  const bufferPtr = raw.__pin(raw.__new(byteLength, ARRAY_BUFFER_CLASS_ID))
-  const headerPtr = raw.__pin(raw.__new(12, spec.classId))
-  try {
-    setUint32(raw, context, headerPtr, bufferPtr)
-    setUint32(raw, context, headerPtr + 4, bufferPtr)
-    setUint32(raw, context, headerPtr + 8, byteLength)
-    new spec.ctor(raw.memory.buffer, bufferPtr, values.length).set(values)
-    return headerPtr
-  } finally {
-    raw.__unpin(bufferPtr)
-  }
-}
-
-function copyLoweredTypedArray<T extends TypedArrayValue>(
-  raw: RawKernelExports,
-  context: LoweringContext,
-  pointer: number,
-  target: T,
-  spec: LoweredArraySpec<T>,
-): void {
-  target.set(new spec.ctor(raw.memory.buffer, getUint32(raw, context, pointer + 4), target.length))
-}
+import { float64ArraySpec, RawKernelArrayBridge, uint16ArraySpec, uint32ArraySpec, uint8ArraySpec } from './raw-kernel-array-bridge.js'
 
 export function evalDirectScalarValueBatchRaw(
   raw: RawKernelExports,
@@ -108,20 +17,36 @@ export function evalDirectScalarValueBatchRaw(
   outNumbers: Float64Array,
   outErrors: Uint16Array,
 ): void {
-  const context = { dataView: new DataView(raw.memory.buffer) }
-  const operatorsPtr = lowerTypedArray(raw, context, operators, uint8Spec)
-  const leftBatchRefsPtr = lowerTypedArray(raw, context, leftBatchRefs, uint32Spec)
-  const leftTagsPtr = lowerTypedArray(raw, context, leftTags, uint8Spec)
-  const leftValuesPtr = lowerTypedArray(raw, context, leftValues, float64Spec)
-  const leftErrorsPtr = lowerTypedArray(raw, context, leftErrors, uint16Spec)
-  const rightBatchRefsPtr = lowerTypedArray(raw, context, rightBatchRefs, uint32Spec)
-  const rightTagsPtr = lowerTypedArray(raw, context, rightTags, uint8Spec)
-  const rightValuesPtr = lowerTypedArray(raw, context, rightValues, float64Spec)
-  const rightErrorsPtr = lowerTypedArray(raw, context, rightErrors, uint16Spec)
-  const resultOffsetsPtr = lowerTypedArray(raw, context, resultOffsets, float64Spec)
-  const outTagsPtr = lowerTypedArray(raw, context, outTags, uint8Spec)
-  const outNumbersPtr = lowerTypedArray(raw, context, outNumbers, float64Spec)
-  const outErrorsPtr = lowerTypedArray(raw, context, outErrors, uint16Spec)
+  const arrayBridge = new RawKernelArrayBridge(raw)
+  const [
+    operatorsPtr,
+    leftBatchRefsPtr,
+    leftTagsPtr,
+    leftValuesPtr,
+    leftErrorsPtr,
+    rightBatchRefsPtr,
+    rightTagsPtr,
+    rightValuesPtr,
+    rightErrorsPtr,
+    resultOffsetsPtr,
+    outTagsPtr,
+    outNumbersPtr,
+    outErrorsPtr,
+  ] = arrayBridge.lowerTypedArrays([
+    [operators, uint8ArraySpec],
+    [leftBatchRefs, uint32ArraySpec],
+    [leftTags, uint8ArraySpec],
+    [leftValues, float64ArraySpec],
+    [leftErrors, uint16ArraySpec],
+    [rightBatchRefs, uint32ArraySpec],
+    [rightTags, uint8ArraySpec],
+    [rightValues, float64ArraySpec],
+    [rightErrors, uint16ArraySpec],
+    [resultOffsets, float64ArraySpec],
+    [outTags, uint8ArraySpec],
+    [outNumbers, float64ArraySpec],
+    [outErrors, uint16ArraySpec],
+  ])
   try {
     raw.evalDirectScalarValueBatch(
       operatorsPtr,
@@ -138,9 +63,9 @@ export function evalDirectScalarValueBatchRaw(
       outNumbersPtr,
       outErrorsPtr,
     )
-    copyLoweredTypedArray(raw, context, outTagsPtr, outTags, uint8Spec)
-    copyLoweredTypedArray(raw, context, outNumbersPtr, outNumbers, float64Spec)
-    copyLoweredTypedArray(raw, context, outErrorsPtr, outErrors, uint16Spec)
+    arrayBridge.copyTypedArray(outTagsPtr, outTags, uint8ArraySpec)
+    arrayBridge.copyTypedArray(outNumbersPtr, outNumbers, float64ArraySpec)
+    arrayBridge.copyTypedArray(outErrorsPtr, outErrors, uint16ArraySpec)
   } finally {
     raw.__unpin(operatorsPtr)
     raw.__unpin(leftBatchRefsPtr)
@@ -172,18 +97,32 @@ export function evalDirectScalarStoreTargetBatchRaw(
   rightErrors: Uint16Array,
   resultOffsets: Float64Array,
 ): void {
-  const context = { dataView: new DataView(raw.memory.buffer) }
-  const targetsPtr = lowerTypedArray(raw, context, targets, uint32Spec)
-  const operatorsPtr = lowerTypedArray(raw, context, operators, uint8Spec)
-  const leftBatchRefsPtr = lowerTypedArray(raw, context, leftBatchRefs, uint32Spec)
-  const leftTagsPtr = lowerTypedArray(raw, context, leftTags, uint8Spec)
-  const leftValuesPtr = lowerTypedArray(raw, context, leftValues, float64Spec)
-  const leftErrorsPtr = lowerTypedArray(raw, context, leftErrors, uint16Spec)
-  const rightBatchRefsPtr = lowerTypedArray(raw, context, rightBatchRefs, uint32Spec)
-  const rightTagsPtr = lowerTypedArray(raw, context, rightTags, uint8Spec)
-  const rightValuesPtr = lowerTypedArray(raw, context, rightValues, float64Spec)
-  const rightErrorsPtr = lowerTypedArray(raw, context, rightErrors, uint16Spec)
-  const resultOffsetsPtr = lowerTypedArray(raw, context, resultOffsets, float64Spec)
+  const arrayBridge = new RawKernelArrayBridge(raw)
+  const [
+    targetsPtr,
+    operatorsPtr,
+    leftBatchRefsPtr,
+    leftTagsPtr,
+    leftValuesPtr,
+    leftErrorsPtr,
+    rightBatchRefsPtr,
+    rightTagsPtr,
+    rightValuesPtr,
+    rightErrorsPtr,
+    resultOffsetsPtr,
+  ] = arrayBridge.lowerTypedArrays([
+    [targets, uint32ArraySpec],
+    [operators, uint8ArraySpec],
+    [leftBatchRefs, uint32ArraySpec],
+    [leftTags, uint8ArraySpec],
+    [leftValues, float64ArraySpec],
+    [leftErrors, uint16ArraySpec],
+    [rightBatchRefs, uint32ArraySpec],
+    [rightTags, uint8ArraySpec],
+    [rightValues, float64ArraySpec],
+    [rightErrors, uint16ArraySpec],
+    [resultOffsets, float64ArraySpec],
+  ])
   try {
     raw.evalDirectScalarStoreTargetBatch(
       targetsPtr,
@@ -239,30 +178,56 @@ export function evalDirectConditionalPickBatchRaw(
   outStringIds: Uint32Array,
   outErrors: Uint16Array,
 ): void {
-  const context = { dataView: new DataView(raw.memory.buffer) }
-  const conditionStartsPtr = lowerTypedArray(raw, context, conditionStarts, uint32Spec)
-  const conditionLengthsPtr = lowerTypedArray(raw, context, conditionLengths, uint32Spec)
-  const conditionOpsPtr = lowerTypedArray(raw, context, conditionOps, uint8Spec)
-  const leftTagsPtr = lowerTypedArray(raw, context, leftTags, uint8Spec)
-  const leftNumbersPtr = lowerTypedArray(raw, context, leftNumbers, float64Spec)
-  const leftStringIdsPtr = lowerTypedArray(raw, context, leftStringIds, uint32Spec)
-  const leftErrorsPtr = lowerTypedArray(raw, context, leftErrors, uint16Spec)
-  const rightTagsPtr = lowerTypedArray(raw, context, rightTags, uint8Spec)
-  const rightNumbersPtr = lowerTypedArray(raw, context, rightNumbers, float64Spec)
-  const rightStringIdsPtr = lowerTypedArray(raw, context, rightStringIds, uint32Spec)
-  const rightErrorsPtr = lowerTypedArray(raw, context, rightErrors, uint16Spec)
-  const branchTagsPtr = lowerTypedArray(raw, context, branchTags, uint8Spec)
-  const branchNumbersPtr = lowerTypedArray(raw, context, branchNumbers, float64Spec)
-  const branchStringIdsPtr = lowerTypedArray(raw, context, branchStringIds, uint32Spec)
-  const branchErrorsPtr = lowerTypedArray(raw, context, branchErrors, uint16Spec)
-  const defaultTagsPtr = lowerTypedArray(raw, context, defaultTags, uint8Spec)
-  const defaultNumbersPtr = lowerTypedArray(raw, context, defaultNumbers, float64Spec)
-  const defaultStringIdsPtr = lowerTypedArray(raw, context, defaultStringIds, uint32Spec)
-  const defaultErrorsPtr = lowerTypedArray(raw, context, defaultErrors, uint16Spec)
-  const outTagsPtr = lowerTypedArray(raw, context, outTags, uint8Spec)
-  const outNumbersPtr = lowerTypedArray(raw, context, outNumbers, float64Spec)
-  const outStringIdsPtr = lowerTypedArray(raw, context, outStringIds, uint32Spec)
-  const outErrorsPtr = lowerTypedArray(raw, context, outErrors, uint16Spec)
+  const arrayBridge = new RawKernelArrayBridge(raw)
+  const [
+    conditionStartsPtr,
+    conditionLengthsPtr,
+    conditionOpsPtr,
+    leftTagsPtr,
+    leftNumbersPtr,
+    leftStringIdsPtr,
+    leftErrorsPtr,
+    rightTagsPtr,
+    rightNumbersPtr,
+    rightStringIdsPtr,
+    rightErrorsPtr,
+    branchTagsPtr,
+    branchNumbersPtr,
+    branchStringIdsPtr,
+    branchErrorsPtr,
+    defaultTagsPtr,
+    defaultNumbersPtr,
+    defaultStringIdsPtr,
+    defaultErrorsPtr,
+    outTagsPtr,
+    outNumbersPtr,
+    outStringIdsPtr,
+    outErrorsPtr,
+  ] = arrayBridge.lowerTypedArrays([
+    [conditionStarts, uint32ArraySpec],
+    [conditionLengths, uint32ArraySpec],
+    [conditionOps, uint8ArraySpec],
+    [leftTags, uint8ArraySpec],
+    [leftNumbers, float64ArraySpec],
+    [leftStringIds, uint32ArraySpec],
+    [leftErrors, uint16ArraySpec],
+    [rightTags, uint8ArraySpec],
+    [rightNumbers, float64ArraySpec],
+    [rightStringIds, uint32ArraySpec],
+    [rightErrors, uint16ArraySpec],
+    [branchTags, uint8ArraySpec],
+    [branchNumbers, float64ArraySpec],
+    [branchStringIds, uint32ArraySpec],
+    [branchErrors, uint16ArraySpec],
+    [defaultTags, uint8ArraySpec],
+    [defaultNumbers, float64ArraySpec],
+    [defaultStringIds, uint32ArraySpec],
+    [defaultErrors, uint16ArraySpec],
+    [outTags, uint8ArraySpec],
+    [outNumbers, float64ArraySpec],
+    [outStringIds, uint32ArraySpec],
+    [outErrors, uint16ArraySpec],
+  ])
   try {
     raw.evalDirectConditionalPickBatch(
       conditionStartsPtr,
@@ -289,10 +254,10 @@ export function evalDirectConditionalPickBatchRaw(
       outStringIdsPtr,
       outErrorsPtr,
     )
-    copyLoweredTypedArray(raw, context, outTagsPtr, outTags, uint8Spec)
-    copyLoweredTypedArray(raw, context, outNumbersPtr, outNumbers, float64Spec)
-    copyLoweredTypedArray(raw, context, outStringIdsPtr, outStringIds, uint32Spec)
-    copyLoweredTypedArray(raw, context, outErrorsPtr, outErrors, uint16Spec)
+    arrayBridge.copyTypedArray(outTagsPtr, outTags, uint8ArraySpec)
+    arrayBridge.copyTypedArray(outNumbersPtr, outNumbers, float64ArraySpec)
+    arrayBridge.copyTypedArray(outStringIdsPtr, outStringIds, uint32ArraySpec)
+    arrayBridge.copyTypedArray(outErrorsPtr, outErrors, uint16ArraySpec)
   } finally {
     raw.__unpin(conditionStartsPtr)
     raw.__unpin(conditionLengthsPtr)
@@ -331,11 +296,13 @@ export function evalDenseDirectScalarRowChainStoreTargetBatchRaw(
   secondFormulaScale: number,
   secondFormulaOffset: number,
 ): void {
-  const context = { dataView: new DataView(raw.memory.buffer) }
-  const leftValuesPtr = lowerTypedArray(raw, context, leftValues, float64Spec)
-  const rightValuesPtr = lowerTypedArray(raw, context, rightValues, float64Spec)
-  const firstTargetsPtr = lowerTypedArray(raw, context, firstTargets, uint32Spec)
-  const secondTargetsPtr = lowerTypedArray(raw, context, secondTargets, uint32Spec)
+  const arrayBridge = new RawKernelArrayBridge(raw)
+  const [leftValuesPtr, rightValuesPtr, firstTargetsPtr, secondTargetsPtr] = arrayBridge.lowerTypedArrays([
+    [leftValues, float64ArraySpec],
+    [rightValues, float64ArraySpec],
+    [firstTargets, uint32ArraySpec],
+    [secondTargets, uint32ArraySpec],
+  ])
   try {
     raw.evalDenseDirectScalarRowChainStoreTargetBatch(
       leftValuesPtr,
@@ -365,12 +332,14 @@ export function evalDenseDirectScalarRowChainDivideStoreTargetBatchRaw(
   rowCount: number,
   firstFormulaCode: number,
 ): void {
-  const context = { dataView: new DataView(raw.memory.buffer) }
-  const leftValuesPtr = lowerTypedArray(raw, context, leftValues, float64Spec)
-  const rightValuesPtr = lowerTypedArray(raw, context, rightValues, float64Spec)
-  const denominatorValuesPtr = lowerTypedArray(raw, context, denominatorValues, float64Spec)
-  const firstTargetsPtr = lowerTypedArray(raw, context, firstTargets, uint32Spec)
-  const secondTargetsPtr = lowerTypedArray(raw, context, secondTargets, uint32Spec)
+  const arrayBridge = new RawKernelArrayBridge(raw)
+  const [leftValuesPtr, rightValuesPtr, denominatorValuesPtr, firstTargetsPtr, secondTargetsPtr] = arrayBridge.lowerTypedArrays([
+    [leftValues, float64ArraySpec],
+    [rightValues, float64ArraySpec],
+    [denominatorValues, float64ArraySpec],
+    [firstTargets, uint32ArraySpec],
+    [secondTargets, uint32ArraySpec],
+  ])
   try {
     raw.evalDenseDirectScalarRowChainDivideStoreTargetBatch(
       leftValuesPtr,

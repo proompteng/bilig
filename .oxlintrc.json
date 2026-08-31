@@ -81,9 +81,7 @@
         "apps/bilig/src/workbook-runtime/local-workbook-session-manager.ts",
         "apps/bilig/src/codex-app/workbook-agent-service.ts",
         "apps/bilig/src/codex-app/workbook-agent-workflow-runtime.ts",
-        "packages/renderer/src/host-config.ts",
-        "packages/storage-browser/src/browser-metadata-store.ts",
-        "packages/storage-browser/src/workbook-local-store.ts"
+        "packages/renderer/src/host-config.ts"
       ],
       "rules": {
         "no-console": "off"

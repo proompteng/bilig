@@ -13,15 +13,11 @@ import type {
   WorkbookAgentWorkflowRun,
 } from '@bilig/contracts'
 import type { SessionIdentity } from '../http/session.js'
-import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
+import { createWorkbookAgentServiceError, HIDDEN_THREAD_ERROR } from '../workbook-agent-errors.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import type { CodexAppServerTransport } from './codex-app-server-client.js'
 import { attachSharedReviewState, createBundleRangeCitations, createWorkflowTurnId } from './workbook-agent-bundle-state.js'
-import {
-  WorkbookAgentCodexRuntime,
-  createWorkbookAgentThreadResumeInput,
-  createWorkbookAgentThreadStartInput,
-} from './workbook-agent-codex-runtime.js'
+import { WorkbookAgentCodexRuntime } from './workbook-agent-codex-runtime.js'
 import { DisabledWorkbookAgentService } from './workbook-agent-disabled-service.js'
 import { updateWorkbookAgentDurableUiContextFromUser } from './workbook-agent-durable-context-sync.js'
 import {
@@ -285,8 +281,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   getObservabilitySnapshot(): WorkbookAgentObservabilitySnapshot {
-    const runtimePoolStats = this.codexRuntime.getStats()
-    const poolStats = runtimePoolStats ?? {
+    const poolStats = this.codexRuntime.getStats() ?? {
       slotCount: 0,
       boundThreadCount: 0,
       activeTurnCount: 0,
@@ -329,7 +324,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       })
     }
     if (parsed.threadId !== undefined) {
-      const sharedSession = this.tryGetSessionByThreadId(parsed.threadId)
+      const sharedSession = this.sessionAuthority.tryGetSessionByThreadId(parsed.threadId)
       if (sharedSession) {
         const accessibleSession = this.sessionAuthority.requireOwnedSession(sharedSession, input.documentId, input.session.userID)
         await this.sessionAuthority.authorizeSharedSessionForUser(accessibleSession, input.documentId, input.session.userID)
@@ -364,14 +359,38 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       }
     }
 
+    const preauthorizedDurableThreadSession =
+      parsed.threadId === undefined
+        ? null
+        : await this.threadRepository.loadThreadState({
+            documentId: input.documentId,
+            actorUserId: input.session.userID,
+            threadId: parsed.threadId,
+          })
+    const preauthorizedDurableThreadState = preauthorizedDurableThreadSession?.threadState
+    if (
+      parsed.threadId !== undefined &&
+      (!preauthorizedDurableThreadState ||
+        (preauthorizedDurableThreadState.scope === 'private' && preauthorizedDurableThreadState.actorUserId !== input.session.userID))
+    ) {
+      throw createWorkbookAgentServiceError(HIDDEN_THREAD_ERROR)
+    }
+    if (preauthorizedDurableThreadState?.scope === 'shared') {
+      assertWorkbookAgentSharedThreadAccess({
+        featureFlags: this.featureFlags,
+        documentId: input.documentId,
+        userId: input.session.userID,
+      })
+    }
+
     let thread: Awaited<ReturnType<CodexAppServerTransport['threadStart']>> | null = null
     let sessionBootstrapError: unknown = null
     try {
       const codexClient = await this.codexRuntime.getClient()
       thread =
         parsed.threadId === undefined
-          ? await codexClient.threadStart(createWorkbookAgentThreadStartInput())
-          : await codexClient.threadResume(createWorkbookAgentThreadResumeInput(parsed.threadId))
+          ? await codexClient.threadStart(this.codexRuntime.createThreadStartInput())
+          : await codexClient.threadResume(this.codexRuntime.createThreadResumeInput(parsed.threadId))
     } catch (error) {
       if (parsed.threadId === undefined) {
         throw error
@@ -382,19 +401,19 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (!threadId) {
       throw sessionBootstrapError instanceof Error ? sessionBootstrapError : new Error('Workbook agent thread bootstrap failed')
     }
-    const durableThreadSession = await this.threadRepository.loadThreadState({
-      documentId: input.documentId,
-      actorUserId: input.session.userID,
-      threadId,
-    })
+    const durableThreadSession =
+      preauthorizedDurableThreadSession ??
+      (await this.threadRepository.loadThreadState({
+        documentId: input.documentId,
+        actorUserId: input.session.userID,
+        threadId,
+      }))
     const durableThreadState = durableThreadSession.threadState
     if (durableThreadState?.scope === 'shared') {
       assertWorkbookAgentSharedThreadAccess({
         featureFlags: this.featureFlags,
         documentId: input.documentId,
         userId: input.session.userID,
-        disabledCode: 'WORKBOOK_AGENT_SHARED_THREADS_DISABLED',
-        rolloutBlockedCode: 'WORKBOOK_AGENT_SHARED_THREADS_ROLLOUT_BLOCKED',
       })
     }
     if (durableThreadState && parsed.executionPolicy) {
@@ -803,10 +822,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     return cloneUiContext(sessionState.live.turnContextByTurn.get(turnId) ?? sessionState.durable.context)
   }
 
-  private tryGetSessionByThreadId(threadId: string): WorkbookAgentThreadState | null {
-    return this.sessionAuthority.tryGetSessionByThreadId(threadId)
-  }
-
   private assertWorkflowFamilyEnabled(workflowTemplate: WorkbookAgentWorkflowRun['workflowTemplate']): void {
     if (isWorkbookAgentWorkflowFamilyEnabled(this.featureFlags, workflowTemplate)) {
       return
@@ -828,8 +843,16 @@ export function createWorkbookAgentService(
   if (!zeroSyncService.enabled) {
     return new DisabledWorkbookAgentService()
   }
+  const featureFlags = {
+    ...resolveWorkbookAgentFeatureFlags(),
+    ...options.featureFlags,
+  }
+  if (!featureFlags.enabled) {
+    return new DisabledWorkbookAgentService()
+  }
   return new EnabledWorkbookAgentService({
     zeroSyncService,
     ...options,
+    featureFlags,
   })
 }

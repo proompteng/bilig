@@ -115,6 +115,12 @@ function readZeroQueryDocumentIds(body: unknown): string[] {
 
 export interface ZeroSyncService {
   readonly enabled: boolean
+  /**
+   * Reports whether an enabled service has completed its startup contract.
+   * Disabled services are intentionally ready because local-only operation is
+   * a supported mode of the app.
+   */
+  readonly isReady: () => boolean
   initialize(): Promise<void>
   close(): Promise<void>
   handleQuery(request: ZeroSyncRequestLike, session: SessionIdentity, authMode: BiligAuthMode): Promise<unknown>
@@ -194,6 +200,10 @@ function fastifyRequestToWebRequest(request: ZeroSyncRequestLike): Request {
 
 class DisabledZeroSyncService implements ZeroSyncService {
   readonly enabled = false
+
+  isReady(): boolean {
+    return true
+  }
 
   async initialize(): Promise<void> {}
 
@@ -279,6 +289,9 @@ class EnabledZeroSyncService implements ZeroSyncService {
   private readonly runtimeStore: WorkbookRuntimeStoreConnection
   private readonly runtimeManager: WorkbookRuntimeManager
   private readonly recalcWorker: ZeroRecalcWorker
+  private lifecycle: 'new' | 'initializing' | 'ready' | 'failed' | 'closing' | 'closed' = 'new'
+  private initializePromise: Promise<void> | null = null
+  private closePromise: Promise<void> | null = null
 
   constructor(connectionString: string) {
     this.pool = createZeroPool(connectionString)
@@ -288,7 +301,37 @@ class EnabledZeroSyncService implements ZeroSyncService {
     this.recalcWorker = new ZeroRecalcWorker(this.pool, this.runtimeStore, this.runtimeManager)
   }
 
+  isReady(): boolean {
+    return this.lifecycle === 'ready'
+  }
+
   async initialize(): Promise<void> {
+    if (this.lifecycle === 'ready') {
+      return
+    }
+    if (this.lifecycle === 'closing' || this.lifecycle === 'closed') {
+      throw new Error('Zero sync cannot be initialized after shutdown has started')
+    }
+    if (this.initializePromise) {
+      return await this.initializePromise
+    }
+
+    this.lifecycle = 'initializing'
+    this.initializePromise = this.initializeOnce()
+    try {
+      await this.initializePromise
+    } catch (error) {
+      this.lifecycle = 'failed'
+      throw error
+    }
+  }
+
+  async close(): Promise<void> {
+    this.closePromise ??= this.closeOnce()
+    return await this.closePromise
+  }
+
+  private async initializeOnce(): Promise<void> {
     await ensureZeroServiceSchema(this.pool)
     await ensureZeroPublication(this.pool)
     await ensureZeroDataMigrationSchema(this.pool)
@@ -299,12 +342,34 @@ class EnabledZeroSyncService implements ZeroSyncService {
       allowPendingCleanup: resolveAllowPendingCleanupMigrations(),
     })
     this.recalcWorker.start()
+    this.lifecycle = 'ready'
   }
 
-  async close(): Promise<void> {
-    this.recalcWorker.stop()
-    await this.runtimeManager.close()
-    await this.pool.end()
+  private async closeOnce(): Promise<void> {
+    this.lifecycle = 'closing'
+    if (this.initializePromise) {
+      await this.initializePromise.catch(() => undefined)
+    }
+    const failures: unknown[] = []
+    try {
+      this.recalcWorker.stop()
+    } catch (error) {
+      failures.push(error)
+    }
+    try {
+      await this.runtimeManager.close()
+    } catch (error) {
+      failures.push(error)
+    }
+    try {
+      await this.pool.end()
+    } catch (error) {
+      failures.push(error)
+    }
+    this.lifecycle = 'closed'
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'Failed to close Zero sync cleanly')
+    }
   }
 
   async handleQuery(request: ZeroSyncRequestLike, session: SessionIdentity, authMode: BiligAuthMode): Promise<unknown> {

@@ -10,6 +10,7 @@ artifacts/fuzz/
 .cache/
 .tmp/
 __pycache__/
+.venv/
 *.pyc
 .agent-coordination/
 .bilig/

@@ -27,3 +27,10 @@ export function createWorkbookAgentServiceError(input: { code: string; message: 
 } {
   return new WorkbookAgentServiceError(input)
 }
+
+export const HIDDEN_THREAD_ERROR = {
+  code: 'WORKBOOK_AGENT_THREAD_NOT_FOUND',
+  message: 'Workbook agent thread not found',
+  statusCode: 404,
+  retryable: false,
+} as const

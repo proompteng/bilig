@@ -33,18 +33,6 @@ function isDenseInitialLiteralSheet(content: WorkPaperSheet, inspection: Initial
   return inspection.materializedCellCount === content.length * inspection.maxColumnCount
 }
 
-export function tryLoadInitialLiteralSheet(engine: SpreadsheetEngine, sheetId: number, content: WorkPaperSheet): boolean {
-  if (sheetContainsFormulaContent(content)) {
-    return false
-  }
-  loadInitialLiteralSheet(engine, sheetId, content)
-  return true
-}
-
-function sheetContainsFormulaContent(content: WorkPaperSheet): boolean {
-  return content.some((row) => row.some((value) => typeof value === 'string' && readInitialFormulaSource(value) !== undefined))
-}
-
 export interface PreparedInitialMixedSheetLoad {
   formulaRefs: EngineFormulaSourceRefTable
   potentialNewCells: number
@@ -520,18 +508,4 @@ function writeInitialLiteralCell(
     cellStore.numbers[cellIndex] = 0
     cellStore.stringIds[cellIndex] = strings.intern(raw)
   }
-}
-
-export function loadInitialMixedSheet(args: {
-  engine: SpreadsheetEngine
-  sheetId: number
-  content: WorkPaperSheet
-  rewriteFormula: (formula: string, row: number, col: number) => string
-  inspection?: InitialSheetMaterializationInspection
-}): void {
-  const prepared = prepareInitialMixedSheetLoad(args)
-  if (prepared.formulaRefs.length === 0) {
-    return
-  }
-  args.engine.initializeFormulaSourcesAtNow(prepared.formulaRefs, prepared.potentialNewCells)
 }

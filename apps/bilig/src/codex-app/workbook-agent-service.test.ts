@@ -15,6 +15,17 @@ import {
 } from './workbook-agent-service.test-helpers.js'
 
 describe('workbook agent service transport timeline and access policy', () => {
+  it('stays disabled when the top-level workbook-agent gate is closed', async () => {
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      featureFlags: {
+        enabled: false,
+      },
+    })
+
+    expect(service.enabled).toBe(false)
+    await service.close()
+  })
+
   it('boots the Codex app-server transport with local workbook skills', async () => {
     const fakeCodex = new FakeCodexTransport()
     const capturedOptions: {
@@ -37,31 +48,29 @@ describe('workbook agent service transport timeline and access policy', () => {
         body: {},
       })
 
-      expect(capturedOptions.current?.args).toEqual([
-        'app-server',
-        '-c',
-        'analytics.enabled=false',
-        '-c',
-        'approval_policy="never"',
-        '-c',
-        'sandbox_mode="danger-full-access"',
-        '-c',
-        'network_access=true',
-        '-c',
-        'web_search="live"',
-      ])
+      expect(capturedOptions.current?.args).toEqual(
+        expect.arrayContaining([
+          'app-server',
+          '--strict-config',
+          'approval_policy="on-request"',
+          'sandbox_mode="read-only"',
+          'sandbox_workspace_write.network_access=false',
+          'web_search="disabled"',
+          'mcp_servers={}',
+        ]),
+      )
       expect(fakeCodex.lastThreadStartInput).toMatchObject({
         model: 'gpt-5.5',
-        approvalPolicy: 'never',
-        sandbox: 'danger-full-access',
+        approvalPolicy: 'on-request',
+        sandbox: 'read-only',
         config: {
-          approval_policy: 'never',
-          sandbox_mode: 'danger-full-access',
-          network_access: true,
-          web_search: 'live',
-          tools: {
-            view_image: true,
+          approval_policy: 'on-request',
+          sandbox_mode: 'read-only',
+          sandbox_workspace_write: {
+            network_access: false,
           },
+          web_search: 'disabled',
+          mcp_servers: {},
         },
       })
       expect(fakeCodex.lastThreadStartInput?.dynamicTools.map((tool) => tool.name)).toEqual(
@@ -80,7 +89,7 @@ describe('workbook agent service transport timeline and access policy', () => {
       expect(fakeCodex.lastThreadStartInput?.dynamicTools.every((tool) => /^[a-zA-Z0-9_-]+$/.test(tool.name))).toBe(true)
       expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain('Help with the active workbook only.')
       expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain(
-        'Use built-in search or network access when the workbook task needs external context.',
+        'Use only the available workbook tools for workbook context; say when external context is unavailable.',
       )
       expect(fakeCodex.lastThreadStartInput?.baseInstructions).not.toContain('Tools:')
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
@@ -93,12 +102,123 @@ describe('workbook agent service transport timeline and access policy', () => {
         'Apply workbook changes directly when the session policy allows it.',
       )
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
-        'External search or network context can support an answer, but workbook state must come from workbook tools.',
+        'Workbook state must come from workbook tools; do not assume external search or network context is available.',
       )
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain('review and apply it from the panel')
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain('stage one coherent change set per turn')
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain('summarizeWorkbook')
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).not.toContain('Do not use non-workbook tools')
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('hides a non-visible thread before attempting to resume it', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const loadWorkbookAgentThreadState = vi.fn(async () => null)
+    const codexClientFactory = vi.fn((): CodexAppServerTransport => fakeCodex)
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        loadWorkbookAgentThreadState,
+      }),
+      {
+        codexClientFactory,
+      },
+    )
+
+    try {
+      await expect(
+        service.createSession({
+          documentId: 'doc-1',
+          session: {
+            userID: 'mallory@example.com',
+            roles: ['editor'],
+          },
+          body: {
+            threadId: 'thr-private',
+            scope: 'private',
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: 'WORKBOOK_AGENT_THREAD_NOT_FOUND',
+        statusCode: 404,
+        retryable: false,
+      })
+
+      expect(loadWorkbookAgentThreadState).toHaveBeenCalledWith('doc-1', 'mallory@example.com', 'thr-private')
+      expect(codexClientFactory).not.toHaveBeenCalled()
+      expect(fakeCodex.lastThreadResumeInput).toBeNull()
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('loads durable authorization before resume and falls back when authorized resume fails', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const events: string[] = []
+    const loadWorkbookAgentThreadState = vi.fn(async () => {
+      events.push('load')
+      return {
+        documentId: 'doc-1',
+        threadId: 'thr-durable',
+        actorUserId: 'alex@example.com',
+        scope: 'private' as const,
+        executionPolicy: 'ownerReview' as const,
+        context: {
+          selection: {
+            sheetName: 'Sheet2',
+            address: 'C7',
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 20,
+            colStart: 0,
+            colEnd: 10,
+          },
+        },
+        entries: [],
+        reviewQueueItems: [],
+        updatedAtUnixMs: 100,
+      }
+    })
+    vi.spyOn(fakeCodex, 'threadResume').mockImplementation(async () => {
+      events.push('resume')
+      throw new Error('codex resume unavailable')
+    })
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        loadWorkbookAgentThreadState,
+      }),
+      {
+        codexClientFactory: (): CodexAppServerTransport => fakeCodex,
+      },
+    )
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          threadId: 'thr-durable',
+        },
+      })
+
+      expect(events).toEqual(['load', 'resume'])
+      expect(loadWorkbookAgentThreadState).toHaveBeenCalledTimes(1)
+      expect(snapshot.threadId).toBe('thr-durable')
+      expect(snapshot.status).toBe('failed')
+      expect(snapshot.lastError).toContain('codex resume unavailable')
+      expect(snapshot.context).toEqual(
+        expect.objectContaining({
+          selection: expect.objectContaining({
+            sheetName: 'Sheet2',
+            address: 'C7',
+          }),
+        }),
+      )
     } finally {
       await service.close()
     }
@@ -754,6 +874,7 @@ describe('workbook agent service transport timeline and access policy', () => {
       })
       Object.defineProperty(service, 'featureFlags', {
         value: {
+          enabled: true,
           sharedThreadsEnabled: false,
           workflowRunnerEnabled: true,
           autoApplyLowRiskEnabled: true,
@@ -1146,6 +1267,19 @@ describe('workbook agent service transport timeline and access policy', () => {
       createZeroSyncStub({
         applyAgentCommandBundle,
         appendWorkbookAgentRun,
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: 'doc-1',
+            threadId: 'thr-shared',
+            actorUserId: 'alex@example.com',
+            scope: 'shared' as const,
+            executionPolicy: 'autoApplySafe' as const,
+            context: null,
+            entries: [],
+            reviewQueueItems: [],
+            updatedAtUnixMs: 100,
+          }
+        },
       }),
       {
         codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {

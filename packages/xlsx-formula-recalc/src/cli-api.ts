@@ -39,7 +39,6 @@ interface CliOptions {
   readonly externalWorkbooks: readonly CliExternalWorkbook[]
   readonly inspect: boolean
   readonly inspectLimit: CliInspectLimit
-  readonly timeoutMs?: number
   readonly engine?: XlsxFormulaRecalcEngine
   readonly maxRssBytes?: number
   readonly fallbackPolicy?: XlsxFormulaRecalcFallbackPolicy
@@ -176,7 +175,6 @@ export async function runXlsxFormulaRecalcCliAsync(args: readonly string[], cont
             ...(externalWorkbooks.length > 0 ? { externalWorkbooks } : {}),
             edits: options.edits,
             reads: options.reads,
-            ...(options.timeoutMs === undefined ? {} : { config: { evaluationTimeoutMs: options.timeoutMs } }),
             ...(options.engine === undefined ? { engine: 'auto' as const } : { engine: options.engine }),
             ...(options.maxRssBytes === undefined ? {} : { maxRssBytes: options.maxRssBytes }),
             ...(options.fallbackPolicy === undefined ? {} : { fallbackPolicy: options.fallbackPolicy }),
@@ -250,7 +248,6 @@ function parseCliArgs(args: readonly string[], commandName: string): CliOptions 
   let outputPath: string | undefined
   let inspect = false
   let inspectLimit: CliOptions['inspectLimit'] = defaultInspectFormulaLimit
-  let timeoutMs: number | undefined
   let engine: XlsxFormulaRecalcEngine | undefined
   let maxRssBytes: number | undefined
   let fallbackPolicy: XlsxFormulaRecalcFallbackPolicy | undefined
@@ -291,9 +288,7 @@ function parseCliArgs(args: readonly string[], commandName: string): CliOptions 
         index += 1
         break
       case '--timeout-ms':
-        timeoutMs = parsePositiveIntegerOption(requireNextArg(args, index, '--timeout-ms'), '--timeout-ms')
-        index += 1
-        break
+        throw unsupportedTimeoutOptionError()
       case '--engine':
         engine = parseEngineOption(requireNextArg(args, index, '--engine'))
         index += 1
@@ -333,7 +328,6 @@ function parseCliArgs(args: readonly string[], commandName: string): CliOptions 
     externalWorkbooks,
     inspect,
     inspectLimit,
-    ...(timeoutMs === undefined ? {} : { timeoutMs }),
     ...(engine === undefined ? {} : { engine }),
     ...(maxRssBytes === undefined ? {} : { maxRssBytes }),
     ...(fallbackPolicy === undefined ? {} : { fallbackPolicy }),
@@ -397,9 +391,6 @@ async function printInspectionSummaryAsync(args: PrintInspectionSummaryAsyncInpu
   if (args.options.mode === 'file') {
     if (args.externalWorkbooks.length > 0) {
       throw new Error('streaming-native inspection does not support external workbook companions')
-    }
-    if (args.options.timeoutMs !== undefined) {
-      throw new Error('streaming-native inspection does not support WorkPaper timeout options')
     }
     const inspection = await inspectXlsxCacheFileStreamingNative(requireInputPath(args.options), {
       inspectLimit: args.options.inspectLimit,
@@ -776,7 +767,6 @@ Options:
                           Print a ready-to-commit GitHub Actions workflow that uses proompteng/bilig@v1.
   --set <Sheet!A1=value>  Edit an input cell before diagnosis. Repeatable.
   --inspect-limit <all|n> Formula cells to recompute during inspection. Defaults to ${defaultInspectFormulaLimit}.
-  --timeout-ms <n>        Formula evaluation timeout in milliseconds.
   --engine <auto|streaming-native>
                           Select the recalculation engine. File-to-file CLI defaults to auto, which tries streaming-native.
   --fallback-policy <error>
@@ -811,7 +801,6 @@ Options:
   --read <Sheet!A1>       Read a recalculated cell after edits. Repeatable.
   --inspect               Inspect formula cells, stale cached values, and suggested --read targets.
   --inspect-limit <all|n> Formula cells to recompute during inspection. Defaults to ${defaultInspectFormulaLimit}.
-  --timeout-ms <n>        Formula evaluation timeout in milliseconds.
   --engine <auto|streaming-native>
                           Select the recalculation engine. File-to-file CLI defaults to auto, which tries streaming-native.
   --fallback-policy <error>
@@ -839,5 +828,11 @@ function cliErrorSummary(error: unknown): Record<string, unknown> {
 function legacyWorkPaperCliPathError(optionName: 'engine' | 'fallbackPolicy'): Error {
   return new Error(
     `The primary xlsx-recalc file CLI no longer loads or exports WorkPaper through ${optionName}; use @bilig/workpaper for WorkPaper workflows.`,
+  )
+}
+
+function unsupportedTimeoutOptionError(): Error {
+  return new Error(
+    'The streaming-native xlsx-recalc CLI does not support --timeout-ms; use @bilig/workpaper for WorkPaper evaluation timeout controls.',
   )
 }

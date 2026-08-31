@@ -298,17 +298,35 @@ process.stdout.write(JSON.stringify({ exitCode, stderr, before, after: loadedXls
     }
   })
 
-  it('documents the formula evaluation timeout option', () => {
-    let stdout = ''
+  it('rejects the retired timeout option before invoking the native file API', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'xlsx-formula-recalc-cli-timeout-'))
+    try {
+      const inputPath = join(tempDir, 'native.xlsx')
+      const outputPath = join(tempDir, 'native.recalculated.xlsx')
+      writeFileSync(inputPath, buildStaleFormulaCacheWorkbook())
+      let stdout = ''
+      let stderr = ''
 
-    const exitCode = runXlsxFormulaRecalcCli(['--help'], {
-      stdout: (text) => {
-        stdout += text
-      },
-    })
+      const exitCode = await runXlsxFormulaRecalcCliAsync([inputPath, '--timeout-ms', '1000', '--out', outputPath, '--json'], {
+        stdout: (text) => {
+          stdout += text
+        },
+        stderr: (text) => {
+          stderr += text
+        },
+      })
 
-    expect(exitCode).toBe(0)
-    expect(stdout).toContain('--timeout-ms <n>')
+      expect(exitCode).toBe(1)
+      expect(stderr).toBe('')
+      expect(existsSync(outputPath)).toBe(false)
+      const summary = readCliErrorSummary(stdout)
+      expect(summary.commandSucceeded).toBe(false)
+      expect(summary.recalculationCompleted).toBe(false)
+      expect(summary.error).toContain('does not support --timeout-ms')
+      expect(summary.error).toContain('@bilig/workpaper')
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
   })
 
   it('inspects workbook formula cells through streaming-native before writing an output file', async () => {

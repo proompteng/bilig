@@ -9,7 +9,7 @@
   },
   "workspaces": {
     ".": {
-      "ignoreFiles": ["**/__tests__/**", "**/*.test.ts?(x)", "e2e/**", "scripts/**", "playwright.config.ts", "playwright.prod.config.ts"],
+      "ignoreFiles": ["scripts/**"],
       "entry": [
         "actions/xlsx-cache-doctor/*.mjs",
         "docs/assets/hero-scene.js",

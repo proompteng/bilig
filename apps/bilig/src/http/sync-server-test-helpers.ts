@@ -84,6 +84,7 @@ afterEach(async () => {
 export function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncService {
   return {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {

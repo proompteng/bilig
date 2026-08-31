@@ -1,6 +1,7 @@
 import type { WorkbookAgentWorkflowRun } from '@bilig/contracts'
 
 export interface WorkbookAgentFeatureFlags {
+  readonly enabled: boolean
   readonly sharedThreadsEnabled: boolean
   readonly workflowRunnerEnabled: boolean
   readonly autoApplyLowRiskEnabled: boolean
@@ -37,7 +38,9 @@ function parseCsvEnv(value: string | undefined): string[] {
 }
 
 export function resolveWorkbookAgentFeatureFlags(env: NodeJS.ProcessEnv = process.env): WorkbookAgentFeatureFlags {
+  const agentEnabledByDefault = env['NODE_ENV'] === 'development' || env['NODE_ENV'] === 'test'
   return {
+    enabled: parseBooleanEnv(env['BILIG_AGENT_ENABLED'], agentEnabledByDefault, 'BILIG_AGENT_ENABLED'),
     sharedThreadsEnabled: parseBooleanEnv(env['BILIG_AGENT_SHARED_THREADS_ENABLED'], true, 'BILIG_AGENT_SHARED_THREADS_ENABLED'),
     workflowRunnerEnabled: parseBooleanEnv(env['BILIG_AGENT_WORKFLOW_RUNNER_ENABLED'], true, 'BILIG_AGENT_WORKFLOW_RUNNER_ENABLED'),
     autoApplyLowRiskEnabled: parseBooleanEnv(

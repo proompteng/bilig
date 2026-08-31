@@ -19,9 +19,6 @@
     },
     {
       "path": "../headless"
-    },
-    {
-      "path": "../excel-import"
     }
   ],
   "include": ["src/**/*"],

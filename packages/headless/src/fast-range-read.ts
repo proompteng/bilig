@@ -226,51 +226,6 @@ export function readFastRangeValueBlock(engine: SpreadsheetEngine, range: WorkPa
   return finalizeValueBlock(block)
 }
 
-export function materializeRangeValueBlock(block: WorkPaperRangeValueBlock): CellValue[][] {
-  const rows: CellValue[][] = []
-  rows.length = block.rowCount
-  for (let rowOffset = 0; rowOffset < block.rowCount; rowOffset += 1) {
-    const row: CellValue[] = []
-    row.length = block.colCount
-    rows[rowOffset] = row
-    const outputRowOffset = rowOffset * block.colCount
-    for (let colOffset = 0; colOffset < block.colCount; colOffset += 1) {
-      const index = outputRowOffset + colOffset
-      switch ((block.tags[index] as ValueTag | undefined) ?? ValueTag.Empty) {
-        case ValueTag.Number:
-          row[colOffset] = { tag: ValueTag.Number, value: block.numbers[index] ?? 0 }
-          break
-        case ValueTag.Boolean:
-          row[colOffset] = {
-            tag: ValueTag.Boolean,
-            value: (block.numbers[index] ?? 0) !== 0,
-          }
-          break
-        case ValueTag.String: {
-          const stringId = block.stringIds[index] ?? 0
-          row[colOffset] = {
-            tag: ValueTag.String,
-            value: stringId === 0 ? '' : (block.strings?.get(stringId) ?? ''),
-            stringId,
-          }
-          break
-        }
-        case ValueTag.Error:
-          row[colOffset] = {
-            tag: ValueTag.Error,
-            code: (block.errors[index] as ErrorCode | undefined) ?? ErrorCode.None,
-          }
-          break
-        case ValueTag.Empty:
-        default:
-          row[colOffset] = EMPTY_CELL_VALUE
-          break
-      }
-    }
-  }
-  return rows
-}
-
 function readFastLogicalRangeValues(
   engine: SpreadsheetEngine,
   sheet: SheetRecord,

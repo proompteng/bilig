@@ -53,20 +53,6 @@ function internPrimaryDirectAggregateRegion(args: {
   })
 }
 
-export function renameDirectAggregateDescriptorSheet(args: {
-  readonly descriptor: RuntimeDirectAggregateDescriptor
-  readonly oldSheetName: string
-  readonly newSheetName: string
-}): RuntimeDirectAggregateDescriptor {
-  if (args.descriptor.sheetName !== args.oldSheetName) {
-    return args.descriptor
-  }
-  return {
-    ...args.descriptor,
-    sheetName: args.newSheetName,
-  }
-}
-
 export function rewriteDirectAggregateDescriptorForStructuralTransform(args: {
   readonly descriptor: RuntimeDirectAggregateDescriptor
   readonly targetSheetName: string

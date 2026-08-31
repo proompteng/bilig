@@ -37,8 +37,6 @@ async function main() {
   const zeroSyncService = createZeroSyncService()
   const workbookAgentService = createWorkbookAgentService(zeroSyncService)
 
-  await zeroSyncService.initialize()
-
   const { app: syncApp, closeWorkbookAgent } = createSyncServer({
     sessionManager,
     documentService,
@@ -61,6 +59,7 @@ async function main() {
   })
 
   try {
+    await zeroSyncService.initialize()
     await syncApp.listen({ host, port: appPort })
     syncApp.log.info({ host, appPort, zeroSync: zeroSyncService.enabled }, 'bilig app listening')
   } catch (error) {

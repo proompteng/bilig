@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import readline from 'node:readline'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import type {
@@ -33,6 +35,33 @@ export interface CodexAppServerClientOptions {
   handleDynamicToolCall: (request: CodexDynamicToolCallRequest) => Promise<CodexDynamicToolCallResult>
 }
 
+const CODEX_CHILD_ENV_KEYS = [
+  'ALL_PROXY',
+  'all_proxy',
+  'COLORTERM',
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'NO_COLOR',
+  'NO_PROXY',
+  'OPENAI_API_KEY',
+  'OPENAI_BASE_URL',
+  'PATH',
+  'SHELL',
+  'SSL_CERT_DIR',
+  'SSL_CERT_FILE',
+  'TERM',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+] as const
+
+export interface CodexChildEnvironmentOptions {
+  readonly codexHome?: string
+}
+
 export type CodexAppServerJsonValue =
   | boolean
   | number
@@ -57,16 +86,14 @@ export type CodexAppServerApprovalPolicy =
     }
 export type CodexAppServerSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 export type CodexAppServerWebSearchMode = 'live' | 'disabled' | 'off' | boolean
-export interface CodexAppServerToolsConfig {
-  readonly view_image?: boolean
-}
 export type CodexAppServerThreadConfig = {
   readonly approval_policy?: CodexAppServerApprovalPolicy
   readonly sandbox_mode?: CodexAppServerSandboxMode
-  readonly network_access?: boolean
+  readonly sandbox_workspace_write?: {
+    readonly network_access?: boolean
+  }
   readonly web_search?: CodexAppServerWebSearchMode
-  readonly tools?: CodexAppServerToolsConfig
-} & { readonly [key: string]: CodexAppServerJsonValue | CodexAppServerToolsConfig | undefined }
+} & { readonly [key: string]: CodexAppServerJsonValue | undefined }
 
 export interface CodexAppServerTransport {
   ensureReady(): Promise<CodexInitializeResponse>
@@ -75,12 +102,24 @@ export interface CodexAppServerTransport {
     model: string
     approvalPolicy: CodexAppServerApprovalPolicy
     sandbox: CodexAppServerSandboxMode
+    cwd?: string
+    runtimeWorkspaceRoots?: readonly string[]
+    environments?: readonly never[]
     config?: CodexAppServerThreadConfig
     baseInstructions: string
     developerInstructions: string
     dynamicTools: readonly CodexDynamicToolSpec[]
   }): Promise<CodexThread>
-  threadResume(input: { threadId: string; baseInstructions: string; developerInstructions: string }): Promise<CodexThread>
+  threadResume(input: {
+    threadId: string
+    approvalPolicy?: CodexAppServerApprovalPolicy
+    sandbox?: CodexAppServerSandboxMode
+    cwd?: string
+    runtimeWorkspaceRoots?: readonly string[]
+    config?: CodexAppServerThreadConfig
+    baseInstructions: string
+    developerInstructions: string
+  }): Promise<CodexThread>
   turnStart(input: { threadId: string; prompt: string }): Promise<CodexTurn>
   turnInterrupt(threadId: string): Promise<void>
   close(): Promise<void>
@@ -96,8 +135,6 @@ const JSON_RPC_METHOD_NOT_FOUND = -32601
 const CODEX_INITIALIZE_CAPABILITIES: CodexInitializeCapabilities = {
   experimentalApi: true,
 }
-const TELEMETRY_ENV_PREFIXES = ['OTEL_'] as const
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -106,19 +143,26 @@ function asError(value: unknown, fallback: string): Error {
   return value instanceof Error ? value : new Error(fallback)
 }
 
-function stripTelemetryEnv(inputEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
-  const nextEnv: NodeJS.ProcessEnv = {
-    ...(inputEnv ?? process.env),
-    OTEL_SDK_DISABLED: 'true',
-  }
-  for (const key of Object.keys(nextEnv)) {
-    if (key === 'OTEL_SDK_DISABLED') {
-      continue
+export function createCodexChildEnvironment(
+  inputEnv: Readonly<Record<string, string | undefined>> | undefined,
+  options: CodexChildEnvironmentOptions = {},
+): NodeJS.ProcessEnv {
+  const sourceEnv = inputEnv ?? process.env
+  const nextEnv: NodeJS.ProcessEnv = {}
+  for (const key of CODEX_CHILD_ENV_KEYS) {
+    const value = sourceEnv[key]
+    if (value !== undefined) {
+      nextEnv[key] = value
     }
-    if (TELEMETRY_ENV_PREFIXES.some((prefix) => key.startsWith(prefix))) {
-      delete nextEnv[key]
-    }
   }
+  if (options.codexHome !== undefined) {
+    nextEnv['HOME'] = options.codexHome
+    nextEnv['CODEX_HOME'] = options.codexHome
+    nextEnv['XDG_CONFIG_HOME'] = path.join(options.codexHome, 'xdg-config')
+    nextEnv['XDG_DATA_HOME'] = path.join(options.codexHome, 'xdg-data')
+    nextEnv['XDG_CACHE_HOME'] = path.join(options.codexHome, 'xdg-cache')
+  }
+  nextEnv['OTEL_SDK_DISABLED'] = 'true'
   return nextEnv
 }
 
@@ -139,8 +183,10 @@ export class CodexAppServerClient implements CodexAppServerTransport {
   constructor(options: CodexAppServerClientOptions) {
     this.command = options.command ?? 'codex'
     this.args = options.args ?? ['app-server']
-    this.cwd = options.cwd
-    this.env = stripTelemetryEnv(options.env)
+    this.cwd = options.cwd ?? os.tmpdir()
+    this.env = createCodexChildEnvironment(options.env, {
+      codexHome: options.env?.['CODEX_HOME'] ?? path.join(os.tmpdir(), 'bilig-codex-client'),
+    })
     this.onLog = options.onLog
     this.handleDynamicToolCall = options.handleDynamicToolCall
   }
@@ -170,6 +216,9 @@ export class CodexAppServerClient implements CodexAppServerTransport {
     model: string
     approvalPolicy: CodexAppServerApprovalPolicy
     sandbox: CodexAppServerSandboxMode
+    cwd?: string
+    runtimeWorkspaceRoots?: readonly string[]
+    environments?: readonly never[]
     config?: CodexAppServerThreadConfig
     baseInstructions: string
     developerInstructions: string
@@ -181,6 +230,9 @@ export class CodexAppServerClient implements CodexAppServerTransport {
         model: input.model,
         approvalPolicy: input.approvalPolicy,
         sandbox: input.sandbox,
+        ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+        ...(input.runtimeWorkspaceRoots === undefined ? {} : { runtimeWorkspaceRoots: [...input.runtimeWorkspaceRoots] }),
+        ...(input.environments === undefined ? {} : { environments: [...input.environments] }),
         ...(input.config === undefined ? {} : { config: input.config }),
         baseInstructions: input.baseInstructions,
         developerInstructions: input.developerInstructions,
@@ -192,11 +244,25 @@ export class CodexAppServerClient implements CodexAppServerTransport {
     return result.thread
   }
 
-  async threadResume(input: { threadId: string; baseInstructions: string; developerInstructions: string }): Promise<CodexThread> {
+  async threadResume(input: {
+    threadId: string
+    approvalPolicy?: CodexAppServerApprovalPolicy
+    sandbox?: CodexAppServerSandboxMode
+    cwd?: string
+    runtimeWorkspaceRoots?: readonly string[]
+    config?: CodexAppServerThreadConfig
+    baseInstructions: string
+    developerInstructions: string
+  }): Promise<CodexThread> {
     await this.ensureReady()
     const result = expectThreadStartResponse(
       await this.request('thread/resume', {
         threadId: input.threadId,
+        ...(input.approvalPolicy === undefined ? {} : { approvalPolicy: input.approvalPolicy }),
+        ...(input.sandbox === undefined ? {} : { sandbox: input.sandbox }),
+        ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+        ...(input.runtimeWorkspaceRoots === undefined ? {} : { runtimeWorkspaceRoots: [...input.runtimeWorkspaceRoots] }),
+        ...(input.config === undefined ? {} : { config: input.config }),
         baseInstructions: input.baseInstructions,
         developerInstructions: input.developerInstructions,
         persistExtendedHistory: true,
@@ -274,7 +340,7 @@ export class CodexAppServerClient implements CodexAppServerTransport {
       if (line.trim().length === 0) {
         return
       }
-      void this.handleLine(line)
+      void this.handleLineInBackground(line)
     })
 
     const initialized = expectInitializeResponse(
@@ -322,6 +388,14 @@ export class CodexAppServerClient implements CodexAppServerTransport {
     }
   }
 
+  private async handleLineInBackground(line: string): Promise<void> {
+    try {
+      await this.handleLine(line)
+    } catch (error) {
+      this.onLog?.(`Failed to handle Codex app-server message: ${String(error)}`)
+    }
+  }
+
   private handleResponse(message: CodexJsonRpcResponse<unknown>): void {
     const pending = this.pending.get(message.id)
     if (!pending) {
@@ -350,7 +424,11 @@ export class CodexAppServerClient implements CodexAppServerTransport {
 
   private emitNotification(notification: CodexServerNotification): void {
     this.notificationListeners.forEach((listener) => {
-      listener(notification)
+      try {
+        listener(notification)
+      } catch (error) {
+        this.onLog?.(`Codex app-server notification listener failed: ${String(error)}`)
+      }
     })
   }
 

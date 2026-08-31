@@ -4,6 +4,7 @@ const state = {
   capabilities: null,
 }
 
+const args = new Set(process.argv.slice(2))
 const TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
 
 function write(payload) {
@@ -35,10 +36,7 @@ reader.on('line', (line) => {
     return
   }
   if (message.method === 'thread/start') {
-    if (
-      process.env.BILIG_TEST_EXPECT_OTEL_STRIPPED === '1' &&
-      (process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT)
-    ) {
+    if (args.has('--expect-otel-stripped') && (process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT)) {
       write({
         id: message.id,
         error: {
@@ -70,17 +68,16 @@ reader.on('line', (line) => {
       })
       return
     }
-    const preview =
-      process.env.BILIG_TEST_ECHO_THREAD_START === '1'
-        ? JSON.stringify({
-            experimentalApi: state.capabilities?.experimentalApi === true,
-            approvalPolicy: message.params?.approvalPolicy ?? null,
-            sandbox: message.params?.sandbox ?? null,
-            config: message.params?.config ?? null,
-          })
-        : state.capabilities?.experimentalApi === true
-          ? 'experimentalApi:true'
-          : 'experimentalApi:false'
+    const preview = args.has('--echo-thread-start')
+      ? JSON.stringify({
+          experimentalApi: state.capabilities?.experimentalApi === true,
+          approvalPolicy: message.params?.approvalPolicy ?? null,
+          sandbox: message.params?.sandbox ?? null,
+          config: message.params?.config ?? null,
+        })
+      : state.capabilities?.experimentalApi === true
+        ? 'experimentalApi:true'
+        : 'experimentalApi:false'
     write({
       id: message.id,
       result: {
@@ -91,7 +88,7 @@ reader.on('line', (line) => {
         },
       },
     })
-    if (process.env.BILIG_TEST_EXIT_AFTER_THREAD_START === '1') {
+    if (args.has('--exit-after-thread-start')) {
       setTimeout(() => {
         process.exit(17)
       }, 0)
@@ -99,12 +96,22 @@ reader.on('line', (line) => {
     return
   }
   if (message.method === 'thread/resume') {
+    const preview = args.has('--echo-thread-resume')
+      ? JSON.stringify({
+          threadId: message.params?.threadId ?? null,
+          approvalPolicy: message.params?.approvalPolicy ?? null,
+          sandbox: message.params?.sandbox ?? null,
+          cwd: message.params?.cwd ?? null,
+          runtimeWorkspaceRoots: message.params?.runtimeWorkspaceRoots ?? null,
+          config: message.params?.config ?? null,
+        })
+      : 'resumed'
     write({
       id: message.id,
       result: {
         thread: {
           id: message.params?.threadId ?? 'thr-fixture',
-          preview: 'resumed',
+          preview,
           turns: [],
         },
       },
@@ -112,13 +119,13 @@ reader.on('line', (line) => {
     return
   }
   if (message.method === 'turn/start') {
-    if (process.env.BILIG_TEST_EXIT_DURING_TURN_START === '1') {
+    if (args.has('--exit-during-turn-start')) {
       setTimeout(() => {
         process.exit(42)
       }, 0)
       return
     }
-    if (process.env.BILIG_TEST_EMIT_REASONING_DELTA === '1') {
+    if (args.has('--emit-reasoning-delta')) {
       write({
         method: 'item/reasoning/textDelta',
         params: {

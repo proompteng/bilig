@@ -7,9 +7,24 @@ import {
 } from './workbook-agent-feature-flags.js'
 
 describe('workbook agent feature flags', () => {
+  it('fails closed outside local environments unless the agent is explicitly enabled', () => {
+    expect(resolveWorkbookAgentFeatureFlags({ NODE_ENV: 'production' } as NodeJS.ProcessEnv).enabled).toBe(false)
+    expect(resolveWorkbookAgentFeatureFlags({ NODE_ENV: 'staging' } as NodeJS.ProcessEnv).enabled).toBe(false)
+    expect(resolveWorkbookAgentFeatureFlags({} as NodeJS.ProcessEnv).enabled).toBe(false)
+    expect(resolveWorkbookAgentFeatureFlags({ NODE_ENV: 'development' } as NodeJS.ProcessEnv).enabled).toBe(true)
+    expect(resolveWorkbookAgentFeatureFlags({ NODE_ENV: 'test' } as NodeJS.ProcessEnv).enabled).toBe(true)
+    expect(
+      resolveWorkbookAgentFeatureFlags({
+        NODE_ENV: 'production',
+        BILIG_AGENT_ENABLED: 'true',
+      } as NodeJS.ProcessEnv).enabled,
+    ).toBe(true)
+  })
+
   it('resolves feature flags from environment values', () => {
     expect(
       resolveWorkbookAgentFeatureFlags({
+        BILIG_AGENT_ENABLED: 'false',
         BILIG_AGENT_SHARED_THREADS_ENABLED: 'false',
         BILIG_AGENT_WORKFLOW_RUNNER_ENABLED: '1',
         BILIG_AGENT_AUTO_APPLY_LOW_RISK_ENABLED: '0',
@@ -23,6 +38,7 @@ describe('workbook agent feature flags', () => {
       } as NodeJS.ProcessEnv),
     ).toEqual(
       expect.objectContaining({
+        enabled: false,
         sharedThreadsEnabled: false,
         workflowRunnerEnabled: true,
         autoApplyLowRiskEnabled: false,
@@ -35,6 +51,12 @@ describe('workbook agent feature flags', () => {
   })
 
   it('rejects malformed boolean feature flags instead of silently using defaults', () => {
+    expect(() =>
+      resolveWorkbookAgentFeatureFlags({
+        BILIG_AGENT_ENABLED: 'sometimes',
+      } as NodeJS.ProcessEnv),
+    ).toThrow('BILIG_AGENT_ENABLED must be "1", "true", "0", or "false" when set, got sometimes')
+
     expect(() =>
       resolveWorkbookAgentFeatureFlags({
         BILIG_AGENT_AUTO_APPLY_LOW_RISK_ENABLED: 'yes',

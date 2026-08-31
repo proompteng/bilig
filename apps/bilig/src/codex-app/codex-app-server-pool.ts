@@ -125,7 +125,7 @@ export class CodexAppServerClientPool implements CodexAppServerTransport {
     }
     slot.threadIds.delete(threadId)
     if (slot.threadIds.size === 0 && slot.activeTurnCount === 0 && slot.waiters.length === 0) {
-      void this.closeSlot(slot)
+      void this.closeSlotInBackground(slot)
     }
   }
 
@@ -156,7 +156,7 @@ export class CodexAppServerClientPool implements CodexAppServerTransport {
       const previousSlot = this.slots.get(previousSlotId)
       previousSlot?.threadIds.delete(threadId)
       if (previousSlot && previousSlot.threadIds.size === 0 && previousSlot.activeTurnCount === 0 && previousSlot.waiters.length === 0) {
-        void this.closeSlot(previousSlot)
+        void this.closeSlotInBackground(previousSlot)
       }
     }
     this.threadToSlotId.set(threadId, slot.id)
@@ -272,7 +272,17 @@ export class CodexAppServerClientPool implements CodexAppServerTransport {
       return
     }
     if (slot.threadIds.size === 0) {
-      void this.closeSlot(slot)
+      void this.closeSlotInBackground(slot)
+    }
+  }
+
+  private async closeSlotInBackground(slot: CodexAppServerPoolSlot): Promise<void> {
+    try {
+      await this.closeSlot(slot)
+    } catch (error) {
+      this.clientOptions.onLog?.(
+        `Failed to close Codex app-server pool slot ${String(slot.id)}: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
   }
 

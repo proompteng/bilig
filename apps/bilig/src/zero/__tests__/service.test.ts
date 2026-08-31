@@ -187,6 +187,7 @@ describe('zero sync service startup', () => {
     const { createZeroSyncService } = await import('../service.js')
     const service = createZeroSyncService()
 
+    expect(service.isReady()).toBe(false)
     await service.initialize()
 
     expect(deps.ensureZeroSyncSchema).toHaveBeenCalledWith(deps.pool)
@@ -202,6 +203,53 @@ describe('zero sync service startup', () => {
       allowPendingCleanup: false,
     })
     expect(deps.recalcStart).toHaveBeenCalledOnce()
+    expect(service.isReady()).toBe(true)
+  }, 15_000)
+
+  it('coalesces concurrent initialization and makes close idempotent', async () => {
+    const { createZeroSyncService } = await import('../service.js')
+    const service = createZeroSyncService()
+
+    await Promise.all([service.initialize(), service.initialize()])
+    await Promise.all([service.close(), service.close()])
+
+    expect(deps.recalcStart).toHaveBeenCalledOnce()
+    expect(deps.recalcStop).toHaveBeenCalledOnce()
+    expect(deps.runtimeClose).toHaveBeenCalledOnce()
+    expect(deps.pool.end).toHaveBeenCalledOnce()
+    expect(service.isReady()).toBe(false)
+  }, 15_000)
+
+  it('remains unready when initialization fails and still releases resources on close', async () => {
+    const startupError = new Error('schema unavailable')
+    deps.ensureZeroSyncSchema.mockRejectedValueOnce(startupError)
+    const { createZeroSyncService } = await import('../service.js')
+    const service = createZeroSyncService()
+
+    await expect(service.initialize()).rejects.toBe(startupError)
+    expect(service.isReady()).toBe(false)
+
+    await service.close()
+
+    expect(deps.recalcStart).not.toHaveBeenCalled()
+    expect(deps.recalcStop).toHaveBeenCalledOnce()
+    expect(deps.runtimeClose).toHaveBeenCalledOnce()
+    expect(deps.pool.end).toHaveBeenCalledOnce()
+  }, 15_000)
+
+  it('attempts every shutdown boundary before reporting close failures', async () => {
+    deps.runtimeClose.mockRejectedValueOnce(new Error('runtime close failed'))
+    deps.pool.end.mockRejectedValueOnce(new Error('pool close failed'))
+    const { createZeroSyncService } = await import('../service.js')
+    const service = createZeroSyncService()
+
+    await expect(service.close()).rejects.toMatchObject({
+      errors: expect.arrayContaining([expect.any(Error), expect.any(Error)]),
+    })
+    expect(deps.recalcStop).toHaveBeenCalledOnce()
+    expect(deps.runtimeClose).toHaveBeenCalledOnce()
+    expect(deps.pool.end).toHaveBeenCalledOnce()
+    expect(service.isReady()).toBe(false)
   }, 15_000)
 
   it('auto-runs pending migrations on boot when explicitly enabled', async () => {

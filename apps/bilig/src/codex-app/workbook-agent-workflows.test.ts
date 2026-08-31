@@ -34,6 +34,7 @@ async function createWorkbookRuntime(): Promise<WorkbookRuntime> {
 function createZeroSyncStub(input?: { onInspectWorkbook?: () => void; createRuntime?: () => Promise<WorkbookRuntime> }): ZeroSyncService {
   return {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {

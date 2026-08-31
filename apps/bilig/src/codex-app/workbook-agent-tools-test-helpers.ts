@@ -95,6 +95,7 @@ export function createVisibleSceneProof(
 export function createZeroSyncHarness(engine: SpreadsheetEngine) {
   const zeroSyncService: ZeroSyncService = {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {

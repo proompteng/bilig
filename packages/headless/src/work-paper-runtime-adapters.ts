@@ -2,14 +2,8 @@ import type { EngineCellMutationRef, SheetRecord, SpreadsheetEngine } from '@bil
 import type { CellRangeRef, CellSnapshot } from '@bilig/protocol'
 import { orderWorkPaperCellChanges } from './change-order.js'
 import { isWorkPaperAxisOrderPossible, isWorkPaperAxisSwapPossible, isWorkPaperMoveAxisPossible } from './work-paper-capability-checks.js'
-import {
-  editWorkPaperAxisIntervals,
-  moveWorkPaperAxis,
-  setWorkPaperAxisOrder,
-  swapWorkPaperAxisIndexes,
-  type WorkPaperAxisEditRuntime,
-} from './work-paper-axis-helpers.js'
-import { setWorkPaperCellContents, type WorkPaperSetCellContentsRuntime } from './work-paper-cell-content-setter.js'
+import { moveWorkPaperAxis, type WorkPaperAxisEditRuntime } from './work-paper-axis-helpers.js'
+import type { WorkPaperSetCellContentsRuntime } from './work-paper-cell-content-setter.js'
 import type { applyWorkPaperCellMutationRefs, WorkPaperCellMutationApplyRuntime } from './work-paper-cell-mutation-refs.js'
 import {
   trySetExistingLiteralWorkPaperCellContentsWithTrackedFastPath,
@@ -475,11 +469,4 @@ export function createWorkPaperRuntimeAdapters(args: CreateWorkPaperRuntimeAdapt
     namedExpressionOperations,
     axisEditRuntime,
   }
-}
-
-export const workPaperRuntimeAdapterCommands = {
-  editWorkPaperAxisIntervals,
-  setWorkPaperAxisOrder,
-  setWorkPaperCellContents,
-  swapWorkPaperAxisIndexes,
 }

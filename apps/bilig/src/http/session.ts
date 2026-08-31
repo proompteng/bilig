@@ -115,11 +115,22 @@ function parseBoolean(value: string | undefined, fallback: boolean, name: string
 
 function resolveAuthMode(env: Readonly<Record<string, string | undefined>>): BiligAuthMode {
   const configured = env['BILIG_AUTH_MODE']
-  if (configured === undefined || configured.length === 0) {
-    if (env['NODE_ENV'] === 'production') {
-      throw new Error('BILIG_AUTH_MODE must be explicitly configured in production')
+  const nodeEnv = env['NODE_ENV']
+  const isExplicitLocalEnvironment = nodeEnv === 'development' || nodeEnv === 'test'
+  if (configured === undefined) {
+    if (!isExplicitLocalEnvironment) {
+      if (nodeEnv === 'production') {
+        throw new Error('BILIG_AUTH_MODE must be explicitly configured in production')
+      }
+      throw new Error('BILIG_AUTH_MODE must be explicitly configured outside development and test')
     }
     return 'demo'
+  }
+  if (configured === 'demo' && !isExplicitLocalEnvironment) {
+    if (nodeEnv === 'production') {
+      throw new Error('BILIG_AUTH_MODE=demo is not allowed in production; use signed-proxy')
+    }
+    throw new Error('BILIG_AUTH_MODE=demo is only allowed when NODE_ENV is explicitly "development" or "test"')
   }
   if (configured !== 'demo' && configured !== 'signed-proxy') {
     throw new Error(`BILIG_AUTH_MODE must be "demo" or "signed-proxy", got ${configured}`)

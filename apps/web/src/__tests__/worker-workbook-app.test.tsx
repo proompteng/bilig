@@ -24,9 +24,29 @@ function getToastAction(activeToast: ToastT | null): Action {
   return activeToast.action
 }
 
-const { latestWorkbookViewProps, useWorkerWorkbookAppState } = vi.hoisted(() => ({
+function createWorkerWorkbookAppElement() {
+  return (
+    <WorkerWorkbookApp
+      config={{
+        currentUserId: 'guest:test',
+        defaultDocumentId: 'doc-1',
+        persistState: true,
+        zeroCacheUrl: 'http://127.0.0.1:4848',
+      }}
+      connectionState={{ name: 'connected' }}
+    />
+  )
+}
+
+const { latestWorkbookViewProps, perfCollector, useWorkerWorkbookAppState } = vi.hoisted(() => ({
   latestWorkbookViewProps: { current: null as Record<string, unknown> | null },
   useWorkerWorkbookAppState: vi.fn(),
+  perfCollector: {
+    getBenchmarkState: vi.fn(() => ({ state: 'idle' as const, error: null, fixture: null })),
+    noteSurfaceCommit: vi.fn(),
+    setBenchmarkState: vi.fn(),
+    setFixture: vi.fn(),
+  },
 }))
 
 vi.mock('@bilig/grid', () => ({
@@ -38,6 +58,10 @@ vi.mock('@bilig/grid', () => ({
 
 vi.mock('../use-worker-workbook-app-state.js', () => ({
   useWorkerWorkbookAppState,
+}))
+
+vi.mock('../perf/workbook-scroll-perf.js', () => ({
+  getWorkbookScrollPerfCollector: () => perfCollector,
 }))
 
 vi.mock('../use-workbook-import-pane.js', () => ({
@@ -712,6 +736,102 @@ describe('WorkerWorkbookApp', () => {
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('does not commit a benchmark install that completes after the runtime lifecycle changes', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.history.replaceState({}, '', '/?benchmarkCorpus=scroll-small')
+
+    let resolveInstall!: () => void
+    const installPromise = new Promise<void>((resolve) => {
+      resolveInstall = resolve
+    })
+    const installBenchmarkCorpus = vi.fn(() => installPromise)
+    const retryInstallBenchmarkCorpus = vi.fn(() => Promise.resolve())
+    let currentState = createReadyWorkbookAppState({
+      installBenchmarkCorpus,
+    })
+    useWorkerWorkbookAppState.mockImplementation(() => currentState)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(createWorkerWorkbookAppElement())
+    })
+    expect(installBenchmarkCorpus).toHaveBeenCalledWith('scroll-small')
+
+    currentState = createReadyWorkbookAppState({
+      installBenchmarkCorpus,
+      runtimeReady: false,
+    })
+    await act(async () => {
+      root.render(createWorkerWorkbookAppElement())
+    })
+
+    await act(async () => {
+      resolveInstall()
+      await installPromise
+    })
+
+    currentState = createReadyWorkbookAppState({
+      installBenchmarkCorpus: retryInstallBenchmarkCorpus,
+    })
+    await act(async () => {
+      root.render(createWorkerWorkbookAppElement())
+    })
+
+    expect(retryInstallBenchmarkCorpus).toHaveBeenCalledWith('scroll-small')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('ignores benchmark install failures after the app unmounts', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.history.replaceState({}, '', '/?benchmarkCorpus=scroll-small')
+
+    let rejectInstall!: (reason?: unknown) => void
+    const installPromise = new Promise<void>((_, reject) => {
+      rejectInstall = reject
+    })
+    const reportRuntimeError = vi.fn()
+    useWorkerWorkbookAppState.mockReturnValue(
+      createReadyWorkbookAppState({
+        installBenchmarkCorpus: vi.fn(() => installPromise),
+        reportRuntimeError,
+      }),
+    )
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkerWorkbookApp
+          config={{
+            currentUserId: 'guest:test',
+            defaultDocumentId: 'doc-1',
+            persistState: true,
+            zeroCacheUrl: 'http://127.0.0.1:4848',
+          }}
+          connectionState={{ name: 'connected' }}
+        />,
+      )
+    })
+
+    await act(async () => {
+      root.unmount()
+      rejectInstall(new Error('late benchmark failure'))
+      await installPromise.catch(() => undefined)
+      await Promise.resolve()
+    })
+
+    expect(reportRuntimeError).not.toHaveBeenCalled()
+    expect(perfCollector.setBenchmarkState).not.toHaveBeenCalledWith('error', 'late benchmark failure')
   })
 
   it('returns row and column delete promises to the workbook view context-menu handlers', async () => {

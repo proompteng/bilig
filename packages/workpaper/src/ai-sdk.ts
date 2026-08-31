@@ -112,24 +112,28 @@ export function createWorkPaperToolHandlers(options: AiSdkWorkPaperToolsOptions)
         }),
       )
       const restored = createWorkPaperFromDocument(parseWorkPaperDocument(saved))
-      const restoredReadback = readWorkPaperRange(restored, proofRange)
+      try {
+        const restoredReadback = readWorkPaperRange(restored, proofRange)
 
-      return {
-        editedCell: options.workpaper.simpleCellAddressToString(address, {
-          includeSheetName: true,
-        }),
-        before,
-        after,
-        restored: restoredReadback,
-        checks: {
-          previousValue,
-          newValue: options.workpaper.getCellSerialized(address),
-          formulasPersisted: sameJson(after.serialized, restoredReadback.serialized),
-          restoredMatchesAfter: sameJson(after.values, restoredReadback.values),
-          proofRangeChanged: !sameJson(before.values, after.values),
-          serializedBytes: Buffer.byteLength(saved, 'utf8'),
-        },
-        ...(options.includeSerializedDocument ? { serializedDocument: saved } : {}),
+        return {
+          editedCell: options.workpaper.simpleCellAddressToString(address, {
+            includeSheetName: true,
+          }),
+          before,
+          after,
+          restored: restoredReadback,
+          checks: {
+            previousValue,
+            newValue: options.workpaper.getCellSerialized(address),
+            formulasPersisted: sameJson(after.serialized, restoredReadback.serialized),
+            restoredMatchesAfter: sameJson(after.values, restoredReadback.values),
+            proofRangeChanged: !sameJson(before.values, after.values),
+            serializedBytes: Buffer.byteLength(saved, 'utf8'),
+          },
+          ...(options.includeSerializedDocument ? { serializedDocument: saved } : {}),
+        }
+      } finally {
+        restored.dispose()
       }
     },
   }

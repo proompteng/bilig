@@ -16,6 +16,7 @@ import {
   PRODUCT_HEADER_HEIGHT,
   resetGridScroll,
   settleWorkbookScrollPerf,
+  startWorkbookScrollPerf,
   stopWorkbookScrollPerf,
   warmStartWorkbookScrollPerf,
   waitForBenchmarkCorpus,
@@ -45,19 +46,6 @@ function summarizeSamples(samples: readonly number[]): {
 
 function sumRecordCounters(counters: Readonly<Record<string, number>>): number {
   return Object.values(counters).reduce((sum, value) => sum + value, 0)
-}
-
-async function scheduleFormulaInputEnter(page: Page) {
-  await page.evaluate(() => {
-    const input = document.querySelector('[data-testid="formula-input"]')
-    if (!(input instanceof HTMLTextAreaElement)) {
-      throw new Error('formula input is not a textarea')
-    }
-    window.setTimeout(() => {
-      input.focus()
-      input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }))
-    }, 0)
-  })
 }
 
 function expectQuietShell(
@@ -667,18 +655,23 @@ test.describe('@browser-perf web app scroll performance', () => {
 
     expect(benchmarkState.fixture?.id).toBe('wide-mixed-250k')
 
+    await settleWorkbookScrollPerf(page, 40)
+    await warmStartWorkbookScrollPerf(page, 'wide-250k-visible-edit-setup')
+    await stopWorkbookScrollPerf(page)
+
     const nameBox = page.getByTestId('name-box')
     const formulaInput = page.getByTestId('formula-input')
     await nameBox.fill('F6')
     await nameBox.press('Enter')
     await expect(page.getByTestId('status-selection')).toContainText('!F6')
-    await formulaInput.fill('7777777')
-    await settleWorkbookScrollPerf(page, 40)
-    await warmStartWorkbookScrollPerf(page, 'wide-250k-visible-edit-commit')
     await settleWorkbookScrollPerf(page, 16)
-    await scheduleFormulaInputEnter(page)
+    await startWorkbookScrollPerf(page, 'wide-250k-visible-edit-commit', { primeRenderer: false })
+    await settleWorkbookScrollPerf(page, 16)
+    await formulaInput.fill('7777777')
+    await formulaInput.press('Enter')
     await settleWorkbookScrollPerf(page, 24)
     const report = await stopWorkbookScrollPerf(page)
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled()
 
     if (!report) {
       throw new Error('scroll performance report was not available')

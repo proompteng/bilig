@@ -328,6 +328,7 @@ export function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): Ze
 
   return {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {

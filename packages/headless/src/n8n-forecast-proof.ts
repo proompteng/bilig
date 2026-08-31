@@ -28,35 +28,43 @@ export function createN8nForecastProof(body: N8nForecastRequestBody = {}) {
 
   const value = body.value === undefined ? DEFAULT_EDIT_VALUE : readCellValue(body.value, 'value')
   const workbook = buildN8nForecastWorkPaper()
-  const summarySheet = requireSheet(workbook, 'Summary')
-  const address = requireCellAddress(workbook, sheetName, addressText)
-  const before = readForecastSummary(workbook, summarySheet)
-  const previousValue = workbook.getCellSerialized(address)
-  const formulaContracts = readFormulaContracts(workbook, summarySheet)
+  try {
+    const summarySheet = requireSheet(workbook, 'Summary')
+    const address = requireCellAddress(workbook, sheetName, addressText)
+    const before = readForecastSummary(workbook, summarySheet)
+    const previousValue = workbook.getCellSerialized(address)
+    const formulaContracts = readFormulaContracts(workbook, summarySheet)
 
-  workbook.setCellContents(address, value)
+    workbook.setCellContents(address, value)
 
-  const after = readForecastSummary(workbook, summarySheet)
-  const serialized = serializeWorkbook(workbook)
-  const restored = createWorkPaperFromDocument(parseWorkPaperDocument(serialized))
-  const restoredSummary = readForecastSummary(restored, requireSheet(restored, 'Summary'))
-  const restoredFormulaContracts = readFormulaContracts(restored, requireSheet(restored, 'Summary'))
+    const after = readForecastSummary(workbook, summarySheet)
+    const serialized = serializeWorkbook(workbook)
+    const restored = createWorkPaperFromDocument(parseWorkPaperDocument(serialized))
+    try {
+      const restoredSummary = readForecastSummary(restored, requireSheet(restored, 'Summary'))
+      const restoredFormulaContracts = readFormulaContracts(restored, requireSheet(restored, 'Summary'))
 
-  return {
-    verified: true,
-    editedCell: workbook.simpleCellAddressToString(address, { includeSheetName: true }),
-    before,
-    after,
-    restored: restoredSummary,
-    formulaContracts,
-    checks: {
-      previousValue,
-      newValue: workbook.getCellSerialized(address),
-      formulasPersisted: sameJson(formulaContracts, restoredFormulaContracts),
-      restoredMatchesAfter: sameJson(after, restoredSummary),
-      computedOutputChanged: after.expectedArr !== before.expectedArr || after.expansionArr !== before.expansionArr,
-      serializedBytes: new TextEncoder().encode(serialized).byteLength,
-    },
+      return {
+        verified: true,
+        editedCell: workbook.simpleCellAddressToString(address, { includeSheetName: true }),
+        before,
+        after,
+        restored: restoredSummary,
+        formulaContracts,
+        checks: {
+          previousValue,
+          newValue: workbook.getCellSerialized(address),
+          formulasPersisted: sameJson(formulaContracts, restoredFormulaContracts),
+          restoredMatchesAfter: sameJson(after, restoredSummary),
+          computedOutputChanged: after.expectedArr !== before.expectedArr || after.expansionArr !== before.expansionArr,
+          serializedBytes: new TextEncoder().encode(serialized).byteLength,
+        },
+      }
+    } finally {
+      restored.dispose()
+    }
+  } finally {
+    workbook.dispose()
   }
 }
 

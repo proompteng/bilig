@@ -256,9 +256,9 @@ The maintained repository example adds more workflows:
 ```sh
 git clone https://github.com/proompteng/bilig.git
 cd bilig
-pnpm --dir examples/workpaper-workpaper install --ignore-workspace
-pnpm --dir examples/workpaper-workpaper run agent:tool-call
-pnpm --dir examples/workpaper-workpaper run agent:verify
+pnpm --dir examples/headless-workpaper install --ignore-workspace
+pnpm --dir examples/headless-workpaper run agent:tool-call
+pnpm --dir examples/headless-workpaper run agent:verify
 ```
 
 The agent tool-call loop changes input cells, reads dependent formula outputs,
@@ -298,11 +298,11 @@ support channel today.
 - [`docs/exceljs-formula-recalculation-node.md`](exceljs-formula-recalculation-node.md)
 - [`docs/stale-xlsx-formula-cache-node.md`](stale-xlsx-formula-cache-node.md)
 - [`examples/recalc-bridge-workflows`](https://github.com/proompteng/bilig/tree/main/examples/recalc-bridge-workflows)
-- [`docs/workpaper-spreadsheet-engine-comparison.md`](headless-spreadsheet-engine-comparison.md)
+- [`docs/headless-spreadsheet-engine-comparison.md`](headless-spreadsheet-engine-comparison.md)
 - [`docs/agent-spreadsheet-tool-call-loop.md`](agent-spreadsheet-tool-call-loop.md)
 - [`docs/persisting-formula-backed-workpaper-documents-in-node.md`](persisting-formula-backed-workpaper-documents-in-node.md)
 - [`docs/where-bilig-is-not-excel-compatible-yet.md`](where-bilig-is-not-excel-compatible-yet.md)
-- [`examples/workpaper-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/workpaper-workpaper)
+- [`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper)
 
 ## Sources
 

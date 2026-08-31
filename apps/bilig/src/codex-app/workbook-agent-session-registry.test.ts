@@ -150,6 +150,7 @@ describe('workbook agent session registry', () => {
 
     const snapshot = registry.getObservabilitySnapshot({
       featureFlags: {
+        enabled: true,
         sharedThreadsEnabled: true,
         workflowRunnerEnabled: true,
         autoApplyLowRiskEnabled: false,

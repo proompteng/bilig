@@ -28,7 +28,6 @@ on:
       - 'action.yml'
       - 'actions/xlsx-cache-doctor/action.yml'
       - 'docs/public-api.md'
-      - 'docs/runtime-semantic-release-program-2026-04-16.md'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -857,10 +856,6 @@ jobs:
             gemini-extension.json
             docs
             docs/headless-package-footprint.json
-            examples/huggingface-workpaper-space/package.json
-            examples/huggingface-workpaper-space/README.md
-            examples/huggingface-workpaper-space/workpaper_proof.mjs
-            examples/huggingface-workpaper-space/scripts/check-space.py
             README.md
             Dockerfile
             packages/protocol/package.json

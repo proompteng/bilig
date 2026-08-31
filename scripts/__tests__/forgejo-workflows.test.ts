@@ -73,4 +73,21 @@ describe('forgejo workflows', () => {
       })
     }
   })
+
+  it('keeps scheduled correctness runs reproducible and singleton', () => {
+    const path = '.forgejo/workflows/forgejo-nightly-fuzz.yml'
+    const workflow = readWorkflow(path)
+    const source = readFileSync(resolve(repoRoot, path), 'utf8')
+
+    expect(workflowConcurrency(workflow)).toEqual({
+      group: '${{ github.workflow }}-${{ github.ref }}',
+      'cancel-in-progress': true,
+    })
+    expect(source).toContain('npm install -g bun@1.3.10')
+    expect(source).toContain('test "$(bun --version)" = "1.3.10"')
+    expect(source).toContain(
+      'mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d',
+    )
+    expect(source).not.toContain('npm install -g bun\n')
+  })
 })

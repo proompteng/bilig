@@ -1239,7 +1239,6 @@ describe('workbook agent service turn lifecycle and stale ownership', () => {
           roles: ['editor'],
         },
         body: {
-          threadId: 'thr-test',
           scope: 'shared',
           executionPolicy: 'ownerReview',
           context: {

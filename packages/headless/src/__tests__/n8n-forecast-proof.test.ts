@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { exportWorkPaperDocument } from '../persistence.js'
 import { buildN8nForecastWorkPaper, createN8nForecastProof } from '../n8n-forecast-proof.js'
 import { n8nForecastServerHelpText, parseN8nForecastServerCliArgs } from '../n8n-forecast-server-cli.js'
 import { createN8nWorkPaperEvaluationProof } from '../n8n-workpaper-evaluation-proof.js'
+import { WorkPaper } from '../work-paper.js'
 
 describe('n8n formula readback proof', () => {
   it('returns formula readback and restore proof for one input edit', () => {
@@ -73,8 +74,12 @@ describe('n8n formula readback proof', () => {
   })
 
   it('evaluates a caller-provided WorkPaper document for n8n workflows', () => {
+    const workbook = buildN8nForecastWorkPaper()
+    const document = exportWorkPaperDocument(workbook, { includeConfig: true })
+    workbook.dispose()
+
     const proof = createN8nWorkPaperEvaluationProof({
-      document: exportWorkPaperDocument(buildN8nForecastWorkPaper(), { includeConfig: true }),
+      document,
       edits: [
         {
           cell: 'Inputs!B3',
@@ -122,6 +127,25 @@ describe('n8n formula readback proof', () => {
         format: 'bilig.headless.work-paper.document.v1',
       },
     })
+  })
+
+  it('disposes temporary workbooks after both n8n proof flows', () => {
+    const workbook = buildN8nForecastWorkPaper()
+    const document = exportWorkPaperDocument(workbook, { includeConfig: true })
+    workbook.dispose()
+    const dispose = vi.spyOn(WorkPaper.prototype, 'dispose')
+
+    try {
+      createN8nForecastProof({ address: 'B3', value: 0.4 })
+      createN8nWorkPaperEvaluationProof({
+        document,
+        edits: [{ cell: 'Inputs!B3', value: 0.4 }],
+      })
+
+      expect(dispose).toHaveBeenCalledTimes(4)
+    } finally {
+      dispose.mockRestore()
+    }
   })
 
   it('rejects generic n8n evaluation without a WorkPaper document', () => {

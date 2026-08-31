@@ -39,6 +39,7 @@ function createZeroSyncHarness(
 ): ZeroSyncService {
   return {
     enabled: true,
+    isReady: () => true,
     async initialize() {},
     async close() {},
     async handleQuery() {

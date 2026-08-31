@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { WorkPaper } from './index.js'
 import { createWorkPaperToolHandlers } from './ai-sdk.js'
 
@@ -64,6 +64,38 @@ describe('@bilig/workpaper AI SDK handlers', () => {
         value: 3,
       }),
     ).toThrow('Sheet "Summary" is not writable')
+  })
+
+  it('disposes the temporary restore workbook after a write proof', () => {
+    const workpaper = WorkPaper.buildFromSheets({
+      Inputs: [
+        ['Metric', 'Value'],
+        ['Units', 20],
+      ],
+      Summary: [
+        ['Metric', 'Value'],
+        ['Units', '=Inputs!B2'],
+      ],
+    })
+    const handlers = createWorkPaperToolHandlers({
+      workpaper,
+      proofRange: 'Summary!A1:B2',
+      writableSheets: ['Inputs'],
+    })
+    const dispose = vi.spyOn(WorkPaper.prototype, 'dispose')
+
+    try {
+      handlers.setWorkPaperInputCell({
+        sheetName: 'Inputs',
+        address: 'B2',
+        value: 24,
+      })
+
+      expect(dispose).toHaveBeenCalledTimes(1)
+    } finally {
+      dispose.mockRestore()
+      workpaper.dispose()
+    }
   })
 })
 

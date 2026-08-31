@@ -9,6 +9,7 @@ class FakePoolTransport implements CodexAppServerTransport {
   readonly resumedThreads: string[] = []
   readonly turnStartThreadIds: string[] = []
   closeCount = 0
+  closeError: Error | null = null
   nextTurn: Promise<CodexTurn> | null = null
 
   constructor(readonly label: string) {}
@@ -65,6 +66,9 @@ class FakePoolTransport implements CodexAppServerTransport {
 
   async close(): Promise<void> {
     this.closeCount += 1
+    if (this.closeError) {
+      throw this.closeError
+    }
   }
 }
 
@@ -76,6 +80,7 @@ function createPool(input?: {
 }) {
   const transports = input?.transports ?? []
   const capturedOptions: CodexAppServerClientOptions[] = []
+  const onLog = vi.fn()
   const pool = new CodexAppServerClientPool({
     codexClientFactory: (options) => {
       capturedOptions.push(options)
@@ -87,7 +92,7 @@ function createPool(input?: {
       args: ['app-server'],
       cwd: process.cwd(),
       env: process.env,
-      onLog: vi.fn(),
+      onLog,
       handleDynamicToolCall: vi.fn(async () => ({
         success: true,
         contentItems: [],
@@ -97,7 +102,7 @@ function createPool(input?: {
     ...(input?.maxConcurrentTurnsPerClient !== undefined ? { maxConcurrentTurnsPerClient: input.maxConcurrentTurnsPerClient } : {}),
     ...(input?.maxQueuedTurnsPerClient !== undefined ? { maxQueuedTurnsPerClient: input.maxQueuedTurnsPerClient } : {}),
   })
-  return { pool, capturedOptions }
+  return { pool, capturedOptions, onLog }
 }
 
 function resolvePendingTurn(resolveTurn: ((value: CodexTurn) => void) | null, value: CodexTurn): void {
@@ -292,6 +297,30 @@ describe('codex-app-server-pool', () => {
     } finally {
       await pool.close()
     }
+  })
+
+  it('reports idle slot close failures without an unhandled rejection', async () => {
+    const fake = new FakePoolTransport('A')
+    fake.closeError = new Error('transport close failed')
+    const { pool, onLog } = createPool({
+      maxClients: 1,
+      transports: [fake],
+    })
+
+    const thread = await pool.threadStart({
+      model: 'gpt-5.4',
+      approvalPolicy: 'never',
+      sandbox: 'read-only',
+      baseInstructions: 'base',
+      developerInstructions: 'dev',
+      dynamicTools: [],
+    })
+    pool.releaseThread(thread.id)
+
+    await vi.waitFor(() => {
+      expect(onLog).toHaveBeenCalledWith(expect.stringContaining('transport close failed'))
+    })
+    expect(fake.closeCount).toBe(1)
   })
 
   it('reports pool stats for observability', async () => {
