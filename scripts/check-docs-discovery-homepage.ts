@@ -144,7 +144,7 @@ export function requireHomepageDiscovery(index: string, siteCss: string, product
       'rewriteLinks(canonicalHrefForGeneratedDocs)',
       'new URL(href.slice(2), canonicalDocsRoot).toString()',
       "href.replace(/\\.html(?=$|[?#])/, '.md')",
-      '<code>npm create @bilig/workpaper@latest pricing-workpaper</code>',
+      '<code>npm install @bilig/workpaper</code>',
       'Put a WorkPaper behind a Node route.',
       '<code>xlsx-recalc --read Summary!B7</code>',
       'bilig-hero-ambient.png?v=2026-05-15-1',

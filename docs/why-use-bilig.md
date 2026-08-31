@@ -77,14 +77,16 @@ of them.
 
 ## Fast fit check
 
-Run the npm proof in a blank directory:
+Run the published proof without cloning:
 
 ```sh
-npm create @bilig/workpaper@latest pricing-workpaper
-cd pricing-workpaper
-npm install
-npm run smoke
+npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door workpaper-service --json
 ```
+
+The generated starter is release-pending while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`; that release's smoke
+reports `formulasPersisted: false`. Use the evaluator until a newer generator
+release passes a fresh consumer smoke.
 
 If it prints `verified: true`, the package can create a workbook, edit one
 input, recalculate, persist JSON, restore it, and read the same calculated value

@@ -10,14 +10,22 @@ image: /assets/github-social-preview.png
 
 # Try Bilig WorkPaper in Node
 
+> [!WARNING]
+> Do not use the `npm create` path below while
+> `@bilig/create-workpaper@latest` resolves to `0.164.11`. That release's
+> generated smoke reports `formulasPersisted: false`. Use the direct evaluator
+> path until the restored-formula fix ships in a newer release and passes a
+> fresh consumer smoke.
+
 This page is for people who want to try the package before reading the whole
-repo. It starts from an empty directory, installs the published npm package,
-builds a tiny WorkPaper, edits an input cell, reads the recalculated formula
-result, serializes the document, restores it, and reads the result again.
+repo. After the fixed generator release, it starts from an empty directory,
+installs the published npm package, builds a tiny WorkPaper, edits an input
+cell, reads the recalculated formula result, serializes the document, restores
+it, and reads the result again.
 
 No browser UI, account, server, or clone is required.
 
-## Quickstart
+## Quickstart After The Fixed Release
 
 ```sh
 npm create @bilig/workpaper@latest pricing-workpaper

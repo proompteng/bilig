@@ -285,7 +285,8 @@ export async function requireAgentInstructionDiscovery(input: {
   requireIncludes(docsAgentStart, '.vscode/mcp.json', 'docs/agent-start.txt')
   requireIncludes(docsAgentStart, '.trae/mcp.json', 'docs/agent-start.txt')
   requireIncludes(docsAgentStart, '.trae/rules/bilig-workpaper.md', 'docs/agent-start.txt')
-  requireIncludes(docsAgentStart, 'npm create @bilig/workpaper@latest . -- --add-agent', 'docs/agent-start.txt')
+  requireIncludes(docsAgentStart, 'The source fix must ship in a newer release', 'docs/agent-start.txt')
+  requireNotIncludes(docsAgentStart, 'npm create @bilig/workpaper@latest . -- --add-agent', 'docs/agent-start.txt')
   requireIncludes(
     docsAgentStart,
     'npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door agent-mcp --scenario provider-backed --json',

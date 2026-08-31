@@ -402,17 +402,16 @@ restoring it, and confirming the restored value matches. Return `editedCell`,
 ## runnable evaluation
 
 ```sh
-npm create @bilig/workpaper@latest pricing-workpaper
-cd pricing-workpaper
-npm install
-npm run smoke
+npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door workpaper-service --json
 ```
 
-the generated starter uses the same fields as:
-https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/npm-eval.ts
+a successful run edits an input, recalculates a dependent formula, persists
+WorkPaper JSON, restores it, and returns `verified: true`.
 
-a successful quickstart run prints `verified: true` after formula readback survives
-a persisted restore.
+do not use `npm create @bilig/workpaper@latest` while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`; that release's
+generated smoke reports `formulasPersisted: false`. use the evaluator or direct
+package install until a newer generator release passes a fresh consumer smoke.
 
 repository example:
 
@@ -502,9 +501,8 @@ npm exec --package @bilig/workpaper@latest -- bilig-workpaper-mcp --workpaper ./
 - WorkPaper agent tool for Node.js:
   https://proompteng.github.io/bilig/ai-agent-spreadsheet-tool-node.html
   https://github.com/proompteng/bilig/blob/main/docs/ai-agent-spreadsheet-tool-node.md
-  gives OpenAI, LangChain, Vercel AI SDK, and Excel/XLSX agent builders one
-  path from `npm create @bilig/workpaper@latest pricing-agent -- --agent` to
-  verified write/recalculate/read/persist proof.
+  gives OpenAI, LangChain, Vercel AI SDK, and Excel/XLSX agent builders a
+  verified write/recalculate/read/persist proof path.
 - SheetJS formula result not updating in Node.js:
   https://proompteng.github.io/bilig/sheetjs-formula-result-not-updating-node.html
   https://github.com/proompteng/bilig/blob/main/docs/sheetjs-formula-result-not-updating-node.md

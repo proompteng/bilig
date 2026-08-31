@@ -17,7 +17,6 @@ async function requireFile(path: string): Promise<void> {
 export async function requireNpmEvalDiscovery(
   repoRoot: string,
   docsRoot: string,
-  readme: string,
   headlessReadme: string,
   headlessExampleReadme: string,
 ): Promise<void> {
@@ -34,10 +33,8 @@ export async function requireNpmEvalDiscovery(
     throw new Error('docs/npm-eval.ts must match examples/headless-workpaper/npm-eval.ts')
   }
 
-  for (const [path, content] of [
-    ['README.md', readme],
-    ['docs/try-bilig-headless-in-node.md', tryPage],
-  ] as const) {
+  for (const [path, content] of [['docs/try-bilig-headless-in-node.md', tryPage]] as const) {
+    requireIncludes(content, 'Use the direct evaluator path until the restored-formula fix ships', path)
     requireIncludes(content, 'npm create @bilig/workpaper@latest pricing-workpaper', path)
     requireIncludes(content, 'examples/headless-workpaper/npm-eval.ts', path)
     requireIncludes(content, '"decisionChanged": true', path)

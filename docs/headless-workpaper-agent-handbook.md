@@ -46,31 +46,13 @@ recalculation state, and persistence proof.
 
 ## Blank Project Starter
 
-Use this when an agent needs a fresh project instead of a copied snippet:
-
-```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-cd pricing-agent
-npm install
-npm run agent:verify
-npm run mcp:server
-```
-
-The generated project includes policy files, local MCP configs, a quote
-approval service smoke test, and the published agent evaluator. `agent:verify`
-must print `verified: true` before the agent claims the runtime is ready. Use
-`npm run mcp:challenge` only when you need the lower-level JSON-RPC transcript.
-
-For an existing repo, add only the Bilig agent and MCP files:
-
-```sh
-npm create @bilig/workpaper@latest . -- --add-agent
-```
-
-This writes the Bilig host rules and MCP configs while keeping the existing app
-template, `README.md`, and `package.json` intact. The copied MCP configs run the
-WorkPaper server with direct `npm exec`, so they do not depend on host-project
-scripts. The common repo-local anchors are:
+The published starter is release-pending. Do not use
+`npm create @bilig/workpaper@latest` while `@bilig/create-workpaper@latest`
+resolves to `0.164.11`; that release's generated smoke reports
+`formulasPersisted: false`. Until a newer release passes a fresh consumer
+smoke, run the evaluator and file-backed MCP commands in this handbook, then
+copy only the host files you need from a cloned checkout. The common repo-local
+anchors are:
 
 ```text
 .claude/commands/bilig-workpaper-proof.md

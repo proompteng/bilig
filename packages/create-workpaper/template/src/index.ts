@@ -95,7 +95,7 @@ export function createQuoteApprovalRequestHandler(storage: WorkbookStorage) {
               proof: summarizeProof(proof),
               checks: {
                 decisionChanged: before.decision !== after.decision,
-                formulasPersisted: workbookJson.includes(decisionFormula),
+                formulasPersisted: restored.formula(outputCells.decision) === decisionFormula,
                 restoredMatchesAfter: JSON.stringify(restoredSummary) === JSON.stringify(after),
                 serializedBytes: Buffer.byteLength(workbookJson, 'utf8'),
               },

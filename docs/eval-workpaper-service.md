@@ -17,15 +17,16 @@ document, restores it, and verifies the same result.
 
 ## One command
 
-```sh
-npm create @bilig/workpaper@latest pricing-workpaper && cd pricing-workpaper && npm install && npm run smoke
-```
-
-For the no-key evaluator, run the published package directly:
+Run the published package directly:
 
 ```sh
 npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door workpaper-service --json
 ```
+
+The generated starter is release-pending while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`; that release's smoke
+reports `formulasPersisted: false`. Use this evaluator until a newer generator
+release passes a fresh consumer smoke.
 
 ## Current evaluator transcript
 

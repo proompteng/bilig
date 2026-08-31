@@ -98,24 +98,16 @@ AGENTS.md
 mcp/bilig-workpaper.mcp.json
 ```
 
-The Bilig starter writes those files for a blank project:
+The published Bilig starter is release-pending while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`; that release's smoke
+reports `formulasPersisted: false`. Until a newer release passes a fresh
+consumer smoke, copy `AGENTS.md` and
+`.agents/skills/bilig-workpaper/SKILL.md` from a cloned checkout and verify the
+public MCP path directly:
 
 ```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-cd pricing-agent
-npm install
-npm run agent:verify
+npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door agent-mcp --json
 ```
-
-For an existing repo, add only the MCP and host files:
-
-```sh
-npm create @bilig/workpaper@latest . -- --add-agent
-```
-
-That overlay writes `AGENTS.md` only when it is absent, writes
-`.agents/skills/bilig-workpaper/SKILL.md`, and keeps app `README.md` and
-`package.json` untouched.
 
 ## OpenHands Task Prompt
 

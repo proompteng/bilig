@@ -37,20 +37,17 @@ npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door workpa
 
 ## Add host files to an existing repo
 
-```sh
-npm create @bilig/workpaper@latest . -- --add-agent
-```
+Do not use `npm create @bilig/workpaper@latest` while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`. Its generated smoke
+reports `formulasPersisted: false` because that release checks escaped JSON
+text instead of restored formula state. The source fix must ship in a newer
+release and pass a fresh consumer smoke before this path is restored.
 
-That adds `AGENTS.md`, `CONVENTIONS.md`, `.aider.conf.yml`, `CLAUDE.md`,
-`GEMINI.md`, Copilot/VS Code instructions, Cursor, Kiro, Roo Code, Trae, Qodo, Zed, Junie, OpenCode, Aider,
-Cline, Continue, Windsurf rules, and MCP client configs
-without replacing the app template or editing `package.json`.
-
-For a new MCP-enabled project:
-
-```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-```
+Until then, use the evaluator commands above, install the reusable skill below,
+or copy the matching host files from a cloned checkout. The repository carries
+`AGENTS.md`, `CONVENTIONS.md`, `.aider.conf.yml`, `CLAUDE.md`, `GEMINI.md`,
+Copilot/VS Code instructions, Cursor, Kiro, Roo Code, Trae, Qodo, Zed, Junie,
+OpenCode, Aider, Cline, Continue, Windsurf rules, and MCP client configs.
 
 ## Install the reusable skill
 

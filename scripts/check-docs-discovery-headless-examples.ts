@@ -59,7 +59,7 @@ export async function requireHeadlessExampleDiscovery({
   ])
   const headlessPackageSpec = `@bilig/headless@${parsePackageVersion(headlessPackageManifest)}`
   const workpaperReadmePackageSpec = '@bilig/workpaper'
-  await requireNpmEvalDiscovery(repoRoot, docsRoot, readme, headlessReadme, headlessExampleReadme)
+  await requireNpmEvalDiscovery(repoRoot, docsRoot, headlessReadme, headlessExampleReadme)
   await requireOpenAiResponsesDiscovery({
     repoRoot,
     docsRoot,

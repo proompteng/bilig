@@ -23,7 +23,6 @@ Pick the door that matches the state you own:
 | Door                    | Run first                                                                                            | What it proves                                                                                     |
 | ----------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Node service or test    | `npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door workpaper-service --json` | edit input, recalculate output, persist JSON, restore, and return `verified: true`.                |
-| New project             | `npm create @bilig/workpaper@latest pricing-workpaper`                                               | a starter wired to the same WorkPaper proof loop.                                                  |
 | Tool host or MCP client | `npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door agent-mcp --json`         | tool discovery, cell mutation, formula readback, JSON export, restart proof, and `verified: true`. |
 | Unsure which proof fits | `npm exec --yes --package @bilig/workpaper@latest -- bilig-agent-start --json`                       | compact routing card with proof commands, evidence fields, and public links.                       |
 
@@ -278,12 +277,12 @@ stdio server:
 import { createWorkPaperMcpServer } from '@bilig/workpaper/mcp'
 ```
 
-For a runnable starter project with `AGENTS.md`, MCP client config, and an
-`agent:verify` script:
-
-```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-```
+The source tree also maintains a starter project with `AGENTS.md`, MCP client
+config, and an `agent:verify` script. Do not use
+`npm create @bilig/workpaper@latest` while `@bilig/create-workpaper@latest`
+resolves to `0.164.11`: that release's generated smoke reports
+`formulasPersisted: false`. Use the evaluators above until a newer generator
+release passes a fresh consumer smoke.
 
 ## Scope
 

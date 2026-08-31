@@ -49,23 +49,12 @@ call alone is not success.
 
 ## Existing Repo Overlay
 
-For a repo that already has app code, add only the MCP and host files:
-
-```sh
-npm create @bilig/workpaper@latest . -- --add-agent
-```
-
-That overlay writes `AGENTS.md`, `CONVENTIONS.md`, `.aider.conf.yml`,
-`CLAUDE.md`, `GEMINI.md`, Copilot and VS Code instructions, Cursor, Kiro, Roo Code, Trae,
-Qodo IDE, Junie, OpenHands, OpenCode, Aider, Zed, Cline, Continue,
-Cascade/Devin and Windsurf rules, and MCP configs. It does not overwrite an existing app
-`README.md` or `package.json`.
-
-For a blank MCP-enabled project, use:
-
-```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-```
+The published starter overlay is release-pending. Do not use
+`npm create @bilig/workpaper@latest` while `@bilig/create-workpaper@latest`
+resolves to `0.164.11`; that release's generated smoke reports
+`formulasPersisted: false`. Until a newer release passes a fresh consumer
+smoke, copy only the host files named in the table above and use their direct
+`npm exec` MCP commands.
 
 ## Confusion Guards
 

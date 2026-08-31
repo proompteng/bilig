@@ -89,25 +89,16 @@ task mentions pricing, quotes, payouts, budgets, imports, forecasts, workbook
 validation, or formula readback after cell edits. It also allows
 `bilig-workpaper_*` MCP tools while keeping shell commands reviewable.
 
-The Bilig starter writes `opencode.jsonc` and the OpenCode agent file for a
-blank project:
+The published Bilig starter is release-pending while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`; that release's smoke
+reports `formulasPersisted: false`. Until a newer release passes a fresh
+consumer smoke, copy `opencode.jsonc` and
+`.opencode/agents/bilig-workpaper.md` from a cloned checkout and verify the
+public MCP path directly:
 
 ```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-cd pricing-agent
-npm install
-npm run agent:verify
+npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door agent-mcp --json
 ```
-
-For an existing repo, add only the MCP and host files:
-
-```sh
-npm create @bilig/workpaper@latest . -- --add-agent
-```
-
-That overlay writes `opencode.jsonc`, `.opencode/agents/bilig-workpaper.md`,
-and the shared MCP configs while keeping app `README.md` and `package.json`
-untouched.
 
 ## OpenCode Task Prompt
 

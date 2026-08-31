@@ -36,14 +36,17 @@ macros, charts, pivots, desktop add-ins, manual review, or exact layout checks.
 
 ## Run the agent starter first
 
-From an empty directory:
+From an empty directory, prove the published MCP path before installing it:
 
 ```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-cd pricing-agent
-npm install
-npm run agent:verify
+npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door agent-mcp --json
+npm install @bilig/workpaper
 ```
+
+The generated starter is release-pending while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`; that release's smoke
+reports `formulasPersisted: false`. Restore that route only after a newer
+release passes a fresh consumer smoke.
 
 The starter builds a quote-approval workbook, writes request inputs, reads the
 recalculated decision cells, persists JSON, restores the workbook, and prints a

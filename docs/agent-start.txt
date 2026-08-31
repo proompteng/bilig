@@ -32,11 +32,16 @@ npm exec --yes --package @bilig/workpaper@latest -- bilig-agent-start --rules op
 
 Current source also has rule packs for `aider`, `junie`, `openhands`, `qodo`, `trae`, `zed`. They are not listed as `@latest` commands here until npm publishing catches up, because this page is for commands that a new user can run successfully today.
 
-For an existing repo that should receive the full starter overlay, run:
+## Published starter status
 
-```sh
-npm create @bilig/workpaper@latest . -- --add-agent
-```
+Do not use `npm create @bilig/workpaper@latest` while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`. Its generated
+smoke reports `formulasPersisted: false` because that release checks escaped
+JSON text instead of restored formula state. The source fix must ship in a
+newer release and pass a fresh consumer smoke before this path is restored.
+
+Until then, use the evaluator commands above, install the reusable skill, or
+copy the matching host files from a cloned checkout.
 
 Suggested files: `AGENTS.md`, `CONVENTIONS.md`, `.aider.conf.yml`, `CLAUDE.md`, `GEMINI.md`, `.agents/skills/bilig-workpaper/SKILL.md`, `.github/copilot-instructions.md`, `.github/instructions/bilig-workpaper.instructions.md`, `.github/prompts/bilig-workpaper-proof.prompt.md`, `.vscode/mcp.json`, `opencode.jsonc`, `.opencode/agents/bilig-workpaper.md`, `.cursor/rules/bilig-workpaper.mdc`, `.kiro/steering/bilig-workpaper.md`, `.kiro/settings/mcp.json`, `.junie/mcp/mcp.json`, `.trae/mcp.json`, `.trae/rules/bilig-workpaper.md`, `.zed/settings.json`, `.devin/rules/bilig-workpaper.md`, `.clinerules/bilig-workpaper.md`, `.continue/rules/bilig-workpaper.md`, `.continue/mcpServers/bilig-workpaper.yaml`, `.windsurf/rules/bilig-workpaper.md`, `gemini-extension.json`, and `gemini-workpaper-context.md`.
 

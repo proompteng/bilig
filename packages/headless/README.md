@@ -26,8 +26,7 @@ Choose the narrow package by the state you own:
 | You own...                                 | Start with                                                    | First proof                                                              |
 | ------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | WorkPaper state inside a service           | `npm install @bilig/workpaper`                                | `bilig-evaluate --door workpaper-service --json`                         |
-| A new service or route                     | `npm create @bilig/workpaper@latest pricing-workpaper`        | `npm run smoke`                                                          |
-| Tool or MCP integration                    | `npm create @bilig/workpaper@latest pricing-agent -- --agent` | `bilig-evaluate --door agent-mcp --json`                                 |
+| Tool or MCP integration                    | `npm install @bilig/workpaper`                                | `bilig-evaluate --door agent-mcp --json`                                 |
 | Lower-level runtime subpaths               | `npm install @bilig/headless`                                 | The examples below prove WorkPaper JSON, provenance, and package weight. |
 | A saved workbook file remains the contract | `npm install @bilig/xlsx-formula-recalc`                      | `bilig-evaluate --door workbook-compatibility --json`                    |
 
@@ -121,19 +120,16 @@ pnpm --dir examples/serverless-workpaper-api install --ignore-workspace
 pnpm --dir examples/serverless-workpaper-api run smoke
 ```
 
-For a generated starter project:
-
-```sh
-npm create @bilig/workpaper@latest pricing-workpaper
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-```
-
-That command is published through `@bilig/create-workpaper`. The publish gate is documented at
+The generated starter is release-pending while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`; that release's smoke
+reports `formulasPersisted: false`. Use the direct package and evaluator paths
+above until a newer generator release passes a fresh consumer smoke. The
+publish gate is documented at
 <https://proompteng.github.io/bilig/create-bilig-workpaper.html>.
-The `--agent` starter adds `AGENTS.md`, `CLAUDE.md`, project-root `.mcp.json`
-for Claude Code, Cursor and VS Code MCP configs, `.junie/mcp/mcp.json` for Junie,
-`mcp/bilig-workpaper.mcp.json`, `npm run agent:verify`, and `npm run
-mcp:server`.
+A fixed `--agent` starter will add `AGENTS.md`, `CLAUDE.md`, project-root
+`.mcp.json` for Claude Code, Cursor and VS Code MCP configs,
+`.junie/mcp/mcp.json` for Junie, `mcp/bilig-workpaper.mcp.json`,
+`npm run agent:verify`, and `npm run mcp:server`.
 
 <!-- headless-package-footprint:start -->
 

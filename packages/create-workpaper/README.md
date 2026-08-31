@@ -2,6 +2,14 @@
 
 Create a runnable Bilig WorkPaper starter for Node services and tool integrations.
 
+> [!WARNING]
+> Do not use the command below while `@bilig/create-workpaper@latest` resolves
+> to `0.164.11`. That release's generated smoke reports
+> `formulasPersisted: false`. The restored-formula fix is in source and must
+> ship in a newer release, then pass a fresh consumer smoke.
+
+After that fixed release is published:
+
 ```sh
 npm create @bilig/workpaper@latest pricing-workpaper
 cd pricing-workpaper
@@ -9,12 +17,12 @@ npm install
 npm run smoke
 ```
 
-The generated starter builds a quote-approval workbook with the A1 facade,
-writes quote inputs through one atomic `editManyAndReadback` proof, recalculates
-formulas, persists JSON, restores the workbook, and prints `verified: true`.
-Generated projects pin `@bilig/workpaper` to the generator package version and
-use exact dev-tool versions instead of `latest`, so the smoke proof is
-reproducible.
+The fixed generated starter builds a quote-approval workbook with the A1
+facade, writes quote inputs through one atomic `editManyAndReadback` proof,
+recalculates formulas, persists JSON, restores the workbook, and prints
+`verified: true`. Generated projects pin `@bilig/workpaper` to the generator
+package version and use exact dev-tool versions instead of `latest`, so the
+smoke proof is reproducible.
 
 After the smoke proof passes, keep the JSON output limited to proof fields.
 If the workflow is relevant, watch releases for API and formula compatibility

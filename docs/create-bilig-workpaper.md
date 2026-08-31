@@ -12,19 +12,25 @@ image: /assets/github-social-preview.png
 
 Use this path when you want a runnable project instead of a pasted snippet.
 
+> [!WARNING]
+> Do not use the commands below while `@bilig/create-workpaper@latest` resolves
+> to `0.164.11`. That release's generated smoke reports
+> `formulasPersisted: false`. The restored-formula fix is in source and must
+> ship in a newer release, then pass a fresh consumer smoke.
+
 The starter package is `@bilig/create-workpaper`, exposed by
 `npm create @bilig/workpaper@latest`. Use it when you want the quote approval
 WorkPaper API shape without cloning the full monorepo.
 
-The starter creates a quote approval API with `@bilig/workpaper`. It uses the
-A1 facade, writes quote inputs through one atomic `editManyAndReadback` proof,
-recalculates workbook formulas, persists the WorkPaper as JSON, restores it,
-and verifies that the restored formula output still matches the live result.
-Generated projects pin `@bilig/workpaper` to the generator package version and
-use exact dev-tool versions instead of `latest`, so the smoke proof is
-reproducible.
+The fixed starter creates a quote approval API with `@bilig/workpaper`. It uses
+the A1 facade, writes quote inputs through one atomic `editManyAndReadback`
+proof, recalculates workbook formulas, persists the WorkPaper as JSON, restores
+it, and verifies that the restored formula output still matches the live
+result. Generated projects pin `@bilig/workpaper` to the generator package
+version and use exact dev-tool versions instead of `latest`, so the smoke proof
+is reproducible.
 
-## Run It
+## Run It After The Fixed Release
 
 Generated-project path:
 

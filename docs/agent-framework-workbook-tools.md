@@ -48,13 +48,14 @@ npx --yes skills@latest add proompteng/bilig --skill bilig-workpaper --list
 npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door agent-mcp --json
 ```
 
-For a generated project with MCP config and host files:
+The published starter is release-pending: do not use it while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`, because that release's
+generated smoke reports `formulasPersisted: false`. Until a newer release
+passes a fresh consumer smoke, verify and install the direct package:
 
 ```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-cd pricing-agent
-npm install
-npm run agent:verify
+npm exec --yes --package @bilig/workpaper@latest -- bilig-evaluate --door agent-mcp --json
+npm install @bilig/workpaper
 ```
 
 For a direct package proof without creating a project:

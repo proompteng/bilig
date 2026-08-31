@@ -91,30 +91,12 @@ maps each host to the current repo-local rule and MCP config. Common anchors are
 `.trae/mcp.json`, `.trae/rules/bilig-workpaper.md`, `.zed/settings.json`,
 `opencode.jsonc`, and `.continue/mcpServers/bilig-workpaper.yaml`.
 
-For a clean project that already contains those instruction files, create the
-starter:
-
-```sh
-npm create @bilig/workpaper@latest pricing-agent -- --agent
-```
-
-The generated project includes the repo policy files, local MCP configs, host
-rules, and `npm run agent:verify`. The exact host paths are listed by the rule
-chooser and by the generated install report.
-
-For an existing repo, add only the MCP and host files:
-
-```sh
-npm create @bilig/workpaper@latest . -- --add-agent
-```
-
-That keeps the app template, existing `README.md`, and `package.json` intact.
-The generated MCP configs use direct `npm exec` and store local workbook state
-at `./.bilig/pricing.workpaper.json`, so hosts can run the WorkPaper server
-without needing project scripts or a root-level state file. If a host policy
-file already exists, the CLI leaves it untouched and writes
-`BILIG_WORKPAPER_INSTALL.md` with the skipped paths and the short handoff block
-to paste into the current policy.
+The published starter overlay is release-pending. Do not use
+`npm create @bilig/workpaper@latest` while `@bilig/create-workpaper@latest`
+resolves to `0.164.11`; that release's generated smoke reports
+`formulasPersisted: false`. Until a newer release passes a fresh consumer
+smoke, use the rule chooser to copy only the host files you need and run the
+direct `npm exec` MCP commands above.
 
 For web fetch, give the agent the compact map first:
 

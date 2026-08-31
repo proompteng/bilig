@@ -63,12 +63,11 @@ Cascade/Devin, and Windsurf/Cascade. They all point at the same rule: read
 first, edit one cell or formula, recalculate, read the dependent output,
 persist or export, and report proof.
 
-Existing projects can add only these host files without replacing their app
-template or editing `package.json`:
-
-```sh
-npm create @bilig/workpaper@latest . -- --add-agent
-```
+The published overlay installer is release-pending while
+`@bilig/create-workpaper@latest` resolves to `0.164.11`; that release's
+smoke reports `formulasPersisted: false`. Until a newer release passes a
+fresh consumer smoke, copy only the host files needed by the current project
+instead of running the generator.
 
 For existing repos, the generated MCP configs keep WorkPaper state under
 `./.bilig/pricing.workpaper.json` so the overlay does not add a noisy root

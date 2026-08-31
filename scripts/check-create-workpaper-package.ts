@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
 type PackageManifest = Readonly<Record<string, unknown>>
@@ -119,13 +119,12 @@ function assertDocs(): void {
   const readme = readFileSync(join(packageDir, 'README.md'), 'utf8')
   const docs = readFileSync(join(repoRoot, 'docs', 'create-bilig-workpaper.md'), 'utf8')
   const agentDocs = readFileSync(join(repoRoot, 'docs', 'agent-adoption-kit.md'), 'utf8')
-  const rootReadme = readFileSync(join(repoRoot, 'README.md'), 'utf8')
   const templateSource = readFileSync(join(packageDir, 'template', 'src', 'index.ts'), 'utf8')
   for (const [label, source] of [
     ['packages/create-workpaper/README.md', readme],
     ['docs/create-bilig-workpaper.md', docs],
-    ['README.md', rootReadme],
   ] as const) {
+    assert(source.includes('The restored-formula fix is in source'), `${label} must guard the broken 0.164.11 starter`)
     assert(source.includes('npm create @bilig/workpaper@latest'), `${label} must document the scoped npm create path`)
     assert(source.includes('@bilig/create-workpaper'), `${label} must include the published package name`)
     assert(source.includes('--agent'), `${label} must document the agent-ready starter path`)
@@ -301,6 +300,23 @@ function assertGeneratedStarters(): void {
   assert(serviceManifest.scripts['smoke'] === 'tsx src/index.ts', 'generated service starter must keep the smoke script')
   assert(serviceManifest.scripts['agent:verify'] === undefined, 'generated service starter must not include agent-only scripts')
   assertGeneratedDependencyVersions(serviceManifest, version, 'service')
+
+  run('pnpm', ['--filter', '@bilig/workpaper', 'build'])
+  const serviceScopedModules = join(serviceDir, 'node_modules', '@bilig')
+  mkdirSync(serviceScopedModules, { recursive: true })
+  symlinkSync(
+    join(repoRoot, 'packages', 'workpaper'),
+    join(serviceScopedModules, 'workpaper'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  )
+  const serviceSmokeResult = run('pnpm', ['exec', 'tsx', 'src/index.ts'], { cwd: serviceDir })
+  const serviceSmoke: unknown = JSON.parse(serviceSmokeResult.stdout)
+  assert(isRecord(serviceSmoke), 'generated service starter smoke must return a JSON object')
+  assert(serviceSmoke.verified === true, 'generated service starter smoke must return verified true')
+  assert(isRecord(serviceSmoke.edit), 'generated service starter smoke must return edit evidence')
+  assert(isRecord(serviceSmoke.edit.checks), 'generated service starter smoke must return edit checks')
+  assert(serviceSmoke.edit.checks.formulasPersisted === true, 'generated service starter must prove formulas persisted')
+  assert(serviceSmoke.edit.checks.restoredMatchesAfter === true, 'generated service starter must prove restored readback')
 
   const agentManifest = readJson(join(agentDir, 'package.json'))
   assert(isRecord(agentManifest.scripts), 'generated agent package scripts must be an object')
