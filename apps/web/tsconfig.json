@@ -16,6 +16,7 @@
     { "path": "../../packages/excel-import" },
     { "path": "../../packages/formula" },
     { "path": "../../packages/grid" },
+    { "path": "../../packages/headless" },
     { "path": "../../packages/protocol" },
     { "path": "../../packages/runtime-kernel" },
     { "path": "../../packages/worker-transport" },

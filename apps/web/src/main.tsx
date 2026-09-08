@@ -28,12 +28,17 @@ const IsolatedWorkbookPaneRendererRoute = lazy(async () => {
   }
 })
 
+const ModelsWorkspace = lazy(async () => {
+  const module = await import('./models/ModelsWorkspace.js')
+  return { default: module.ModelsWorkspace }
+})
+
 const root = getOrCreateReactRoot({
   container: document.getElementById('root')!,
   createRoot: ReactDOM.createRoot,
   hot: import.meta.hot,
 })
-const entryRoute = resolveWebEntryRoute(window.location.pathname)
+const entryRoute = resolveWebEntryRoute(window.location.pathname, window.location.search)
 const remoteSyncEnabled = resolveRemoteSyncEnabled(import.meta.env)
 const LOCAL_ONLY_CONNECTION_STATE: ZeroConnectionState = {
   name: 'closed',
@@ -228,6 +233,10 @@ root.render(
     {entryRoute === 'isolated-workbook-pane-renderer' ? (
       <Suspense fallback={<BootstrapShell />}>
         <IsolatedWorkbookPaneRendererRoute />
+      </Suspense>
+    ) : entryRoute === 'models' ? (
+      <Suspense fallback={<div role="status">Opening your workspace…</div>}>
+        <ModelsWorkspace />
       </Suspense>
     ) : (
       <BootstrapRoot />

@@ -12,7 +12,7 @@ test.describe('@clipboard-global web app clipboard flows', () => {
 
   test('web app supports rectangular clipboard copy and external paste', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await page.goto('/')
+    await page.goto('/workbook')
     await waitForWorkbookReady(page)
 
     const grid = page.getByTestId('sheet-grid')
@@ -74,7 +74,7 @@ test.describe('@clipboard-global web app clipboard flows', () => {
 
   test('web app relocates formulas when using rectangular clipboard paste', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await page.goto('/')
+    await page.goto('/workbook')
     await waitForWorkbookReady(page)
 
     const grid = page.getByTestId('sheet-grid')

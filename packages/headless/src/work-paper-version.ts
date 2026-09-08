@@ -1,7 +1,4 @@
-import { createRequire } from 'node:module'
-
-const requirePackageJson = createRequire(import.meta.url)
-const packageManifest: unknown = requirePackageJson('../package.json')
+import packageManifest from '../package.json' with { type: 'json' }
 
 export const WORKPAPER_VERSION = readWorkPaperPackageVersion(packageManifest)
 

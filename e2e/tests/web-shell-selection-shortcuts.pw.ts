@@ -50,7 +50,7 @@ test('web app routes row, column, and full-sheet selection shortcuts from toolba
 })
 
 test('web app supports row, column, and full-sheet selection shortcuts', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const grid = page.getByTestId('sheet-grid')
@@ -184,7 +184,7 @@ test('web app fills down and right with spreadsheet keyboard shortcuts', async (
 })
 
 test('web app expands the active range with repeated shift arrows', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const grid = page.getByTestId('sheet-grid')
@@ -202,7 +202,7 @@ test('web app expands the active range with repeated shift arrows', async ({ pag
 })
 
 test('web app collapses the selected range before typing into the cell editor', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const grid = page.getByTestId('sheet-grid')
@@ -223,7 +223,7 @@ test('web app collapses the selected range before typing into the cell editor', 
 })
 
 test('web app expands the active range with shift-click', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await clickProductCell(page, 1, 1)
@@ -559,7 +559,7 @@ test('web app keeps delete keys scoped to the in-cell editor while editing', asy
 })
 
 test('web app clears the clicked cell after a prior name-box selection changes pending app selection', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const formulaInput = page.getByTestId('formula-input')
@@ -589,7 +589,7 @@ test('web app clears the clicked cell after a prior name-box selection changes p
 })
 
 test('web app ignores right gutter clicks', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')

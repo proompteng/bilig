@@ -1,5 +1,6 @@
 @import 'sonner/dist/styles.css';
 @import 'tailwindcss';
+@import './models/models.css';
 @source "./";
 @source "../../../packages/grid/src";
 

@@ -106,6 +106,9 @@ function WorkerWorkbookAppInner({
     connectionState,
     toolbarControls: (
       <>
+        <a className={missingSheetActionClass} href="/models">
+          Models
+        </a>
         {shortcuts.shortcutHelpButton}
         {importToggle}
       </>

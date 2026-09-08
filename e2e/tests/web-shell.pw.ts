@@ -52,7 +52,7 @@ test('web app accepts string values and string comparison formulas', async ({ pa
 })
 
 test('web app supports type-to-replace and Enter or Tab commit movement', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -371,7 +371,7 @@ test('web app preserves editor multiline shortcuts across commit, formula bar, a
 })
 
 test('web app preserves multi-digit numeric type-to-replace input', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -400,7 +400,7 @@ test('web app preserves multi-digit numeric type-to-replace input', async ({ pag
 })
 
 test('web app right-aligns numeric in-cell editing like numeric view state', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const grid = page.getByTestId('sheet-grid')
@@ -422,7 +422,7 @@ test('web app right-aligns numeric in-cell editing like numeric view state', asy
 })
 
 test('web app accepts numpad digits for in-cell numeric entry', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const formulaInput = page.getByTestId('formula-input')
@@ -445,7 +445,7 @@ test('web app accepts numpad digits for in-cell numeric entry', async ({ page })
 })
 
 test('@browser-serial web app supports F2 edit in the product shell', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
   await waitForWorkbookReady(page)
 
@@ -508,7 +508,7 @@ test('@browser-ci web app offers formula autocomplete and inserts a function wit
 })
 
 test('web app shows formula argument hints while typing', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const formulaInput = page.getByTestId('formula-input')
@@ -523,7 +523,7 @@ test('web app shows formula argument hints while typing', async ({ page }) => {
 })
 
 test('web app double-click edits the exact clicked cell', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -561,7 +561,7 @@ test('web app double-click edits the exact clicked cell', async ({ page }) => {
 })
 
 test('web app keeps the selected cell when clicking its top border', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -576,7 +576,7 @@ test('web app keeps the selected cell when clicking its top border', async ({ pa
 })
 
 test('web app keeps selected text cells visible when clicked', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')

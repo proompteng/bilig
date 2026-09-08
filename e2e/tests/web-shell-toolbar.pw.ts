@@ -11,7 +11,7 @@ import {
 } from './web-shell-helpers.js'
 
 test('@browser-ci web app renders the minimal product shell without legacy demo chrome', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await expect(page.getByTestId('formula-bar')).toBeVisible()
@@ -36,7 +36,7 @@ test('@browser-ci web app renders the minimal product shell without legacy demo 
 })
 
 test('web app keeps toolbar controls aligned and consistently sized', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const toolbar = page.getByRole('toolbar', { name: 'Formatting toolbar' })
@@ -90,7 +90,7 @@ test('web app keeps toolbar controls aligned and consistently sized', async ({ p
 
 test('web app keeps sync status icon-only in the toolbar', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 })
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const syncText = await page.getByTestId('status-sync').textContent()
@@ -114,7 +114,7 @@ test('web app keeps sync status icon-only in the toolbar', async ({ page }) => {
 })
 
 test('web app keeps toolbar, formula bar, grid, and footer tightly stacked', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const toolbar = page.getByRole('toolbar', { name: 'Formatting toolbar' })
@@ -136,7 +136,7 @@ test('web app keeps toolbar, formula bar, grid, and footer tightly stacked', asy
 })
 
 test('web app keeps formula bar controls aligned and consistently sized', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -228,7 +228,7 @@ test('web app keeps the workbook visible when the assistant rail becomes a phone
 })
 
 test('web app keeps shell controls on one height and radius system', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const locators = [
@@ -252,7 +252,7 @@ test('web app keeps shell controls on one height and radius system', async ({ pa
 
 test('web app keeps the toolbar compact on narrow viewports', async ({ page }) => {
   await page.setViewportSize({ width: 620, height: 760 })
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const toolbar = page.getByRole('toolbar', { name: 'Formatting toolbar' })
@@ -367,7 +367,7 @@ test('web app keeps tiny toolbar overflow controls from covering formatting acti
 })
 
 test('web app shows preset color swatches first and only reveals the custom picker on demand', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await page.getByLabel('Fill color').click()
@@ -383,7 +383,7 @@ test('web app shows preset color swatches first and only reveals the custom pick
 })
 
 test('web app renders the fill color palette as a visible popover below the toolbar', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await page.getByLabel('Fill color').click()
@@ -401,7 +401,7 @@ test('web app renders the fill color palette as a visible popover below the tool
 })
 
 test('web app applies preset swatch colors directly from the palette', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await pickToolbarPresetColor(page, 'Fill color', 'light cornflower blue 3')

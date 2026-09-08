@@ -59,7 +59,7 @@ test.beforeEach(async ({ page }) => {
 
 test('web app keeps sheet tabs and status bar visible in a short viewport', async ({ page }) => {
   await page.setViewportSize({ width: 2048, height: 220 })
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const sheetTab = page.getByRole('tab', { name: 'Sheet1' })
@@ -79,7 +79,7 @@ test('web app keeps sheet tabs and status bar visible in a short viewport', asyn
 })
 
 test('web app supports column and row header selection', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   const grid = page.getByTestId('sheet-grid')
@@ -102,7 +102,7 @@ test('web app supports column and row header selection', async ({ page }) => {
 })
 
 test('web app supports row and column header drag selection', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await dragProductHeaderSelection(page, 'column', 1, 3)
@@ -295,7 +295,7 @@ test('web app clears the selected column range with Delete after header selectio
 })
 
 test('web app supports rectangular drag selection', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await dragProductBodySelection(page, 1, 1, 3, 3)
@@ -988,7 +988,7 @@ test('web app keeps moved range data visible when border drag reaches the grid e
 })
 
 test('web app keeps the active focus inside the sheet grid when clicking a cell', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await clickProductCell(page, 2, 2)
@@ -1079,7 +1079,7 @@ test('@browser-perf web app keeps range-move preview out of resident scene inval
 })
 
 test('web app maps clicks in the upper half of a cell to that same visible cell', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
   await clickProductCellUpperHalf(page, 4, 11)

@@ -71,6 +71,10 @@
     "packageDir": "packages/headless",
     "sourceEntry": "packages/headless/src/index.ts"
   },
+  "@bilig/headless/browser": {
+    "packageDir": "packages/headless",
+    "sourceEntry": "packages/headless/src/browser.ts"
+  },
   "@bilig/headless/cli": {
     "packageDir": "packages/headless",
     "sourceEntry": "packages/headless/src/cli.ts"

@@ -673,7 +673,7 @@ async function waitForWorkbookReadyOnce(page: Page): Promise<void> {
   )
 }
 
-export async function gotoWorkbookShell(page: Page, path = '/', timeoutMs = 15_000) {
+export async function gotoWorkbookShell(page: Page, path = '/workbook', timeoutMs = 15_000) {
   async function attempt(deadline: number, lastError: unknown): Promise<void> {
     if (Date.now() >= deadline) {
       throw lastError instanceof Error ? lastError : new Error(`Timed out navigating to ${path}`)

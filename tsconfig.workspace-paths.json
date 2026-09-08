@@ -20,6 +20,7 @@
       "@bilig/formula/program-arena": ["./packages/formula/src/program-arena.ts"],
       "@bilig/grid": ["./packages/grid/src/index.ts"],
       "@bilig/headless": ["./packages/headless/src/index.ts"],
+      "@bilig/headless/browser": ["./packages/headless/src/browser.ts"],
       "@bilig/headless/cli": ["./packages/headless/src/cli.ts"],
       "@bilig/headless/mcp": ["./packages/headless/src/mcp.ts"],
       "@bilig/headless/xlsx": ["./packages/excel-import/src/index.ts"],

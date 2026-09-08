@@ -1,5 +1,10 @@
 # @bilig/headless
 
+The `@bilig/headless/browser` entry exposes `WorkPaper` and its JSON persistence
+functions for browser applications and Web Workers. It omits the Node tooling
+entrypoints. Bilig's model workspace uses it to calculate results and verify
+exported documents by restoring them in the worker.
+
 [![npm: @bilig/headless](https://img.shields.io/npm/v/@bilig/headless?label=%40bilig%2Fheadless)](https://www.npmjs.com/package/@bilig/headless)
 [![npm weekly downloads](https://img.shields.io/npm/dw/@bilig/headless?label=npm%20downloads)](https://www.npmjs.com/package/@bilig/headless)
 [![GitHub](https://img.shields.io/badge/GitHub-proompteng%2Fbilig-blue)](https://github.com/proompteng/bilig)
@@ -23,12 +28,12 @@ calculated value again.
 
 Choose the narrow package by the state you own:
 
-| You own...                                 | Start with                                                    | First proof                                                              |
-| ------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| WorkPaper state inside a service           | `npm install @bilig/workpaper`                                | `bilig-evaluate --door workpaper-service --json`                         |
-| Tool or MCP integration                    | `npm install @bilig/workpaper`                                | `bilig-evaluate --door agent-mcp --json`                                 |
-| Lower-level runtime subpaths               | `npm install @bilig/headless`                                 | The examples below prove WorkPaper JSON, provenance, and package weight. |
-| A saved workbook file remains the contract | `npm install @bilig/xlsx-formula-recalc`                      | `bilig-evaluate --door workbook-compatibility --json`                    |
+| You own...                                 | Start with                               | First proof                                                              |
+| ------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------ |
+| WorkPaper state inside a service           | `npm install @bilig/workpaper`           | `bilig-evaluate --door workpaper-service --json`                         |
+| Tool or MCP integration                    | `npm install @bilig/workpaper`           | `bilig-evaluate --door agent-mcp --json`                                 |
+| Lower-level runtime subpaths               | `npm install @bilig/headless`            | The examples below prove WorkPaper JSON, provenance, and package weight. |
+| A saved workbook file remains the contract | `npm install @bilig/xlsx-formula-recalc` | `bilig-evaluate --door workbook-compatibility --json`                    |
 
 Use `@bilig/headless` when the workbook is the business logic, but production
 needs API readback, tests, persistence, and deterministic proof instead of a

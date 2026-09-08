@@ -21,6 +21,7 @@
     "@bilig/excel-import": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/grid": "workspace:*",
+    "@bilig/headless": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/runtime-kernel": "workspace:*",
     "@bilig/workbook": "workspace:*",

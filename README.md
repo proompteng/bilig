@@ -31,6 +31,20 @@ or a browser grid.
 
 ## Quick Start
 
+### Browser model workspace
+
+Run `pnpm dev:web` and open the local URL to use the model workspace. Start
+with a contribution, project budget, or capacity model, or create your own.
+Edit assumptions and formulas, compare saved scenarios, and export a model
+backup or a WorkPaper JSON document. Models are saved in the current browser.
+The spreadsheet editor remains available at `/workbook`, and existing
+`?document=...` links continue to work.
+
+See the [model workspace plan](docs/model-workspace-plan.md) for the product
+scope, storage contract, and verification evidence.
+
+### Node runtime
+
 Prove the published package before installing it:
 
 ```sh
