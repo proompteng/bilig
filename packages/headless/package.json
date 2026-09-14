@@ -89,7 +89,7 @@
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/xlsx": "workspace:*",
-    "fflate": "0.3.11"
+    "fflate": "0.8.3"
   },
   "engines": {
     "node": ">=22.0.0"
