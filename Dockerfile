@@ -1,6 +1,6 @@
 FROM oven/bun:1.3.10@sha256:b86c67b531d87b4db11470d9b2bd0c519b1976eee6fcd71634e73abfa6230d2e AS bun
 
-FROM node:24-bookworm-slim@sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e AS build-base
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370 AS build-base
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="/usr/local/bin:$PNPM_HOME:$PATH"
@@ -9,7 +9,7 @@ COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 
 RUN corepack enable
 
-FROM node:24-bookworm-slim@sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e AS bilig-workpaper-mcp
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370 AS bilig-workpaper-mcp
 
 ARG BILIG_WORKPAPER_VERSION=0.164.11
 ENV NODE_ENV="production"
@@ -38,7 +38,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm build
 RUN pnpm --config.inject-workspace-packages=true --filter @bilig/app deploy --prod --offline /out/bilig
 
-FROM node:24-bookworm-slim@sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e AS bilig-runtime
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370 AS bilig-runtime
 
 ENV NODE_ENV="production"
 
