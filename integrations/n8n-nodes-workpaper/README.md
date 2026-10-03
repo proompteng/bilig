@@ -157,6 +157,19 @@ community nodes.
 7. Use the returned `verified` and `checks` fields as a gate before the workflow
    continues.
 
+## Development
+
+Use Node.js 24 and the npm version pinned in `package.json`. The development
+SDK is pinned separately from the host-provided `n8n-workflow` peer.
+
+```sh
+corepack npm ci
+corepack npm run check
+```
+
+The check builds the node, runs n8n's community-package linter, audits production
+dependencies, and validates the package contents.
+
 ## Resources
 
 - [Bilig GitHub repository](https://github.com/proompteng/bilig)
@@ -165,6 +178,7 @@ community nodes.
 
 ## Version history
 
+- `0.2.3`: add deterministic dependency installation and pin the development SDK.
 - `0.2.1`: remove premature n8n Cloud verification wording before Creator
   Portal review.
 - `0.2.0`: add a generic WorkPaper JSON evaluation operation for user-owned

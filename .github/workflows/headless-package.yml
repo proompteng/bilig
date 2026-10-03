@@ -194,8 +194,8 @@ jobs:
         run: |
           set -euo pipefail
           cd integrations/n8n-nodes-workpaper
-          npm ci
-          npm run check
+          corepack npm ci
+          corepack npm run check
 
       - name: Pack runtime package set
         run: |
@@ -1249,53 +1249,24 @@ jobs:
           node-version: '24.11.1'
           registry-url: https://registry.npmjs.org
 
-      - name: Ensure npm supports trusted publishing
+      - name: Enable pinned npm
         run: |
           set -euo pipefail
-          required_npm_version="11.9.0"
-          current_npm_version="$(npm --version)"
-
-          if node - "$current_npm_version" "$required_npm_version" <<'NODE'
-          const [current, required] = process.argv.slice(2);
-          const parse = (version) => version.split('.').map((part) => Number.parseInt(part, 10));
-          const [currentMajor, currentMinor, currentPatch] = parse(current);
-          const [requiredMajor, requiredMinor, requiredPatch] = parse(required);
-          const currentParts = [currentMajor, currentMinor, currentPatch];
-          const requiredParts = [requiredMajor, requiredMinor, requiredPatch];
-          for (let index = 0; index < requiredParts.length; index += 1) {
-            if (currentParts[index] > requiredParts[index]) {
-              process.exit(0);
-            }
-            if (currentParts[index] < requiredParts[index]) {
-              process.exit(1);
-            }
-          }
-          process.exit(0);
-          NODE
-          then
-            echo "npm ${current_npm_version} satisfies trusted publishing minimum ${required_npm_version}"
-          else
-            echo "npm ${current_npm_version} is below trusted publishing minimum ${required_npm_version}; installing ${required_npm_version}"
-            npm config set fetch-retries 5
-            npm config set fetch-retry-factor 2
-            npm config set fetch-retry-mintimeout 20000
-            npm config set fetch-retry-maxtimeout 120000
-            npm install -g "npm@${required_npm_version}"
-          fi
-
-          npm --version
+          corepack enable
+          cd integrations/n8n-nodes-workpaper
+          corepack npm --version
 
       - name: Install n8n node dependencies
         run: |
           set -euo pipefail
           cd integrations/n8n-nodes-workpaper
-          npm ci
+          corepack npm ci
 
       - name: Check n8n node package
         run: |
           set -euo pipefail
           cd integrations/n8n-nodes-workpaper
-          npm run check
+          corepack npm run check
 
       - name: Inspect n8n node package version
         id: n8n_package
@@ -1344,7 +1315,7 @@ jobs:
           fi
 
           unset NODE_AUTH_TOKEN
-          npm publish "${publish_args[@]}"
+          corepack npm publish "${publish_args[@]}"
 
       - name: Verify n8n community node is visible on npm
         if: steps.n8n_package.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'

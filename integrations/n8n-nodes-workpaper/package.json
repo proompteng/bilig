@@ -1,6 +1,6 @@
 {
   "name": "@bilig/n8n-nodes-workpaper",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "n8n community node for Bilig WorkPaper formula readback.",
   "keywords": [
     "agent-tools",
@@ -49,6 +49,7 @@
   "devDependencies": {
     "@n8n/node-cli": "^0.31.0",
     "eslint": "9.32.0",
+    "n8n-workflow": "2.41.2",
     "prettier": "3.6.2",
     "release-it": "^19.0.4",
     "typescript": "5.9.2"
@@ -56,6 +57,7 @@
   "peerDependencies": {
     "n8n-workflow": "*"
   },
+  "packageManager": "npm@11.19.1",
   "n8n": {
     "n8nNodesApiVersion": 1,
     "strict": true,
