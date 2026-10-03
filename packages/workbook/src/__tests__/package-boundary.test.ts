@@ -31,7 +31,6 @@ const bannedRuntimeDependencies = Object.freeze([
   '@bilig/agent-api',
   '@bilig/web',
   '@bilig/grid',
-  '@bilig/renderer',
   'zod',
   'effect',
 ] as const)

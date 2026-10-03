@@ -9,7 +9,6 @@
   },
   "workspaces": {
     ".": {
-      "ignoreFiles": ["scripts/**"],
       "entry": [
         "actions/xlsx-cache-doctor/*.mjs",
         "docs/assets/hero-scene.js",

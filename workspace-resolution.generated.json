@@ -91,10 +91,6 @@
     "packageDir": "packages/protocol",
     "sourceEntry": "packages/protocol/src/index.ts"
   },
-  "@bilig/renderer": {
-    "packageDir": "packages/renderer",
-    "sourceEntry": "packages/renderer/src/index.ts"
-  },
   "@bilig/runtime-kernel": {
     "packageDir": "packages/runtime-kernel",
     "sourceEntry": "packages/runtime-kernel/src/index.ts"

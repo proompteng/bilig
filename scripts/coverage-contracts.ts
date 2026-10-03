@@ -16,7 +16,6 @@ type IstanbulCoverageMap = Record<string, IstanbulFileCoverage>
 const thresholds = [
   { label: 'packages/core/src', prefix: '/packages/core/src/', lines: 91 },
   { label: 'packages/formula/src', prefix: '/packages/formula/src/', lines: 91 },
-  { label: 'packages/renderer/src', prefix: '/packages/renderer/src/', lines: 91 },
 ]
 
 const ignoredSuffixes = ['/index.ts', '/snapshot.ts', '/ast.ts']

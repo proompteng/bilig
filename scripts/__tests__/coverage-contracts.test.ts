@@ -64,7 +64,6 @@ describe('coverage contracts path resolution', () => {
       JSON.stringify({
         ...fullyCoveredFile('/repo/packages/core/src/engine.ts'),
         ...fullyCoveredFile('/repo/packages/formula/src/builtins.ts'),
-        ...fullyCoveredFile('/repo/packages/renderer/src/grid.ts'),
       }),
     )
 

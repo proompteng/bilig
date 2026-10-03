@@ -44,7 +44,7 @@ export default defineConfig({
       provider: 'v8',
       reportsDirectory: process.env['BILIG_COVERAGE_DIR'] ?? './coverage',
       reporter: ['text', 'lcov', 'json', 'json-summary'],
-      include: ['packages/core/src/**/*.ts', 'packages/formula/src/**/*.ts', 'packages/renderer/src/**/*.ts'],
+      include: ['packages/core/src/**/*.ts', 'packages/formula/src/**/*.ts'],
       exclude: [
         '**/__tests__/**',
         '**/*.d.ts',
@@ -55,7 +55,6 @@ export default defineConfig({
         'packages/formula/src/js-evaluator-types.ts',
         '**/packages/formula/src/js-evaluator-types.ts',
         '**/js-evaluator-types.ts',
-        'packages/renderer/src/index.ts',
       ],
       thresholds: {
         // Package line coverage is enforced by scripts/coverage-contracts.ts after

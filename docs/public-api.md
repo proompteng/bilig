@@ -22,23 +22,12 @@ package boundaries; not every package name is provisioned on npm yet.
 - `@bilig/formula`
 - `@bilig/wasm-kernel`
 - `@bilig/workbook`
-- `@bilig/renderer`
 - `@bilig/grid`
 - `@bilig/binary-protocol`
 - `@bilig/worker-transport`
 - `@bilig/agent-api`
 - `@bilig/storage-server`
 - `@bilig/excel-fixtures`
-
-## Workbook DSL
-
-`@bilig/renderer` keeps the declarative workbook DSL unchanged:
-
-- `<Workbook>`
-- `<Sheet name="...">`
-- `<Cell addr="..." value={...} />`
-- `<Cell addr="..." formula="..." />`
-- `<Cell addr="..." format="..." />`
 
 ## Agent-first workbook surface
 

@@ -113,7 +113,7 @@ function validateManifestShape(packageLabel, manifest, failureMessages) {
     failureMessages.push(`${packageLabel}: files list must be present and non-empty`)
   }
 
-  if ((packageLabel === '@bilig/grid' || packageLabel === '@bilig/renderer') && !manifest.peerDependencies?.react) {
+  if (packageLabel === '@bilig/grid' && !manifest.peerDependencies?.react) {
     failureMessages.push(`${packageLabel}: react must be declared as a peer dependency`)
   }
 }

@@ -2,35 +2,92 @@
   "extends": "./tsconfig.workspace-paths.json",
   "files": [],
   "references": [
-    { "path": "./packages/protocol" },
-    { "path": "./packages/contracts" },
-    { "path": "./packages/runtime-kernel" },
-    { "path": "./packages/actors" },
-    { "path": "./packages/formula" },
-    { "path": "./packages/workbook" },
-    { "path": "./packages/binary-protocol" },
-    { "path": "./packages/agent-api" },
-    { "path": "./packages/storage-server" },
-    { "path": "./packages/excel-fixtures" },
-    { "path": "./packages/wasm-kernel" },
-    { "path": "./packages/excel-import" },
-    { "path": "./packages/core" },
-    { "path": "./packages/headless" },
-    { "path": "./packages/bilig" },
-    { "path": "./packages/workpaper" },
-    { "path": "./packages/xlsx-formula-recalc" },
-    { "path": "./packages/bilig-xlsx-formula-recalc" },
-    { "path": "./packages/sheetjs-formula-recalc" },
-    { "path": "./packages/bilig-sheetjs-formula-recalc" },
-    { "path": "./packages/exceljs-formula-recalc" },
-    { "path": "./packages/bilig-exceljs-formula-recalc" },
-    { "path": "./packages/worker-transport" },
-    { "path": "./packages/renderer" },
-    { "path": "./packages/grid" },
-    { "path": "./packages/benchmarks" },
-    { "path": "./packages/zero-sync" },
-    { "path": "./packages/test-fuzz" },
-    { "path": "./apps/bilig" },
-    { "path": "./apps/web" }
+    {
+      "path": "./packages/protocol"
+    },
+    {
+      "path": "./packages/contracts"
+    },
+    {
+      "path": "./packages/runtime-kernel"
+    },
+    {
+      "path": "./packages/actors"
+    },
+    {
+      "path": "./packages/formula"
+    },
+    {
+      "path": "./packages/workbook"
+    },
+    {
+      "path": "./packages/binary-protocol"
+    },
+    {
+      "path": "./packages/agent-api"
+    },
+    {
+      "path": "./packages/storage-server"
+    },
+    {
+      "path": "./packages/excel-fixtures"
+    },
+    {
+      "path": "./packages/wasm-kernel"
+    },
+    {
+      "path": "./packages/excel-import"
+    },
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/headless"
+    },
+    {
+      "path": "./packages/bilig"
+    },
+    {
+      "path": "./packages/workpaper"
+    },
+    {
+      "path": "./packages/xlsx-formula-recalc"
+    },
+    {
+      "path": "./packages/bilig-xlsx-formula-recalc"
+    },
+    {
+      "path": "./packages/sheetjs-formula-recalc"
+    },
+    {
+      "path": "./packages/bilig-sheetjs-formula-recalc"
+    },
+    {
+      "path": "./packages/exceljs-formula-recalc"
+    },
+    {
+      "path": "./packages/bilig-exceljs-formula-recalc"
+    },
+    {
+      "path": "./packages/worker-transport"
+    },
+    {
+      "path": "./packages/grid"
+    },
+    {
+      "path": "./packages/benchmarks"
+    },
+    {
+      "path": "./packages/zero-sync"
+    },
+    {
+      "path": "./packages/test-fuzz"
+    },
+    {
+      "path": "./apps/bilig"
+    },
+    {
+      "path": "./apps/web"
+    }
   ]
 }

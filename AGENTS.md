@@ -103,7 +103,7 @@ Avoid:
 
 ## Testing Guidelines
 
-Add colocated unit tests as `*.test.ts` or `*.test.tsx`; keep browser flows in `e2e/tests/*.pw.ts`. Coverage gates apply to `packages/core`, `packages/formula`, and `packages/renderer`: 90% lines, statements, and functions, 70% branches. For targeted work, use filters such as `pnpm --filter @bilig/web test`.
+Add colocated unit tests as `*.test.ts` or `*.test.tsx`; keep browser flows in `e2e/tests/*.pw.ts`. Coverage gates apply to `packages/core` and `packages/formula`: 90% lines, statements, and functions, 70% branches. For targeted work, use filters such as `pnpm --filter @bilig/web test`.
 
 ## Infra & Cluster Operations
 

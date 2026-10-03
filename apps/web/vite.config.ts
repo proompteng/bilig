@@ -102,7 +102,6 @@ const codeSplittingGroups = [
     test(id: string) {
       return includesAny(id, [
         '/packages/grid/',
-        '/packages/renderer/',
         '/packages/worker-transport/',
         '/packages/workbook/',
         '/apps/web/src/WorkerWorkbookApp.tsx',

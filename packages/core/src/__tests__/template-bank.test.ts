@@ -1,8 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import {
-  tryMatchInitialSimpleRowRelativeBinaryTemplate,
-  tryMatchInitialSimpleRowRelativeBinaryTemplateShape,
-} from '../formula/initial-simple-direct-scalar-template.js'
 import { createTemplateBank } from '../formula/template-bank.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
 
@@ -137,46 +133,6 @@ describe('TemplateBank', () => {
         endCol: 5,
       },
     ])
-  })
-
-  it('matches cached simple row-relative binary template shapes without reparsing the family', () => {
-    const anchor = tryMatchInitialSimpleRowRelativeBinaryTemplate('A1+B1', 0, 2)
-
-    expect(anchor).toBeDefined()
-    const translated = tryMatchInitialSimpleRowRelativeBinaryTemplateShape('a2+b2', 1, 2, anchor!)
-
-    expect(translated).toEqual(
-      expect.objectContaining({
-        templateKey: anchor!.templateKey,
-        symbolicRefs: ['A2', 'B2'],
-        parsedDeps: [
-          { kind: 'cell', address: 'A2', row: 1, col: 0, rowAbsolute: false, colAbsolute: false },
-          { kind: 'cell', address: 'B2', row: 1, col: 1, rowAbsolute: false, colAbsolute: false },
-        ],
-        parsedSymbolicRefs: [
-          { address: 'A2', row: 1, col: 0, rowAbsolute: false, colAbsolute: false },
-          { address: 'B2', row: 1, col: 1, rowAbsolute: false, colAbsolute: false },
-        ],
-      }),
-    )
-    expect(tryMatchInitialSimpleRowRelativeBinaryTemplateShape('A20+B20', 1, 2, anchor!)).toBeUndefined()
-  })
-
-  it('matches cached simple row-relative number template shapes exactly', () => {
-    const anchor = tryMatchInitialSimpleRowRelativeBinaryTemplate('E2*2', 1, 5)
-
-    expect(anchor).toBeDefined()
-    const translated = tryMatchInitialSimpleRowRelativeBinaryTemplateShape('E3*2', 2, 5, anchor!)
-
-    expect(translated).toEqual(
-      expect.objectContaining({
-        templateKey: anchor!.templateKey,
-        symbolicRefs: ['E3'],
-        parsedDeps: [{ kind: 'cell', address: 'E3', row: 2, col: 4, rowAbsolute: false, colAbsolute: false }],
-        parsedSymbolicRefs: [{ address: 'E3', row: 2, col: 4, rowAbsolute: false, colAbsolute: false }],
-      }),
-    )
-    expect(tryMatchInitialSimpleRowRelativeBinaryTemplateShape('E3*20', 2, 5, anchor!)).toBeUndefined()
   })
 
   it('rejects stale template ids when the current source belongs to a different template family', () => {

@@ -25,7 +25,6 @@
       "@bilig/headless/mcp": ["./packages/headless/src/mcp.ts"],
       "@bilig/headless/xlsx": ["./packages/excel-import/src/index.ts"],
       "@bilig/protocol": ["./packages/protocol/src/index.ts"],
-      "@bilig/renderer": ["./packages/renderer/src/index.ts"],
       "@bilig/runtime-kernel": ["./packages/runtime-kernel/src/index.ts"],
       "@bilig/sheetjs-formula-recalc": ["./packages/bilig-sheetjs-formula-recalc/src/index.ts"],
       "@bilig/storage-server": ["./packages/storage-server/src/index.ts"],

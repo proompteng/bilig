@@ -697,9 +697,8 @@ export function buildGithubCopilotInstructions(input: AgentIdeRuleInput): string
 - \`packages/formula\` owns A1 addressing, lexer/parser, binding, optimization, translation, compatibility, and the JS evaluator.
 - \`packages/wasm-kernel\` is the AssemblyScript/WASM numeric fast path. \`packages/core\` decides when formulas stay on the JS path versus the WASM path.
 - \`packages/crdt\`, \`packages/binary-protocol\`, \`packages/worker-transport\`, \`packages/agent-api\`, and \`packages/storage-server\` make up the local-first sync and transport stack used by the browser and server runtimes.
-- \`packages/renderer\` is the custom workbook reconciler and workbook DSL.
 - \`packages/grid\` is the reusable React spreadsheet UI: selection, editing, metrics, inspectors, and workbook/grid views.
-- \`apps/web\` is the thin React/Vite shell around the shared workbook surface. Shared behavior should usually live in \`packages/renderer\` or \`packages/grid\`, not inside app folders.
+- \`apps/web\` is the thin React/Vite shell around the shared workbook surface. Shared behavior should usually live in \`packages/grid\`, not inside app folders.
 - \`apps/local-server\` hosts local workbook sessions and emits committed frames over websocket.
 - \`apps/sync-server\` is the remote sync/backend service surface.
 - When you need the architectural contracts, start with \`docs/architecture.md\`, \`docs/reconciler-layering.md\`, \`docs/local-first-realtime-loop.md\`, \`docs/public-api.md\`, and \`docs/testing-and-benchmarks.md\`.
