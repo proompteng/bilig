@@ -1,6 +1,6 @@
 {
   "name": "@bilig/workbook",
-  "version": "0.164.11",
+  "version": "1.0.0",
   "description": "Transport-neutral workbook intent API for plans, command receipts, and formula readback checks.",
   "keywords": [
     "bilig",

@@ -4,6 +4,35 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 1.0.0
+
+- Release type: major
+- Previous libraries tag: libraries-v0.164.11
+- Manual override: no
+
+## Breaking changes
+- refactor(packages)!: consolidate canonical workbook runtimes (c6390416)
+
+## Fixes
+- fix(runtime): harden trust and lifecycle boundaries (a0485435)
+- fix(workpaper): harden public onboarding proof (7946e4ac)
+- fix(repo): harden runtime and clean stale debt (3f740671)
+- fix(discovery): preserve client identifiers after package consolidation (e7a51a36)
+- fix(n8n): lock reproducible community node dependencies (3fcad560)
+
+## Internal runtime changes
+- refactor(core): split structural hotspot helpers (aa2d0752)
+- refactor(engine): split cache and cli helpers (dd0cf3d8)
+- chore(ci): purge proof-garbage scorecards (b495f4ba)
+- chore(ci): remove stale proof garbage (a4a55dc7)
+- chore(ci): demote proof-garbage research lanes (93e16fcf)
+- chore(ci): remove proof-garbage lanes (711cf4ab)
+- chore(ci): remove stale proof surfaces (fcdc0f64)
+- chore(repo): remove stale proof garbage (37f9db9e)
+- chore(repo): burn down cleanup debt (29f76efc)
+- chore(repo): eliminate unowned cleanup debris (f9ce2049)
+- refactor(repo): remove orphan tooling and unused renderer (4c39dc1d)
+
 ## 0.164.11
 
 - Release type: patch

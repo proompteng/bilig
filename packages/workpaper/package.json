@@ -1,6 +1,6 @@
 {
   "name": "@bilig/workpaper",
-  "version": "0.164.11",
+  "version": "1.0.0",
   "description": "Run workbook-shaped business rules in Node services: edit inputs, recalculate formulas, read outputs, and save WorkPaper JSON.",
   "keywords": [
     "bilig",

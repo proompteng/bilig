@@ -31,7 +31,7 @@ release passes a fresh consumer smoke.
 ## Current evaluator transcript
 
 This transcript was captured on June 25, 2026 against
-`@bilig/workpaper@0.164.11`. It is the shortest current proof for service-owned
+`@bilig/workpaper@1.0.0`. It is the shortest current proof for service-owned
 WorkPaper state:
 
 ```json
@@ -40,7 +40,7 @@ WorkPaper state:
   "door": "workpaper-service",
   "doorName": "WorkPaper service proof",
   "packageVersions": {
-    "@bilig/workpaper": "0.164.11"
+    "@bilig/workpaper": "1.0.0"
   },
   "evidence": {
     "editedCell": "Inputs!B2",

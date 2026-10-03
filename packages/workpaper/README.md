@@ -45,7 +45,7 @@ The useful output is not a write-call status. It is readback proof:
   "door": "workpaper-service",
   "verified": true,
   "packageVersions": {
-    "@bilig/workpaper": "0.164.11"
+    "@bilig/workpaper": "1.0.0"
   },
   "evidence": {
     "editedCell": "Inputs!B2",
@@ -309,9 +309,9 @@ Full docs: <https://proompteng.github.io/bilig/>
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/workpaper@0.164.11`:
+Current checked npm footprint for `@bilig/workpaper@1.0.0`:
 
-- Pack dry run: `881 kB` tarball, `5.36 MB` unpacked, `862` package entries.
+- Pack dry run: `882 kB` tarball, `5.36 MB` unpacked, `862` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/workpaper/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the
