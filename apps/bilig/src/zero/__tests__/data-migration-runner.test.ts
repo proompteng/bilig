@@ -191,15 +191,7 @@ describe('data migration runner', () => {
     )
   })
 
-  it('tracks workbook event client mutation uniqueness as a required migration', () => {
-    expect(zeroDataMigrations.map((migration) => [migration.name, migration.classification])).toContainEqual([
-      'workbook-event-client-mutation-id-uniqueness',
-      'required',
-    ])
-  })
-
-  it('enforces sheet id invariants immediately after repairing sheet ids', () => {
-    expect(zeroDataMigrations.map((migration) => migration.name).slice(0, 2)).toEqual(['sheet-id-repair', 'sheet-id-invariant-enforcement'])
-    expect(zeroDataMigrations.find((migration) => migration.name === 'sheet-id-invariant-enforcement')?.classification).toBe('required')
+  it('has no historical data migrations after the current schema baseline', () => {
+    expect(zeroDataMigrations).toEqual([])
   })
 })

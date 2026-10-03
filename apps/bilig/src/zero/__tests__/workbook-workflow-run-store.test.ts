@@ -279,31 +279,6 @@ function createZeroWorkflowMutationProofRow(run: ReturnType<typeof createWorkflo
 }
 
 describe('workbook-workflow-run-store', () => {
-  it('migrates legacy workflow run rows with artifact snapshot columns', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookWorkflowRunSchema(queryable)
-
-    const stepsColumnIndex = queryable.calls.findIndex((call) => call.text.includes('ADD COLUMN IF NOT EXISTS steps_json'))
-    const artifactColumnIndex = queryable.calls.findIndex((call) => call.text.includes('ADD COLUMN IF NOT EXISTS artifact_json'))
-    expect(stepsColumnIndex).toBeGreaterThan(-1)
-    expect(artifactColumnIndex).toBeGreaterThan(stepsColumnIndex)
-  })
-
-  it('adds nullable workflow completion and artifact columns for legacy run rows', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookWorkflowRunSchema(queryable)
-
-    for (const column of ['completed_at_unix_ms', 'error_message', 'artifact_json']) {
-      expect(
-        queryable.calls.some(
-          (call) => call.text.includes('ALTER TABLE workbook_workflow_run') && call.text.includes(`ADD COLUMN IF NOT EXISTS ${column}`),
-        ),
-      ).toBe(true)
-    }
-  })
-
   it('does not create workflow mutation proof columns outside the Zero replication contract', async () => {
     const queryable = new FakeQueryable()
 
@@ -317,64 +292,6 @@ describe('workbook-workflow-run-store', () => {
       ).toBe(false)
     }
     expect(queryable.calls.some((call) => call.text.includes('CREATE TABLE IF NOT EXISTS workbook_workflow_mutation_proof'))).toBe(true)
-  })
-
-  it('backfills and enforces workflow run step snapshots on legacy schemas', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookWorkflowRunSchema(queryable)
-
-    const stepsBackfillIndex = queryable.calls.findIndex(
-      (call) => call.text.includes('UPDATE workbook_workflow_run') && call.text.includes("SET steps_json = '[]'::jsonb"),
-    )
-    const stepsNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN steps_json SET NOT NULL'))
-    expect(stepsBackfillIndex).toBeGreaterThan(-1)
-    expect(stepsNotNullIndex).toBeGreaterThan(stepsBackfillIndex)
-  })
-
-  it('backfills legacy durable artifact ownership before indexing workflow artifacts', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookWorkflowRunSchema(queryable)
-
-    const workbookColumnIndex = queryable.calls.findIndex(
-      (call) => call.text.includes('ALTER TABLE workbook_workflow_artifact') && call.text.includes('ADD COLUMN IF NOT EXISTS workbook_id'),
-    )
-    const backfillIndex = queryable.calls.findIndex(
-      (call) =>
-        call.text.includes('UPDATE workbook_workflow_artifact AS artifact') && call.text.includes('FROM workbook_workflow_run AS run'),
-    )
-    const updatedAtColumnIndex = queryable.calls.findIndex(
-      (call) =>
-        call.text.includes('ALTER TABLE workbook_workflow_artifact') && call.text.includes('ADD COLUMN IF NOT EXISTS updated_at_unix_ms'),
-    )
-    const artifactIndex = queryable.calls.findIndex((call) => call.text.includes('workbook_workflow_artifact_run_idx'))
-    expect(workbookColumnIndex).toBeGreaterThan(-1)
-    expect(backfillIndex).toBeGreaterThan(workbookColumnIndex)
-    expect(updatedAtColumnIndex).toBeGreaterThan(backfillIndex)
-    expect(artifactIndex).toBeGreaterThan(updatedAtColumnIndex)
-  })
-
-  it('enforces durable artifact ownership and timestamps before indexing workflow artifacts', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookWorkflowRunSchema(queryable)
-
-    const ownershipBackfillIndex = queryable.calls.findIndex(
-      (call) =>
-        call.text.includes('UPDATE workbook_workflow_artifact AS artifact') && call.text.includes('SET workbook_id = run.workbook_id'),
-    )
-    const ownershipNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN workbook_id SET NOT NULL'))
-    const timestampBackfillIndex = queryable.calls.findIndex(
-      (call) => call.text.includes('UPDATE workbook_workflow_artifact') && call.text.includes('SET updated_at_unix_ms = 0'),
-    )
-    const timestampNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN updated_at_unix_ms SET NOT NULL'))
-    const artifactIndex = queryable.calls.findIndex((call) => call.text.includes('workbook_workflow_artifact_run_idx'))
-    expect(ownershipBackfillIndex).toBeGreaterThan(-1)
-    expect(ownershipNotNullIndex).toBeGreaterThan(ownershipBackfillIndex)
-    expect(timestampBackfillIndex).toBeGreaterThan(-1)
-    expect(timestampNotNullIndex).toBeGreaterThan(timestampBackfillIndex)
-    expect(artifactIndex).toBeGreaterThan(timestampNotNullIndex)
   })
 
   it('persists workflow artifacts in durable rows', async () => {
@@ -437,33 +354,6 @@ describe('workbook-workflow-run-store', () => {
     const deleteQuery = queryable.calls.find((call) => call.text.includes('DELETE FROM workbook_workflow_mutation_proof'))
     expect(deleteQuery?.text).toContain('WHERE run_id = $1')
     expect(deleteQuery?.values).toEqual(['workflow-1'])
-  })
-
-  it('backfills durable child rows from legacy workflow snapshots before removing their authority', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookWorkflowRunSchema(queryable)
-
-    const stepTableIndex = queryable.calls.findIndex((call) => call.text.includes('CREATE TABLE IF NOT EXISTS workbook_workflow_step'))
-    const artifactTableIndex = queryable.calls.findIndex((call) =>
-      call.text.includes('CREATE TABLE IF NOT EXISTS workbook_workflow_artifact'),
-    )
-    const stepBackfillIndex = queryable.calls.findIndex(
-      (call) =>
-        call.text.includes('jsonb_array_elements') &&
-        call.text.includes('run.steps_json') &&
-        call.text.includes('INSERT INTO workbook_workflow_step'),
-    )
-    const artifactBackfillIndex = queryable.calls.findIndex(
-      (call) =>
-        call.text.includes('INSERT INTO workbook_workflow_artifact') &&
-        call.text.includes("run.artifact_json->>'title'") &&
-        call.text.includes("run.artifact_json->>'text'"),
-    )
-    expect(stepTableIndex).toBeGreaterThan(-1)
-    expect(artifactTableIndex).toBeGreaterThan(stepTableIndex)
-    expect(stepBackfillIndex).toBeGreaterThan(artifactTableIndex)
-    expect(artifactBackfillIndex).toBeGreaterThan(stepBackfillIndex)
   })
 
   it('replaces durable workflow steps by global run id before inserting the latest snapshot', async () => {
@@ -842,32 +732,6 @@ describe('workbook-workflow-run-store', () => {
     ).resolves.toEqual([])
   })
 
-  it('drops workflow runs when durable step rows are malformed instead of falling back to legacy step json', async () => {
-    const run = createWorkflowRun()
-    const queryable = createWorkflowRunStoreConnection([createZeroWorkflowRunRow(run)], [], {
-      stepRows: [
-        {
-          workbookId: 'doc-1',
-          runId: run.runId,
-          stepId: 'bad-step',
-          stepOrder: -1,
-          label: 'Bad step',
-          status: 'completed',
-          summary: 'Should invalidate the run.',
-          updatedAtUnixMs: 120,
-        },
-      ],
-    })
-
-    await expect(
-      listWorkbookThreadWorkflowRuns(queryable, {
-        documentId: 'doc-1',
-        actorUserId: 'alex@example.com',
-        threadId: 'thr-1',
-      }),
-    ).resolves.toEqual([])
-  })
-
   it('drops workflow runs missing durable step rows once the reload batch has durable step coverage', async () => {
     const firstRun = createWorkflowRun()
     const secondRun = {
@@ -931,30 +795,6 @@ describe('workbook-workflow-run-store', () => {
         title: 'Valid Durable Workflow',
       }),
     ])
-  })
-
-  it('drops workflow runs when durable artifact rows are malformed instead of falling back to legacy artifact json', async () => {
-    const run = createWorkflowRun()
-    const queryable = createWorkflowRunStoreConnection([createZeroWorkflowRunRow(run)], [], {
-      artifactRows: [
-        {
-          runId: run.runId,
-          workbookId: 'doc-1',
-          kind: 'markdown',
-          title: null,
-          text: run.artifact?.text,
-          updatedAtUnixMs: run.updatedAtUnixMs,
-        },
-      ],
-    })
-
-    await expect(
-      listWorkbookThreadWorkflowRuns(queryable, {
-        documentId: 'doc-1',
-        actorUserId: 'alex@example.com',
-        threadId: 'thr-1',
-      }),
-    ).resolves.toEqual([])
   })
 
   it('loads workflow runs without durable artifact rows as artifact-free runs', async () => {

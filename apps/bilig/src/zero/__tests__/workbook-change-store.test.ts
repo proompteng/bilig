@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { QueryResultRow, Queryable } from '../store.js'
 import {
   appendWorkbookChange,
-  backfillWorkbookChanges,
   buildWorkbookChangeDescriptor,
-  ensureWorkbookChangeSchema,
   listWorkbookChanges,
   listWorkbookChangesAfterRevision,
   loadLatestRedoableWorkbookChange,
@@ -231,27 +229,6 @@ class FakeTransactionalQueryable implements Queryable {
   }
 }
 
-class ConcurrentHistoryQueryable extends FakeQueryable {
-  maxActiveInserts = 0
-  private activeInserts = 0
-
-  override async query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]): Promise<{ rows: T[] }> {
-    const isWorkbookChangeInsert = text.includes('INSERT INTO workbook_change')
-    if (isWorkbookChangeInsert) {
-      this.activeInserts += 1
-      this.maxActiveInserts = Math.max(this.maxActiveInserts, this.activeInserts)
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
-    try {
-      return await super.query<T>(text, values)
-    } finally {
-      if (isWorkbookChangeInsert) {
-        this.activeInserts -= 1
-      }
-    }
-  }
-}
-
 function latestQuery(queryable: FakeQueryable): RecordedQuery {
   const query = queryable.calls.at(-1)
   if (!query) {
@@ -261,18 +238,6 @@ function latestQuery(queryable: FakeQueryable): RecordedQuery {
 }
 
 describe('workbook-change-store persistence and history queries', () => {
-  it('adds the client mutation id column for legacy history tables', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookChangeSchema(queryable)
-
-    expect(
-      queryable.calls.some(
-        (call) => call.text.includes('ALTER TABLE workbook_change') && call.text.includes('ADD COLUMN IF NOT EXISTS client_mutation_id'),
-      ),
-    ).toBe(true)
-  })
-
   it('summarizes renderCommit cell bundles as authoritative range changes', () => {
     expect(
       buildWorkbookChangeDescriptor({
@@ -880,139 +845,6 @@ describe('workbook-change-store persistence and history queries', () => {
       { kind: 'history', documentId: 'doc-1' },
     ])
     expect(queryable.calls.some((call) => call.text.includes('FROM workbook_change'))).toBe(false)
-  })
-
-  it('backfills missing workbook_change rows from authoritative workbook events', async () => {
-    const queryable = new FakeQueryable([
-      (text) =>
-        text.includes('FROM workbook_event AS event')
-          ? [
-              {
-                workbookId: 'doc-1',
-                revision: 9,
-                actorUserId: 'sam@example.com',
-                clientMutationId: 'mutation-9',
-                payload: {
-                  kind: 'setCellFormula',
-                  sheetName: 'Sheet1',
-                  address: 'D5',
-                  formula: '=SUM(A1:A4)',
-                },
-                createdAtUnixMs: 987_654,
-              } satisfies QueryResultRow,
-            ]
-          : null,
-      (text) => (text.includes('FROM sheets') ? [{ sheetId: 11, sheetName: 'Sheet1' } satisfies QueryResultRow] : null),
-    ])
-
-    await backfillWorkbookChanges(queryable)
-
-    const insertQuery = queryable.calls.find((call) => call.text.includes('INSERT INTO workbook_change'))
-    expect(insertQuery?.values).toEqual([
-      'doc-1',
-      9,
-      'sam@example.com',
-      'mutation-9',
-      'setCellFormula',
-      'Set formula in Sheet1!D5',
-      11,
-      'Sheet1',
-      'D5',
-      JSON.stringify({
-        sheetName: 'Sheet1',
-        startAddress: 'D5',
-        endAddress: 'D5',
-      }),
-      null,
-      null,
-      null,
-      987_654,
-    ])
-  })
-
-  it('backfills workbook_change rows sequentially so revert markers land after target rows', async () => {
-    const queryable = new ConcurrentHistoryQueryable([
-      (text) =>
-        text.includes('FROM workbook_event AS event')
-          ? [
-              {
-                workbookId: 'doc-1',
-                revision: 7,
-                actorUserId: 'sam@example.com',
-                clientMutationId: 'mutation-7',
-                payload: {
-                  kind: 'setCellValue',
-                  sheetName: 'Sheet1',
-                  address: 'B1',
-                  value: 1,
-                },
-                createdAtUnixMs: 987_000,
-              } satisfies QueryResultRow,
-              {
-                workbookId: 'doc-1',
-                revision: 8,
-                actorUserId: 'sam@example.com',
-                clientMutationId: 'mutation-8',
-                payload: {
-                  kind: 'revertChange',
-                  targetRevision: 7,
-                  targetSummary: 'Updated Sheet1!B1',
-                  sheetName: 'Sheet1',
-                  address: 'B1',
-                  range: {
-                    sheetName: 'Sheet1',
-                    startAddress: 'B1',
-                    endAddress: 'B1',
-                  },
-                  appliedBundle: {
-                    kind: 'engineOps',
-                    ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'B1' }],
-                  },
-                },
-                createdAtUnixMs: 987_100,
-              } satisfies QueryResultRow,
-            ]
-          : null,
-      (text) => (text.includes('FROM sheets') ? [{ sheetId: 11, sheetName: 'Sheet1' } satisfies QueryResultRow] : null),
-    ])
-
-    await backfillWorkbookChanges(queryable)
-
-    const insertIndexes = queryable.calls
-      .map((call, index) => ({ call, index }))
-      .filter(({ call }) => call.text.includes('INSERT INTO workbook_change'))
-    const markerIndex = queryable.calls.findIndex((call) => call.text.includes('UPDATE workbook_change') && call.values?.[1] === 7)
-    expect(queryable.maxActiveInserts).toBe(1)
-    expect(insertIndexes.map(({ call }) => call.values?.[1])).toEqual([7, 8])
-    expect(markerIndex).toBeGreaterThan(insertIndexes[1]?.index ?? -1)
-    expect(queryable.calls[markerIndex]?.values).toEqual(['doc-1', 7, 8])
-  })
-
-  it('skips invalid authoritative event revisions during workbook_change backfill', async () => {
-    const queryable = new FakeQueryable([
-      (text) =>
-        text.includes('FROM workbook_event AS event')
-          ? [
-              {
-                workbookId: 'doc-1',
-                revision: -1,
-                actorUserId: 'sam@example.com',
-                clientMutationId: 'mutation-negative',
-                payload: {
-                  kind: 'setCellFormula',
-                  sheetName: 'Sheet1',
-                  address: 'D5',
-                  formula: '=SUM(A1:A4)',
-                },
-                createdAtUnixMs: 987_654,
-              } satisfies QueryResultRow,
-            ]
-          : null,
-    ])
-
-    await backfillWorkbookChanges(queryable)
-
-    expect(queryable.calls.some((call) => call.text.includes('INSERT INTO workbook_change'))).toBe(false)
   })
 
   it('summarizes restoreVersion events as named workbook restores', () => {

@@ -346,43 +346,6 @@ function createZeroReviewQueueRows(state: ReturnType<typeof createThreadState>):
 }
 
 describe('workbook-chat-thread-store', () => {
-  it('backfills shared thread visibility columns before deriving execution policy', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookChatThreadSchema(queryable)
-
-    const scopeColumnIndex = queryable.calls.findIndex(
-      (call) => call.text.includes('ALTER TABLE workbook_chat_thread') && call.text.includes('ADD COLUMN IF NOT EXISTS scope'),
-    )
-    const scopeNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN scope SET NOT NULL'))
-    const updatedAtColumnIndex = queryable.calls.findIndex(
-      (call) => call.text.includes('ALTER TABLE workbook_chat_thread') && call.text.includes('ADD COLUMN IF NOT EXISTS updated_at_unix_ms'),
-    )
-    const updatedAtNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN updated_at_unix_ms SET NOT NULL'))
-    const executionPolicyBackfillIndex = queryable.calls.findIndex((call) => call.text.includes('SET execution_policy = CASE WHEN scope ='))
-    expect(scopeColumnIndex).toBeGreaterThan(-1)
-    expect(scopeNotNullIndex).toBeGreaterThan(scopeColumnIndex)
-    expect(updatedAtColumnIndex).toBeGreaterThan(-1)
-    expect(updatedAtNotNullIndex).toBeGreaterThan(updatedAtColumnIndex)
-    expect(executionPolicyBackfillIndex).toBeGreaterThan(scopeNotNullIndex)
-  })
-
-  it('creates the review-queue schema without legacy pending-bundle compatibility paths', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookChatThreadSchema(queryable)
-
-    expect(queryable.calls.some((call) => call.text.includes('CREATE TABLE IF NOT EXISTS workbook_review_queue_item'))).toBe(true)
-    expect(
-      queryable.calls.some(
-        (call) =>
-          call.text.includes('information_schema.tables') ||
-          call.text.includes('DROP TABLE') ||
-          call.text.includes('DROP COLUMN IF EXISTS'),
-      ),
-    ).toBe(false)
-  })
-
   it('reconciles denormalized thread summaries from durable child tables during schema bootstrap', async () => {
     const queryable = new FakeQueryable()
 
@@ -414,29 +377,6 @@ describe('workbook-chat-thread-store', () => {
     expect(reconcileQuery).toContain('IS DISTINCT FROM thread_stats.entry_count')
     expect(reconcileQuery).toContain('IS DISTINCT FROM thread_stats.review_queue_item_count')
     expect(reconcileQuery).toContain('IS DISTINCT FROM thread_stats.latest_entry_text')
-  })
-
-  it('backfills and enforces thread summary counters on legacy schemas', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookChatThreadSchema(queryable)
-
-    const entryCountBackfillIndex = queryable.calls.findIndex(
-      (call) => call.text.includes('UPDATE workbook_chat_thread AS thread') && call.text.includes('entry_count = thread_stats.entry_count'),
-    )
-    const entryCountNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN entry_count SET NOT NULL'))
-    const reviewCountBackfillIndex = queryable.calls.findIndex(
-      (call) =>
-        call.text.includes('UPDATE workbook_chat_thread AS thread') &&
-        call.text.includes('review_queue_item_count = thread_stats.review_queue_item_count'),
-    )
-    const reviewCountNotNullIndex = queryable.calls.findIndex((call) =>
-      call.text.includes('ALTER COLUMN review_queue_item_count SET NOT NULL'),
-    )
-    expect(entryCountBackfillIndex).toBeGreaterThan(-1)
-    expect(entryCountNotNullIndex).toBeGreaterThan(entryCountBackfillIndex)
-    expect(reviewCountBackfillIndex).toBeGreaterThan(-1)
-    expect(reviewCountNotNullIndex).toBeGreaterThan(reviewCountBackfillIndex)
   })
 
   it('persists thread metadata, timeline items, and review queue rows', async () => {

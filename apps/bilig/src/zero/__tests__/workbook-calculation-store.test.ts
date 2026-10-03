@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ValueTag, type CellValue } from '@bilig/protocol'
-import { backfillWorkbookSnapshotsFromInlineState, persistCellEvalDiff, persistCellEvalIncremental } from '../workbook-calculation-store.js'
+import { persistCellEvalDiff, persistCellEvalIncremental } from '../workbook-calculation-store.js'
 import type { CellEvalRow } from '../projection.js'
 import type { QueryResultRow, Queryable } from '../store.js'
 
@@ -71,15 +71,6 @@ describe('workbook calculation store', () => {
     await expect(persistCellEvalDiff(db, 'book-1', [])).rejects.toThrow('Invalid cell_eval projection row for workbook book-1')
 
     expect(query).toHaveBeenCalledTimes(1)
-  })
-
-  it('backfills json-v1 workbook snapshots from inline state', async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [] })
-    const db: Queryable = { query }
-
-    await backfillWorkbookSnapshotsFromInlineState(db)
-
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO workbook_snapshot'), ['json-v1'])
   })
 
   it('serializes full cell_eval diff writes so rendered values do not leave in-flight transaction batches', async () => {

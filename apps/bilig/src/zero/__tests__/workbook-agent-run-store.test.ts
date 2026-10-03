@@ -173,38 +173,16 @@ function createZeroAgentRunRow(
 }
 
 describe('workbook-agent-run-store', () => {
-  it('backfills legacy nullable bundle ids before enforcing the execution schema', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookAgentRunSchema(queryable)
-
-    const backfillIndex = queryable.calls.findIndex((call) => call.text.includes('SET bundle_id = id'))
-    const notNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN bundle_id SET NOT NULL'))
-    expect(backfillIndex).toBeGreaterThan(-1)
-    expect(notNullIndex).toBeGreaterThan(backfillIndex)
-  })
-
-  it('backfills legacy acceptance metadata before enforcing execution schema defaults', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookAgentRunSchema(queryable)
-
-    const acceptedScopeBackfillIndex = queryable.calls.findIndex((call) => call.text.includes("SET accepted_scope = 'full'"))
-    const acceptedScopeNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN accepted_scope SET NOT NULL'))
-    const appliedByBackfillIndex = queryable.calls.findIndex((call) => call.text.includes("SET applied_by = 'user'"))
-    const appliedByNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN applied_by SET NOT NULL'))
-    expect(acceptedScopeBackfillIndex).toBeGreaterThan(-1)
-    expect(acceptedScopeNotNullIndex).toBeGreaterThan(acceptedScopeBackfillIndex)
-    expect(appliedByBackfillIndex).toBeGreaterThan(-1)
-    expect(appliedByNotNullIndex).toBeGreaterThan(appliedByBackfillIndex)
-  })
-
   it('adds optional command result proof storage to execution rows', async () => {
     const queryable = new FakeQueryable()
 
     await ensureWorkbookAgentRunSchema(queryable)
 
-    expect(queryable.calls.some((call) => call.text.includes('ADD COLUMN IF NOT EXISTS command_result_json JSONB'))).toBe(true)
+    expect(
+      queryable.calls.some(
+        (call) => call.text.includes('CREATE TABLE IF NOT EXISTS workbook_agent_run') && call.text.includes('command_result_json JSONB'),
+      ),
+    ).toBe(true)
   })
 
   it('persists partial accepted scope in execution rows', async () => {

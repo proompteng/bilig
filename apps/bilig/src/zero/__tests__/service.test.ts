@@ -140,7 +140,7 @@ vi.mock('../workbook-mutation-store.js', () => ({
   }),
 }))
 
-vi.mock('../workbook-migration-store.js', () => ({
+vi.mock('../workbook-document-initialization.js', () => ({
   ensureWorkbookDocumentExists: deps.ensureWorkbookDocumentExists,
 }))
 

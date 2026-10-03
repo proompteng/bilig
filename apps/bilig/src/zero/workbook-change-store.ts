@@ -1,5 +1,4 @@
 import {
-  isWorkbookEventPayload,
   normalizeWorkbookChangeRowModel,
   queries,
   type WorkbookChangeUndoBundle,
@@ -9,11 +8,9 @@ import {
 import type { Row } from '@rocicorp/zero'
 import { buildWorkbookChangeDescriptor, type WorkbookChangeDescriptor } from './workbook-change-descriptor.js'
 import type { QueryResultRow, Queryable, ZeroQueryRunner } from './store.js'
-import { parseNonNegativeInteger, parsePositiveInteger } from './store-support.js'
 import { resolveWorkbookSheetRef } from './workbook-sheet-ref.js'
 import { selectLatestRedoableWorkbookChangeRevision, selectLatestUndoableWorkbookChangeRevision } from './workbook-history-selector.js'
-import { runQueryableTransaction, runSequentially } from './transaction-support.js'
-import { addColumnIfMissing } from './schema-upgrade.js'
+import { runQueryableTransaction } from './transaction-support.js'
 import { ensureZeroSchemaTable } from './zero-schema-ddl.js'
 
 export type { WorkbookChangeRange } from '@bilig/zero-sync'
@@ -55,15 +52,6 @@ export interface WorkbookChangeRecord {
   readonly revertedByRevision: number | null
   readonly revertsRevision: number | null
   readonly createdAtUnixMs: number
-}
-
-interface WorkbookEventBackfillRow extends QueryResultRow {
-  readonly workbookId?: unknown
-  readonly revision?: unknown
-  readonly actorUserId?: unknown
-  readonly clientMutationId?: unknown
-  readonly payload?: unknown
-  readonly createdAtUnixMs?: unknown
 }
 
 interface WorkbookChangeSelectRow extends QueryResultRow {
@@ -245,14 +233,6 @@ export async function ensureWorkbookChangeSchema(db: Queryable): Promise<void> {
       sheetId: { dataType: 'INTEGER' },
     },
   })
-  await addColumnIfMissing(db, { tableName: 'workbook_change', columnName: 'client_mutation_id', dataType: 'TEXT' })
-  await addColumnIfMissing(db, { tableName: 'workbook_change', columnName: 'sheet_id', dataType: 'INTEGER' })
-  await addColumnIfMissing(db, { tableName: 'workbook_change', columnName: 'sheet_name', dataType: 'TEXT' })
-  await addColumnIfMissing(db, { tableName: 'workbook_change', columnName: 'anchor_address', dataType: 'TEXT' })
-  await addColumnIfMissing(db, { tableName: 'workbook_change', columnName: 'range_json', dataType: 'JSONB' })
-  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS undo_bundle_json JSONB;`)
-  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS reverted_by_revision BIGINT;`)
-  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS reverts_revision BIGINT;`)
   await db.query(
     `CREATE INDEX IF NOT EXISTS workbook_change_workbook_created_idx ON workbook_change(workbook_id, created_at DESC, revision DESC);`,
   )
@@ -369,57 +349,5 @@ export async function listWorkbookChanges(
   return rows.flatMap((row) => {
     const record = normalizeWorkbookChangeRecord(toWorkbookChangeSelectRow(row))
     return record ? [record] : []
-  })
-}
-
-export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
-  const result = await db.query<WorkbookEventBackfillRow>(
-    `
-      SELECT event.workbook_id AS "workbookId",
-             event.revision AS "revision",
-             event.actor_user_id AS "actorUserId",
-             event.client_mutation_id AS "clientMutationId",
-             event.txn_json AS "payload",
-             CASE
-               WHEN event.created_at IS NULL THEN 0
-               ELSE FLOOR(EXTRACT(EPOCH FROM event.created_at) * 1000)
-             END AS "createdAtUnixMs"
-        FROM workbook_event AS event
-        LEFT JOIN workbook_change AS change
-          ON change.workbook_id = event.workbook_id
-         AND change.revision = event.revision
-       WHERE change.workbook_id IS NULL
-       ORDER BY event.workbook_id ASC, event.revision ASC
-    `,
-  )
-
-  const inputs = result.rows.flatMap((row) => {
-    const revision = parsePositiveInteger(row.revision)
-    const createdAtUnixMs = parseNonNegativeInteger(row.createdAtUnixMs)
-    if (
-      typeof row.workbookId !== 'string' ||
-      typeof row.actorUserId !== 'string' ||
-      revision === null ||
-      createdAtUnixMs === null ||
-      !isWorkbookEventPayload(row.payload)
-    ) {
-      return []
-    }
-    return [
-      {
-        documentId: row.workbookId,
-        revision,
-        actorUserId: row.actorUserId,
-        clientMutationId: typeof row.clientMutationId === 'string' ? row.clientMutationId : null,
-        payload: row.payload,
-        undoBundle: null,
-        createdAtUnixMs,
-      } satisfies AppendWorkbookChangeInput,
-    ]
-  })
-  await runQueryableTransaction(db, async (transactionDb) => {
-    await runSequentially(inputs, async (input) => {
-      await appendWorkbookChange(transactionDb, input)
-    })
   })
 }

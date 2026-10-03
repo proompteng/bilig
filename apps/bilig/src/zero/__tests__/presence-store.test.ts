@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { WorkbookRuntimeManager } from '../../workbook-runtime/runtime-manager.js'
 import { handleServerMutator } from '../server-mutators.js'
-import {
-  ensureWorkbookPresenceSchema,
-  resolveWorkbookPresenceSheetRef,
-  upsertWorkbookPresence,
-  type UpsertWorkbookPresenceInput,
-} from '../presence-store.js'
+import { resolveWorkbookPresenceSheetRef, upsertWorkbookPresence, type UpsertWorkbookPresenceInput } from '../presence-store.js'
 import type { QueryResultRow, Queryable } from '../store.js'
 
 interface RecordedQuery {
@@ -44,20 +39,6 @@ function latestQuery(queryable: FakeQueryable): RecordedQuery {
 }
 
 describe('presence-store', () => {
-  it('adds every nullable shared Zero presence column for legacy tables', async () => {
-    const queryable = new FakeQueryable()
-
-    await ensureWorkbookPresenceSchema(queryable)
-
-    for (const column of ['presence_client_id', 'sheet_id', 'sheet_name', 'address', 'selection_json']) {
-      expect(
-        queryable.calls.some(
-          (call) => call.text.includes('ALTER TABLE presence_coarse') && call.text.includes(`ADD COLUMN IF NOT EXISTS ${column}`),
-        ),
-      ).toBe(true)
-    }
-  })
-
   it('resolves a workbook presence sheet ref by name', async () => {
     const queryable = new FakeQueryable([
       (text) => (text.includes('FROM sheets') ? [{ sheetId: 7, sheetName: 'Revenue' } satisfies QueryResultRow] : null),

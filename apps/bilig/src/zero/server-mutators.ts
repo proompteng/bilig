@@ -27,7 +27,7 @@ import {
 } from '@bilig/zero-sync'
 import type { SessionIdentity } from '../http/session.js'
 import type { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
-import { ensureWorkbookDocumentExists } from './workbook-migration-store.js'
+import { ensureWorkbookDocumentExists } from './workbook-document-initialization.js'
 import { upsertWorkbookPresence } from './presence-store.js'
 import { normalizeNumberFormatInput, normalizeStylePatch } from './server-mutator-format-payloads.js'
 import {

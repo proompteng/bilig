@@ -1,15 +1,4 @@
 import type { QueryResultRow, Queryable } from './store.js'
-import { backfillWorkbookSnapshotsFromInlineState } from './workbook-calculation-store.js'
-import { backfillWorkbookChanges } from './workbook-change-store.js'
-import {
-  backfillCellEvalStyleJson,
-  backfillWorkbookSourceProjectionVersion,
-  dropLegacyZeroSyncSchemaObjects,
-  enforceWorkbookSheetIdInvariant,
-  enforceWorkbookEventClientMutationIdUniqueness,
-  repairWorkbookSheetIdsForMigration,
-} from './workbook-migration-store.js'
-
 export type ZeroDataMigrationClassification = 'required' | 'cleanup'
 
 export interface ZeroDataMigrationDefinition {
@@ -42,48 +31,7 @@ interface ZeroDataMigrationLedgerRow extends QueryResultRow {
 
 const DATA_MIGRATION_LOCK_KEY = 'bilig-zero-data-migrations'
 
-export const zeroDataMigrations = [
-  {
-    name: 'sheet-id-repair',
-    classification: 'required',
-    run: repairWorkbookSheetIdsForMigration,
-  },
-  {
-    name: 'sheet-id-invariant-enforcement',
-    classification: 'required',
-    run: enforceWorkbookSheetIdInvariant,
-  },
-  {
-    name: 'workbook-source-projection-v2-backfill',
-    classification: 'required',
-    run: backfillWorkbookSourceProjectionVersion,
-  },
-  {
-    name: 'cell-eval-style-json-backfill',
-    classification: 'required',
-    run: backfillCellEvalStyleJson,
-  },
-  {
-    name: 'workbook-change-backfill',
-    classification: 'required',
-    run: backfillWorkbookChanges,
-  },
-  {
-    name: 'workbook-event-client-mutation-id-uniqueness',
-    classification: 'required',
-    run: enforceWorkbookEventClientMutationIdUniqueness,
-  },
-  {
-    name: 'workbook-snapshot-json-v1-backfill',
-    classification: 'cleanup',
-    run: backfillWorkbookSnapshotsFromInlineState,
-  },
-  {
-    name: 'legacy-zero-style-format-table-retirement',
-    classification: 'cleanup',
-    run: dropLegacyZeroSyncSchemaObjects,
-  },
-] as const satisfies readonly ZeroDataMigrationDefinition[]
+export const zeroDataMigrations: readonly ZeroDataMigrationDefinition[] = []
 
 export class PendingZeroDataMigrationsError extends Error {
   readonly pendingRequired: readonly string[]

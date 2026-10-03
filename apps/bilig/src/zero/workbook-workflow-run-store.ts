@@ -1,7 +1,6 @@
 import type { WorkbookAgentWorkflowArtifact, WorkbookAgentWorkflowRun, WorkbookAgentWorkflowStep } from '@bilig/contracts'
 import { queries } from '@bilig/zero-sync'
 import type { Row } from '@rocicorp/zero'
-import { addColumnIfMissing, ensureDefaultedNotNullColumn } from './schema-upgrade.js'
 import type { QueryResultRow, Queryable, ZeroQueryRunner } from './store.js'
 import { parseNonNegativeInteger } from './store-support.js'
 import { runQueryableTransaction, runSequentially } from './transaction-support.js'
@@ -483,90 +482,6 @@ export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<vo
       mutation_receipt_json JSONB,
       updated_at_unix_ms BIGINT NOT NULL
     )
-  `)
-  await ensureDefaultedNotNullColumn(db, {
-    tableName: 'workbook_workflow_run',
-    columnName: 'steps_json',
-    dataType: 'JSONB',
-    defaultSql: "'[]'::jsonb",
-  })
-  await addColumnIfMissing(db, { tableName: 'workbook_workflow_run', columnName: 'completed_at_unix_ms', dataType: 'BIGINT' })
-  await addColumnIfMissing(db, { tableName: 'workbook_workflow_run', columnName: 'error_message', dataType: 'TEXT' })
-  await addColumnIfMissing(db, { tableName: 'workbook_workflow_run', columnName: 'artifact_json', dataType: 'JSONB' })
-  await db.query(`
-    ALTER TABLE workbook_workflow_artifact
-      ADD COLUMN IF NOT EXISTS workbook_id TEXT
-  `)
-  await db.query(`
-    UPDATE workbook_workflow_artifact AS artifact
-    SET workbook_id = run.workbook_id
-    FROM workbook_workflow_run AS run
-    WHERE artifact.run_id = run.run_id
-      AND (artifact.workbook_id IS NULL OR artifact.workbook_id = '')
-  `)
-  await db.query(`
-    ALTER TABLE workbook_workflow_artifact
-      ALTER COLUMN workbook_id SET NOT NULL
-  `)
-  await ensureDefaultedNotNullColumn(db, {
-    tableName: 'workbook_workflow_artifact',
-    columnName: 'updated_at_unix_ms',
-    dataType: 'BIGINT',
-    defaultSql: '0',
-  })
-  await db.query(`
-    INSERT INTO workbook_workflow_step (
-      workbook_id,
-      run_id,
-      step_id,
-      step_order,
-      label,
-      status,
-      summary,
-      updated_at_unix_ms
-    )
-    SELECT
-      run.workbook_id,
-      run.run_id,
-      step_item.step->>'stepId',
-      (step_item.ordinality - 1)::integer,
-      step_item.step->>'label',
-      step_item.step->>'status',
-      step_item.step->>'summary',
-      (step_item.step->>'updatedAtUnixMs')::bigint
-    FROM workbook_workflow_run AS run
-    CROSS JOIN LATERAL jsonb_array_elements(
-      CASE WHEN jsonb_typeof(run.steps_json) = 'array' THEN run.steps_json ELSE '[]'::jsonb END
-    ) WITH ORDINALITY AS step_item(step, ordinality)
-    WHERE jsonb_typeof(run.steps_json) = 'array'
-      AND step_item.step->>'stepId' IS NOT NULL
-      AND step_item.step->>'label' IS NOT NULL
-      AND step_item.step->>'status' IN ('pending', 'running', 'completed', 'failed', 'cancelled')
-      AND step_item.step->>'summary' IS NOT NULL
-      AND step_item.step->>'updatedAtUnixMs' ~ '^[0-9]+$'
-    ON CONFLICT (run_id, step_id) DO NOTHING
-  `)
-  await db.query(`
-    INSERT INTO workbook_workflow_artifact (
-      run_id,
-      workbook_id,
-      kind,
-      title,
-      text,
-      updated_at_unix_ms
-    )
-    SELECT
-      run.run_id,
-      run.workbook_id,
-      'markdown',
-      run.artifact_json->>'title',
-      run.artifact_json->>'text',
-      run.updated_at_unix_ms
-    FROM workbook_workflow_run AS run
-    WHERE run.artifact_json->>'kind' = 'markdown'
-      AND run.artifact_json->>'title' IS NOT NULL
-      AND run.artifact_json->>'text' IS NOT NULL
-    ON CONFLICT (run_id) DO NOTHING
   `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_workflow_run_thread_updated_idx

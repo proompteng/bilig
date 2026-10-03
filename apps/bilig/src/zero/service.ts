@@ -50,7 +50,7 @@ import { acquireWorkbookMutationLock, loadWorkbookRuntimeMetadata, loadWorkbookS
 import { ensureZeroPublication } from './publication-store.js'
 import { createWorkbookChangeStoreConnection, listWorkbookChanges, type WorkbookChangeRecord } from './workbook-change-store.js'
 import { ensureZeroServiceSchema } from './schema-bootstrap.js'
-import { ensureWorkbookDocumentExists } from './workbook-migration-store.js'
+import { ensureWorkbookDocumentExists } from './workbook-document-initialization.js'
 import {
   appendWorkbookAgentRun,
   createWorkbookAgentRunStoreConnection,

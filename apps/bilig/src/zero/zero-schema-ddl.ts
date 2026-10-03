@@ -21,6 +21,7 @@ interface ZeroColumnDdlOverride {
 }
 
 interface ZeroTableDdlOptions {
+  readonly extraColumnSql?: readonly string[]
   readonly columnOverrides?: Readonly<Record<string, ZeroColumnDdlOverride>>
 }
 
@@ -93,7 +94,7 @@ export function createZeroSchemaTableSql(tableName: string, options: ZeroTableDd
   const primaryKeyLine = `      PRIMARY KEY (${tableSchema.primaryKey.map((columnName) => quoteSqlIdentifier(serverColumnName(columnName, requireZeroColumn(tableName, columnName, tableSchema.columns)))).join(', ')})`
   return `
     CREATE TABLE IF NOT EXISTS ${quoteSqlIdentifier(tableName)} (
-${[...columnLines, primaryKeyLine].join(',\n')}
+${[...columnLines, ...(options.extraColumnSql ?? []).map((column) => `      ${column}`), primaryKeyLine].join(',\n')}
     )
   `
 }

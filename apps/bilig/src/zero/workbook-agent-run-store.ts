@@ -8,7 +8,6 @@ import {
 import { isWorkbookCommandResult, type WorkbookCommandResult } from '@bilig/workbook'
 import { queries } from '@bilig/zero-sync'
 import type { Row } from '@rocicorp/zero'
-import { addDefaultedColumnIfMissing, enforceDefaultedNotNullColumn } from './schema-upgrade.js'
 import type { QueryResultRow, Queryable, ZeroQueryRunner } from './store.js'
 import { parseNonNegativeInteger } from './store-support.js'
 import { ensureZeroSchemaTable } from './zero-schema-ddl.js'
@@ -178,53 +177,6 @@ export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void>
       appliedBy: { defaultSql: "'user'" },
     },
   })
-  await db.query(`ALTER TABLE workbook_agent_run ADD COLUMN IF NOT EXISTS bundle_id TEXT;`)
-  await db.query(`
-    UPDATE workbook_agent_run
-    SET bundle_id = id
-    WHERE bundle_id IS NULL OR bundle_id = '';
-  `)
-  await db.query(`
-    ALTER TABLE workbook_agent_run
-      ALTER COLUMN bundle_id SET NOT NULL;
-  `)
-  await addDefaultedColumnIfMissing(db, {
-    tableName: 'workbook_agent_run',
-    columnName: 'accepted_scope',
-    dataType: 'TEXT',
-    defaultSql: "'full'",
-  })
-  await db.query(`
-    UPDATE workbook_agent_run
-    SET accepted_scope = 'full'
-    WHERE accepted_scope IS NULL
-       OR accepted_scope NOT IN ('full', 'partial');
-  `)
-  await enforceDefaultedNotNullColumn(db, {
-    tableName: 'workbook_agent_run',
-    columnName: 'accepted_scope',
-    dataType: 'TEXT',
-    defaultSql: "'full'",
-  })
-  await addDefaultedColumnIfMissing(db, {
-    tableName: 'workbook_agent_run',
-    columnName: 'applied_by',
-    dataType: 'TEXT',
-    defaultSql: "'user'",
-  })
-  await db.query(`
-    UPDATE workbook_agent_run
-    SET applied_by = 'user'
-    WHERE applied_by IS NULL
-       OR applied_by NOT IN ('user', 'auto');
-  `)
-  await enforceDefaultedNotNullColumn(db, {
-    tableName: 'workbook_agent_run',
-    columnName: 'applied_by',
-    dataType: 'TEXT',
-    defaultSql: "'user'",
-  })
-  await db.query(`ALTER TABLE workbook_agent_run ADD COLUMN IF NOT EXISTS command_result_json JSONB;`)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_agent_run_workbook_actor_applied_idx
       ON workbook_agent_run (workbook_id, actor_user_id, applied_at_unix_ms DESC)

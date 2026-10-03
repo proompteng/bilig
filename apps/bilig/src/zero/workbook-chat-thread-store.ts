@@ -6,12 +6,6 @@ import type {
   WorkbookAgentUiContext,
 } from '@bilig/contracts'
 import { queries } from '@bilig/zero-sync'
-import {
-  addColumnIfMissing,
-  addDefaultedColumnIfMissing,
-  enforceDefaultedNotNullColumn,
-  ensureDefaultedNotNullColumn,
-} from './schema-upgrade.js'
 import type { Queryable, QueryResultRow, ZeroQueryRunner } from './store.js'
 import { runQueryableTransaction, runSequentially } from './transaction-support.js'
 import {
@@ -210,53 +204,6 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       reviewQueueItemCount: { defaultSql: '0' },
     },
   })
-  await ensureDefaultedNotNullColumn(db, {
-    tableName: 'workbook_chat_thread',
-    columnName: 'scope',
-    dataType: 'TEXT',
-    defaultSql: "'private'",
-  })
-  await addColumnIfMissing(db, {
-    tableName: 'workbook_chat_thread',
-    columnName: 'context_json',
-    dataType: 'JSONB',
-  })
-  await ensureDefaultedNotNullColumn(db, {
-    tableName: 'workbook_chat_thread',
-    columnName: 'updated_at_unix_ms',
-    dataType: 'BIGINT',
-    defaultSql: '0',
-  })
-  await db.query(`
-    ALTER TABLE workbook_chat_thread
-      ADD COLUMN IF NOT EXISTS execution_policy TEXT;
-  `)
-  await db.query(`
-    UPDATE workbook_chat_thread
-    SET execution_policy = CASE WHEN scope = 'shared' THEN 'ownerReview' ELSE 'autoApplyAll' END
-    WHERE execution_policy IS NULL;
-  `)
-  await db.query(`
-    ALTER TABLE workbook_chat_thread
-      ALTER COLUMN execution_policy SET DEFAULT 'autoApplyAll';
-  `)
-  await db.query(`
-    ALTER TABLE workbook_chat_thread
-      ALTER COLUMN execution_policy SET NOT NULL;
-  `)
-  await addDefaultedColumnIfMissing(db, {
-    tableName: 'workbook_chat_thread',
-    columnName: 'entry_count',
-    dataType: 'BIGINT',
-    defaultSql: '0',
-  })
-  await addDefaultedColumnIfMissing(db, {
-    tableName: 'workbook_chat_thread',
-    columnName: 'review_queue_item_count',
-    dataType: 'BIGINT',
-    defaultSql: '0',
-  })
-  await addColumnIfMissing(db, { tableName: 'workbook_chat_thread', columnName: 'latest_entry_text', dataType: 'TEXT' })
   await ensureZeroSchemaTable(db, 'workbook_chat_item', {
     columnOverrides: {
       sortOrder: { dataType: 'INTEGER' },
@@ -267,28 +214,12 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       sortOrder: { dataType: 'INTEGER' },
     },
   })
-  await db.query(`
-    ALTER TABLE workbook_chat_item
-      ADD COLUMN IF NOT EXISTS citations_json JSONB;
-  `)
   await ensureZeroSchemaTable(db, 'workbook_review_queue_item', {
     columnOverrides: {
       recommendations: { defaultSql: "'[]'::jsonb" },
     },
   })
   await reconcileWorkbookChatThreadSummaryColumns(db)
-  await enforceDefaultedNotNullColumn(db, {
-    tableName: 'workbook_chat_thread',
-    columnName: 'entry_count',
-    dataType: 'BIGINT',
-    defaultSql: '0',
-  })
-  await enforceDefaultedNotNullColumn(db, {
-    tableName: 'workbook_chat_thread',
-    columnName: 'review_queue_item_count',
-    dataType: 'BIGINT',
-    defaultSql: '0',
-  })
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx
       ON workbook_chat_thread (workbook_id, actor_user_id, updated_at_unix_ms DESC)
