@@ -103,7 +103,7 @@ describe('workbook local mutation journal persistence', () => {
       mutationJournalEntries: [],
       nextPendingMutationSeq: 2,
     })
-    expect(removeItem).toHaveBeenCalledWith('bilig:workbook-local-mutation-journal:doc-1')
+    expect(removeItem).not.toHaveBeenCalled()
   })
 
   it('clears empty journals that have no mutation high-water mark', () => {
@@ -171,7 +171,7 @@ describe('workbook local mutation journal persistence', () => {
     expect(removeItem).toHaveBeenCalledWith('bilig:workbook-local-mutation-journal:doc-1:browser%3Atest')
   })
 
-  it('removes legacy document-only journals instead of replaying unscoped edits', () => {
+  it('ignores obsolete document-only journals', () => {
     storage.setItem(
       'bilig:workbook-local-mutation-journal:doc-1',
       JSON.stringify({
@@ -184,6 +184,6 @@ describe('workbook local mutation journal persistence', () => {
     )
 
     expect(loadPersistedWorkbookMutationJournal(scope)).toBeNull()
-    expect(removeItem).toHaveBeenCalledWith('bilig:workbook-local-mutation-journal:doc-1')
+    expect(removeItem).not.toHaveBeenCalled()
   })
 })

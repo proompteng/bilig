@@ -57,12 +57,12 @@ describe('workbook agent pane storage', () => {
 
     expect(loadStoredSession(alexScope)).toBeNull()
     expect(storage.has('bilig:workbook-agent:doc-1:alex%40example.com')).toBe(false)
-    expect(storage.has('bilig:workbook-agent:doc-1')).toBe(false)
+    expect(storage.has('bilig:workbook-agent:doc-1')).toBe(true)
 
     storage.set('bilig:workbook-agent:doc-1', JSON.stringify({ threadId: 'legacy-thread' }))
     persistStoredSession(alexScope, { threadId: '   ' })
     expect(storage.has('bilig:workbook-agent:doc-1:alex%40example.com')).toBe(false)
-    expect(storage.has('bilig:workbook-agent:doc-1')).toBe(false)
+    expect(storage.has('bilig:workbook-agent:doc-1')).toBe(true)
   })
 
   it('normalizes and persists valid stored thread ids', () => {
@@ -78,11 +78,11 @@ describe('workbook agent pane storage', () => {
     expect(loadStoredSession(caseyScope)).toBeNull()
   })
 
-  it('removes legacy document-only assistant sessions instead of restoring unscoped threads', () => {
+  it('ignores obsolete document-only assistant sessions', () => {
     storage.set('bilig:workbook-agent:doc-1', JSON.stringify({ threadId: 'legacy-thread' }))
 
     expect(loadStoredSession(alexScope)).toBeNull()
-    expect(storage.has('bilig:workbook-agent:doc-1')).toBe(false)
+    expect(storage.has('bilig:workbook-agent:doc-1')).toBe(true)
   })
 
   it('removes corrupt stored draft JSON after falling back', () => {
@@ -107,15 +107,15 @@ describe('workbook agent pane storage', () => {
     expect(loadStoredDrafts(caseyScope)).toEqual({})
   })
 
-  it('removes legacy document-only assistant drafts instead of restoring unscoped text', () => {
+  it('ignores obsolete document-only assistant drafts', () => {
     storage.set('bilig:workbook-agent-drafts:doc-1', JSON.stringify({ 'new:private': 'legacy draft' }))
 
     expect(loadStoredDrafts(alexScope)).toEqual({})
-    expect(storage.has('bilig:workbook-agent-drafts:doc-1')).toBe(false)
+    expect(storage.has('bilig:workbook-agent-drafts:doc-1')).toBe(true)
 
     storage.set('bilig:workbook-agent-drafts:doc-1', JSON.stringify({ 'new:private': 'legacy draft' }))
     persistStoredDrafts(alexScope, {})
-    expect(storage.has('bilig:workbook-agent-drafts:doc-1')).toBe(false)
+    expect(storage.has('bilig:workbook-agent-drafts:doc-1')).toBe(true)
   })
 
   it('does not throw when session storage writes fail', () => {
@@ -137,7 +137,7 @@ describe('workbook agent pane storage', () => {
     expect(() => persistStoredSession(alexScope, { threadId: 'thr-1' })).not.toThrow()
     expect(() => persistStoredDrafts(alexScope, { key: 'draft' })).not.toThrow()
     expect(() => clearStoredSession(alexScope)).not.toThrow()
-    storageDebug.expectMessageCount('Failed to clear workbook agent storage', 4)
+    storageDebug.expectMessageCount('Failed to clear workbook agent storage', 1)
     storageDebug.expectMessageCount('Failed to persist workbook agent storage', 2)
   })
 })

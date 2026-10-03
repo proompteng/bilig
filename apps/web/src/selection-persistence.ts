@@ -1,10 +1,6 @@
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { WorkerRuntimeSelection } from './runtime-session.js'
-import {
-  legacyWorkbookDocumentStorageKey,
-  scopedWorkbookStorageKey,
-  type WorkbookBrowserStorageScope,
-} from './workbook-browser-storage-scope.js'
+import { scopedWorkbookStorageKey, type WorkbookBrowserStorageScope } from './workbook-browser-storage-scope.js'
 
 const DEFAULT_SELECTION: WorkerRuntimeSelection = {
   sheetName: 'Sheet1',
@@ -42,10 +38,6 @@ const SELECTION_STORAGE_KEY_PREFIX = 'bilig:selection:'
 
 function storageKey(scope: SelectionPersistenceScope): string {
   return scopedWorkbookStorageKey(SELECTION_STORAGE_KEY_PREFIX, scope)
-}
-
-function legacyStorageKey(documentId: string): string {
-  return legacyWorkbookDocumentStorageKey(SELECTION_STORAGE_KEY_PREFIX, documentId)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -124,7 +116,6 @@ function readStoredSelection(scope: SelectionPersistenceScope): WorkerRuntimeSel
   }
   const key = storageKey(scope)
   try {
-    removeStoredSelection(legacyStorageKey(scope.documentId))
     const raw = window.localStorage.getItem(key)
     if (!raw) {
       return null
@@ -242,7 +233,6 @@ function persistSelectionToUrl(selection: WorkerRuntimeSelection): void {
 }
 
 function persistNormalizedSelection(scope: SelectionPersistenceScope, normalizedSelection: WorkerRuntimeSelection): void {
-  removeStoredSelection(legacyStorageKey(scope.documentId))
   persistSelectionToUrl(normalizedSelection)
   window.localStorage.setItem(storageKey(scope), JSON.stringify(normalizedSelection))
 }

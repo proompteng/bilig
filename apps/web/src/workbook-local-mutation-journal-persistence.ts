@@ -33,10 +33,6 @@ function storageKey(scope: WorkbookMutationJournalPersistenceScope): string {
   return `${STORAGE_KEY_PREFIX}${encodeURIComponent(scope.documentId)}:${encodeURIComponent(scope.replicaId)}`
 }
 
-function legacyStorageKey(documentId: string): string {
-  return `${STORAGE_KEY_PREFIX}${encodeURIComponent(documentId)}`
-}
-
 function resolveLocalStorage(): Storage | null {
   const candidate = (globalThis as { localStorage?: Storage | undefined }).localStorage
   return candidate ?? null
@@ -101,12 +97,8 @@ export function loadPersistedWorkbookMutationJournal(
   if (!storage) {
     return null
   }
-  const legacyKey = legacyStorageKey(scope.documentId)
   const key = storageKey(scope)
   try {
-    if (storage.getItem(legacyKey) !== null) {
-      removeStorageItem(storage, legacyKey)
-    }
     const raw = storage.getItem(key)
     if (!raw) {
       return null
@@ -136,7 +128,6 @@ export function persistWorkbookMutationJournal(
   const activeEntries = scopedEntries.filter((mutation) => mutation.status !== 'acked')
   const nextPendingMutationSeq = nextMutationSeq(scopedEntries)
   try {
-    removeStorageItem(storage, legacyStorageKey(scope.documentId))
     if (activeEntries.length === 0 && nextPendingMutationSeq <= 1) {
       storage.removeItem(key)
       return

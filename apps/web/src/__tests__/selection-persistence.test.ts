@@ -134,18 +134,18 @@ describe('selection persistence', () => {
     expect(storage.has(caseySelectionStorageKey)).toBe(false)
   })
 
-  it('removes legacy document-only selection instead of restoring unscoped state', () => {
+  it('ignores obsolete document-only selection', () => {
     storage.set(legacySelectionStorageKey, JSON.stringify({ sheetName: 'PrivateSheet', address: 'D4' }))
 
     expect(loadPersistedSelection(alexScope)).toEqual({
       sheetName: 'Sheet1',
       address: 'A1',
     })
-    expect(storage.has(legacySelectionStorageKey)).toBe(false)
+    expect(storage.has(legacySelectionStorageKey)).toBe(true)
 
     storage.set(legacySelectionStorageKey, JSON.stringify({ sheetName: 'PrivateSheet', address: 'D4' }))
     persistSelection(alexScope, { sheetName: 'Sheet2', address: 'C3' })
-    expect(storage.has(legacySelectionStorageKey)).toBe(false)
+    expect(storage.has(legacySelectionStorageKey)).toBe(true)
   })
 
   it('ignores invalid stored values', () => {

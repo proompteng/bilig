@@ -1,10 +1,6 @@
 import type { WorkbookAgentThreadScope } from '@bilig/contracts'
 import { logDebug } from './runtime-logger.js'
-import {
-  legacyWorkbookDocumentStorageKey,
-  scopedWorkbookStorageKey,
-  type WorkbookBrowserStorageScope,
-} from './workbook-browser-storage-scope.js'
+import { scopedWorkbookStorageKey, type WorkbookBrowserStorageScope } from './workbook-browser-storage-scope.js'
 
 const STORAGE_KEY_PREFIX = 'bilig:workbook-agent:'
 const DRAFT_STORAGE_KEY_PREFIX = 'bilig:workbook-agent-drafts:'
@@ -21,14 +17,6 @@ function storageKey(scope: WorkbookAgentPaneStorageScope): string {
 
 function draftStorageKey(scope: WorkbookAgentPaneStorageScope): string {
   return scopedWorkbookStorageKey(DRAFT_STORAGE_KEY_PREFIX, scope)
-}
-
-function legacyStorageKey(documentId: string): string {
-  return legacyWorkbookDocumentStorageKey(STORAGE_KEY_PREFIX, documentId)
-}
-
-function legacyDraftStorageKey(documentId: string): string {
-  return legacyWorkbookDocumentStorageKey(DRAFT_STORAGE_KEY_PREFIX, documentId)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -92,7 +80,6 @@ function parseStoredWorkbookAgentSession(value: unknown): StoredWorkbookAgentThr
 export function loadStoredSession(scope: WorkbookAgentPaneStorageScope): StoredWorkbookAgentThreadRef | null {
   const key = storageKey(scope)
   try {
-    removeSessionStorageItem(scope.documentId, legacyStorageKey(scope.documentId))
     const raw = readSessionStorageItem(scope.documentId, key)
     if (!raw) {
       return null
@@ -111,7 +98,6 @@ export function loadStoredSession(scope: WorkbookAgentPaneStorageScope): StoredW
 }
 
 export function persistStoredSession(scope: WorkbookAgentPaneStorageScope, value: StoredWorkbookAgentThreadRef): void {
-  removeSessionStorageItem(scope.documentId, legacyStorageKey(scope.documentId))
   const storedSession = parseStoredWorkbookAgentSession(value)
   if (!storedSession) {
     removeSessionStorageItem(scope.documentId, storageKey(scope))
@@ -122,13 +108,11 @@ export function persistStoredSession(scope: WorkbookAgentPaneStorageScope, value
 
 export function clearStoredSession(scope: WorkbookAgentPaneStorageScope): void {
   removeSessionStorageItem(scope.documentId, storageKey(scope))
-  removeSessionStorageItem(scope.documentId, legacyStorageKey(scope.documentId))
 }
 
 export function loadStoredDrafts(scope: WorkbookAgentPaneStorageScope): Record<string, string> {
   const key = draftStorageKey(scope)
   try {
-    removeSessionStorageItem(scope.documentId, legacyDraftStorageKey(scope.documentId))
     const raw = readSessionStorageItem(scope.documentId, key)
     if (!raw) {
       return {}
@@ -153,7 +137,6 @@ export function loadStoredDrafts(scope: WorkbookAgentPaneStorageScope): Record<s
 }
 
 export function persistStoredDrafts(scope: WorkbookAgentPaneStorageScope, drafts: Record<string, string>): void {
-  removeSessionStorageItem(scope.documentId, legacyDraftStorageKey(scope.documentId))
   const entries = Object.entries(drafts).filter((entry) => entry[1].length > 0)
   if (entries.length === 0) {
     removeSessionStorageItem(scope.documentId, draftStorageKey(scope))
