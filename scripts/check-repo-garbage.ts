@@ -31,7 +31,6 @@ const forbiddenTrackedPathPatterns = [
   /completion-audit/u,
   /active-not-achieved/u,
   /dominance/u,
-  /package-lock\.json$/u,
   /uv\.lock$/u,
 ] as const
 
@@ -98,6 +97,9 @@ function packageScripts(): Record<string, string> {
 function checkTrackedPaths(trackedFiles: readonly string[]): string[] {
   const violations: string[] = []
   for (const path of trackedFiles) {
+    if (path.endsWith('package-lock.json') && path !== 'integrations/n8n-nodes-workpaper/package-lock.json') {
+      violations.push(`${path}: npm lockfile is not owned by standalone n8n CI`)
+    }
     if (!allowedScorecardPaths.has(path) && path.includes('scorecard')) {
       violations.push(`${path}: internal scorecard paths are forbidden outside OpenSSF workflows`)
     }
