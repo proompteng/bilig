@@ -2,14 +2,24 @@
   "extends": "../../tsconfig.workspace-paths.json",
   "compilerOptions": {
     "rootDir": "src",
+    "resolveJsonModule": true,
     "outDir": "dist"
   },
   "references": [
     {
-      "path": "../bilig"
+      "path": "../protocol"
     },
     {
-      "path": "../headless"
+      "path": "../formula"
+    },
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../xlsx"
+    },
+    {
+      "path": "../excel-import"
     }
   ],
   "include": ["src/**/*"],

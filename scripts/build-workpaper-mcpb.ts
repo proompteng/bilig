@@ -9,7 +9,7 @@ const defaultExtensionDir = join(defaultBuildRoot, 'bilig-workpaper')
 const defaultOutputPath = join(defaultBuildRoot, 'bilig-workpaper.mcpb')
 const defaultIconPath = join(repoRoot, 'docs', 'assets', 'bilig-mcp-marketplace-logo.png')
 const defaultMcpbPackage = '@anthropic-ai/mcpb@2.1.2'
-const headlessPackageName = '@bilig/headless'
+const headlessPackageName = '@bilig/workpaper'
 const workPaperMcpbPrivacyPolicyUrl = 'https://proompteng.github.io/bilig/workpaper-mcpb-privacy.html'
 
 export type WorkPaperMcpbManifest = {
@@ -50,7 +50,7 @@ export type WorkPaperMcpbManifest = {
   readonly compatibility: {
     readonly platforms: readonly ['darwin', 'win32', 'linux']
     readonly runtimes: {
-      readonly node: '>=22.0.0'
+      readonly node: '>=24.0.0'
     }
   }
 }
@@ -86,7 +86,7 @@ export function buildWorkPaperMcpbManifest(packageVersion: string): WorkPaperMcp
     description: 'Formula-backed WorkPaper tools for workbook readback, input edits, and JSON persistence.',
     long_description: [
       'Bilig WorkPaper gives Claude Desktop a local spreadsheet engine for agent workflows that need more than a screenshot of a grid.',
-      'The bundle runs the published @bilig/headless MCP stdio server in file-backed writable mode, exposes tools for reading sheets and ranges, editing cells, validating formulas, exporting WorkPaper JSON, and returning calculated readback.',
+      'The bundle runs the published @bilig/workpaper MCP stdio server in file-backed writable mode, exposes tools for reading sheets and ranges, editing cells, validating formulas, exporting WorkPaper JSON, and returning calculated readback.',
       'Use it to evaluate formula-backed workbook automation before wiring the same package into a Node service, queue worker, or coding-agent tool.',
     ].join('\n\n'),
     author: {
@@ -158,7 +158,7 @@ export function buildWorkPaperMcpbManifest(packageVersion: string): WorkPaperMcp
     compatibility: {
       platforms: ['darwin', 'win32', 'linux'],
       runtimes: {
-        node: '>=22.0.0',
+        node: '>=24.0.0',
       },
     },
   }
@@ -174,26 +174,15 @@ export function renderWorkPaperMcpbLauncher(): string {
     'import {',
     '  exportWorkPaperDocument,',
     '  serializeWorkPaperDocument,',
-    "} from '@bilig/headless';",
+    "} from '@bilig/workpaper';",
     '',
     'const requirePackageJson = createRequire(import.meta.url);',
-    "const packageManifest = requirePackageJson('../node_modules/@bilig/headless/package.json');",
+    "const packageManifest = requirePackageJson('../node_modules/@bilig/workpaper/package.json');",
     "const serverVersion = typeof packageManifest.version === 'string' ? packageManifest.version : '0.0.0';",
     'const serverDir = dirname(fileURLToPath(import.meta.url));',
     "const workpaperPath = join(serverDir, 'workpaper.json');",
     '',
-    'async function loadMcpRuntime() {',
-    '  try {',
-    "    return await import('@bilig/headless/mcp');",
-    '  } catch (error) {',
-    "    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') {",
-    "      return await import('@bilig/headless');",
-    '    }',
-    '    throw error;',
-    '  }',
-    '}',
-    '',
-    'const { buildDemoWorkPaper, createFileBackedWorkPaperMcpToolServerFromFile, runDemoWorkPaperMcpStdioServer } = await loadMcpRuntime();',
+    "import { buildDemoWorkPaper, createFileBackedWorkPaperMcpToolServerFromFile, runDemoWorkPaperMcpStdioServer } from '@bilig/workpaper/mcp';",
     '',
     'if (!existsSync(workpaperPath)) {',
     '  writeFileSync(workpaperPath, serializeWorkPaperDocument(exportWorkPaperDocument(buildDemoWorkPaper(), { includeConfig: true })));',
@@ -221,7 +210,7 @@ export function renderWorkPaperMcpbReadme(packageVersion: string): string {
   return [
     '# Bilig WorkPaper MCPB',
     '',
-    'This bundle runs the published `@bilig/headless` WorkPaper MCP stdio server inside Claude Desktop.',
+    'This bundle runs the published `@bilig/workpaper` WorkPaper MCP stdio server inside Claude Desktop.',
     '',
     `Bundled package version: \`${packageVersion}\``,
     '',
@@ -370,7 +359,7 @@ function printHelp(): void {
   console.log(`Usage: pnpm mcpb:workpaper:build [options]
 
 Options:
-  --package-version <version>  Bundle a specific @bilig/headless version. Defaults to npm latest.
+  --package-version <version>  Bundle a specific @bilig/workpaper version. Defaults to npm latest.
   --extension-dir <path>       Staging directory. Defaults to build/mcpb/bilig-workpaper.
   --output <path>              Output file. Defaults to build/mcpb/bilig-workpaper.mcpb.
   --icon <path>                Icon file. Defaults to docs/assets/bilig-mcp-marketplace-logo.png.

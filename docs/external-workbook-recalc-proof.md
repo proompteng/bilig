@@ -83,7 +83,7 @@ oracle test around the exact files you accept.
 ## Source
 
 - [downloadable external-workbook proof script](external-workbook-recalc-proof.ts)
-- [package README](https://github.com/proompteng/bilig/tree/main/packages/bilig-xlsx-formula-recalc#readme)
+- [package README](https://github.com/proompteng/bilig/tree/main/packages/xlsx-formula-recalc#readme)
 - [XLSX formula recalculation in Node.js](xlsx-formula-recalculation-node.md)
 
 ## After the proof

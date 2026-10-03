@@ -81,7 +81,7 @@ test('@browser-ci model backups and WorkPaper exports contain actual formulas an
       '--eval',
       `
     import { readFileSync } from 'node:fs';
-    import { createWorkPaperFromDocument, parseWorkPaperDocument } from '@bilig/headless/browser';
+    import { createWorkPaperFromDocument, parseWorkPaperDocument } from '@bilig/workpaper/browser';
     const workbook = createWorkPaperFromDocument(parseWorkPaperDocument(readFileSync(process.argv[1], 'utf8')));
     try {
       const sheet = workbook.getSheetId('Results');

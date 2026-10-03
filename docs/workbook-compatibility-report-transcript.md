@@ -51,9 +51,7 @@ Observed shape from `@bilig/xlsx-formula-recalc` `0.157.0`:
     "staleCachedFormulas": { "count": 2 },
     "missingCachedFormulaValues": { "count": 1 },
     "unsupportedRecalculations": { "count": 0 },
-    "warnings": [
-      "Volatile formulas were preserved during XLSX import; cached formula values may depend on workbook calculation time."
-    ]
+    "warnings": ["Volatile formulas were preserved during XLSX import; cached formula values may depend on workbook calculation time."]
   },
   "cacheInspection": {
     "inspectedFormulaCellCount": 3,

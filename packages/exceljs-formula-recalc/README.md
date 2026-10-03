@@ -1,4 +1,4 @@
-# exceljs-formula-recalc
+# @bilig/exceljs-formula-recalc
 
 Recalculate formulas in an ExcelJS workbook without opening Excel, LibreOffice, or a browser.
 
@@ -19,7 +19,7 @@ The important distinction is:
 
 - `workbook.calcProperties.fullCalcOnLoad = true` asks Excel or LibreOffice to
   recalculate later, when the file is opened.
-- `exceljs-formula-recalc` recalculates before your Node process returns, then
+- `@bilig/exceljs-formula-recalc` recalculates before your Node process returns, then
   patches requested ExcelJS formula cells with fresh `result` values.
 
 Use ExcelJS for workbook I/O and presentation. Use this package only for the
@@ -38,7 +38,7 @@ before adding an ExcelJS-specific bridge.
 ## Install
 
 ```sh
-npm install exceljs exceljs-formula-recalc
+npm install exceljs @bilig/exceljs-formula-recalc
 ```
 
 ## CLI
@@ -47,13 +47,13 @@ If your ExcelJS workflow has already written an `.xlsx` file, the package also
 ships an ExcelJS-named CLI for quick proof runs:
 
 ```sh
-npx --package exceljs-formula-recalc exceljs-recalc --demo --json
+npx --package @bilig/exceljs-formula-recalc exceljs-recalc --demo --json
 ```
 
 For a real workbook saved by ExcelJS:
 
 ```sh
-npx --package exceljs-formula-recalc exceljs-recalc quote.xlsx \
+npx --package @bilig/exceljs-formula-recalc exceljs-recalc quote.xlsx \
   --set Inputs!B2=48 \
   --set Inputs!B3=1500 \
   --read Summary!B7 \
@@ -68,7 +68,7 @@ onto the in-memory ExcelJS workbook object.
 
 ```ts
 import ExcelJS from 'exceljs'
-import { recalculateExceljsWorkbook } from 'exceljs-formula-recalc'
+import { recalculateExceljsWorkbook } from '@bilig/exceljs-formula-recalc'
 
 const workbook = new ExcelJS.Workbook()
 await workbook.xlsx.readFile('quote.xlsx')
@@ -89,23 +89,23 @@ By default, `recalculateExceljsWorkbook` mutates the provided ExcelJS workbook b
 
 ## Common Boundaries
 
-| Job                                                             | Use                                    |
-| --------------------------------------------------------------- | -------------------------------------- |
-| Create styled XLSX reports, worksheets, tables, images, or rows | ExcelJS                                |
-| Ask Excel to recalculate after a human opens the file           | ExcelJS `fullCalcOnLoad`               |
-| Read recalculated formula values before an API/job returns      | `exceljs-formula-recalc`               |
-| Recalculate raw XLSX bytes from SheetJS or xlsx-populate        | `xlsx-formula-recalc`                  |
-| Keep formula-backed business state as JSON, not XLSX            | `@bilig/headless` or `bilig-workpaper` |
+| Job                                                             | Use                                     |
+| --------------------------------------------------------------- | --------------------------------------- |
+| Create styled XLSX reports, worksheets, tables, images, or rows | ExcelJS                                 |
+| Ask Excel to recalculate after a human opens the file           | ExcelJS `fullCalcOnLoad`                |
+| Read recalculated formula values before an API/job returns      | `@bilig/exceljs-formula-recalc`         |
+| Recalculate raw XLSX bytes from SheetJS or xlsx-populate        | `@bilig/xlsx-formula-recalc`            |
+| Keep formula-backed business state as JSON, not XLSX            | `@bilig/workpaper` or `bilig-workpaper` |
 
 ## API
 
 ```ts
-import { recalculateExceljsBuffer, recalculateExceljsWorkbook } from 'exceljs-formula-recalc'
+import { recalculateExceljsBuffer, recalculateExceljsWorkbook } from '@bilig/exceljs-formula-recalc'
 ```
 
 `recalculateExceljsWorkbook(workbook, options)` accepts any workbook-like object with `workbook.xlsx.writeBuffer()` and `workbook.xlsx.load(...)`, which matches ExcelJS workbooks.
 
-`recalculateExceljsBuffer(input, options)` accepts XLSX bytes and returns the same result shape as `xlsx-formula-recalc`.
+`recalculateExceljsBuffer(input, options)` accepts XLSX bytes and returns the same result shape as `@bilig/xlsx-formula-recalc`.
 
 Cell targets must be sheet-qualified A1 references such as `Inputs!B2` or `'Pricing Model'!F12`.
 

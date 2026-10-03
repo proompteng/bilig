@@ -10,14 +10,14 @@
 
 ## Stable packages
 
-`@bilig/headless` is the current external npm adoption path for WorkPaper
-calculation and Excel workbook import/export. Its `@bilig/headless/xlsx`
+`@bilig/workpaper` is the current external npm adoption path for WorkPaper
+calculation and Excel workbook import/export. Its `@bilig/workpaper/xlsx`
 subpath exposes the repository XLSX importer/exporter without requiring a second
 public npm package. The other package surfaces listed here are stable repository
 package boundaries; not every package name is provisioned on npm yet.
 
 - `@bilig/core`
-- `@bilig/headless`
+- `@bilig/workpaper`
 - `@bilig/excel-import`
 - `@bilig/formula`
 - `@bilig/wasm-kernel`
@@ -33,7 +33,7 @@ package boundaries; not every package name is provisioned on npm yet.
 
 `@bilig/workbook` is the generic public package for consumer-defined workbook
 models. It does not ship business-model templates and does not depend on
-`@bilig/core`, `@bilig/headless`, `@bilig/agent-api`, `zod`, or `effect`.
+`@bilig/core`, `@bilig/workpaper`, `@bilig/agent-api`, `zod`, or `effect`.
 
 `@bilig/workbook` defines generic, inspectable workbook intent for agents and
 runtimes. It does not depend on hardcoded business models or human spreadsheet
@@ -47,7 +47,7 @@ Package identity is intentionally explicit:
 | ------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `@bilig/workbook`  | Defining generic agent intent, refs, formulas, checks, plan data, schemas, and proof handoff. | Calculating formulas or owning workbook state.     |
 | `@bilig/workpaper` | Running workbook tools, MCP, or product workflows around persisted WorkPaper state.           | Designing a reusable model API for other runtimes. |
-| `@bilig/headless`  | Owning workbook state inside Node with formula recalculation and import/export.               | Publishing generic agent intent contracts.         |
+| `@bilig/workpaper` | Owning workbook state inside Node with formula recalculation and import/export.               | Publishing generic agent intent contracts.         |
 | `@bilig/core`      | Implementing calculation or mutation internals.                                               | Consumer-facing agent model definitions.           |
 
 The root export remains the ordinary agent path: models, refs, checks, formulas,
@@ -989,7 +989,7 @@ The canonical engine surface includes:
 
 ## WorkPaper surface
 
-`@bilig/headless` exposes `WorkPaper`, a HyperFormula-style headless workbook API on top
+`@bilig/workpaper` exposes `WorkPaper`, a HyperFormula-style headless workbook API on top
 of `@bilig/core`:
 
 - `WorkPaper.buildEmpty`
@@ -1013,7 +1013,7 @@ of `@bilig/core`:
 
 ## Excel Import Surface
 
-`@bilig/headless/xlsx` exposes the CSV/XLSX boundary for WorkPaper consumers:
+`@bilig/workpaper/xlsx` exposes the CSV/XLSX boundary for WorkPaper consumers:
 
 - `importXlsx(bytes, fileName)`
 - `importXlsxFile(path, fileName?, options?)`
@@ -1028,12 +1028,12 @@ CSV import auto-detects comma, semicolon, and tab delimiters. For locale-specifi
 accounting exports, pass `{ delimiter: ";", decimalSeparator: "," }`.
 
 ```sh
-pnpm add @bilig/headless
+pnpm add @bilig/workpaper
 ```
 
 ```ts
-import { WorkPaper } from '@bilig/headless'
-import { exportWorkPaperXlsxToFileAsync, importXlsxFile } from '@bilig/headless/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
+import { exportWorkPaperXlsxToFileAsync, importXlsxFile } from '@bilig/workpaper/xlsx'
 
 const imported = importXlsxFile('model.xlsx')
 const workbook = WorkPaper.buildFromSnapshot(imported.snapshot, {

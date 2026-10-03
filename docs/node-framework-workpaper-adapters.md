@@ -1,7 +1,7 @@
 ---
 title: Express, Fastify, Hono, Oak, Hapi, AdonisJS, and tRPC adapters for a WorkPaper API
 published: true
-description: Copyable TypeScript adapters for serving @bilig/headless WorkPaper formulas from Express, Fastify, Hono, Oak, Hapi, AdonisJS, tRPC, Next.js, Vercel Functions, and Fetch-style route handlers.
+description: Copyable TypeScript adapters for serving @bilig/workpaper WorkPaper formulas from Express, Fastify, Hono, Oak, Hapi, AdonisJS, tRPC, Next.js, Vercel Functions, and Fetch-style route handlers.
 tags: typescript, node, spreadsheet, express
 canonical_url: https://proompteng.github.io/bilig/node-framework-workpaper-adapters.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png

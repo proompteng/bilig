@@ -1,5 +1,5 @@
 ---
-name: sheetjs-formula-recalc
+name: @bilig/sheetjs-formula-recalc
 version: 0.1.0
 description: Add fresh formula readback to SheetJS and xlsx workflows after writing XLSX inputs in Node.js.
 tags:
@@ -13,14 +13,14 @@ tags:
 
 # SheetJS Formula Recalculation
 
-Use `sheetjs-formula-recalc` when an agent or Node.js service has changed XLSX
+Use `@bilig/sheetjs-formula-recalc` when an agent or Node.js service has changed XLSX
 inputs through SheetJS / `xlsx` and must read recalculated formula outputs
 without opening Excel, LibreOffice, or a browser.
 
 ## First Check
 
 ```sh
-npx --package sheetjs-formula-recalc sheetjs-recalc --demo --json
+npx --package @bilig/sheetjs-formula-recalc sheetjs-recalc --demo --json
 ```
 
 The demo should print `verified: true` and a `Summary!B2` value of `72000`.
@@ -28,7 +28,7 @@ The demo should print `verified: true` and a `Summary!B2` value of `72000`.
 ## Real Workbook
 
 ```sh
-npx --package sheetjs-formula-recalc sheetjs-recalc workbook.xlsx \
+npx --package @bilig/sheetjs-formula-recalc sheetjs-recalc workbook.xlsx \
   --set Inputs!B2=48 \
   --read Summary!B7 \
   --out workbook.recalculated.xlsx \
@@ -38,7 +38,7 @@ npx --package sheetjs-formula-recalc sheetjs-recalc workbook.xlsx \
 ## TypeScript
 
 ```ts
-import { recalculateSheetjsWorkbook } from 'sheetjs-formula-recalc'
+import { recalculateSheetjsWorkbook } from '@bilig/sheetjs-formula-recalc'
 
 const result = recalculateSheetjsWorkbook(inputXlsxBytes, {
   edits: [{ target: 'Inputs!B2', value: 48 }],
@@ -46,6 +46,6 @@ const result = recalculateSheetjsWorkbook(inputXlsxBytes, {
 })
 ```
 
-Use `xlsx-formula-recalc` when the caller does not care about SheetJS naming,
-and use `exceljs-formula-recalc` when the caller owns an ExcelJS `Workbook`
+Use `@bilig/xlsx-formula-recalc` when the caller does not care about SheetJS naming,
+and use `@bilig/exceljs-formula-recalc` when the caller owns an ExcelJS `Workbook`
 object and wants read results patched back into that object.

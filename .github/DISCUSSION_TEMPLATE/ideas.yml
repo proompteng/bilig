@@ -1,5 +1,5 @@
-title: "[idea] "
-labels: ["enhancement"]
+title: '[idea] '
+labels: ['enhancement']
 body:
   - type: markdown
     attributes:

@@ -76,7 +76,7 @@ cells, so reviewers can see the stale value without downloading the artifact.
 The fixture is deliberately tiny. To regenerate it from source:
 
 ```sh
-pnpm --filter xlsx-formula-recalc build
+pnpm --filter @bilig/xlsx-formula-recalc build
 bun scripts/build-stale-pricing-fixture.ts
 bun ../../packages/xlsx-formula-recalc/src/cache-doctor-cli.ts \
   fixtures/stale-pricing.xlsx --json > reports/stale-pricing.cache-doctor.json

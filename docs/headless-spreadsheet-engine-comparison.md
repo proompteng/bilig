@@ -20,14 +20,14 @@ calculation engine, a Rust/WASM spreadsheet product, and a Node WorkPaper
 runtime can all be correct choices for different jobs.
 
 `bilig` is not trying to claim that every evaluator should choose
-`@bilig/headless`. The useful claim is narrower: choose it when you need a
+`@bilig/workpaper`. The useful claim is narrower: choose it when you need a
 TypeScript WorkPaper object for Node services and coding agents, with formulas,
 structural edits, persistence, restore, mutation receipts, and computed
 readback in one package.
 
 ## Short Version
 
-Use `@bilig/headless` when the job is service-side workbook automation or agent
+Use `@bilig/workpaper` when the job is service-side workbook automation or agent
 writeback verification.
 
 Use HyperFormula when you need a mature JavaScript formula engine with broad
@@ -55,14 +55,14 @@ calculations.
 
 ## Use-Case Chooser
 
-| If your job is...                                                 | Start with...                           | Check next                                                                                                                                                                        |
-| ----------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Formula-backed calculations inside a Node service                 | `@bilig/headless`                       | Start with the [quote approval WorkPaper API proof](quote-approval-workpaper-api.md), then wire the [Node service recipe](node-service-workpaper-recipe.md).                      |
-| Agent writeback that must prove the value after an edit           | `@bilig/headless`                       | Use the [agent tool-calling recipe](agent-workpaper-tool-calling-recipe.md) or the [MCP WorkPaper server](mcp-workpaper-tool-server.md).                                          |
-| XLSX parsing, export, styling, images, and workbook-file metadata | SheetJS or ExcelJS                      | Read the [SheetJS and ExcelJS boundary guide](sheetjs-exceljs-alternative-formula-workbook-api.md) before mixing file I/O with formula runtime state.                             |
+| If your job is...                                                 | Start with...                           | Check next                                                                                                                                                                               |
+| ----------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Formula-backed calculations inside a Node service                 | `@bilig/workpaper`                      | Start with the [quote approval WorkPaper API proof](quote-approval-workpaper-api.md), then wire the [Node service recipe](node-service-workpaper-recipe.md).                             |
+| Agent writeback that must prove the value after an edit           | `@bilig/workpaper`                      | Use the [agent tool-calling recipe](agent-workpaper-tool-calling-recipe.md) or the [MCP WorkPaper server](mcp-workpaper-tool-server.md).                                                 |
+| XLSX parsing, export, styling, images, and workbook-file metadata | SheetJS or ExcelJS                      | Read the [SheetJS and ExcelJS boundary guide](sheetjs-exceljs-alternative-formula-workbook-api.md) before mixing file I/O with formula runtime state.                                    |
 | A mature formula engine with broad spreadsheet-function coverage  | HyperFormula                            | Compare against the [JavaScript spreadsheet library guide](javascript-spreadsheet-library-headless-node.md) and the [compatibility caveats](where-bilig-is-not-excel-compatible-yet.md). |
-| Persisting a workbook document as JSON and restoring it later     | `@bilig/headless`                       | Follow the [WorkPaper persistence guide](persisting-formula-backed-workpaper-documents-in-node.md).                                                                               |
-| Embedding a spreadsheet UI that users edit directly               | A browser grid or spreadsheet component | Use bilig only if a backend WorkPaper runtime also needs to verify calculations outside the UI.                                                                                   |
+| Persisting a workbook document as JSON and restoring it later     | `@bilig/workpaper`                      | Follow the [WorkPaper persistence guide](persisting-formula-backed-workpaper-documents-in-node.md).                                                                                      |
+| Embedding a spreadsheet UI that users edit directly               | A browser grid or spreadsheet component | Use bilig only if a backend WorkPaper runtime also needs to verify calculations outside the UI.                                                                                          |
 
 This is a chooser, not a compatibility guarantee. `bilig` does not claim full
 Excel parity, broad XLSX fidelity, or blanket speed wins. Check the
@@ -71,16 +71,16 @@ benchmark or small workbook check that matches your workload.
 
 ## Library Decision Table
 
-| Workload                                                                                    | Start With        | Why                                                                                                                                                                                            |
-| ------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Build an XLSX report with styles, tables, images, and supplied formula results              | ExcelJS           | It is an Excel workbook manager for reading, manipulating, and writing spreadsheet data and styles. Its README says formula results must be supplied rather than calculated by ExcelJS itself. |
-| Call `SUM`, `DATE`, `XLOOKUP`-style functions directly from JavaScript code                 | Formula.js        | It implements many Excel formula functions as JavaScript functions, but it is not a workbook engine.                                                                                           |
-| Embed a mature headless spreadsheet formula engine in a web app or Node process             | HyperFormula      | It is UI-independent, has extensive built-in function coverage, and documents browser and server-side installation paths.                                                                      |
-| Build around a Rust/WASM open-source spreadsheet ecosystem                                  | IronCalc          | It presents itself as an open-source spreadsheet engine and ecosystem, with programmatic use from multiple languages.                                                                          |
-| Read, write, and transform spreadsheet files from modern TypeScript                         | Hucre             | Its site positions it around dependency-free TypeScript spreadsheet I/O for XLSX, CSV, and ODS, with built-in formula evaluation and streaming I/O.                                            |
-| Share spreadsheet logic across Rust, Python, and JavaScript/WASM                            | Formualizer       | Its docs describe an embeddable spreadsheet formula engine for apps, services, and automation pipelines across those runtimes.                                                                 |
-| Add commercial formula calculation to a JSpreadsheet-backed product                         | Formula Pro       | JSpreadsheet describes Formula Pro as a JavaScript plugin for spreadsheet-like calculations in the browser or Node.js.                                                                         |
-| Give an agent or Node service a workbook object it can mutate, persist, restore, and verify | `@bilig/headless` | It exposes WorkPaper operations and recipes around mutation, formula readback, persistence, and restored state.                                                                                |
+| Workload                                                                                    | Start With         | Why                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build an XLSX report with styles, tables, images, and supplied formula results              | ExcelJS            | It is an Excel workbook manager for reading, manipulating, and writing spreadsheet data and styles. Its README says formula results must be supplied rather than calculated by ExcelJS itself. |
+| Call `SUM`, `DATE`, `XLOOKUP`-style functions directly from JavaScript code                 | Formula.js         | It implements many Excel formula functions as JavaScript functions, but it is not a workbook engine.                                                                                           |
+| Embed a mature headless spreadsheet formula engine in a web app or Node process             | HyperFormula       | It is UI-independent, has extensive built-in function coverage, and documents browser and server-side installation paths.                                                                      |
+| Build around a Rust/WASM open-source spreadsheet ecosystem                                  | IronCalc           | It presents itself as an open-source spreadsheet engine and ecosystem, with programmatic use from multiple languages.                                                                          |
+| Read, write, and transform spreadsheet files from modern TypeScript                         | Hucre              | Its site positions it around dependency-free TypeScript spreadsheet I/O for XLSX, CSV, and ODS, with built-in formula evaluation and streaming I/O.                                            |
+| Share spreadsheet logic across Rust, Python, and JavaScript/WASM                            | Formualizer        | Its docs describe an embeddable spreadsheet formula engine for apps, services, and automation pipelines across those runtimes.                                                                 |
+| Add commercial formula calculation to a JSpreadsheet-backed product                         | Formula Pro        | JSpreadsheet describes Formula Pro as a JavaScript plugin for spreadsheet-like calculations in the browser or Node.js.                                                                         |
+| Give an agent or Node service a workbook object it can mutate, persist, restore, and verify | `@bilig/workpaper` | It exposes WorkPaper operations and recipes around mutation, formula readback, persistence, and restored state.                                                                                |
 
 ## What Makes The Bilig Slice Different
 
@@ -94,7 +94,7 @@ The questions become operational:
 - can the service reject unsupported formulas with useful diagnostics?
 - can a coding agent prove the write instead of narrating what it meant to do?
 
-That is the `@bilig/headless` wedge. It is a WorkPaper runtime surface, not just
+That is the `@bilig/workpaper` wedge. It is a WorkPaper runtime surface, not just
 a formula parser, not just an XLSX writer, and not a browser grid.
 
 The maintained quote approval proof demonstrates the service shape without a
@@ -105,7 +105,7 @@ mkdir bilig-quote-approval
 cd bilig-quote-approval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 curl -fsSLo quote-approval-api.ts \
   https://raw.githubusercontent.com/proompteng/bilig/main/examples/serverless-workpaper-api/quote-approval-api.ts
@@ -143,7 +143,7 @@ or a proprietary license.
 Start with HyperFormula when the core need is formula calculation with mature
 engine behavior and a commercial option.
 
-Evaluate `@bilig/headless` when the core need is a Node WorkPaper object with
+Evaluate `@bilig/workpaper` when the core need is a Node WorkPaper object with
 agent-oriented writeback verification, persistence helpers, restored readback,
 history, and deterministic evaluator or compatibility checks tied to repository
 commands.
@@ -167,7 +167,7 @@ Start with IronCalc when you want a broader spreadsheet engine ecosystem,
 standalone or embeddable spreadsheet product direction, Rust/WASM portability,
 or Python/Rust/JavaScript integration around the same engine.
 
-Evaluate `@bilig/headless` when the immediate slice is narrower: a TypeScript
+Evaluate `@bilig/workpaper` when the immediate slice is narrower: a TypeScript
 Node package for service WorkPaper state, mutation receipts, formula readback,
 JSON persistence, restore checks, and coding-agent workflows.
 
@@ -187,7 +187,7 @@ states that ExcelJS cannot process a formula to generate the result. That makes
 it useful for XLSX file management, but not the right primitive when a service
 must recalculate formulas and verify values before Excel opens the file.
 
-Use ExcelJS with `@bilig/headless` when the architecture needs both:
+Use ExcelJS with `@bilig/workpaper` when the architecture needs both:
 
 1. WorkPaper calculation and verification in Node.
 2. XLSX file generation or richer workbook-file handling at the boundary.
@@ -216,7 +216,7 @@ currently limited to approved early-access users.
 Start with Hucre when the product needs a modern TypeScript file I/O layer and
 the team is comfortable with early-access onboarding.
 
-Evaluate `@bilig/headless` when the immediate job is not file conversion, but a
+Evaluate `@bilig/workpaper` when the immediate job is not file conversion, but a
 Node WorkPaper runtime that a service or coding agent can mutate, recalculate,
 persist as JSON, restore, and verify through computed readback.
 
@@ -230,7 +230,7 @@ Python automation paths.
 Start with Formualizer when cross-language runtime support is the deciding
 factor.
 
-Evaluate `@bilig/headless` when the project is already TypeScript-first and the
+Evaluate `@bilig/workpaper` when the project is already TypeScript-first and the
 hard part is an operational workbook object for Node services, agent tool calls,
 mutation receipts, persistence, and readback.
 
@@ -243,7 +243,7 @@ JSpreadsheet integration, and a broader formula set.
 Start with Formula Pro when the application already depends on JSpreadsheet or
 needs that commercial plugin path.
 
-Evaluate `@bilig/headless` when there is no grid dependency and the service
+Evaluate `@bilig/workpaper` when there is no grid dependency and the service
 needs a small package for formula-backed WorkPaper state, persisted documents,
 and verifiable agent edits.
 
@@ -265,7 +265,7 @@ inside your process:
 
 If the must-have list is mostly XLSX output and style fidelity, start with an
 XLSX library. If it is mostly calculation, start with a formula engine. If it is
-agent or service workbook mutation with proof, evaluate `@bilig/headless`.
+agent or service workbook mutation with proof, evaluate `@bilig/workpaper`.
 
 ## Bilig Proof Path
 
@@ -276,7 +276,7 @@ mkdir bilig-headless-eval
 cd bilig-headless-eval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 ```
 
 Then run the quickstart from the root README. The script builds a workbook,

@@ -10,14 +10,14 @@ image: /assets/github-social-preview.png
 
 # WorkPaper Node Service Recipe
 
-This recipe shows how to put `@bilig/headless` behind a small Node service
+This recipe shows how to put `@bilig/workpaper` behind a small Node service
 boundary. It uses Node's built-in `node:http` module so evaluators can see the
 service shape without adopting a web framework.
 
 Use this when a backend job, queue worker, API route, or agent tool needs
 formula-backed workbook state with controlled edits and persistence. Start with
 the package contract in
-[`packages/headless/README.md`](../packages/headless/README.md).
+[`packages/workpaper/README.md`](../packages/workpaper/README.md).
 
 ## Setup
 
@@ -27,7 +27,7 @@ cd bilig-workpaper-service
 npm init -y
 npm pkg set type=module
 npm pkg set scripts.start="tsx service.ts"
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install --save-dev tsx typescript @types/node
 ```
 
@@ -41,7 +41,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 let persistedWorkbook = serializeWorkbook(createInitialWorkbook())
 
@@ -243,7 +243,7 @@ as a positive persistence signal, not a golden value.
   below. It keeps storage as parameterized SQL plus serialized WorkPaper JSON.
 - Return computed values after every controlled edit. A successful HTTP status
   only proves the route ran; readback proves the workbook recalculated.
-- Use public `@bilig/headless` exports only. Do not import from this monorepo's
+- Use public `@bilig/workpaper` exports only. Do not import from this monorepo's
   internal `src/` or `dist/` paths in a consumer service.
 
 ## Plain node-postgres (`pg`) JSON persistence
@@ -252,7 +252,7 @@ Use this path when the service already owns a `pg` `Pool` or `Client` and you
 do not want an ORM or query builder. The WorkPaper document remains an opaque
 serialized JSON string in application code; Postgres only stores and returns it.
 
-Install `pg` and its TypeScript declarations alongside `@bilig/headless`:
+Install `pg` and its TypeScript declarations alongside `@bilig/workpaper`:
 
 ```sh
 npm install pg
@@ -280,7 +280,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const documentId = 'revenue-plan'

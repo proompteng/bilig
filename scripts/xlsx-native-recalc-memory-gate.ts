@@ -13,7 +13,7 @@ import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const mib = 1024 * 1024
 const defaultCacheDir = join(rootDir, '.cache', 'xlsx-native-recalc-memory-gate')
-const defaultCliPath = join(rootDir, 'packages', 'xlsx-formula-recalc', 'dist', 'cli.js')
+const defaultCliPath = join(rootDir, 'packages', '@bilig/xlsx-formula-recalc', 'dist', 'cli.js')
 const defaultSyntheticRowCount = 50_000
 const defaultTimeoutMs = 180_000
 const rssCheckIntervalMs = 10

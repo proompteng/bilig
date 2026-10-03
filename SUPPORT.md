@@ -6,7 +6,7 @@ and documentation gaps.
 Before opening an issue:
 
 - check the root `README.md`
-- check `packages/headless/README.md` for WorkPaper API usage
+- check `packages/workpaper/README.md` for WorkPaper API usage
 - run the smallest command that reproduces the problem
 - include the package name, version, Node version, OS, and exact workbook or
   formula input when possible
@@ -16,7 +16,7 @@ Good support requests include:
 - a minimal workbook or script
 - expected and actual values
 - command output or failing test names
-- whether the issue affects `@bilig/headless`, `@bilig/core`,
+- whether the issue affects `@bilig/workpaper`, `@bilig/core`,
   `@bilig/formula`, the browser app, sync, or the grid UI
 
 Do not use public support channels for secrets, private workbook data, or

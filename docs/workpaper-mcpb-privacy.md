@@ -56,4 +56,3 @@ For privacy, security, or support questions about this extension, open an issue
 in the Bilig repository:
 
 <https://github.com/proompteng/bilig/issues>
-

@@ -1,7 +1,7 @@
 name: Starter task
 description: Propose a small task that a new contributor can complete with clear proof.
-title: "[starter]: "
-labels: ["help wanted"]
+title: '[starter]: '
+labels: ['help wanted']
 body:
   - type: markdown
     attributes:
@@ -31,7 +31,7 @@ body:
       label: Suggested approach
       description: Give enough context for someone new to make progress without knowing the whole repo.
       placeholder: |
-        Follow the existing revenue-plan example shape, use public @bilig/headless exports, and keep the output deterministic.
+        Follow the existing revenue-plan example shape, use public @bilig/workpaper exports, and keep the output deterministic.
     validations:
       required: true
   - type: textarea

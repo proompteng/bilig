@@ -86,7 +86,7 @@ export interface DocsDiscoveryContext {
 
 export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> {
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-  const docsRoot = join(repoRoot, 'docs')
+  const docsRoot = join(repoRoot, '.cache', 'docs-source')
   const siteRoot = 'https://proompteng.github.io/bilig/'
   const expectedSitemapUrls = docsSiteSources.map(([urlPath]) => `${siteRoot}${urlPath}`)
   const sourceFilesByUrl = new Map<string, string>(docsSiteSources.map(([urlPath, sourceFile]) => [`${siteRoot}${urlPath}`, sourceFile]))
@@ -182,11 +182,11 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     readFile(join(docsRoot, '.well-known', 'skills', 'index.json'), 'utf8'),
     readFile(join(docsRoot, 'starter-issues.md'), 'utf8'),
     readFile(join(docsRoot, 'new-contributor-guide.md'), 'utf8'),
-    readFile(join(repoRoot, 'packages', 'headless', 'package.json'), 'utf8'),
+    readFile(join(repoRoot, 'packages', 'workpaper', 'package.json'), 'utf8'),
     readFile(join(repoRoot, 'examples', 'headless-workpaper', 'package.json'), 'utf8'),
-    readFile(join(repoRoot, 'packages', 'headless', 'README.md'), 'utf8'),
-    readFile(join(repoRoot, 'packages', 'headless', 'AGENTS.md'), 'utf8'),
-    readFile(join(repoRoot, 'packages', 'headless', 'SKILL.md'), 'utf8'),
+    readFile(join(repoRoot, 'packages', 'workpaper', 'README.md'), 'utf8'),
+    readFile(join(repoRoot, 'packages', 'workpaper', 'AGENTS.md'), 'utf8'),
+    readFile(join(repoRoot, 'packages', 'workpaper', 'SKILL.md'), 'utf8'),
     readFile(join(repoRoot, 'packages', 'excel-import', 'README.md'), 'utf8'),
     readFile(join(repoRoot, 'Dockerfile'), 'utf8'),
     readFile(join(docsRoot, 'public-api.md'), 'utf8'),
@@ -325,7 +325,7 @@ export function parseHeadlessPackageVersion(packageJson: string): string {
       ? Reflect.get(parsedPackage, 'version')
       : undefined
   if (typeof version !== 'string') {
-    throw new Error('packages/headless/package.json is missing a string version')
+    throw new Error('packages/workpaper/package.json is missing a string version')
   }
   return version
 }

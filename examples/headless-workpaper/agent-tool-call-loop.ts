@@ -4,7 +4,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 type CellAddress = NonNullable<ReturnType<WorkPaperInstance['simpleCellAddressFromString']>>

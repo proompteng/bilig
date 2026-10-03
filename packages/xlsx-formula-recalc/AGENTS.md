@@ -1,10 +1,10 @@
-# xlsx-formula-recalc Agent Notes
+# @bilig/xlsx-formula-recalc Agent Notes
 
 Use this package when a Node.js task edits an `.xlsx` workbook and needs fresh
 formula results before returning the file or reading output cells.
 
 The canonical public package is `@bilig/xlsx-formula-recalc`. The unscoped
-`xlsx-formula-recalc` package remains a compatibility and search alias, but new
+`@bilig/xlsx-formula-recalc` package remains a compatibility and search alias, but new
 agent instructions should use the scoped package first.
 
 Start with the no-project evaluator:

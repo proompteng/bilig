@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { exportXlsxSourceLiteralPatches, readXlsxTargetCell } from '@bilig/xlsx'
 import ExcelJS from 'exceljs'
-import { recalculateExceljsWorkbook } from 'exceljs-formula-recalc'
-import { recalculateXlsx } from 'xlsx-formula-recalc'
+import { recalculateExceljsWorkbook } from '@bilig/exceljs-formula-recalc'
+import { recalculateXlsx } from '@bilig/xlsx-formula-recalc'
 import XlsxPopulate from 'xlsx-populate'
 
 const exampleDir = dirname(fileURLToPath(import.meta.url))

@@ -10,7 +10,7 @@ import { recalculateXlsxFileToFile } from '../index.js'
 
 const officeRelationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
-describe('xlsx-formula-recalc native aggregates', () => {
+describe('@bilig/xlsx-formula-recalc native aggregates', () => {
   it('hydrates high-index shared string targets without replaying the shared-string buffer', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'xlsx-native-shared-string-buffer-'))
     try {

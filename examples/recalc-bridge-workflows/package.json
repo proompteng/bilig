@@ -10,10 +10,10 @@
     "start": "npm run smoke"
   },
   "dependencies": {
+    "@bilig/exceljs-formula-recalc": "latest",
     "@bilig/xlsx": "file:../../packages/xlsx",
+    "@bilig/xlsx-formula-recalc": "latest",
     "exceljs": "4.4.0",
-    "exceljs-formula-recalc": "latest",
-    "xlsx-formula-recalc": "latest",
     "xlsx-populate": "1.21.0"
   },
   "engines": {

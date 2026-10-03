@@ -196,7 +196,7 @@ Use file-backed stdio for private project state:
 ```json
 {
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "command": "npm",
       "args": [
         "exec",
@@ -259,7 +259,7 @@ The exact values can change, but the evaluator result should look like this:
   "verified": true,
   "packageVersions": {
     "@bilig/workpaper": "0.164.11",
-    "xlsx-formula-recalc": "0.164.11"
+    "@bilig/xlsx-formula-recalc": "0.164.11"
   },
   "evidence": {
     "editedCell": "Inputs!B3",

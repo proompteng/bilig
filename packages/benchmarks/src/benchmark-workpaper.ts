@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks'
 import type { RecalcMetrics } from '@bilig/protocol'
-import { WorkPaper, type WorkPaperSheet } from '../../headless/src/work-paper.js'
+import { WorkPaper, type WorkPaperSheet } from '../../workpaper/src/work-paper.js'
 import { measureMemory, sampleMemory, type MemoryMeasurement } from './metrics.js'
 import {
   address,

@@ -157,16 +157,16 @@ a write token.
 
 ## Inputs
 
-| Input                | Default | Use                                                                               |
-| -------------------- | ------- | --------------------------------------------------------------------------------- |
-| `workbook`           |         | Path to one workbook to inspect. Kept for existing copied workflows.              |
-| `workbooks`          |         | Glob, comma list, or newline list of XLSX workbooks to inspect.                   |
-| `changed-files-only` | `false` | Only inspect matched XLSX files changed in the pull request or current git diff.  |
+| Input                | Default  | Use                                                                               |
+| -------------------- | -------- | --------------------------------------------------------------------------------- |
+| `workbook`           |          | Path to one workbook to inspect. Kept for existing copied workflows.              |
+| `workbooks`          |          | Glob, comma list, or newline list of XLSX workbooks to inspect.                   |
+| `changed-files-only` | `false`  | Only inspect matched XLSX files changed in the pull request or current git diff.  |
 | `package-version`    | 0.164.11 | npm version or dist-tag for `@bilig/xlsx-formula-recalc`. Pin this in production. |
-| `inspect-limit`      | `all`   | Formula cells to recompute during inspection. Use `all` or a positive integer.    |
-| `json-output`        |         | Optional path for the JSON report.                                                |
-| `markdown-output`    |         | Optional path for the Markdown report.                                            |
-| `fail-on-stale`      | `false` | Fail the job when inspected formula cells have stale cached values.               |
+| `inspect-limit`      | `all`    | Formula cells to recompute during inspection. Use `all` or a positive integer.    |
+| `json-output`        |          | Optional path for the JSON report.                                                |
+| `markdown-output`    |          | Optional path for the Markdown report.                                            |
+| `fail-on-stale`      | `false`  | Fail the job when inspected formula cells have stale cached values.               |
 
 ## Outputs
 

@@ -7,22 +7,54 @@
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
   "references": [
-    { "path": "../../packages/agent-api" },
-    { "path": "../../packages/actors" },
-    { "path": "../../packages/binary-protocol" },
-    { "path": "../../packages/benchmarks" },
-    { "path": "../../packages/contracts" },
-    { "path": "../../packages/core" },
-    { "path": "../../packages/excel-import" },
-    { "path": "../../packages/formula" },
-    { "path": "../../packages/grid" },
-    { "path": "../../packages/headless" },
-    { "path": "../../packages/protocol" },
-    { "path": "../../packages/runtime-kernel" },
-    { "path": "../../packages/worker-transport" },
-    { "path": "../../packages/workbook" },
-    { "path": "../../packages/zero-sync" },
-    { "path": "../../packages/test-fuzz" }
+    {
+      "path": "../../packages/agent-api"
+    },
+    {
+      "path": "../../packages/actors"
+    },
+    {
+      "path": "../../packages/binary-protocol"
+    },
+    {
+      "path": "../../packages/benchmarks"
+    },
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/excel-import"
+    },
+    {
+      "path": "../../packages/formula"
+    },
+    {
+      "path": "../../packages/grid"
+    },
+    {
+      "path": "../../packages/workpaper"
+    },
+    {
+      "path": "../../packages/protocol"
+    },
+    {
+      "path": "../../packages/runtime-kernel"
+    },
+    {
+      "path": "../../packages/worker-transport"
+    },
+    {
+      "path": "../../packages/workbook"
+    },
+    {
+      "path": "../../packages/zero-sync"
+    },
+    {
+      "path": "../../packages/test-fuzz"
+    }
   ],
   "include": ["src/**/*", "vite.config.ts"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/__tests__/**"]

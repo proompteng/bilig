@@ -4,7 +4,7 @@ This example shows the concrete server-side XLSX workflow:
 
 1. build a pricing workbook,
 2. export it as `pricing-model-source.xlsx`,
-3. import the XLSX through `@bilig/headless/xlsx`,
+3. import the XLSX through `@bilig/workpaper/xlsx`,
 4. edit input cells through the WorkPaper API,
 5. read recalculated formula values,
 6. export `pricing-model-edited.xlsx`,

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { createN8nForecastProof } from '@bilig/headless'
+import { createN8nForecastProof } from '@bilig/workpaper'
 
 const n8nNodeDir = join(process.cwd(), 'integrations', 'n8n-nodes-workpaper')
 

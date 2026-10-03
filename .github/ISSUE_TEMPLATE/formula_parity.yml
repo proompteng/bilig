@@ -1,7 +1,7 @@
 name: Formula parity report
 description: Report a reduced Excel-compatible formula or workbook result mismatch.
-title: "[formula]: "
-labels: ["bug", "area: formula", "needs reduced fixture"]
+title: '[formula]: '
+labels: ['bug', 'area: formula', 'needs reduced fixture']
 body:
   - type: markdown
     attributes:
@@ -89,7 +89,7 @@ body:
       label: Environment
       description: Package version, commit, Node, pnpm, OS, and import path.
       placeholder: |
-        @bilig/headless:
+        @bilig/workpaper:
         Commit:
         Node:
         pnpm:

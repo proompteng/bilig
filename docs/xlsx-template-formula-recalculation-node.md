@@ -32,7 +32,7 @@ Keep the workflow explicit:
    verified readback path.
 
 For tiny formula sets, `xlsx-calc` may be enough. For exact Excel behavior, use
-Excel, LibreOffice, or Microsoft Graph. Use `@bilig/headless` when the service
+Excel, LibreOffice, or Microsoft Graph. Use `@bilig/workpaper` when the service
 can own the workbook state locally and needs write, recalculate, readback,
 JSON persistence, and restore checks.
 
@@ -43,8 +43,8 @@ and read the output cells that matter to the API:
 
 ```ts
 import { readFileSync } from 'node:fs'
-import { WorkPaper } from '@bilig/headless'
-import { importXlsx } from '@bilig/headless/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
+import { importXlsx } from '@bilig/workpaper/xlsx'
 
 const imported = importXlsx(new Uint8Array(readFileSync('result.xlsx')), 'result.xlsx')
 const workbook = WorkPaper.buildFromSnapshot(imported.snapshot, {

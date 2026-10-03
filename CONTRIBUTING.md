@@ -54,7 +54,7 @@ For targeted changes, run the smallest useful gate first:
   [`docs/new-contributor-guide.md#first-time-command-checklist`](docs/new-contributor-guide.md#first-time-command-checklist)
 - Formula or WorkPaper behavior: `pnpm test:correctness:core`
 - Formula package changes: `pnpm --filter @bilig/formula build`
-- Headless package changes: `pnpm --filter @bilig/headless build`
+- Headless package changes: `pnpm --filter @bilig/workpaper build`
 - Import/export changes: `pnpm test:correctness:xlsx`
 - Browser shell changes: `pnpm test:browser`
 - Docs discovery changes: `pnpm docs:discovery:check`
@@ -100,7 +100,7 @@ Start by reading the existing fixture shape before adding a new case:
   canonical fixtures through the JavaScript evaluator.
 - `packages/core/src/__tests__/formula-runtime-correctness.test.ts` covers the
   production runtime path for fixtures that should run through the engine.
-- `packages/headless/fixtures/xlsx-corpus/` holds checked-in XLSX cached-result
+- `packages/workpaper/fixtures/xlsx-corpus/` holds checked-in XLSX cached-result
   reductions for XLSX fixture compatibility regressions.
 
 A minimal formula-parity contribution should:
@@ -169,3 +169,7 @@ Forgejo `origin` is the primary repo workflow for maintainers. GitHub mirrors
 the public verification contract and public collaboration surface. External
 pull requests on GitHub are welcome; maintainers handle any Forgejo-side
 mirroring needed after review.
+
+## Development schema baseline
+
+Fresh databases start from the current Zero schema, including positive sheet IDs and unique client mutation IDs. Bootstrap no longer upgrades historical layouts or replays the eight retired data backfills. Development databases that predate this baseline must be recreated. The production migration ledger was verified complete before retiring those implementations.

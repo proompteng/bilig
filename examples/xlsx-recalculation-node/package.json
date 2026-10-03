@@ -8,8 +8,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bilig/headless": "latest",
-    "xlsx-formula-recalc": "latest"
+    "@bilig/workpaper": "latest",
+    "@bilig/xlsx-formula-recalc": "latest"
   },
   "devDependencies": {
     "@types/node": "25.5.0",

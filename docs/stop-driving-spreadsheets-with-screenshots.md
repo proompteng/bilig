@@ -99,37 +99,35 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from "@bilig/workpaper";
+} from '@bilig/workpaper'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
-    ["Metric", "Value"],
-    ["Seats", 25],
-    ["Price", 147],
+    ['Metric', 'Value'],
+    ['Seats', 25],
+    ['Price', 147],
   ],
   Summary: [
-    ["Metric", "Value"],
-    ["Total", "=Inputs!B2*Inputs!B3"],
+    ['Metric', 'Value'],
+    ['Total', '=Inputs!B2*Inputs!B3'],
   ],
-});
+})
 
-const inputs = workbook.getSheetId("Inputs");
-const summary = workbook.getSheetId("Summary");
+const inputs = workbook.getSheetId('Inputs')
+const summary = workbook.getSheetId('Summary')
 if (inputs === undefined || summary === undefined) {
-  throw new Error("Workbook did not create the expected sheets");
+  throw new Error('Workbook did not create the expected sheets')
 }
 
-const before = readNumber(workbook.getCellValue({ sheet: summary, row: 1, col: 1 }));
-workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 40);
-const after = readNumber(workbook.getCellValue({ sheet: summary, row: 1, col: 1 }));
+const before = readNumber(workbook.getCellValue({ sheet: summary, row: 1, col: 1 }))
+workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 40)
+const after = readNumber(workbook.getCellValue({ sheet: summary, row: 1, col: 1 }))
 
-const saved = serializeWorkPaperDocument(
-  exportWorkPaperDocument(workbook, { includeConfig: true }),
-);
-const restored = createWorkPaperFromDocument(parseWorkPaperDocument(saved));
-const restoredSummary = restored.getSheetId("Summary");
+const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
+const restored = createWorkPaperFromDocument(parseWorkPaperDocument(saved))
+const restoredSummary = restored.getSheetId('Summary')
 if (restoredSummary === undefined) {
-  throw new Error("Restored workbook did not create the Summary sheet");
+  throw new Error('Restored workbook did not create the Summary sheet')
 }
 
 const afterRestore = readNumber(
@@ -138,27 +136,23 @@ const afterRestore = readNumber(
     row: 1,
     col: 1,
   }),
-);
+)
 
 console.log({
   before,
   after,
   afterRestore,
   verified: after === afterRestore,
-});
+})
 
 function readNumber(cell: unknown): number {
-  if (
-    typeof cell === "object" &&
-    cell !== null &&
-    typeof (cell as { value: unknown }).value === "number"
-  ) {
-    return (cell as { value: number }).value;
+  if (typeof cell === 'object' && cell !== null && typeof (cell as { value: unknown }).value === 'number') {
+    return (cell as { value: number }).value
   }
-  if (typeof cell === "number") {
-    return cell;
+  if (typeof cell === 'number') {
+    return cell
   }
-  throw new Error(`Expected numeric cell value, got ${JSON.stringify(cell)}`);
+  throw new Error(`Expected numeric cell value, got ${JSON.stringify(cell)}`)
 }
 ```
 
@@ -228,7 +222,7 @@ formula-backed runtime boundary, not a finished Excel clone.
 
 ## Useful Next Pages
 
-- [Try `@bilig/headless` in Node](try-bilig-headless-in-node.md)
+- [Try `@bilig/workpaper` in Node](try-bilig-headless-in-node.md)
 - [Node service WorkPaper recipe](node-service-workpaper-recipe.md)
 - [ExcelJS formula recalculation in Node.js](exceljs-formula-recalculation-node.md)
 - [Agent tool-calling recipe](agent-workpaper-tool-calling-recipe.md)

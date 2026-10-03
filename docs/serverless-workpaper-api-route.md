@@ -10,7 +10,7 @@ image: /assets/github-social-preview.png
 
 # Serverless WorkPaper API Route
 
-This recipe shows how to put `@bilig/headless` behind a small API route using
+This recipe shows how to put `@bilig/workpaper` behind a small API route using
 web-standard `Request` and `Response` objects. Use it when a serverless
 function, route handler, queue worker, or coding-agent tool needs spreadsheet
 formulas without keeping a browser grid open.
@@ -89,7 +89,7 @@ cd bilig-serverless-workpaper
 npm init -y
 npm pkg set type=module
 npm pkg set scripts.start="tsx route.ts"
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install --save-dev tsx typescript @types/node
 ```
 
@@ -104,7 +104,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 const state = {
   workbookJson: serializeWorkbook(createInitialWorkbook()),
@@ -547,7 +547,7 @@ Next.js route segment.
 
 Put the shared WorkPaper route in `api/workpaper-route.ts`:
 
-- keep the `@bilig/headless` imports
+- keep the `@bilig/workpaper` imports
 - keep `state`, `handleWorkPaperRequest()`, and every workbook helper
 - omit `createServer()`, `toWebRequest()`, and the local Node adapter block
 
@@ -688,7 +688,7 @@ can stay as thin as the Worker adapter.
 
 Put the shared WorkPaper route in `src/workpaper-route.ts`:
 
-- keep the `@bilig/headless` imports
+- keep the `@bilig/workpaper` imports
 - keep `state`, `handleWorkPaperRequest()`, and every workbook helper
 - omit `createServer()`, `toWebRequest()`, and the local Node adapter block
 
@@ -835,7 +835,7 @@ If the shared WorkPaper module runs directly in Deno instead of a bundled build,
 import the published package with Deno's npm specifier:
 
 ```ts
-import { WorkPaper } from 'npm:@bilig/headless'
+import { WorkPaper } from 'npm:@bilig/workpaper'
 ```
 
 The same route paths apply when the Deno server is running locally:
@@ -857,8 +857,8 @@ Supabase Edge Functions run on Deno and receive Fetch `Request` objects, so the
 shared WorkPaper handler can stay the route boundary. Put the shared route in
 `supabase/functions/workpaper/workpaper-route.ts`:
 
-- keep the `@bilig/headless` imports, using Deno's npm specifier:
-  `npm:@bilig/headless`
+- keep the `@bilig/workpaper` imports, using Deno's npm specifier:
+  `npm:@bilig/workpaper`
 - keep `state`, `handleWorkPaperRequest()`, and every workbook helper
 - omit `createServer()`, `toWebRequest()`, and the local Node adapter block
 
@@ -914,7 +914,7 @@ each endpoint file as a pass-through.
 
 Create `src/lib/server/workpaper-route.ts` from the shared route code above:
 
-- keep the `@bilig/headless` imports
+- keep the `@bilig/workpaper` imports
 - keep `state`, `handleWorkPaperRequest()`, and every workbook helper
 - omit `createServer()`, `toWebRequest()`, and the local Node adapter block
 
@@ -963,7 +963,7 @@ handler.
 
 Create `app/workpaper-route.server.ts` from the shared route code above:
 
-- keep the `@bilig/headless` imports
+- keep the `@bilig/workpaper` imports
 - keep `state`, `handleWorkPaperRequest()`, and every workbook helper
 - omit `createServer()`, `toWebRequest()`, and the local Node adapter block
 
@@ -1016,7 +1016,7 @@ stay framework-agnostic.
 
 Create `workpaper-route.ts` from the shared route code above:
 
-- keep the `@bilig/headless` imports
+- keep the `@bilig/workpaper` imports
 - keep `state`, `handleWorkPaperRequest()`, and every workbook helper
 - omit `createServer()`, `toWebRequest()`, and the local Node adapter block
 
@@ -1144,7 +1144,7 @@ returned `Response` back to Nest's response object.
 
 Create `workpaper-route.ts` from the shared route code above:
 
-- keep the `@bilig/headless` imports
+- keep the `@bilig/workpaper` imports
 - keep `state`, `handleWorkPaperRequest()`, and every workbook helper
 - omit `createServer()`, `toWebRequest()`, and the local Node adapter block
 
@@ -1713,7 +1713,7 @@ returned `Response` back to Firebase.
 
 Create `functions/workpaper-route.ts` from the shared route code above:
 
-- keep the `@bilig/headless` imports
+- keep the `@bilig/workpaper` imports
 - keep `state`, `handleWorkPaperRequest()`, and every workbook helper
 - omit `createServer()`, `toWebRequest()`, and the local Node adapter block
 

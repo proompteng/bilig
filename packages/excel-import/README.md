@@ -5,11 +5,11 @@ CSV/XLSX-to-`WorkbookSnapshot` import helpers and supported-subset XLSX export h
 ## Package Status
 
 This repository package owns the CSV/XLSX implementation. Public npm consumers
-should import the same implementation from the `@bilig/headless/xlsx` subpath so
+should import the same implementation from the `@bilig/workpaper/xlsx` subpath so
 first-time XLSX import/export works from one published package.
 
 ```sh
-pnpm add @bilig/headless
+pnpm add @bilig/workpaper
 ```
 
 Repository development:
@@ -24,8 +24,8 @@ pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts
 
 ```ts
 import { readFileSync, writeFileSync } from 'node:fs'
-import { WorkPaper } from '@bilig/headless'
-import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
+import { exportXlsx, importXlsx } from '@bilig/workpaper/xlsx'
 
 const imported = importXlsx(new Uint8Array(readFileSync('model.xlsx')), 'model.xlsx')
 const workbook = WorkPaper.buildFromSnapshot(imported.snapshot, {
@@ -83,7 +83,7 @@ tooltips, and display text during no-op XLSX roundtrips.
 ## CSV Import
 
 ```ts
-import { importCsv } from '@bilig/headless/xlsx'
+import { importCsv } from '@bilig/workpaper/xlsx'
 
 const imported = importCsv('Account;Amount\n4000;125,50', 'ledger.csv', {
   delimiter: ';',

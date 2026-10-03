@@ -178,7 +178,7 @@ with a Development Tools entry for the Bilig WorkPaper MCP server. Treat it as
 pending until the maintainer merges the pull request.
 
 The ToolSDK MCP Registry pull request was opened on May 13, 2026 with a
-Developer Tools package entry for `@bilig/headless` and the
+Developer Tools package entry for `@bilig/workpaper` and the
 `bilig-workpaper-mcp` stdio binary. Biome passed on the pull request; the
 integration job failed before package validation because the base workflow used
 latest pnpm on Node.js 20 and hit `node:sqlite` before reading the Bilig entry.

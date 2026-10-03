@@ -159,7 +159,7 @@ describe('runtime release helpers', () => {
       { packageName: '@bilig/protocol', version: '0.10.1' },
       { packageName: '@bilig/core', version: '0.10.1' },
       { packageName: '@bilig/future-runtime', version: null },
-      { packageName: '@bilig/headless', version: '0.10.0' },
+      { packageName: '@bilig/workpaper', version: '0.10.0' },
     ]
 
     expect(resolvePublishedRuntimePackageBaseline(publishedVersions, { allowPartialPublishedSet: true })).toBe('0.10.1')
@@ -175,7 +175,7 @@ describe('runtime release helpers', () => {
           { packageName: '@bilig/protocol', version: '0.10.0' },
           { packageName: '@bilig/core', version: '0.10.0' },
           { packageName: '@bilig/future-runtime', version: null },
-          { packageName: '@bilig/headless', version: '0.10.0' },
+          { packageName: '@bilig/workpaper', version: '0.10.0' },
         ],
         { allowPartialPublishedSet: false },
       ),
@@ -187,7 +187,7 @@ describe('runtime release helpers', () => {
       missingPublishedRuntimePackageNames([
         { packageName: '@bilig/protocol', version: '0.10.1' },
         { packageName: '@bilig/future-runtime', version: null },
-        { packageName: '@bilig/headless', version: '0.10.0' },
+        { packageName: '@bilig/workpaper', version: '0.10.0' },
       ]),
     ).toEqual(['@bilig/future-runtime'])
   })
@@ -196,7 +196,7 @@ describe('runtime release helpers', () => {
     const publishedVersions = [
       { packageName: '@bilig/protocol', version: '0.10.1' },
       { packageName: '@bilig/future-runtime', version: null },
-      { packageName: '@bilig/headless', version: '0.10.0' },
+      { packageName: '@bilig/workpaper', version: '0.10.0' },
     ]
 
     expect(
@@ -223,8 +223,8 @@ describe('runtime release helpers', () => {
   it('allows explicitly skipping unprovisioned leaf packages during partial recovery', () => {
     const publishedVersions = [
       { packageName: '@bilig/protocol', version: '0.36.0' },
-      { packageName: 'sheetjs-formula-recalc', version: null },
-      { packageName: 'exceljs-formula-recalc', version: '0.35.1' },
+      { packageName: '@bilig/sheetjs-formula-recalc', version: null },
+      { packageName: '@bilig/exceljs-formula-recalc', version: '0.35.1' },
     ]
 
     expect(
@@ -236,8 +236,8 @@ describe('runtime release helpers', () => {
       }),
     ).toEqual({
       publishAllowed: true,
-      missingPackageNames: ['sheetjs-formula-recalc'],
-      reason: 'unprovisioned npm package name(s) will be skipped: sheetjs-formula-recalc',
+      missingPackageNames: ['@bilig/sheetjs-formula-recalc'],
+      reason: 'unprovisioned npm package name(s) will be skipped: @bilig/sheetjs-formula-recalc',
     })
   })
 
@@ -246,7 +246,6 @@ describe('runtime release helpers', () => {
       { dir: 'packages/protocol', name: '@bilig/protocol', version: '0.164.0' },
       { dir: 'packages/formula', name: '@bilig/formula', version: '0.164.0' },
       { dir: 'packages/xlsx', name: '@bilig/xlsx', version: '0.164.0' },
-      { dir: 'packages/headless', name: '@bilig/headless', version: '0.164.0' },
       { dir: 'packages/workpaper', name: '@bilig/workpaper', version: '0.164.0' },
     ] as const
 
@@ -256,7 +255,7 @@ describe('runtime release helpers', () => {
         missingPackageNames: new Set(['@bilig/xlsx']),
         targetVersionPublishedPackageNames: new Set(['@bilig/protocol', '@bilig/formula']),
       }).map((runtimePackage) => runtimePackage.name),
-    ).toEqual(['@bilig/xlsx', '@bilig/headless', '@bilig/workpaper', '@bilig/protocol', '@bilig/formula'])
+    ).toEqual(['@bilig/xlsx', '@bilig/workpaper', '@bilig/protocol', '@bilig/formula'])
   })
 
   it('uses strict boolean parsing for runtime publish controls', () => {
@@ -274,13 +273,13 @@ describe('runtime release helpers', () => {
   it('keeps the Excel importer runtime-affecting without requiring standalone npm publication', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/excel-import')
     expect(RUNTIME_NPM_PACKAGE_DIRS).not.toContain('packages/excel-import')
-    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/headless')
+    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/workpaper')
   })
 
   it('publishes @bilig/xlsx before dependent runtime packages', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/xlsx')
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/xlsx')
-    expect(RUNTIME_NPM_PACKAGE_DIRS.indexOf('packages/xlsx')).toBeLessThan(RUNTIME_NPM_PACKAGE_DIRS.indexOf('packages/headless'))
+    expect(RUNTIME_NPM_PACKAGE_DIRS.indexOf('packages/xlsx')).toBeLessThan(RUNTIME_NPM_PACKAGE_DIRS.indexOf('packages/workpaper'))
     expect(isRuntimeAffectingPath('packages/xlsx/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/xlsx/src/index.ts')).toBe(true)
   })
@@ -293,68 +292,40 @@ describe('runtime release helpers', () => {
     expect(isRuntimePackageContentPath('packages/create-workpaper/agent-overlay/.claude/skills/bilig-workpaper/SKILL.md')).toBe(true)
   })
 
-  it('publishes the unscoped bilig-workpaper package through the common runtime workflow', () => {
-    expect(RUNTIME_PACKAGE_DIRS).toContain('packages/bilig')
-    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/bilig')
-    expect(isRuntimeAffectingPath('packages/bilig/package.json')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig/src/index.ts')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig/AGENTS.md')).toBe(true)
-  })
-
   it('publishes the scoped WorkPaper package through the common runtime workflow', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/workpaper')
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/workpaper')
     expect(isRuntimeAffectingPath('packages/workpaper/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/workpaper/src/index.ts')).toBe(true)
     expect(isRuntimePackageContentPath('packages/workpaper/README.md')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/workpaper/AGENTS.md')).toBe(true)
   })
 
-  it('publishes the XLSX formula recalculation package through the common runtime workflow', () => {
+  it('publishes the scoped XLSX formula recalculation package through the common runtime workflow', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/xlsx-formula-recalc')
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/xlsx-formula-recalc')
     expect(isRuntimeAffectingPath('packages/xlsx-formula-recalc/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/xlsx-formula-recalc/src/index.ts')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/xlsx-formula-recalc/README.md')).toBe(true)
     expect(isRuntimePackageContentPath('packages/xlsx-formula-recalc/AGENTS.md')).toBe(true)
   })
 
-  it('publishes the scoped XLSX formula recalculation package through the common runtime workflow', () => {
-    expect(RUNTIME_PACKAGE_DIRS).toContain('packages/bilig-xlsx-formula-recalc')
-    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/bilig-xlsx-formula-recalc')
-    expect(isRuntimeAffectingPath('packages/bilig-xlsx-formula-recalc/package.json')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-xlsx-formula-recalc/src/index.ts')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-xlsx-formula-recalc/README.md')).toBe(true)
-  })
-
-  it('publishes the SheetJS formula recalculation package through the common runtime workflow', () => {
+  it('publishes the scoped SheetJS formula recalculation package through the common runtime workflow', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/sheetjs-formula-recalc')
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/sheetjs-formula-recalc')
     expect(isRuntimeAffectingPath('packages/sheetjs-formula-recalc/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/sheetjs-formula-recalc/src/index.ts')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/sheetjs-formula-recalc/README.md')).toBe(true)
     expect(isRuntimePackageContentPath('packages/sheetjs-formula-recalc/AGENTS.md')).toBe(true)
   })
 
-  it('publishes the scoped SheetJS formula recalculation package through the common runtime workflow', () => {
-    expect(RUNTIME_PACKAGE_DIRS).toContain('packages/bilig-sheetjs-formula-recalc')
-    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/bilig-sheetjs-formula-recalc')
-    expect(isRuntimeAffectingPath('packages/bilig-sheetjs-formula-recalc/package.json')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-sheetjs-formula-recalc/src/index.ts')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-sheetjs-formula-recalc/README.md')).toBe(true)
-  })
-
-  it('publishes the ExcelJS formula recalculation package through the common runtime workflow', () => {
+  it('publishes the scoped ExcelJS formula recalculation package through the common runtime workflow', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/exceljs-formula-recalc')
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/exceljs-formula-recalc')
     expect(isRuntimeAffectingPath('packages/exceljs-formula-recalc/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/exceljs-formula-recalc/src/index.ts')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/exceljs-formula-recalc/README.md')).toBe(true)
     expect(isRuntimePackageContentPath('packages/exceljs-formula-recalc/AGENTS.md')).toBe(true)
-  })
-
-  it('publishes the scoped ExcelJS formula recalculation package through the common runtime workflow', () => {
-    expect(RUNTIME_PACKAGE_DIRS).toContain('packages/bilig-exceljs-formula-recalc')
-    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/bilig-exceljs-formula-recalc')
-    expect(isRuntimeAffectingPath('packages/bilig-exceljs-formula-recalc/package.json')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-exceljs-formula-recalc/src/index.ts')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-exceljs-formula-recalc/README.md')).toBe(true)
   })
 
   it('keeps runtime package bins on committed files instead of generated build output', () => {
@@ -391,7 +362,7 @@ describe('runtime release helpers', () => {
   })
 
   it('publishes XLSX import/export through the headless package subpath', () => {
-    const manifest = JSON.parse(readFileSync(resolve(repoRoot, 'packages/headless/package.json'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(resolve(repoRoot, 'packages/workpaper/package.json'), 'utf8'))
 
     expect(manifest.exports['./xlsx']).toEqual({
       types: './dist/xlsx.d.ts',
@@ -418,15 +389,15 @@ describe('runtime release helpers', () => {
 
   it('separates package content changes from release automation changes', () => {
     expect(isRuntimePackageContentPath('packages/core/src/index.ts')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/headless/package.json')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig/package.json')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/workpaper/package.json')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/workpaper/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/workpaper/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/xlsx-formula-recalc/package.json')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-xlsx-formula-recalc/package.json')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/xlsx-formula-recalc/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/sheetjs-formula-recalc/package.json')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-sheetjs-formula-recalc/package.json')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/sheetjs-formula-recalc/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('packages/exceljs-formula-recalc/package.json')).toBe(true)
-    expect(isRuntimePackageContentPath('packages/bilig-exceljs-formula-recalc/package.json')).toBe(true)
+    expect(isRuntimePackageContentPath('packages/exceljs-formula-recalc/package.json')).toBe(true)
     expect(isRuntimePackageContentPath('scripts/plan-runtime-release.ts')).toBe(false)
     expect(isRuntimePackageContentPath('.github/workflows/headless-package.yml')).toBe(false)
   })
@@ -451,7 +422,7 @@ describe('runtime release helpers', () => {
   it('keeps release-please manifest version in the runtime release sync path', () => {
     const source = readFileSync(resolve(repoRoot, 'scripts/sync-runtime-package-versions.ts'), 'utf8')
 
-    expect(source).toContain("manifest['packages/headless'] = version")
+    expect(source).toContain("manifest['packages/workpaper'] = version")
     expect(source).toContain('syncReleasePleaseManifestVersion')
     expect(source).toContain("join(rootDir, 'gemini-extension.json')")
     expect(source).toContain('syncGeminiExtensionVersion')

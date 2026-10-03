@@ -1,4 +1,4 @@
-import type { WorkPaperSheet, WorkPaperSheets } from '@bilig/headless'
+import type { WorkPaperSheet, WorkPaperSheets } from '@bilig/workpaper'
 
 export type CellContent = WorkPaperSheet[number][number]
 

@@ -8,7 +8,7 @@ canonical_url: https://proompteng.github.io/bilig/formula-edge-xlookup-exact-fix
 
 # XLOOKUP Exact Fixture Walkthrough
 
-Status: public formula-edge fixture note for `@bilig/headless`.
+Status: public formula-edge fixture note for `@bilig/workpaper`.
 
 This page documents one canonical lookup fixture. It is intentionally narrow:
 the claim is that the current exact-match `XLOOKUP` fixture is represented in

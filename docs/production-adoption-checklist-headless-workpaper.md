@@ -1,7 +1,7 @@
 ---
 title: Production adoption checklist for headless WorkPaper
 published: true
-description: A service-readiness checklist for adopting @bilig/headless in Node services and agent tools without overstating Excel parity or performance claims.
+description: A service-readiness checklist for adopting @bilig/workpaper in Node services and agent tools without overstating Excel parity or performance claims.
 tags: typescript, node, spreadsheet, production, agents
 canonical_url: https://proompteng.github.io/bilig/production-adoption-checklist-headless-workpaper.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -10,7 +10,7 @@ image: /assets/github-social-preview.png
 
 # Production Adoption Checklist For Headless WorkPaper
 
-`@bilig/headless` is useful when workbook formulas are product logic and the
+`@bilig/workpaper` is useful when workbook formulas are product logic and the
 runtime boundary is a Node service, queue worker, serverless route, test, or
 agent tool. This checklist is for deciding whether to move from evaluation to a
 controlled production use.
@@ -58,7 +58,7 @@ repository that proves:
 The smallest proof looks like:
 
 ```sh
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts
 npx tsx quickstart.ts
@@ -162,7 +162,7 @@ workflow issues belong in [`SUPPORT.md`](../SUPPORT.md).
 
 ## Decision
 
-Use `@bilig/headless` in production first where you can pin the package, own the
+Use `@bilig/workpaper` in production first where you can pin the package, own the
 workflow fixture, run shadow mode, and roll back at the caller boundary.
 
 Do not use it as a default for arbitrary customer-critical durable execution

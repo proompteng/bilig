@@ -1,5 +1,5 @@
 ---
-name: xlsx-formula-recalc
+name: @bilig/xlsx-formula-recalc
 version: 0.1.0
 description: Recalculate XLSX formula outputs in Node.js after cell edits without opening Excel, LibreOffice, or browser automation.
 tags:
@@ -15,7 +15,7 @@ tags:
 
 Use `@bilig/xlsx-formula-recalc` when an agent or Node.js service has changed
 XLSX inputs and must read recalculated formula outputs without opening Excel,
-LibreOffice, or a browser. The unscoped `xlsx-formula-recalc` package remains a
+LibreOffice, or a browser. The unscoped `@bilig/xlsx-formula-recalc` package remains a
 compatibility/search alias; new agent instructions should use the scoped package
 first.
 
@@ -114,5 +114,5 @@ For the older bytes-in/bytes-out WorkPaper path, import from
 `@bilig/workpaper/xlsx` and install `@bilig/workpaper`
 explicitly.
 
-Prefer `exceljs-formula-recalc` when the caller already owns an ExcelJS
+Prefer `@bilig/exceljs-formula-recalc` when the caller already owns an ExcelJS
 `Workbook` object and wants read results patched back into that object.

@@ -30,7 +30,7 @@ You need to solve a workbook-shaped task without opening Excel, LibreOffice,
 Google Sheets, or a screenshot UI unless the user explicitly asks for a visual
 review.
 
-Use @bilig/headless or the Bilig WorkPaper MCP server. Build or load a workbook
+Use @bilig/workpaper or the Bilig WorkPaper MCP server. Build or load a workbook
 with these sheets:
 
 Inputs

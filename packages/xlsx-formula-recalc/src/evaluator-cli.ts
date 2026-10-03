@@ -187,7 +187,7 @@ function buildXlsxCacheEvaluatorProof(): Omit<BiligEvaluatorProof, 'durationMs'>
     doorName: 'XLSX stale-cache proof',
     command: summary.command,
     packageVersions: {
-      'xlsx-formula-recalc': readLocalPackageVersion(),
+      '@bilig/xlsx-formula-recalc': readLocalPackageVersion(),
     },
     evidence: {
       target: firstFormula?.target,
@@ -233,7 +233,7 @@ async function buildWorkbookCompatibilityEvaluatorProof(): Promise<Omit<BiligEva
     doorName: 'Workbook compatibility risk report',
     command: summary.command,
     packageVersions: {
-      'xlsx-formula-recalc': readLocalPackageVersion(),
+      '@bilig/xlsx-formula-recalc': readLocalPackageVersion(),
     },
     evidence: {
       riskLevel: sourceProof.risk.level,

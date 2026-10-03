@@ -10,7 +10,7 @@ image: /assets/github-social-preview.png
 
 # Persisting Formula-Backed WorkPaper Documents In Node
 
-`@bilig/headless` can run spreadsheet logic without opening a browser grid, but
+`@bilig/workpaper` can run spreadsheet logic without opening a browser grid, but
 the useful boundary for services and agents is not just formula evaluation. A
 workflow also needs a way to save workbook state, restore it later, and prove
 that formulas still recalculate after restore.
@@ -21,7 +21,7 @@ parse and restore it before the next operation.
 
 ## The Shape
 
-The public persistence helpers are exported from `@bilig/headless`:
+The public persistence helpers are exported from `@bilig/workpaper`:
 
 - `exportWorkPaperDocument(workbook, { includeConfig: true })`
 - `serializeWorkPaperDocument(document)`
@@ -38,7 +38,7 @@ workbook can continue to evaluate and mutate through the WorkPaper API.
 Install the package:
 
 ```sh
-pnpm add @bilig/headless
+pnpm add @bilig/workpaper
 ```
 
 Build a workbook, write it to disk, restore it, and apply a new edit:
@@ -52,7 +52,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 const workbook = WorkPaper.buildFromSheets({
   Plan: [
@@ -159,7 +159,7 @@ functions, while the host app can map those helpers to S3, R2, GCS, Azure Blob
 Storage, or another provider.
 
 ```ts
-import { WorkPaper, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
+import { WorkPaper, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/workpaper'
 
 const workbookKey = 'workpapers/revenue-plan.json'
 
@@ -232,7 +232,7 @@ create table workpaper_documents (
 The storage adapter still has the same two-function shape:
 
 ```ts
-import { WorkPaper, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
+import { WorkPaper, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/workpaper'
 
 const documentId = 'revenue-plan'
 
@@ -318,7 +318,7 @@ methods. Keep those calls thin and swap in `better-sqlite3`, `node:sqlite`, or
 the SQLite client your service already uses.
 
 ```ts
-import { WorkPaper, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
+import { WorkPaper, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/workpaper'
 
 const documentId = 'local-revenue-plan'
 
@@ -394,4 +394,4 @@ Keep persistence at the workbook-document boundary:
 - Keep screenshots as human review artifacts, not as the saved state.
 
 For a broader package overview, start with
-[`packages/headless/README.md`](../packages/headless/README.md).
+[`packages/workpaper/README.md`](../packages/workpaper/README.md).

@@ -5,11 +5,11 @@ import { join, resolve } from 'node:path'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const excelImportDistDir = join(rootDir, 'packages', 'excel-import', 'dist')
-const headlessDistDir = join(rootDir, 'packages', 'headless', 'dist')
+const headlessDistDir = join(rootDir, 'packages', 'workpaper', 'dist')
 const bundledXlsxDistDir = join(headlessDistDir, 'xlsx-internal')
 
 if (!existsSync(join(excelImportDistDir, 'index.js')) || !existsSync(join(excelImportDistDir, 'index.d.ts'))) {
-  throw new Error('Build @bilig/excel-import before building the @bilig/headless XLSX subpath')
+  throw new Error('Build @bilig/excel-import before building the @bilig/workpaper XLSX subpath')
 }
 
 mkdirSync(headlessDistDir, { recursive: true })
@@ -17,7 +17,7 @@ rmSync(bundledXlsxDistDir, { recursive: true, force: true })
 cpSync(excelImportDistDir, bundledXlsxDistDir, { recursive: true })
 
 writeFileSync(
-  join(headlessDistDir, 'xlsx.js'),
+  join(headlessDistDir, 'xlsx-runtime.js'),
   `import { writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import {
@@ -128,7 +128,7 @@ export function importXlsxFile(path, fileName = basename(path), options) {
 `,
 )
 writeFileSync(
-  join(headlessDistDir, 'xlsx.d.ts'),
+  join(headlessDistDir, 'xlsx-runtime.d.ts'),
   `import type { WorkbookSnapshot } from '@bilig/protocol'
 import type { ImportedWorkbook, XlsxByteSourceImportOptions, XlsxSourceLiteralPatchFileExportResult } from './xlsx-internal/index.js'
 

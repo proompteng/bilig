@@ -1,4 +1,4 @@
-import { WorkPaper } from '@bilig/headless'
+import { WorkPaper } from '@bilig/workpaper'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 type ReportRow = readonly [metric: string, value: number]

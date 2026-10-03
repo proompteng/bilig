@@ -29,7 +29,7 @@ export function createAgentSkillDiscoveryIndex(skillDocument = readWorkPaperSkil
 }
 
 function readWorkPaperSkillDocument(): string {
-  cachedSkillDocument ??= readFileSync(join(dirname(require.resolve('@bilig/headless')), '..', 'SKILL.md'), 'utf8')
+  cachedSkillDocument ??= readFileSync(join(dirname(require.resolve('@bilig/workpaper')), '..', 'SKILL.md'), 'utf8')
   return cachedSkillDocument
 }
 

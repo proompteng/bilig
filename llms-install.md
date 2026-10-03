@@ -66,7 +66,7 @@ Use file-backed stdio for private workbook state:
 ```json
 {
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "command": "npm",
       "args": [
         "exec",
@@ -158,38 +158,32 @@ npm install @bilig/workpaper
 ```
 
 ```ts
-import {
-  WorkPaper,
-  exportWorkPaperDocument,
-  serializeWorkPaperDocument,
-} from "@bilig/workpaper";
+import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/workpaper'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
-    ["Metric", "Value"],
-    ["Customers", 20],
-    ["Average revenue", 1200],
+    ['Metric', 'Value'],
+    ['Customers', 20],
+    ['Average revenue', 1200],
   ],
   Summary: [
-    ["Metric", "Value"],
-    ["Revenue", "=Inputs!B2*Inputs!B3"],
+    ['Metric', 'Value'],
+    ['Revenue', '=Inputs!B2*Inputs!B3'],
   ],
-});
+})
 
-const inputs = workbook.getSheetId("Inputs");
-const summary = workbook.getSheetId("Summary");
+const inputs = workbook.getSheetId('Inputs')
+const summary = workbook.getSheetId('Summary')
 if (inputs === undefined || summary === undefined) {
-  throw new Error("missing sheets");
+  throw new Error('missing sheets')
 }
 
-workbook.setCellContents({ sheet: inputs, row: 2, col: 1 }, 4800);
+workbook.setCellContents({ sheet: inputs, row: 2, col: 1 }, 4800)
 
-const after = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 });
-const saved = serializeWorkPaperDocument(
-  exportWorkPaperDocument(workbook, { includeConfig: true }),
-);
+const after = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })
+const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
 
-console.log({ after, persistedDocumentBytes: saved.length });
+console.log({ after, persistedDocumentBytes: saved.length })
 ```
 
 ## Agent task contract

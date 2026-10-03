@@ -9,7 +9,7 @@ Use this package when a consumer wants to define their own workbook model and
 hand a runtime a portable plan. Bilig supplies the generic model API, selectors,
 formula helpers, checks, JSON-safe transport data, validators, and run-result
 proof shapes. It does not import an engine, start a server, calculate formulas,
-ship business templates, or depend on `@bilig/core`, `@bilig/headless`,
+ship business templates, or depend on `@bilig/core`, `@bilig/workpaper`,
 `@bilig/agent-api`, `zod`, or `effect`.
 
 ```sh
@@ -86,7 +86,7 @@ The core flow:
 | ------------------ | ------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
 | `@bilig/workbook`  | Defining generic workbook intent, refs, formulas, checks, plan data, schemas, and proof handoff. | Calculating formulas or owning workbook state.     |
 | `@bilig/workpaper` | Running workbook tools, MCP, or product workflows around persisted WorkPaper state.              | Designing a reusable model API for other runtimes. |
-| `@bilig/headless`  | Owning workbook state inside Node with formula recalculation and import/export.                  | Publishing generic intent contracts.               |
+| `@bilig/workpaper` | Owning workbook state inside Node with formula recalculation and import/export.                  | Publishing generic intent contracts.               |
 | `@bilig/core`      | Implementing calculation or mutation internals.                                                  | Consumer-facing model definitions.                 |
 
 The root export keeps the ordinary adapter path: models, refs, checks,

@@ -328,7 +328,7 @@ const generatedSourceChecks: readonly CiTask[] = [
         'WorkPaper XLSX corpus parity check',
         'scripts/check-workpaper-xlsx-corpus.ts',
         '--',
-        'packages/headless/fixtures/xlsx-corpus',
+        'packages/workpaper/fixtures/xlsx-corpus',
       ),
     ],
   },
@@ -365,7 +365,7 @@ try {
       skipBrowserGates ? wasmBuildTask : appRuntimeDependencyBuild,
       pnpm('formula package build', '--filter', '@bilig/formula', 'build'),
       pnpm('core package build', '--filter', '@bilig/core', 'build'),
-      pnpm('headless package build', '--filter', '@bilig/headless', 'build'),
+      pnpm('headless package build', '--filter', '@bilig/workpaper', 'build'),
       ...(skipBrowserGates ? [] : [pnpm('playwright chromium install', 'exec', 'playwright', 'install', 'chromium')]),
     ])),
   )

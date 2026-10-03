@@ -1,7 +1,7 @@
 name: Feature request
 description: Propose a scoped engine, formula, grid, sync, agent, or runtime feature.
-title: "[feature]: "
-labels: ["enhancement"]
+title: '[feature]: '
+labels: ['enhancement']
 body:
   - type: textarea
     id: problem

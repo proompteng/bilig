@@ -107,7 +107,7 @@ function assertManifest(manifest: PackageManifest): string {
   assert(manifest.publishConfig['access'] === 'public', 'package publishConfig.access must be public')
 
   assert(isRecord(manifest.engines), 'package engines must be an object')
-  assert(manifest.engines['node'] === '>=22.0.0', 'package engines.node must stay Node 22 compatible')
+  assert(manifest.engines['node'] === '>=24.0.0', 'package engines.node must require the Node 24 runtime baseline')
 
   assert(isRecord(manifest.scripts), 'package scripts must be an object')
   assert(manifest.scripts['smoke'] === 'node ./bin/create-bilig-workpaper.js --help', 'package smoke script must exercise the CLI')

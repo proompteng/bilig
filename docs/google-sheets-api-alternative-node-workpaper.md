@@ -1,7 +1,7 @@
 ---
 title: Google Sheets API alternative for local Node workbook execution
 published: true
-description: Decide when to use Google Sheets API and when a local @bilig/headless WorkPaper is a better fit for formula execution, verified readback, and JSON persistence in Node services.
+description: Decide when to use Google Sheets API and when a local @bilig/workpaper WorkPaper is a better fit for formula execution, verified readback, and JSON persistence in Node services.
 tags: google sheets api, node, spreadsheet, formulas, workbook automation
 canonical_url: https://proompteng.github.io/bilig/google-sheets-api-alternative-node-workpaper.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -14,7 +14,7 @@ If a real spreadsheet with sharing, permissions, comments, and a URL is the
 product, use Google Sheets API.
 
 If the spreadsheet logic belongs inside a Node service, queue worker, CLI, or
-agent tool, use `@bilig/headless`. Keep the workbook local, write inputs, read
+agent tool, use `@bilig/workpaper`. Keep the workbook local, write inputs, read
 calculated cells, and persist the WorkPaper document as JSON.
 
 That is the boundary. `bilig` is not trying to replace Google Sheets. It is for
@@ -27,8 +27,8 @@ spreadsheet into the system of record.
 | ------------------------------------------------------------------- | ------------------------------------- |
 | People editing the same hosted spreadsheet                          | Google Sheets                         |
 | OAuth, spreadsheet IDs, A1 ranges, and Google Workspace permissions | Google Sheets API                     |
-| A Node service that owns workbook state and formula execution       | `@bilig/headless`                     |
-| An agent tool that edits a cell and returns checked readback        | `@bilig/headless`                     |
+| A Node service that owns workbook state and formula execution       | `@bilig/workpaper`                    |
+| An agent tool that edits a cell and returns checked readback        | `@bilig/workpaper`                    |
 | An XLSX file for a person to open later                             | SheetJS, ExcelJS, or Excel automation |
 
 Google describes the Sheets API as a REST interface for reading and modifying
@@ -48,7 +48,7 @@ mkdir bilig-google-sheets-api-boundary
 cd bilig-google-sheets-api-boundary
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 cat > eval.ts <<'EOF'
 import {
@@ -57,7 +57,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from "@bilig/headless";
+} from "@bilig/workpaper";
 
 type NumericCell = {
   value: number;

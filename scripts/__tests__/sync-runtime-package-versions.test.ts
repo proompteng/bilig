@@ -20,9 +20,7 @@ describe('syncRuntimePackageVersions', () => {
           {
             name: packageNameForDir(packageDir),
             version: '0.1.95',
-            ...(packageDir === 'packages/headless' || packageDir === 'packages/workpaper'
-              ? { mcpName: 'io.github.proompteng/bilig-workpaper' }
-              : {}),
+            ...(packageDir === 'packages/workpaper' ? { mcpName: 'io.github.proompteng/bilig-workpaper' } : {}),
           },
           null,
           2,
@@ -30,13 +28,13 @@ describe('syncRuntimePackageVersions', () => {
       )
     }
 
-    writeFileSync(join(rootDir, '.release-please-manifest.json'), `${JSON.stringify({ 'packages/headless': '0.1.95' }, null, 2)}\n`)
+    writeFileSync(join(rootDir, '.release-please-manifest.json'), `${JSON.stringify({ 'packages/workpaper': '0.1.95' }, null, 2)}\n`)
     writeFileSync(join(rootDir, 'Dockerfile'), 'ARG BILIG_WORKPAPER_VERSION=0.1.95\n')
     writeFileSync(
       join(rootDir, 'gemini-extension.json'),
       `${JSON.stringify(
         {
-          name: 'bilig-workpaper',
+          name: '@bilig/workpaper',
           version: '0.1.95',
           contextFileName: 'gemini-workpaper-context.md',
         },
@@ -79,7 +77,7 @@ describe('syncRuntimePackageVersions', () => {
         '',
       ].join('\n'),
     )
-    const agentEvaluatorDoc = ['{', '  "@bilig/workpaper": "0.1.95",', '  "xlsx-formula-recalc": "0.1.95"', '}', ''].join('\n')
+    const agentEvaluatorDoc = ['{', '  "@bilig/workpaper": "0.1.95",', '  "@bilig/xlsx-formula-recalc": "0.1.95"', '}', ''].join('\n')
     writeFileSync(join(rootDir, 'docs/agent-adoption-kit.md'), agentEvaluatorDoc)
     writeFileSync(join(rootDir, 'docs/eval-agent-mcp.md'), agentEvaluatorDoc)
     writeFileSync(
@@ -88,7 +86,7 @@ describe('syncRuntimePackageVersions', () => {
     )
     writeFileSync(join(rootDir, 'packages/workpaper/README.md'), ['{', '  "@bilig/workpaper": "0.1.95"', '}', ''].join('\n'))
     writeFileSync(
-      join(rootDir, 'packages/headless/server.json'),
+      join(rootDir, 'packages/workpaper/server.json'),
       `${JSON.stringify(
         {
           name: 'io.github.proompteng.bilig',
@@ -102,7 +100,7 @@ describe('syncRuntimePackageVersions', () => {
           packages: [
             {
               registryType: 'npm',
-              identifier: '@bilig/headless',
+              identifier: '@bilig/workpaper',
               version: '0.1.95',
             },
           ],
@@ -139,14 +137,14 @@ describe('syncRuntimePackageVersions', () => {
     const result = syncRuntimePackageVersions({ rootDir, version: '0.14.14' })
 
     expect(result.updatedPackages).toEqual(RUNTIME_PACKAGE_DIRS.map(packageNameForDir))
-    expect(result.updatedFiles).toHaveLength(RUNTIME_PACKAGE_DIRS.length + 14)
+    expect(result.updatedFiles).toHaveLength(RUNTIME_PACKAGE_DIRS.length + 13)
 
     for (const packageDir of RUNTIME_PACKAGE_DIRS) {
       const manifest = JSON.parse(readFileSync(join(rootDir, packageDir, 'package.json'), 'utf8'))
       expect(manifest.version).toBe('0.14.14')
     }
 
-    const serverJson = JSON.parse(readFileSync(join(rootDir, 'packages/headless/server.json'), 'utf8'))
+    const serverJson = JSON.parse(readFileSync(join(rootDir, 'packages/workpaper/server.json'), 'utf8'))
     expect(serverJson.version).toBe('0.14.14')
     expect(serverJson.remotes[0]).toEqual({
       type: 'streamable-http',
@@ -163,7 +161,7 @@ describe('syncRuntimePackageVersions', () => {
     expect(workpaperServerJson.packages[0].version).toBe('0.14.14')
 
     const releasePleaseManifest = JSON.parse(readFileSync(join(rootDir, '.release-please-manifest.json'), 'utf8'))
-    expect(releasePleaseManifest['packages/headless']).toBe('0.14.14')
+    expect(releasePleaseManifest['packages/workpaper']).toBe('0.14.14')
     expect(readFileSync(join(rootDir, 'Dockerfile'), 'utf8')).toBe('ARG BILIG_WORKPAPER_VERSION=0.14.14\n')
     const geminiExtension = JSON.parse(readFileSync(join(rootDir, 'gemini-extension.json'), 'utf8'))
     expect(geminiExtension.version).toBe('0.14.14')
@@ -174,7 +172,7 @@ describe('syncRuntimePackageVersions', () => {
     expect(readFileSync(join(rootDir, 'docs/xlsx-cache-doctor-github-action.md'), 'utf8')).toContain("package-version: '0.14.14'")
     expect(readFileSync(join(rootDir, 'docs/xlsx-cache-doctor-github-action.md'), 'utf8')).toContain('| `package-version`    | 0.14.14 |')
     expect(readFileSync(join(rootDir, 'docs/agent-adoption-kit.md'), 'utf8')).toContain('"@bilig/workpaper": "0.14.14"')
-    expect(readFileSync(join(rootDir, 'docs/eval-agent-mcp.md'), 'utf8')).toContain('"xlsx-formula-recalc": "0.14.14"')
+    expect(readFileSync(join(rootDir, 'docs/eval-agent-mcp.md'), 'utf8')).toContain('"@bilig/xlsx-formula-recalc": "0.14.14"')
     expect(readFileSync(join(rootDir, 'docs/eval-workpaper-service.md'), 'utf8')).toContain('@bilig/workpaper@0.14.14')
     expect(readFileSync(join(rootDir, 'docs/eval-workpaper-service.md'), 'utf8')).toContain('"@bilig/workpaper": "0.14.14"')
     expect(readFileSync(join(rootDir, 'packages/workpaper/README.md'), 'utf8')).toContain('"@bilig/workpaper": "0.14.14"')
@@ -192,28 +190,28 @@ describe('syncRuntimePackageVersions', () => {
 })
 
 function packageNameForDir(packageDir: string): string {
-  if (packageDir === 'packages/bilig') {
-    return 'bilig-workpaper'
+  if (packageDir === 'packages/workpaper') {
+    return '@bilig/workpaper'
   }
   if (packageDir === 'packages/workpaper') {
     return '@bilig/workpaper'
   }
   if (packageDir === 'packages/xlsx-formula-recalc') {
-    return 'xlsx-formula-recalc'
+    return '@bilig/xlsx-formula-recalc'
   }
-  if (packageDir === 'packages/bilig-xlsx-formula-recalc') {
+  if (packageDir === 'packages/xlsx-formula-recalc') {
     return '@bilig/xlsx-formula-recalc'
   }
   if (packageDir === 'packages/sheetjs-formula-recalc') {
-    return 'sheetjs-formula-recalc'
+    return '@bilig/sheetjs-formula-recalc'
   }
-  if (packageDir === 'packages/bilig-sheetjs-formula-recalc') {
+  if (packageDir === 'packages/sheetjs-formula-recalc') {
     return '@bilig/sheetjs-formula-recalc'
   }
   if (packageDir === 'packages/exceljs-formula-recalc') {
-    return 'exceljs-formula-recalc'
+    return '@bilig/exceljs-formula-recalc'
   }
-  if (packageDir === 'packages/bilig-exceljs-formula-recalc') {
+  if (packageDir === 'packages/exceljs-formula-recalc') {
     return '@bilig/exceljs-formula-recalc'
   }
   return `@bilig/${packageDir.split('/').at(-1) ?? packageDir}`

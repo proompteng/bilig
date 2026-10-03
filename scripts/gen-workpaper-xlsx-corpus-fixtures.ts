@@ -14,7 +14,7 @@ import {
 } from '@bilig/xlsx'
 import { bytesEqual, xlsxZipEntryContentsEqual } from './xlsx-fixture-comparison.ts'
 
-const fixtureDirectory = resolve(process.env.BILIG_XLSX_CORPUS_FIXTURE_DIR ?? 'packages/headless/fixtures/xlsx-corpus')
+const fixtureDirectory = resolve(process.env.BILIG_XLSX_CORPUS_FIXTURE_DIR ?? 'packages/workpaper/fixtures/xlsx-corpus')
 
 interface XlsxCorpusFixture {
   readonly fileName: string
@@ -30,7 +30,7 @@ function buildFixtures(): readonly XlsxCorpusFixture[] {
     },
     {
       fileName: 'macos-excel-threaded-comments-source.xlsx',
-      sourcePath: resolve('packages/headless/fixtures/excel-oracle/macos-excel-threaded-comments-source.xlsx'),
+      sourcePath: resolve('packages/workpaper/fixtures/excel-oracle/macos-excel-threaded-comments-source.xlsx'),
     },
   ]
 }

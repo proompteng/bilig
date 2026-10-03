@@ -32,8 +32,8 @@ body:
     id: package_version
     attributes:
       label: Package version or commit
-      description: Include the @bilig/headless version or commit you tested.
-      placeholder: '@bilig/headless 0.157.0, @bilig/xlsx-formula-recalc 0.157.0, or commit SHA'
+      description: Include the @bilig/workpaper version or commit you tested.
+      placeholder: '@bilig/workpaper 0.157.0, @bilig/xlsx-formula-recalc 0.157.0, or commit SHA'
     validations:
       required: true
   - type: textarea

@@ -42,7 +42,7 @@ const BROAD_GOOGLE_SHEETS_TEN_X_PATTERNS: readonly RegExp[] = [
 export function collectPublicClaimFiles(repoRoot = rootDir): string[] {
   const files = new Set<string>()
   addIfFile(files, repoRoot, 'README.md')
-  addIfFile(files, repoRoot, join('packages', 'headless', 'README.md'))
+  addIfFile(files, repoRoot, join('packages', 'workpaper', 'README.md'))
   collectDocs(files, repoRoot, join(repoRoot, 'docs'))
   return [...files].toSorted()
 }

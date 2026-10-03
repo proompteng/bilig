@@ -23,7 +23,7 @@ formulas before Excel opens the file. A formula-function package can be useful
 without giving you a workbook document, dependency graph, persistence, or
 post-write readback.
 
-`@bilig/headless` fits the fourth job. It is a TypeScript WorkPaper runtime for
+`@bilig/workpaper` fits the fourth job. It is a TypeScript WorkPaper runtime for
 Node.js services, workbook automation, and coding-agent tools. It is not a
 visual spreadsheet grid, and it is not a finished Excel clone.
 
@@ -44,7 +44,7 @@ Excel-like functions as direct JavaScript calls.
 
 If a Node.js service or coding agent needs to create a workbook, change inputs,
 read calculated cells, persist state, restore it, and prove the values after the
-edit, try `@bilig/headless`.
+edit, try `@bilig/workpaper`.
 
 ## Choose by job
 
@@ -54,7 +54,7 @@ edit, try `@bilig/headless`.
 | Import, export, or transform spreadsheet files                                       | SheetJS or ExcelJS-style tooling             | The main problem is file interchange, workbook structure, styles, tables, or generated reports.                  |
 | Evaluate many spreadsheet formulas inside JavaScript                                 | HyperFormula                                 | The main problem is calculation-engine maturity and formula coverage.                                            |
 | Call individual Excel-style functions from code                                      | Formula.js                                   | The main problem is function calls, not a workbook document.                                                     |
-| Put formula-backed workbook state behind an API, queue worker, or agent tool         | `@bilig/headless`                            | The main problem is a mutable workbook object with formula readback, persistence, restore, and verifiable edits. |
+| Put formula-backed workbook state behind an API, queue worker, or agent tool         | `@bilig/workpaper`                           | The main problem is a mutable workbook object with formula readback, persistence, restore, and verifiable edits. |
 
 The decision gets easier when you name the user. If the user is a person at a
 browser grid, use a grid. If the user is Excel, use file tooling. If the user is
@@ -62,7 +62,7 @@ another backend process or a coding agent, use a headless workbook runtime.
 
 ## Where bilig fits
 
-`@bilig/headless` gives a Node process a WorkPaper object. A WorkPaper has
+`@bilig/workpaper` gives a Node process a WorkPaper object. A WorkPaper has
 sheets, cells, formulas, computed values, structural operations, JSON
 persistence, and restore paths. That makes it useful for service code such as:
 
@@ -85,12 +85,12 @@ mkdir bilig-javascript-spreadsheet-eval
 cd bilig-javascript-spreadsheet-eval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 ```
 
 Then run the npm-only smoke test:
 
-- [try `@bilig/headless` in Node.js](try-bilig-headless-in-node.md)
+- [try `@bilig/workpaper` in Node.js](try-bilig-headless-in-node.md)
 
 The maintained repo example is the next step:
 
@@ -108,7 +108,7 @@ values survived the round trip.
 
 ## When not to use bilig
 
-Do not choose `@bilig/headless` just because the phrase "spreadsheet library"
+Do not choose `@bilig/workpaper` just because the phrase "spreadsheet library"
 appears in a search result.
 
 Use a browser grid when the product is human editing. Use XLSX tooling when the
@@ -116,7 +116,7 @@ product is a file. Use HyperFormula when broad formula compatibility is the
 deciding constraint today. Use Formula.js when isolated function calls are
 enough.
 
-Use `@bilig/headless` when the product needs a workbook-shaped backend object
+Use `@bilig/workpaper` when the product needs a workbook-shaped backend object
 that can be changed, recalculated, saved, restored, and inspected by code.
 
 ## Related bilig pages

@@ -324,8 +324,8 @@ Promise.all([
 const { createRequire } = require('node:module')
 const requireForCache = createRequire(process.cwd() + '/package.json')
 Promise.all([
-  import('./packages/headless/src/index.ts'),
-  import('./packages/headless/src/xlsx.ts'),
+  import('./packages/workpaper/src/index.ts'),
+  import('./packages/workpaper/src/xlsx.ts'),
   import('./packages/xlsx-formula-recalc/src/workbook-compatibility-report.ts'),
 ])
   .then(([{ WorkPaper }, { exportXlsx }, { buildWorkbookCompatibilityReport }]) => {

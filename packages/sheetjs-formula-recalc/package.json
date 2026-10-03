@@ -1,5 +1,5 @@
 {
-  "name": "sheetjs-formula-recalc",
+  "name": "@bilig/sheetjs-formula-recalc",
   "version": "0.164.11",
   "description": "Recalculate SheetJS and xlsx workbook formulas in Node.js without Excel, LibreOffice, or browser automation.",
   "keywords": [
@@ -58,12 +58,12 @@
     "access": "public"
   },
   "scripts": {
-    "build": "pnpm --dir ../.. --filter xlsx-formula-recalc build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json",
+    "build": "pnpm --dir ../.. --filter @bilig/xlsx-formula-recalc build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json",
     "smoke": "node ./dist/cli.js --help"
   },
   "dependencies": {
-    "bilig-workpaper": "workspace:*",
-    "xlsx-formula-recalc": "workspace:*"
+    "@bilig/workpaper": "workspace:*",
+    "@bilig/xlsx-formula-recalc": "workspace:*"
   },
   "engines": {
     "node": ">=22.0.0"

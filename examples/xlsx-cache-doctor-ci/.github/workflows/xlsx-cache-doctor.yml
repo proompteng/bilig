@@ -3,7 +3,7 @@ name: xlsx-cache-doctor
 on:
   pull_request:
     paths:
-      - "**/*.xlsx"
+      - '**/*.xlsx'
   workflow_dispatch:
 
 permissions:
@@ -18,10 +18,10 @@ jobs:
       - id: cache-doctor
         uses: proompteng/bilig@v1
         with:
-          workbooks: "fixtures/**/*.xlsx"
-          changed-files-only: "false"
+          workbooks: 'fixtures/**/*.xlsx'
+          changed-files-only: 'false'
           json-output: ${{ runner.temp }}/stale-pricing.cache-doctor.json
-          fail-on-stale: "true"
+          fail-on-stale: 'true'
 
       - uses: actions/upload-artifact@v4
         if: always()

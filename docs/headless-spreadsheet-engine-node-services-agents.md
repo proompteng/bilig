@@ -1,7 +1,7 @@
 ---
 title: Headless spreadsheet engine for Node services and agents
 published: true
-description: Use @bilig/headless as a TypeScript WorkPaper runtime for Node services and agent tools that need cell edits, formula recalculation, JSON persistence, and verified readback.
+description: Use @bilig/workpaper as a TypeScript WorkPaper runtime for Node services and agent tools that need cell edits, formula recalculation, JSON persistence, and verified readback.
 tags: typescript, node, spreadsheet, agents, mcp
 canonical_url: https://proompteng.github.io/bilig/headless-spreadsheet-engine-node-services-agents.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -10,7 +10,7 @@ image: /assets/github-social-preview.png
 
 # Headless spreadsheet engine for Node services and agents
 
-`@bilig/headless` is a TypeScript WorkPaper runtime for backend workflows that
+`@bilig/workpaper` is a TypeScript WorkPaper runtime for backend workflows that
 still make the most sense as cells and formulas. It gives a Node service or
 agent tool an API for writing cells, recalculating formulas, reading computed
 values, and saving the workbook as JSON.
@@ -50,7 +50,7 @@ mkdir bilig-headless-eval
 cd bilig-headless-eval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts
 npx tsx quickstart.ts
@@ -142,17 +142,17 @@ or the [MCP spreadsheet tool server](mcp-workpaper-tool-server.md).
 
 ## Decision boundary
 
-Use `@bilig/headless` when the runtime requirement is formula-backed workbook
+Use `@bilig/workpaper` when the runtime requirement is formula-backed workbook
 state inside TypeScript. Use other tools when the primary requirement is
 different:
 
-| Requirement                                                    | Start with                                              |
-| -------------------------------------------------------------- | ------------------------------------------------------- |
-| Formula-backed business logic inside a Node service            | `@bilig/headless` WorkPaper                             |
-| Agent writeback with verified readback                         | WorkPaper tools or the MCP server                       |
-| XLSX file import, export, styling, and reports                 | SheetJS, ExcelJS, or the `@bilig/headless/xlsx` subpath |
-| Broad formula coverage in an established headless engine       | HyperFormula comparison first                           |
-| Shared Google Workspace document with permissions and comments | Google Sheets API                                       |
+| Requirement                                                    | Start with                                               |
+| -------------------------------------------------------------- | -------------------------------------------------------- |
+| Formula-backed business logic inside a Node service            | `@bilig/workpaper` WorkPaper                             |
+| Agent writeback with verified readback                         | WorkPaper tools or the MCP server                        |
+| XLSX file import, export, styling, and reports                 | SheetJS, ExcelJS, or the `@bilig/workpaper/xlsx` subpath |
+| Broad formula coverage in an established headless engine       | HyperFormula comparison first                            |
+| Shared Google Workspace document with permissions and comments | Google Sheets API                                        |
 
 Read the [headless spreadsheet engine comparison](headless-spreadsheet-engine-comparison.md)
 when the boundary is not obvious.

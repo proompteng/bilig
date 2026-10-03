@@ -1,24 +1,24 @@
 ---
-title: Verify npm provenance for @bilig/headless
+title: Verify npm provenance for @bilig/workpaper
 published: true
-description: How to verify the published @bilig/headless package before adopting it in a Node service or agent tool.
+description: How to verify the published @bilig/workpaper package before adopting it in a Node service or agent tool.
 tags: npm, provenance, typescript, security, node
 canonical_url: https://proompteng.github.io/bilig/npm-provenance-package-trust.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
 image: /assets/github-social-preview.png
 ---
 
-# Verify npm Provenance For `@bilig/headless`
+# Verify npm Provenance For `@bilig/workpaper`
 
 Production adoption starts before the first import. For a service runtime or
 agent tool, the package needs to be traceable to source, release CI, and a
 specific GitHub commit.
 
-`@bilig/headless` is published with npm registry signatures and SLSA provenance
+`@bilig/workpaper` is published with npm registry signatures and SLSA provenance
 attestations. npm reports this for the latest published package:
 
 ```sh
-npm view @bilig/headless@latest version dist.attestations dist.signatures --json
+npm view @bilig/workpaper@latest version dist.attestations dist.signatures --json
 ```
 
 The important signal is that `dist.attestations.provenance.predicateType` is
@@ -32,7 +32,7 @@ From a clean project:
 mkdir bilig-package-trust
 cd bilig-package-trust
 npm init -y
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm audit signatures
 ```
 
@@ -91,7 +91,7 @@ before a production adopter has to ask for it.
 Package provenance does not prove that a workbook workflow is correct, complete,
 or safe for every production domain.
 
-Before adopting `@bilig/headless` for customer-critical work, also run:
+Before adopting `@bilig/workpaper` for customer-critical work, also run:
 
 - the [90-second npm eval](try-bilig-headless-in-node.md);
 - the [quote approval WorkPaper API proof](quote-approval-workpaper-api.md);

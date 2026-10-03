@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { parse as parseYaml } from 'yaml'
 
-import { WorkPaper, exportXlsx } from 'bilig-workpaper/xlsx'
+import { WorkPaper, exportXlsx } from '@bilig/workpaper/xlsx'
 
 const officeRelationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 export const packageVersion = readPackageVersion()

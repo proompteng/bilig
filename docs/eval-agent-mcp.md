@@ -65,7 +65,7 @@ The evaluator prints this shape:
   "verified": true,
   "packageVersions": {
     "@bilig/workpaper": "0.164.11",
-    "xlsx-formula-recalc": "0.164.11"
+    "@bilig/xlsx-formula-recalc": "0.164.11"
   },
   "evidence": {
     "editedCell": "Inputs!B3",

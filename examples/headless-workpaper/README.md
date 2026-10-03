@@ -782,7 +782,7 @@ Claude Desktop:
 ```json
 {
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "type": "stdio",
       "command": "npm",
       "args": ["exec", "--package", "@bilig/workpaper", "--", "bilig-workpaper-mcp"],
@@ -797,7 +797,7 @@ Cline:
 ```json
 {
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "command": "npm",
       "args": ["exec", "--package", "@bilig/workpaper", "--", "bilig-workpaper-mcp"],
       "env": {},
@@ -839,7 +839,7 @@ the absolute path to your checkout:
 ```json
 {
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "command": "npm",
       "args": ["--prefix", "/absolute/path/to/bilig/examples/headless-workpaper", "run", "--silent", "agent:mcp-stdio"]
     }

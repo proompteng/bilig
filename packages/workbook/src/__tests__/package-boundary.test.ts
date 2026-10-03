@@ -27,7 +27,7 @@ const workspaceResolutionPath = new URL('../../../../workspace-resolution.genera
 
 const bannedRuntimeDependencies = Object.freeze([
   '@bilig/core',
-  '@bilig/headless',
+  '@bilig/workpaper',
   '@bilig/agent-api',
   '@bilig/web',
   '@bilig/grid',
@@ -274,7 +274,7 @@ describe('@bilig/workbook package boundary', () => {
     expect(readme).toContain('Defining generic workbook intent')
     expect(readme).toContain('| `@bilig/workpaper`')
     expect(readme).toContain('Running workbook tools, MCP, or product workflows')
-    expect(readme).toContain('| `@bilig/headless`')
+    expect(readme).toContain('| `@bilig/workpaper`')
     expect(readme).toContain('Owning workbook state inside Node')
     expect(readme).toContain('| `@bilig/core`')
     expect(readme).toContain('Implementing calculation or mutation internals')

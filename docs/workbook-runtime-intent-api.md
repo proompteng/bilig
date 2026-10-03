@@ -67,51 +67,45 @@ adapter returns the required proof. That is the main distinction from a thin
 ## Minimal Shape
 
 ```ts
-import {
-  defineModel,
-  describeRunResult,
-  formula,
-  prepareWorkbookAction,
-  runWorkbookPlan,
-} from "@bilig/workbook";
+import { defineModel, describeRunResult, formula, prepareWorkbookAction, runWorkbookPlan } from '@bilig/workbook'
 
 const model = defineModel({
-  name: "named-range-formula",
+  name: 'named-range-formula',
   find(workbook) {
     return {
-      input: workbook.findName("input"),
-      factor: workbook.findName("factor"),
-      result: workbook.findName("result"),
-    };
+      input: workbook.findName('input'),
+      factor: workbook.findName('factor'),
+      result: workbook.findName('result'),
+    }
   },
   checks({ refs, workbook }) {
-    return [workbook.check.exists(refs.result), workbook.check.noFormulaErrors(refs.result)];
+    return [workbook.check.exists(refs.result), workbook.check.noFormulaErrors(refs.result)]
   },
   actions: {
     calculate({ refs, workbook }) {
-      const expected = formula.multiply(refs.input, refs.factor);
-      workbook.writeFormula(refs.result, expected);
-      workbook.check.formulaEquals(refs.result, expected);
+      const expected = formula.multiply(refs.input, refs.factor)
+      workbook.writeFormula(refs.result, expected)
+      workbook.check.formulaEquals(refs.result, expected)
     },
   },
-});
+})
 
-const prepared = prepareWorkbookAction(model, "calculate");
-if (prepared.status === "failed") {
-  throw new Error(prepared.errors[0]?.message ?? "workbook plan failed");
+const prepared = prepareWorkbookAction(model, 'calculate')
+if (prepared.status === 'failed') {
+  throw new Error(prepared.errors[0]?.message ?? 'workbook plan failed')
 }
 
-const result = await runWorkbookPlan(prepared.planData, adapter, { strict: true });
-console.log(describeRunResult(result));
+const result = await runWorkbookPlan(prepared.planData, adapter, { strict: true })
+console.log(describeRunResult(result))
 ```
 
 ## Package Boundary
 
-| Package | Owns | Best first proof |
-| --- | --- | --- |
-| `@bilig/workbook` | Workbook intent, plan data, requirements, checks, schemas, and runtime proof. | Package unit tests and [public API docs](public-api.md) |
-| `@bilig/workpaper` | WorkPaper state, recalculation, JSON persistence, MCP, and service tools. | [WorkPaper service evaluator](eval-workpaper-service.md) |
-| `@bilig/xlsx-formula-recalc` | File-level XLSX formula recalculation after input edits. | [XLSX recalculation evaluator](eval-xlsx-recalc.md) |
+| Package                      | Owns                                                                          | Best first proof                                         |
+| ---------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `@bilig/workbook`            | Workbook intent, plan data, requirements, checks, schemas, and runtime proof. | Package unit tests and [public API docs](public-api.md)  |
+| `@bilig/workpaper`           | WorkPaper state, recalculation, JSON persistence, MCP, and service tools.     | [WorkPaper service evaluator](eval-workpaper-service.md) |
+| `@bilig/xlsx-formula-recalc` | File-level XLSX formula recalculation after input edits.                      | [XLSX recalculation evaluator](eval-xlsx-recalc.md)      |
 
 The older `workbook-agent-intent-api.html` URL remains as a compatibility alias
 for existing links.

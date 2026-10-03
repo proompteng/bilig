@@ -128,7 +128,7 @@ Expose the same command from an MCP client config:
 ```json
 {
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "command": "npm",
       "args": [
         "exec",

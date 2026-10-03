@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { WORKPAPER_VERSION } from '@bilig/headless'
-import { buildDemoWorkPaper, createFileBackedWorkPaperMcpToolServer } from '@bilig/headless/mcp'
+import { WORKPAPER_VERSION } from '@bilig/workpaper'
+import { buildDemoWorkPaper, createFileBackedWorkPaperMcpToolServer } from '@bilig/workpaper/mcp'
 
 const OPENAPI_SPEC_ENDPOINTS = ['/openapi/workpaper', '/openapi/workpaper.json', '/openapi/workpaper/openapi.json'] as const
 const OPENAPI_OPERATION_ENDPOINTS = [

@@ -1,7 +1,7 @@
 ---
 title: Server-side spreadsheet automation in Node.js
 published: true
-description: 'Automate spreadsheet formulas inside Node services with @bilig/headless: edit inputs, read calculated cells, and persist WorkPaper JSON without a browser grid.'
+description: 'Automate spreadsheet formulas inside Node services with @bilig/workpaper: edit inputs, read calculated cells, and persist WorkPaper JSON without a browser grid.'
 tags: typescript, node, spreadsheet, automation, opensource
 canonical_url: https://proompteng.github.io/bilig/server-side-spreadsheet-automation-node.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -15,7 +15,7 @@ the user interface. A Node service may need to price a quote, check a budget,
 score an import, or run a forecast using formulas that already exist in a
 workbook-shaped model.
 
-Use `@bilig/headless` for that middle case: the service owns a workbook object,
+Use `@bilig/workpaper` for that middle case: the service owns a workbook object,
 changes narrow input cells, reads calculated outputs, and stores the WorkPaper
 document as JSON for the next request or job.
 
@@ -41,7 +41,7 @@ mkdir bilig-server-automation-eval
 cd bilig-server-automation-eval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 cat > eval.ts <<'EOF'
 import {
@@ -50,7 +50,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 type NumericCell = {
   value: number
@@ -143,7 +143,7 @@ Good server-side fits:
 This is not an XLSX styling library and it is not full Excel automation. Use
 ExcelJS or SheetJS when the main artifact is an Excel file. Use HyperFormula
 when broad Excel-compatible formula coverage is the primary requirement. Use
-`@bilig/headless` when a Node process needs a small workbook model it can edit,
+`@bilig/workpaper` when a Node process needs a small workbook model it can edit,
 verify, and save.
 
 ## Next paths

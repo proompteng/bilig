@@ -1,5 +1,5 @@
 {
-  "name": "exceljs-formula-recalc",
+  "name": "@bilig/exceljs-formula-recalc",
   "version": "0.164.11",
   "description": "Recalculate ExcelJS XLSX workbook formulas in Node.js without Excel, LibreOffice, or browser automation.",
   "keywords": [
@@ -54,11 +54,11 @@
     "access": "public"
   },
   "scripts": {
-    "build": "pnpm --dir ../.. --filter xlsx-formula-recalc build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json"
+    "build": "pnpm --dir ../.. --filter @bilig/xlsx-formula-recalc build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json"
   },
   "dependencies": {
-    "bilig-workpaper": "workspace:*",
-    "xlsx-formula-recalc": "workspace:*"
+    "@bilig/workpaper": "workspace:*",
+    "@bilig/xlsx-formula-recalc": "workspace:*"
   },
   "devDependencies": {
     "exceljs": "4.4.0"

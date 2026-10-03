@@ -80,7 +80,7 @@ issue and then `pnpm run ci` before asking for review.
 
 ## Know Where To Look
 
-- Public headless API: `packages/headless/README.md`
+- Public headless API: `packages/workpaper/README.md`
 - Runnable examples: `examples/headless-workpaper/`
 - Formula fixtures: `packages/excel-fixtures/src/`
 - Formula runtime checks: `packages/formula/src/__tests__/` and
@@ -103,5 +103,5 @@ unless the issue is specifically about package internals.
 - Open a draft PR early if setup, scope, or expected behavior is unclear.
 
 The best first contribution gives a future user a clearer path to evaluate
-`@bilig/headless` or gives maintainers a small regression proof they can keep in
+`@bilig/workpaper` or gives maintainers a small regression proof they can keep in
 CI.

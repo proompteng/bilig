@@ -2,8 +2,8 @@ import { basename, dirname, join } from 'node:path'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import { WorkPaper } from '@bilig/headless'
-import { importXlsx } from '@bilig/headless/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
+import { importXlsx } from '@bilig/workpaper/xlsx'
 
 type CellRef = {
   readonly sheetName: string | null
@@ -116,7 +116,7 @@ function printReport(report: {
 
 ## Summary
 
-- Package: \`@bilig/headless@${report.packageVersion}\`
+- Package: \`@bilig/workpaper@${report.packageVersion}\`
 - File: \`${report.fileName}\`
 - File size: ${report.fileSizeBytes.toString()} bytes
 - Status: ${report.status}
@@ -272,7 +272,7 @@ function firstPositionalArg(argv: readonly string[]): string | null {
 
 function readHeadlessPackageVersion(): string {
   try {
-    const entrypointPath = fileURLToPath(import.meta.resolve('@bilig/headless'))
+    const entrypointPath = fileURLToPath(import.meta.resolve('@bilig/workpaper'))
     const packageJson: unknown = JSON.parse(readFileSync(findPackageJsonPath(entrypointPath), 'utf8'))
     if (typeof packageJson === 'object' && packageJson !== null && 'version' in packageJson && typeof packageJson.version === 'string') {
       return packageJson.version
@@ -296,5 +296,5 @@ function findPackageJsonPath(entrypointPath: string): string {
     }
     current = parent
   }
-  throw new Error('Could not resolve @bilig/headless package.json')
+  throw new Error('Could not resolve @bilig/workpaper package.json')
 }

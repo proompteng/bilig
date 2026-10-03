@@ -2,7 +2,7 @@
 
 ## Toolchain and commands
 
-- Use Node `24.11.1` locally via `.nvmrc` / `.node-version`. Published runtime packages allow Node `22+` and are smoke-tested under Node 22 in the runtime-package workflow. `pnpm 10.32.1` remains required.
+- Use Node `24.11.1` locally via `.nvmrc` / `.node-version`. WorkPaper runtime packages require Node `24+`. `pnpm 10.32.1` remains required.
 - Activate the pinned runtime before running `pnpm` commands (`nvm use` in a normal shell, or let your version manager honor `.node-version` automatically).
 - Install dependencies with `pnpm install`.
 - Start the default app shell with `pnpm dev` (`apps/web`).

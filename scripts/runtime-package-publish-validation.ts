@@ -7,20 +7,20 @@ import { validateStagedMcpServerMetadata } from './runtime-package-mcp-metadata.
 const textDecoder = new TextDecoder()
 
 export function validateStagedRuntimePackageVersion(packageName: string, stagedPackageDir: string, expectedVersion: string): void {
-  if (packageName === '@bilig/headless') {
+  if (packageName === '@bilig/workpaper') {
     const versionModuleUrl = pathToFileURL(join(stagedPackageDir, 'dist/work-paper-version.js')).href
     const script = [
       `const versionModule = await import(${JSON.stringify(versionModuleUrl)});`,
       `if (versionModule.WORKPAPER_VERSION !== ${JSON.stringify(expectedVersion)}) {`,
       '  throw new Error(',
-      `    ${JSON.stringify('Staged @bilig/headless WorkPaper.version does not match package version: ')} +`,
+      `    ${JSON.stringify('Staged @bilig/workpaper WorkPaper.version does not match package version: ')} +`,
       `      String(versionModule.WORKPAPER_VERSION) + ${JSON.stringify(' !== ')} + ${JSON.stringify(expectedVersion)},`,
       '  );',
       '}',
     ].join('\n')
     runCommand('node', ['--input-type=module', '--eval', script])
   }
-  if (packageName === '@bilig/headless' || packageName === '@bilig/workpaper') {
+  if (packageName === '@bilig/workpaper') {
     validateStagedMcpServerMetadata(packageName, stagedPackageDir, expectedVersion)
   }
 }

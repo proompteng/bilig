@@ -150,7 +150,7 @@ format interchange.
 
 Use `@bilig/xlsx-formula-recalc` when the Node process must own the recalculated answer
 before it accepts, rejects, queues, or persists a workflow. Use
-`@bilig/headless/xlsx` directly only when you need the lower-level WorkPaper
+`@bilig/workpaper/xlsx` directly only when you need the lower-level WorkPaper
 snapshot boundary.
 
 Many services should combine the tools: use a file library for presentation

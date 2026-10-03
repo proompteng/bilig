@@ -1,6 +1,6 @@
 name: Correctness Replay
 description: Capture a reproducible correctness bug with the guarantee it violates and the narrowest replay target.
-title: "[correctness] "
+title: '[correctness] '
 labels:
   - correctness
 body:

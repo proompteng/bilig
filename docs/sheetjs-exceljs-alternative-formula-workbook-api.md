@@ -1,7 +1,7 @@
 ---
 title: SheetJS and ExcelJS alternative for formula-backed workbook APIs
 published: true
-description: Decide when SheetJS, ExcelJS, xlsx-populate, xlsx-formula-recalc, exceljs-formula-recalc, or @bilig/workpaper is the right fit for stale formula results and verified Node.js workbook execution.
+description: Decide when SheetJS, ExcelJS, xlsx-populate, @bilig/xlsx-formula-recalc, @bilig/exceljs-formula-recalc, or @bilig/workpaper is the right fit for stale formula results and verified Node.js workbook execution.
 tags: typescript, node, spreadsheet, formulas, xlsx, opensource
 canonical_url: https://proompteng.github.io/bilig/sheetjs-exceljs-alternative-formula-workbook-api.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -93,14 +93,14 @@ This page intentionally targets the big spreadsheet-library paths, not low
 traffic integration directories. On the research date, the live npm download
 API showed the real audience is already concentrated around these packages:
 
-| Package | Last-week npm downloads on 2026-05-20 | Practical implication |
-| --- | ---: | --- |
-| `xlsx` / SheetJS | 10,608,303 | Optimize for SheetJS-style XLSX buffers and stale formula cache searches. |
-| `exceljs` | 8,133,216 | Keep ExcelJS in the workflow; add recalculated readback at the missing boundary. |
-| `@formulajs/formulajs` | 344,141 | Formula-function users may need workbook semantics, dependency tracking, and verification. |
-| `hyperformula` | 305,054 | Compare honestly against mature formula-engine use cases. |
-| `xlsx-populate` | 201,621 | Generated-workbook users often need fresh formula results before sending the file. |
-| `xlsx-calc` | 150,686 | Migration pages should focus on unsupported formulas, workbook size, and verification. |
+| Package                | Last-week npm downloads on 2026-05-20 | Practical implication                                                                      |
+| ---------------------- | ------------------------------------: | ------------------------------------------------------------------------------------------ |
+| `xlsx` / SheetJS       |                            10,608,303 | Optimize for SheetJS-style XLSX buffers and stale formula cache searches.                  |
+| `exceljs`              |                             8,133,216 | Keep ExcelJS in the workflow; add recalculated readback at the missing boundary.           |
+| `@formulajs/formulajs` |                               344,141 | Formula-function users may need workbook semantics, dependency tracking, and verification. |
+| `hyperformula`         |                               305,054 | Compare honestly against mature formula-engine use cases.                                  |
+| `xlsx-populate`        |                               201,621 | Generated-workbook users often need fresh formula results before sending the file.         |
+| `xlsx-calc`            |                               150,686 | Migration pages should focus on unsupported formulas, workbook size, and verification.     |
 
 The growth surface is not another generic "spreadsheet engine" post. It is the
 exact failure mode those users search for: "I edited an XLSX in Node and the
@@ -108,16 +108,16 @@ formula result is stale."
 
 ## Comparison Table
 
-| Need | Start with | Reason |
-| --- | --- | --- |
-| Parse many spreadsheet file formats into JavaScript data | SheetJS | It is built around file-format import/export and a common spreadsheet object model. |
-| Generate XLSX reports with workbook structure and styling | ExcelJS | It focuses on reading, manipulating, and writing XLSX workbook files. |
-| Store formulas in a workbook file and let Excel calculate later | SheetJS or ExcelJS | Both can represent formula text and cached or supplied values in workbook data. |
-| Recalculate a SheetJS / `xlsx` pipeline after changing inputs | `@bilig/xlsx-formula-recalc` | It accepts the XLSX bytes already produced by SheetJS and returns fresh formula readback plus exported bytes. |
-| Recalculate raw XLSX bytes after changing inputs | `@bilig/xlsx-formula-recalc` | It accepts the XLSX bytes already produced by SheetJS, `xlsx-populate`, or template tools and returns fresh readback plus exported bytes. |
-| Recalculate an existing ExcelJS workbook after changing inputs | `@bilig/exceljs-formula-recalc` | It preserves the ExcelJS authoring boundary and patches requested formula cells with fresh results. |
-| Recalculate formulas inside a Node service after changing inputs | `@bilig/workpaper` or `@bilig/workpaper` | It exposes a WorkPaper runtime with formula readback, JSON persistence, and restore verification after edits. |
-| Give a coding agent a spreadsheet tool it can mutate and verify | `@bilig/workpaper` | The maintained examples prove writeback, dependent formulas, persistence, and restore. |
+| Need                                                             | Start with                               | Reason                                                                                                                                    |
+| ---------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Parse many spreadsheet file formats into JavaScript data         | SheetJS                                  | It is built around file-format import/export and a common spreadsheet object model.                                                       |
+| Generate XLSX reports with workbook structure and styling        | ExcelJS                                  | It focuses on reading, manipulating, and writing XLSX workbook files.                                                                     |
+| Store formulas in a workbook file and let Excel calculate later  | SheetJS or ExcelJS                       | Both can represent formula text and cached or supplied values in workbook data.                                                           |
+| Recalculate a SheetJS / `xlsx` pipeline after changing inputs    | `@bilig/xlsx-formula-recalc`             | It accepts the XLSX bytes already produced by SheetJS and returns fresh formula readback plus exported bytes.                             |
+| Recalculate raw XLSX bytes after changing inputs                 | `@bilig/xlsx-formula-recalc`             | It accepts the XLSX bytes already produced by SheetJS, `xlsx-populate`, or template tools and returns fresh readback plus exported bytes. |
+| Recalculate an existing ExcelJS workbook after changing inputs   | `@bilig/exceljs-formula-recalc`          | It preserves the ExcelJS authoring boundary and patches requested formula cells with fresh results.                                       |
+| Recalculate formulas inside a Node service after changing inputs | `@bilig/workpaper` or `@bilig/workpaper` | It exposes a WorkPaper runtime with formula readback, JSON persistence, and restore verification after edits.                             |
+| Give a coding agent a spreadsheet tool it can mutate and verify  | `@bilig/workpaper`                       | The maintained examples prove writeback, dependent formulas, persistence, and restore.                                                    |
 
 ## Use The Narrow Bridge First
 

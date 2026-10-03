@@ -1,4 +1,4 @@
-# sheetjs-formula-recalc
+# @bilig/sheetjs-formula-recalc
 
 Recalculate SheetJS / `xlsx` formula workbooks in Node.js without opening
 Excel, LibreOffice, or a browser.
@@ -28,7 +28,7 @@ Use this package at the file boundary:
 3. read proof cells from `result.reads`;
 4. write `result.xlsx` if the updated artifact is needed.
 
-This package is a SheetJS-named bridge over `xlsx-formula-recalc`, so teams
+This package is a SheetJS-named bridge over `@bilig/xlsx-formula-recalc`, so teams
 searching for a SheetJS answer can find the right boundary directly.
 
 If the workflow might belong at the generic XLSX, ExcelJS, template, CI,
@@ -39,7 +39,7 @@ before installing another bridge.
 ## Install
 
 ```sh
-npm install sheetjs-formula-recalc
+npm install @bilig/sheetjs-formula-recalc
 ```
 
 ## CLI
@@ -47,13 +47,13 @@ npm install sheetjs-formula-recalc
 Run a self-contained proof first:
 
 ```sh
-npx --package sheetjs-formula-recalc sheetjs-recalc --demo --json
+npx --package @bilig/sheetjs-formula-recalc sheetjs-recalc --demo --json
 ```
 
 For a real workbook:
 
 ```sh
-npx --package sheetjs-formula-recalc sheetjs-recalc quote.xlsx \
+npx --package @bilig/sheetjs-formula-recalc sheetjs-recalc quote.xlsx \
   --set Inputs!B2=48 \
   --set Inputs!B3=1500 \
   --read Summary!B7 \
@@ -67,7 +67,7 @@ The command writes the recalculated XLSX and prints the requested read cells.
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises'
-import { recalculateSheetjsWorkbook } from 'sheetjs-formula-recalc'
+import { recalculateSheetjsWorkbook } from '@bilig/sheetjs-formula-recalc'
 
 const result = recalculateSheetjsWorkbook(await readFile('quote.xlsx'), {
   fileName: 'quote.xlsx',
@@ -130,5 +130,5 @@ with the formula, input cells, output cells, and warning output:
 - [SheetJS formula result not updating in Node.js](https://proompteng.github.io/bilig/sheetjs-formula-result-not-updating-node.html)
 - [XLSX formula recalculation in Node.js](https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html)
 - [SheetJS and ExcelJS boundary guide](https://proompteng.github.io/bilig/sheetjs-exceljs-alternative-formula-workbook-api.html)
-- [`xlsx-formula-recalc`](https://www.npmjs.com/package/xlsx-formula-recalc)
-- [`@bilig/headless`](https://www.npmjs.com/package/@bilig/headless)
+- [`@bilig/xlsx-formula-recalc`](https://www.npmjs.com/package/xlsx-formula-recalc)
+- [`@bilig/workpaper`](https://www.npmjs.com/package/@bilig/workpaper)

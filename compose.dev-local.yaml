@@ -1,7 +1,7 @@
 services:
   postgres:
     ports:
-      - "${BILIG_DEV_POSTGRES_PORT:-55432}:5432"
+      - '${BILIG_DEV_POSTGRES_PORT:-55432}:5432'
 
   zero-cache-local:
     image: rocicorp/zero:1.1.1
@@ -17,7 +17,7 @@ services:
       retries: 20
       start_period: 10s
     environment:
-      ZERO_PORT: "4848"
+      ZERO_PORT: '4848'
       ZERO_REPLICA_FILE: /data/zero.db
       ZERO_ADMIN_PASSWORD: local-zero-admin
       ZERO_APP_ID: bilig_v2
@@ -28,8 +28,8 @@ services:
       ZERO_QUERY_URL: http://host.docker.internal:${BILIG_DEV_APP_PORT:-4321}/api/zero/v2/query
       ZERO_MUTATE_URL: http://host.docker.internal:${BILIG_DEV_APP_PORT:-4321}/api/zero/v2/mutate
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     ports:
-      - "${BILIG_DEV_ZERO_PORT:-4848}:4848"
+      - '${BILIG_DEV_ZERO_PORT:-4848}:4848'
     volumes:
       - zero-replica-data:/data

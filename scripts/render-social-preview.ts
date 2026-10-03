@@ -126,7 +126,7 @@ async function buildSvg(): Promise<string> {
     <text x="60" y="30" fill="#f4f1e8" font-size="26" font-weight="700">bilig</text>
   </g>
 
-  <text x="74" y="174" fill="#37df88" font-size="20" font-weight="700">@bilig/headless</text>
+  <text x="74" y="174" fill="#37df88" font-size="20" font-weight="700">@bilig/workpaper</text>
   <text x="74" y="260" fill="#f4f1e8" font-size="72" font-weight="700">Formulas</text>
   <text x="74" y="334" fill="#f4f1e8" font-size="72" font-weight="700">for TypeScript.</text>
   <text x="78" y="397" fill="#c9d1c2" font-size="30" font-weight="400">Edit cells. Recalculate. Save JSON.</text>
@@ -135,7 +135,7 @@ async function buildSvg(): Promise<string> {
     <rect x="0" y="0" width="438" height="62" rx="0" fill="#151914" stroke="#5d675a"/>
     <rect x="0" y="0" width="64" height="62" fill="#1b211b" stroke="#5d675a"/>
     <text x="27" y="40" fill="#39e98f" class="mono" font-size="23" font-weight="500">$</text>
-    <text x="86" y="40" fill="#f4f1e8" class="mono" font-size="23" font-weight="500">npm i @bilig/headless</text>
+    <text x="86" y="40" fill="#f4f1e8" class="mono" font-size="23" font-weight="500">npm i @bilig/workpaper</text>
   </g>
 
   <g transform="translate(74 558)" fill="#c9d1c2">

@@ -1,10 +1,10 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices } from '@playwright/test'
 
-const baseURL = process.env["BILIG_PROD_BASE_URL"] ?? "https://bilig.proompteng.ai";
+const baseURL = process.env['BILIG_PROD_BASE_URL'] ?? 'https://bilig.proompteng.ai'
 
 export default defineConfig({
-  testDir: "./e2e/tests",
-  testMatch: "**/prod-smoke.pw.ts",
+  testDir: './e2e/tests',
+  testMatch: '**/prod-smoke.pw.ts',
   fullyParallel: false,
   retries: 0,
   timeout: 60_000,
@@ -12,10 +12,10 @@ export default defineConfig({
     timeout: 15_000,
   },
   use: {
-    ...devices["Desktop Chrome"],
+    ...devices['Desktop Chrome'],
     baseURL,
-    trace: "retain-on-failure",
-    video: "retain-on-failure",
-    screenshot: "only-on-failure",
+    trace: 'retain-on-failure',
+    video: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
-});
+})

@@ -8,7 +8,7 @@ canonical_url: https://proompteng.github.io/bilig/formula-edge-sumifs-paired-cri
 
 # SUMIFS Paired Criteria Fixture Walkthrough
 
-Status: public formula-edge fixture note for `@bilig/headless`.
+Status: public formula-edge fixture note for `@bilig/workpaper`.
 
 This page documents one canonical criteria-aggregate fixture. It is intentionally
 narrow: the claim is that the current paired-criteria `SUMIFS` fixture is

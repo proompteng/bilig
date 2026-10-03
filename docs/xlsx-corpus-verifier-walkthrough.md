@@ -18,7 +18,7 @@ value.
 For example, a stale cached XLSX value can differ from a fresh Excel
 recalculation even when the underlying formula is correct.
 
-That distinction matters when you are evaluating `@bilig/headless` for a Node.js
+That distinction matters when you are evaluating `@bilig/workpaper` for a Node.js
 service, an agent tool, or a workbook automation job. A stale cache can make a
 correct engine look wrong. It can also make a wrong engine look correct.
 
@@ -134,7 +134,7 @@ Excel accuracy.
 
 The checked reduction corpus is intentionally small and tracked in the repo.
 When a new real workbook exposes a regression, reduce it to a deterministic
-fixture under `packages/headless/fixtures/xlsx-corpus` and refresh the fixture
+fixture under `packages/workpaper/fixtures/xlsx-corpus` and refresh the fixture
 manifest:
 
 ```sh
@@ -195,5 +195,5 @@ Useful links:
 - [new issue](https://github.com/proompteng/bilig/issues/new/choose)
 - [first-timers-only queue](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only)
 - [GitHub Discussions](https://github.com/proompteng/bilig/discussions)
-- [`@bilig/headless` README](https://github.com/proompteng/bilig/blob/main/packages/headless/README.md)
+- [`@bilig/workpaper` README](https://github.com/proompteng/bilig/blob/main/packages/workpaper/README.md)
 - [compatibility limits](where-bilig-is-not-excel-compatible-yet.md)

@@ -4,7 +4,6 @@
   "description": "Run workbook-shaped business rules in Node services: edit inputs, recalculate formulas, read outputs, and save WorkPaper JSON.",
   "keywords": [
     "bilig",
-    "bilig-workpaper",
     "formula-engine",
     "formula-recalculation",
     "formula-workbook",
@@ -57,41 +56,56 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js",
+      "default": "./dist/browser.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./ai-sdk": {
-      "types": "./dist/ai-sdk.d.ts",
-      "import": "./dist/ai-sdk.js",
-      "default": "./dist/ai-sdk.js"
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js",
+      "default": "./dist/cli.js"
     },
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.js",
       "default": "./dist/mcp.js"
     },
-    "./evaluator": {
-      "types": "./dist/evaluator.d.ts",
-      "import": "./dist/evaluator.js",
-      "default": "./dist/evaluator.js"
-    },
     "./xlsx": {
       "types": "./dist/xlsx.d.ts",
       "import": "./dist/xlsx.js",
       "default": "./dist/xlsx.js"
+    },
+    "./ai-sdk": {
+      "types": "./dist/ai-sdk.d.ts",
+      "import": "./dist/ai-sdk.js",
+      "default": "./dist/ai-sdk.js"
+    },
+    "./evaluator": {
+      "types": "./dist/evaluator.d.ts",
+      "import": "./dist/evaluator.js",
+      "default": "./dist/evaluator.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "pnpm --dir ../.. --filter bilig-workpaper build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json"
+    "build": "pnpm --dir ../.. --filter @bilig/xlsx build && pnpm --dir ../.. --filter @bilig/excel-import build && rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json && bun ../../scripts/build-headless-xlsx-subpath.ts",
+    "test:excel-oracle": "tsx ../../scripts/run-vitest.ts --root ../.. --run src/__tests__/desktop-excel-oracle-inventory.test.ts src/__tests__/macos-desktop-excel-*.test.ts --maxWorkers=1 --pool forks --configLoader runner --reporter=verbose",
+    "test:excel-oracle:live": "BILIG_EXCEL_ORACLE_RUN=1 tsx ../../scripts/run-vitest.ts --root ../.. --run src/__tests__/desktop-excel-oracle-inventory.test.ts src/__tests__/macos-desktop-excel-*.test.ts --maxWorkers=1 --pool forks --configLoader runner --reporter=verbose"
   },
   "dependencies": {
-    "@bilig/headless": "workspace:*",
-    "bilig-workpaper": "workspace:*"
+    "@bilig/core": "workspace:*",
+    "@bilig/formula": "workspace:*",
+    "@bilig/protocol": "workspace:*",
+    "@bilig/xlsx": "workspace:*",
+    "fflate": "0.3.11"
   },
   "devDependencies": {
     "ai": "6.0.195",
@@ -110,7 +124,7 @@
     }
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
   },
   "mcpName": "io.github.proompteng/bilig-workpaper"
 }

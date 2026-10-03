@@ -1,4 +1,4 @@
-import type { WorkPaperCellAddress, WorkPaperCellRange, WorkPaperSheet } from '../../headless/src/work-paper.js'
+import type { WorkPaperCellAddress, WorkPaperCellRange, WorkPaperSheet } from '../../workpaper/src/work-paper.js'
 
 export function buildDenseLiteralSheet(rows: number, cols: number): WorkPaperSheet {
   return Array.from({ length: rows }, (_rowValue, rowIndex) =>

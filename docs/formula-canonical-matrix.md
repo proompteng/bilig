@@ -11,24 +11,24 @@
 
 ## Family view
 
-| family | status | wasmStatus | current gap |
-| --- | --- | --- | --- |
-| `arithmetic` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `comparison` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `logical` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `aggregation` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `math` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `text` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `date-time` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `lookup-reference` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `statistical` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `information` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `dynamic-array` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `names` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `tables` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| family                 | status                        | wasmStatus   | current gap                      |
+| ---------------------- | ----------------------------- | ------------ | -------------------------------- |
+| `arithmetic`           | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `comparison`           | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `logical`              | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `aggregation`          | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `math`                 | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `text`                 | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `date-time`            | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `lookup-reference`     | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `statistical`          | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `information`          | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `dynamic-array`        | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `names`                | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `tables`               | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `structured-reference` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `volatile` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `lambda` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `volatile`             | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `lambda`               | `implemented-wasm-production` | `production` | no non-production canonical rows |
 
 ## Current remaining open rows
 

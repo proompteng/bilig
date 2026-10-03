@@ -44,9 +44,9 @@ server:
 
 ```json
 {
-  "name": "bilig-workpaper",
+  "name": "@bilig/workpaper",
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "command": "npm",
       "args": [
         "exec",

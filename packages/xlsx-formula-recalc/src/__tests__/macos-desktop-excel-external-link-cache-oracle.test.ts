@@ -8,7 +8,7 @@ import { ValueTag } from '@bilig/protocol'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 
-import { WorkPaper, exportXlsx, recalculateXlsx } from 'bilig-workpaper/xlsx'
+import { WorkPaper, exportXlsx, recalculateXlsx } from '@bilig/workpaper/xlsx'
 
 const officeRelationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 const externalLinkContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml'

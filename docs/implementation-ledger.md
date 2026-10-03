@@ -4,17 +4,17 @@ This ledger maps the current production path to concrete proof points in the che
 
 ## Closed foundation rows
 
-| Row | Proof |
-| --- | --- |
-| Worker-first browser shell | `apps/web/src/WorkerWorkbookApp.tsx` |
+| Row                                       | Proof                                     |
+| ----------------------------------------- | ----------------------------------------- |
+| Worker-first browser shell                | `apps/web/src/WorkerWorkbookApp.tsx`      |
 | Zero-backed authoritative viewport bridge | `apps/web/src/zero/ZeroWorkbookBridge.ts` |
-| Monolith backend runtime | `apps/bilig/src/index.ts` |
-| Zero service in monolith | `apps/bilig/src/zero/service.ts` |
-| Semantic Zero mutators | `apps/bilig/src/zero/server-mutators.ts` |
-| Recalc worker | `apps/bilig/src/zero/recalc-worker.ts` |
-| Relational Zero schema (repo-local) | `packages/zero-sync/src/schema.ts` |
-| Additive local Postgres schema | `docker/postgres/02-v2-schema.sql` |
-| Transport-neutral workbook op layer | `packages/workbook/src/index.ts` |
+| Monolith backend runtime                  | `apps/bilig/src/index.ts`                 |
+| Zero service in monolith                  | `apps/bilig/src/zero/service.ts`          |
+| Semantic Zero mutators                    | `apps/bilig/src/zero/server-mutators.ts`  |
+| Recalc worker                             | `apps/bilig/src/zero/recalc-worker.ts`    |
+| Relational Zero schema (repo-local)       | `packages/zero-sync/src/schema.ts`        |
+| Additive local Postgres schema            | `docker/postgres/02-v2-schema.sql`        |
+| Transport-neutral workbook op layer       | `packages/workbook/src/index.ts`          |
 
 ## Open work that still matters
 

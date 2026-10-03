@@ -1,7 +1,7 @@
 ---
 title: Use an Excel file as a calculation engine in Node.js
 published: true
-description: Decide whether a Node.js app should use Excel, xlsx-calc, HyperFormula, or @bilig/headless when an uploaded XLSX workbook is meant to calculate backend outputs.
+description: Decide whether a Node.js app should use Excel, xlsx-calc, HyperFormula, or @bilig/workpaper when an uploaded XLSX workbook is meant to calculate backend outputs.
 tags: typescript, node, excel, xlsx, spreadsheet, formulas
 canonical_url: https://proompteng.github.io/bilig/excel-file-calculation-engine-node.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -38,7 +38,7 @@ formula coverage is enough.
 Use HyperFormula if the main requirement is a mature headless formula engine
 with broad spreadsheet-function coverage.
 
-Use `@bilig/headless` when the service can treat the workbook as WorkPaper state:
+Use `@bilig/workpaper` when the service can treat the workbook as WorkPaper state:
 write inputs, recalculate, read values back, persist JSON, and import or export
 XLSX at the boundary.
 
@@ -69,8 +69,8 @@ were a fresh calculation result.
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises'
-import { WorkPaper } from '@bilig/headless'
-import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
+import { exportXlsx, importXlsx } from '@bilig/workpaper/xlsx'
 
 const imported = importXlsx(await readFile('vehicle-calculator.xlsx'), 'vehicle-calculator.xlsx')
 const workbook = WorkPaper.buildFromSnapshot(imported.snapshot)

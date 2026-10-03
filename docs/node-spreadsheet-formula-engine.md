@@ -1,7 +1,7 @@
 ---
 title: Node.js spreadsheet formula engine for services
 published: true
-description: Use @bilig/headless when a Node.js service needs workbook formulas, computed readback, JSON persistence, and verified edits without a browser grid.
+description: Use @bilig/workpaper when a Node.js service needs workbook formulas, computed readback, JSON persistence, and verified edits without a browser grid.
 tags: typescript, node, spreadsheet, formulas, opensource
 canonical_url: https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -10,7 +10,7 @@ image: /assets/github-social-preview.png
 
 # Node.js spreadsheet formula engine for services
 
-Use `@bilig/headless` when a Node.js service needs spreadsheet formulas as part
+Use `@bilig/workpaper` when a Node.js service needs spreadsheet formulas as part
 of its own runtime. The useful case is not "make a prettier spreadsheet." It is
 "accept inputs, update workbook state, recalculate formulas, persist the
 document, and return values that were actually read back from the engine."
@@ -26,12 +26,12 @@ That shows up in ordinary backend work:
 If you only need to write an XLSX file for Excel to open later, use an XLSX
 library. If you need maximum Excel-function coverage today, evaluate
 HyperFormula first. If you need a small TypeScript WorkPaper object that a Node
-process can mutate, verify, and save as JSON, `@bilig/headless` is the slice to
+process can mutate, verify, and save as JSON, `@bilig/workpaper` is the slice to
 try.
 
 ## What the engine owns
 
-`@bilig/headless` gives the service a WorkPaper object. A WorkPaper is a
+`@bilig/workpaper` gives the service a WorkPaper object. A WorkPaper is a
 programmatic workbook with sheets, cell addresses, formulas, computed values,
 structural edits, and persistence helpers.
 
@@ -49,10 +49,10 @@ mkdir bilig-formula-engine-eval
 cd bilig-formula-engine-eval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 cat > formula-engine-smoke.ts <<'EOF'
-import { WorkPaper } from '@bilig/headless'
+import { WorkPaper } from '@bilig/workpaper'
 
 type NumericCell = {
   value: number
@@ -108,7 +108,7 @@ formula evaluation, and computed readback from Node.
 Start here when the service needs a workbook model, not just isolated formula
 functions.
 
-| Need                                   | Why `@bilig/headless` helps                                                                          |
+| Need                                   | Why `@bilig/workpaper` helps                                                                         |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Put spreadsheet formulas behind an API | The service can build a WorkPaper, edit input cells, and return computed cells.                      |
 | Let an agent edit a workbook safely    | The agent can report exact changed cells and post-write readback instead of only narrating intent.   |

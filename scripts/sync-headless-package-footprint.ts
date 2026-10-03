@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { formatJsonForRepo } from './generated-json-format.ts'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const packageDir = join(repoRoot, 'packages', 'headless')
+const packageDir = join(repoRoot, 'packages', 'workpaper')
 const outputPath = join(repoRoot, 'docs', 'headless-package-footprint.json')
 const checkMode = process.argv.includes('--check')
 const coldStartProbeMaxElapsedMs = 1_000
@@ -37,7 +37,8 @@ if (displayValue !== '24000') {
 }
 `
 
-const requiredDescription = 'Lower-level WorkPaper formula runtime for Node services with JSON persistence and verified formula readback.'
+const requiredDescription =
+  'Run workbook-shaped business rules in Node services: edit inputs, recalculate formulas, read outputs, and save WorkPaper JSON.'
 const requiredKeywords = [
   'bilig',
   'workpaper',
@@ -50,7 +51,6 @@ const requiredKeywords = [
   'formula-recalculation',
   'formula-workbook',
   'node',
-  'node-services',
   'server-side-formula-engine',
   'server-side-formulas',
   'tool-integration',
@@ -144,19 +144,22 @@ function readStringArray(record: Record<string, unknown>, key: string, context: 
 }
 
 async function readPackageManifest(): Promise<PackageManifest> {
-  const parsed = asRecord(JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8')) as unknown, 'packages/headless/package.json')
-  const engines = asRecord(parsed['engines'], 'packages/headless/package.json.engines')
+  const parsed = asRecord(
+    JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8')) as unknown,
+    'packages/workpaper/package.json',
+  )
+  const engines = asRecord(parsed['engines'], 'packages/workpaper/package.json.engines')
   return {
-    name: readString(parsed, 'name', 'packages/headless/package.json'),
-    version: readString(parsed, 'version', 'packages/headless/package.json'),
-    description: readString(parsed, 'description', 'packages/headless/package.json'),
-    keywords: readStringArray(parsed, 'keywords', 'packages/headless/package.json'),
-    dependencies: asStringRecord(parsed['dependencies'], 'packages/headless/package.json.dependencies'),
+    name: readString(parsed, 'name', 'packages/workpaper/package.json'),
+    version: readString(parsed, 'version', 'packages/workpaper/package.json'),
+    description: readString(parsed, 'description', 'packages/workpaper/package.json'),
+    keywords: readStringArray(parsed, 'keywords', 'packages/workpaper/package.json'),
+    dependencies: asStringRecord(parsed['dependencies'], 'packages/workpaper/package.json.dependencies'),
     engines: {
-      node: readString(engines, 'node', 'packages/headless/package.json.engines'),
+      node: readString(engines, 'node', 'packages/workpaper/package.json.engines'),
     },
-    bin: asStringRecord(parsed['bin'], 'packages/headless/package.json.bin'),
-    exports: asRecord(parsed['exports'], 'packages/headless/package.json.exports'),
+    bin: asStringRecord(parsed['bin'], 'packages/workpaper/package.json.bin'),
+    exports: asRecord(parsed['exports'], 'packages/workpaper/package.json.exports'),
   }
 }
 
@@ -204,7 +207,7 @@ function runPackDryRun(): PackResult {
 }
 
 function ensureHeadlessBuild(): void {
-  const result = spawnSync('pnpm', ['--dir', repoRoot, '--filter', '@bilig/headless', 'build'], {
+  const result = spawnSync('pnpm', ['--dir', repoRoot, '--filter', '@bilig/workpaper', 'build'], {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -253,19 +256,19 @@ function readBoolean(record: Record<string, unknown>, key: string, context: stri
 
 function assertPositioning(manifest: PackageManifest): void {
   if (manifest.description !== requiredDescription) {
-    throw new Error(`packages/headless/package.json description must be: ${requiredDescription}`)
+    throw new Error(`packages/workpaper/package.json description must be: ${requiredDescription}`)
   }
   for (const fragment of forbiddenDescriptionFragments) {
     if (manifest.description.includes(fragment)) {
-      throw new Error(`packages/headless/package.json description must not include stale positioning: ${fragment}`)
+      throw new Error(`packages/workpaper/package.json description must not include stale positioning: ${fragment}`)
     }
   }
   if (manifest.keywords.length > 24) {
-    throw new Error(`packages/headless/package.json has ${manifest.keywords.length.toString()} keywords; keep npm metadata compressed`)
+    throw new Error(`packages/workpaper/package.json has ${manifest.keywords.length.toString()} keywords; keep npm metadata compressed`)
   }
   for (const keyword of requiredKeywords) {
     if (!manifest.keywords.includes(keyword)) {
-      throw new Error(`packages/headless/package.json keywords must include ${keyword}`)
+      throw new Error(`packages/workpaper/package.json keywords must include ${keyword}`)
     }
   }
 }
@@ -390,13 +393,13 @@ function renderMarkdownBlock(footprint: HeadlessPackageFootprint): string {
     '',
     `- Pack dry run: \`${formatBytes(footprint.npmPackDryRun.tarballBytes)}\` tarball, \`${formatBytes(footprint.npmPackDryRun.unpackedBytes)}\` unpacked, \`${footprint.npmPackDryRun.entryCount.toString()}\` package entries.`,
     '- Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX',
-    '  import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the',
+    '  import/export stays behind the `@bilig/workpaper/xlsx` subpath; MCP is the',
     '  `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the',
     '  `bilig-formula-clinic` binary.',
     '- Cold-start gate: Node imports the main entrypoint, builds a two-sheet',
     `  WorkPaper, and reads \`${footprint.coldStartProbe.expectedDisplayValue}\` under \`${footprint.coldStartProbe.maxElapsedMs.toString()} ms\` without importing`,
     '  the XLSX subpath.',
-    `- Runtime: Node \`${footprint.package.nodeEngine}\`; Node 22 compatibility is covered by the runtime package workflow.`,
+    `- Runtime: Node \`${footprint.package.nodeEngine}\`.`,
     '<!-- headless-package-footprint:end -->',
   ].join('\n')
 }
@@ -411,7 +414,7 @@ function replaceMarkdownBlock(source: string, renderedBlock: string, path: strin
 
 async function syncMarkdownBlocks(footprint: HeadlessPackageFootprint): Promise<void> {
   const renderedBlock = renderMarkdownBlock(footprint)
-  const paths = [join('packages', 'headless', 'README.md')] as const
+  const paths = [join('packages', 'workpaper', 'README.md')] as const
   await Promise.all(
     paths.map(async (path) => {
       const absolutePath = join(repoRoot, path)

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runAgentWorkbookChallengeCli } from '@bilig/headless/cli'
+import { runAgentWorkbookChallengeCli } from './cli.js'
 
 process.exitCode = runAgentWorkbookChallengeCli({
   argv: process.argv.slice(2),

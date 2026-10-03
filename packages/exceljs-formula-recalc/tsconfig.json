@@ -6,7 +6,7 @@
   },
   "references": [
     {
-      "path": "../bilig"
+      "path": "../workpaper"
     },
     {
       "path": "../xlsx-formula-recalc"

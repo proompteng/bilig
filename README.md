@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/proompteng/bilig/actions/workflows/ci.yml/badge.svg)](https://github.com/proompteng/bilig/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@bilig/workpaper?label=%40bilig%2Fworkpaper)](https://www.npmjs.com/package/@bilig/workpaper)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-43853d)](packages/workpaper/package.json)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-43853d)](packages/workpaper/package.json)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/proompteng/bilig/badge)](https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig)
 [![License: MIT](https://img.shields.io/badge/license-MIT-14784b)](LICENSE)
 
@@ -79,28 +79,28 @@ npm install @bilig/workpaper
 ```
 
 ```ts
-import { buildA1WorkPaper } from "@bilig/workpaper";
+import { buildA1WorkPaper } from '@bilig/workpaper'
 
 const pricing = buildA1WorkPaper({
   Inputs: [
-    ["Metric", "Value"],
-    ["Units", 20],
-    ["Price", 1200],
+    ['Metric', 'Value'],
+    ['Units', 20],
+    ['Price', 1200],
   ],
   Summary: [
-    ["Metric", "Value"],
-    ["Revenue", "=Inputs!B2*Inputs!B3"],
+    ['Metric', 'Value'],
+    ['Revenue', '=Inputs!B2*Inputs!B3'],
   ],
-});
+})
 
-const proof = pricing.editAndReadback("Inputs!B2", 32, {
-  readbackRange: "Summary!B2",
-});
+const proof = pricing.editAndReadback('Inputs!B2', 32, {
+  readbackRange: 'Summary!B2',
+})
 
-console.log(proof.afterReadback.displayValues[0]?.[0]); // 38400
-console.log(proof.verified); // true
+console.log(proof.afterReadback.displayValues[0]?.[0]) // 38400
+console.log(proof.verified) // true
 
-pricing.dispose();
+pricing.dispose()
 ```
 
 For ordinary operations, use `set()`, `setMany()`, `readMany()`, `display()`,
@@ -114,13 +114,13 @@ The lifecycle is deliberately small:
 
 ## Why Bilig
 
-| Capability | What it gives you |
-| --- | --- |
-| Workbook-shaped models | Sheets, A1 addresses, formulas, ranges, and named expressions without a spreadsheet UI. |
-| Verified mutations | Before/after computed values plus persistence and restore checks. |
-| Service-owned state | Portable WorkPaper JSON for routes, queues, tests, tools, and audit trails. |
-| Agent-safe tools | Narrow read/write tools with exact cells, computed readback, and writable-sheet boundaries. |
-| Explicit file boundaries | Separate XLSX import, export, risk inspection, and Excel-oracle workflows. |
+| Capability               | What it gives you                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| Workbook-shaped models   | Sheets, A1 addresses, formulas, ranges, and named expressions without a spreadsheet UI.     |
+| Verified mutations       | Before/after computed values plus persistence and restore checks.                           |
+| Service-owned state      | Portable WorkPaper JSON for routes, queues, tests, tools, and audit trails.                 |
+| Agent-safe tools         | Narrow read/write tools with exact cells, computed readback, and writable-sheet boundaries. |
+| Explicit file boundaries | Separate XLSX import, export, risk inspection, and Excel-oracle workflows.                  |
 
 Use Bilig for pricing, quote approval, payouts, forecasts, validation rules,
 formula-backed workflows, and tests where a service or tool should own the
@@ -159,15 +159,15 @@ workflow before editing cells.
 
 Machine-readable entry points:
 
-| Need | Entry point |
-| --- | --- |
-| A compact routing card | [`docs/agent-start.txt`](docs/agent-start.txt) |
-| A concise model index | [`docs/llms.txt`](docs/llms.txt) |
-| Full agent documentation | [`docs/llms-full.txt`](docs/llms-full.txt) |
-| Installation context | [`docs/llms-install.md`](docs/llms-install.md) |
-| Structured capabilities | [`docs/agent.json`](docs/agent.json) |
-| Reusable skill | [`skills/bilig-workpaper/SKILL.md`](skills/bilig-workpaper/SKILL.md) |
-| Proof and host matrix | [`docs/agent-adoption-kit.md`](docs/agent-adoption-kit.md) |
+| Need                     | Entry point                                                          |
+| ------------------------ | -------------------------------------------------------------------- |
+| A compact routing card   | [`docs/agent-start.txt`](docs/agent-start.txt)                       |
+| A concise model index    | [`docs/llms.txt`](docs/llms.txt)                                     |
+| Full agent documentation | [`docs/llms-full.txt`](docs/llms-full.txt)                           |
+| Installation context     | [`docs/llms-install.md`](docs/llms-install.md)                       |
+| Structured capabilities  | [`docs/agent.json`](docs/agent.json)                                 |
+| Reusable skill           | [`skills/bilig-workpaper/SKILL.md`](skills/bilig-workpaper/SKILL.md) |
+| Proof and host matrix    | [`docs/agent-adoption-kit.md`](docs/agent-adoption-kit.md)           |
 
 The published package also carries `AGENTS.md` and `SKILL.md`, so an agent can
 discover the same proof contract from `node_modules`. Install or inspect the
@@ -205,13 +205,13 @@ Run an evaluator first, then use the recipe owned by your host:
 
 ## Choose An Evaluation Path
 
-| Your state owner | Start here | Evidence to require |
-| --- | --- | --- |
-| TypeScript application | `npm install @bilig/workpaper` | direct A1 API and focused application tests |
-| Node service, route, queue, or test | `bilig-evaluate --door workpaper-service --json` | edit, recalculation, JSON export, restore, `verified: true` |
-| MCP client or tool host | `bilig-evaluate --door agent-mcp --json` | discovery, readback, disk persistence, restart |
-| Imported `.xlsx` is the contract | `workbook-compatibility-report workbook.xlsx --json` | unsupported formulas and workbook risk reasons for that file |
-| Cached `.xlsx` values look stale | `xlsx-cache-doctor workbook.xlsx --json` | stale-cache diagnosis, recalculation, and readback for that file |
+| Your state owner                    | Start here                                           | Evidence to require                                              |
+| ----------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
+| TypeScript application              | `npm install @bilig/workpaper`                       | direct A1 API and focused application tests                      |
+| Node service, route, queue, or test | `bilig-evaluate --door workpaper-service --json`     | edit, recalculation, JSON export, restore, `verified: true`      |
+| MCP client or tool host             | `bilig-evaluate --door agent-mcp --json`             | discovery, readback, disk persistence, restart                   |
+| Imported `.xlsx` is the contract    | `workbook-compatibility-report workbook.xlsx --json` | unsupported formulas and workbook risk reasons for that file     |
+| Cached `.xlsx` values look stale    | `xlsx-cache-doctor workbook.xlsx --json`             | stale-cache diagnosis, recalculation, and readback for that file |
 
 The `workbook-compatibility` and `xlsx-cache` evaluator doors use bundled demo
 workbooks to smoke-test the published package; they do not inspect your file.
@@ -291,17 +291,16 @@ against a workbook freshly recalculated by Excel. See the
 
 ## Packages And Repository Map
 
-| Path | Role |
-| --- | --- |
-| [`packages/workpaper`](packages/workpaper) | Recommended `@bilig/workpaper` API, evaluators, AI SDK adapter, MCP server, and XLSX boundary. |
-| [`packages/headless`](packages/headless) | Lower-level WorkPaper runtime and integration primitives. |
-| [`packages/xlsx-formula-recalc`](packages/xlsx-formula-recalc) | Real-file compatibility and stale-cache diagnostics. |
-| [`packages/formula`](packages/formula) | Formula parser, binder, compiler, and evaluator. |
-| [`packages/core`](packages/core) | Workbook state, mutations, snapshots, and scheduling. |
-| [`apps/web`](apps/web) | Browser spreadsheet shell. |
-| [`apps/bilig`](apps/bilig) | Full-stack runtime, APIs, and static site host. |
+| Path                                                           | Role                                                                                           |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [`packages/workpaper`](packages/workpaper)                     | Recommended `@bilig/workpaper` API, evaluators, AI SDK adapter, MCP server, and XLSX boundary. |
+| [`packages/xlsx-formula-recalc`](packages/xlsx-formula-recalc) | Real-file compatibility and stale-cache diagnostics.                                           |
+| [`packages/formula`](packages/formula)                         | Formula parser, binder, compiler, and evaluator.                                               |
+| [`packages/core`](packages/core)                               | Workbook state, mutations, snapshots, and scheduling.                                          |
+| [`apps/web`](apps/web)                                         | Browser spreadsheet shell.                                                                     |
+| [`apps/bilig`](apps/bilig)                                     | Full-stack runtime, APIs, and static site host.                                                |
 
-The public package requires Node.js `>=22`. Local monorepo development uses
+The public WorkPaper package requires Node.js `>=24`. Local monorepo development uses
 Node.js 24+, Bun, and `pnpm@10.32.1`.
 
 Published releases include npm registry signatures and provenance attestations:

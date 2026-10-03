@@ -9,7 +9,7 @@ import { recalculateXlsxFileToFile } from '../index.js'
 
 const officeRelationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
-describe('xlsx-formula-recalc native typed range aggregates', () => {
+describe('@bilig/xlsx-formula-recalc native typed range aggregates', () => {
   it('evaluates SUM, AVERAGE, and COUNTA ranges through the native kernel', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'xlsx-native-typed-aggregate-'))
     try {

@@ -290,7 +290,7 @@ restoring it, and confirming the restored value matches. Return `editedCell`,
 - https://proompteng.github.io/bilig/external-workbook-recalc-proof.html
 - https://proompteng.github.io/bilig/external-workbook-recalc-proof.ts
 - https://proompteng.github.io/bilig/agent-xlsx-formula-recalculation-without-libreoffice.html
-- https://github.com/proompteng/bilig/tree/main/packages/headless#readme
+- https://github.com/proompteng/bilig/tree/main/packages/workpaper#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
 - https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/npm-eval.ts
 - https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node
@@ -739,7 +739,7 @@ npm exec --package @bilig/workpaper@latest -- bilig-workpaper-mcp --workpaper ./
   https://proompteng.github.io/bilig/lobehub-workpaper-mcp.html
   https://github.com/proompteng/bilig/blob/main/docs/lobehub-workpaper-mcp.md
   Import the hosted Streamable HTTP endpoint with:
-  {"mcpServers":{"bilig-workpaper":{"url":"https://bilig.proompteng.ai/mcp","type":"http"}}}
+  {"mcpServers":{"@bilig/workpaper":{"url":"https://bilig.proompteng.ai/mcp","type":"http"}}}
   Use the desktop STDIO config for private writable WorkPaper JSON files.
 - AnythingLLM MCP setup:
   https://proompteng.github.io/bilig/anythingllm-workpaper-mcp.html
@@ -747,7 +747,7 @@ npm exec --package @bilig/workpaper@latest -- bilig-workpaper-mcp --workpaper ./
   AnythingLLM loads MCP servers from `plugins/anythingllm_mcp_servers.json` in
   the AnythingLLM storage directory.
   Hosted Streamable HTTP smoke config:
-  {"mcpServers":{"bilig-workpaper":{"type":"streamable","url":"https://bilig.proompteng.ai/mcp"}}}
+  {"mcpServers":{"@bilig/workpaper":{"type":"streamable","url":"https://bilig.proompteng.ai/mcp"}}}
   Desktop stdio config uses host paths and:
   npx -y --package @bilig/workpaper@latest bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
   Docker stdio config should persist writable WorkPaper JSON under
@@ -780,7 +780,7 @@ npm exec --package @bilig/workpaper@latest -- bilig-workpaper-mcp --workpaper ./
 - packaged MCP stdio WorkPaper server:
   npm exec --package @bilig/workpaper@latest -- bilig-workpaper-mcp
   mcpName: io.github.proompteng/bilig-workpaper
-  https://github.com/proompteng/bilig/blob/main/packages/headless/server.json
+  https://github.com/proompteng/bilig/blob/main/packages/workpaper/server.json
 - official MCP Registry entry:
   https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper
 - agent spreadsheet tool-call loop:

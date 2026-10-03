@@ -1,13 +1,13 @@
-import { recalculateXlsx, type XlsxFormulaRecalcOptions, type XlsxFormulaRecalcResult } from 'xlsx-formula-recalc'
+import { recalculateXlsx, type XlsxFormulaRecalcOptions, type XlsxFormulaRecalcResult } from '@bilig/xlsx-formula-recalc'
 
-export { recalculateXlsx, recalculateXlsxFileToFile } from 'xlsx-formula-recalc'
-export { WorkPaper, exportXlsx, importXlsx, parseQualifiedCellTarget } from 'bilig-workpaper/xlsx'
+export { recalculateXlsx, recalculateXlsxFileToFile } from '@bilig/xlsx-formula-recalc'
+export { WorkPaper, exportXlsx, importXlsx, parseQualifiedCellTarget } from '@bilig/workpaper/xlsx'
 export type {
   XlsxFormulaRecalcCellValue,
   XlsxFormulaRecalcEdit,
   XlsxFormulaRecalcOptions,
   XlsxFormulaRecalcResult,
-} from 'xlsx-formula-recalc'
+} from '@bilig/xlsx-formula-recalc'
 
 export interface ExceljsWorkbookLike {
   readonly xlsx: {

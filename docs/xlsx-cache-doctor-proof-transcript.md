@@ -123,9 +123,9 @@ For pull requests, use the GitHub Action in report-only mode first:
 ```yaml
 - uses: proompteng/bilig@v1
   with:
-    workbooks: "fixtures/**/*.xlsx"
-    changed-files-only: "true"
-    fail-on-stale: "false"
+    workbooks: 'fixtures/**/*.xlsx'
+    changed-files-only: 'true'
+    fail-on-stale: 'false'
 ```
 
 The action writes JSON and Markdown reports and exposes `stale-count`,

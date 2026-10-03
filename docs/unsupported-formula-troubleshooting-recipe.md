@@ -10,7 +10,7 @@ image: /assets/github-social-preview.png
 
 # Unsupported Formula Troubleshooting Recipe
 
-Status: runnable recipe for `@bilig/headless` diagnostics
+Status: runnable recipe for `@bilig/workpaper` diagnostics
 
 Use this when a Node service or agent tool calls a formula-backed WorkPaper
 cell and gets `#VALUE!`, `#NAME?`, or another workbook error instead of a
@@ -28,14 +28,14 @@ mkdir bilig-unsupported-formula-eval
 cd bilig-unsupported-formula-eval
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install --save-dev tsx typescript
 ```
 
 Create `unsupported-formula.ts`:
 
 ```ts
-import { WorkPaper } from '@bilig/headless'
+import { WorkPaper } from '@bilig/workpaper'
 
 const workbook = WorkPaper.buildFromSheets(
   {
@@ -134,7 +134,7 @@ the bad formula result as if it were a valid business number.
 Use a small error boundary around reads that must produce numbers:
 
 ```ts
-import type { WorkPaper, WorkPaperCellAddress } from '@bilig/headless'
+import type { WorkPaper, WorkPaperCellAddress } from '@bilig/workpaper'
 
 type RequiredNumberRead =
   | number
@@ -199,9 +199,9 @@ visible and gives the agent the exact cell/range it needs to fix.
 This recipe does not imply that tracked formula names are missing. It shows the
 diagnostic workflow for formula errors caused by workbook-specific references,
 external dependencies, argument shapes, locale/date edges, or unsupported host
-features in `@bilig/headless`.
+features in `@bilig/workpaper`.
 
 For the broader compatibility boundary, read
 [`docs/where-bilig-is-not-excel-compatible-yet.md`](where-bilig-is-not-excel-compatible-yet.md).
 For the API contract, read
-[`packages/headless/README.md`](../packages/headless/README.md).
+[`packages/workpaper/README.md`](../packages/workpaper/README.md).

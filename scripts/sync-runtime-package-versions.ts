@@ -72,9 +72,9 @@ function syncAgentEvaluatorDocVersions(rootDir: string, version: string, updated
         `$1${version}$2`,
         `${docPath} must include a @bilig/workpaper evaluator package version`,
       ),
-      /("xlsx-formula-recalc":\s*")\d+\.\d+\.\d+(")/u,
+      /("@bilig\/xlsx-formula-recalc":\s*")\d+\.\d+\.\d+(")/u,
       `$1${version}$2`,
-      `${docPath} must include an xlsx-formula-recalc evaluator package version`,
+      `${docPath} must include an @bilig/xlsx-formula-recalc evaluator package version`,
     )
     writeTextIfChanged(docPath, currentContent, nextContent, updatedFiles)
   }
@@ -156,7 +156,7 @@ function syncGeminiExtensionVersion(rootDir: string, version: string, updatedFil
 function syncReleasePleaseManifestVersion(rootDir: string, version: string, updatedFiles: string[]): void {
   const manifestPath = join(rootDir, '.release-please-manifest.json')
   const manifest = readJsonRecord(manifestPath)
-  manifest['packages/headless'] = version
+  manifest['packages/workpaper'] = version
 
   if (writeJsonIfChanged(manifestPath, manifest)) {
     updatedFiles.push(manifestPath)

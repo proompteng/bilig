@@ -2,9 +2,9 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { WorkPaper } from '@bilig/headless'
-import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'
-import { recalculateXlsx } from 'xlsx-formula-recalc'
+import { WorkPaper } from '@bilig/workpaper'
+import { exportXlsx, importXlsx } from '@bilig/workpaper/xlsx'
+import { recalculateXlsx } from '@bilig/xlsx-formula-recalc'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 

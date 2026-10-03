@@ -14,7 +14,7 @@ import {
   parseQualifiedA1,
   recalculateSheetjsWorkbook,
   recalculateXlsx,
-} from 'bilig-workpaper/xlsx'
+} from '@bilig/workpaper/xlsx'
 import {
   inspectXlsxCacheFile,
   recalculateXlsx as recalculateNativeXlsx,
@@ -24,7 +24,7 @@ import {
 
 const officeRelationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
-describe('xlsx-formula-recalc', () => {
+describe('@bilig/xlsx-formula-recalc', () => {
   it('edits XLSX inputs, recalculates formulas, and exports a reimportable workbook', () => {
     const sourceWorkbook = WorkPaper.buildFromSheets({
       Inputs: [

@@ -32,7 +32,7 @@
     "packages/create-workpaper": {
       "entry": ["template/src/index.ts"]
     },
-    "packages/bilig": {
+    "packages/workpaper": {
       "entry": [
         "src/agent-workbook-challenge-bin.ts",
         "src/evaluator-bin.ts",
@@ -41,7 +41,7 @@
         "src/work-paper-mcp-stdio-bin.ts"
       ]
     },
-    "packages/bilig-xlsx-formula-recalc": {
+    "packages/xlsx-formula-recalc": {
       "entry": [
         "src/cache-doctor-cli.ts",
         "src/cli.ts",
@@ -50,7 +50,7 @@
         "src/workbook-compatibility-report-cli.ts"
       ]
     },
-    "packages/headless": {
+    "packages/workpaper": {
       "entry": [
         "src/agent-start-bin.ts",
         "src/agent-workbook-challenge-bin.ts",

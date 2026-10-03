@@ -4,7 +4,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from 'bilig-workpaper'
+} from '@bilig/workpaper'
 import { createAiSdkWorkPaperTools as createPublishedAiSdkWorkPaperTools } from '@bilig/workpaper/ai-sdk'
 import { z } from 'zod'
 

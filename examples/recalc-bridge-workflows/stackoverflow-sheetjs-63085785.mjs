@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { exportXlsxSourceLiteralPatches, readXlsxTargetCell, writeSimpleXlsxWorkbook } from '@bilig/xlsx'
-import { recalculateXlsx } from 'xlsx-formula-recalc'
+import { recalculateXlsx } from '@bilig/xlsx-formula-recalc'
 
 const exampleDir = dirname(fileURLToPath(import.meta.url))
 const outputDir = join(exampleDir, 'dist')

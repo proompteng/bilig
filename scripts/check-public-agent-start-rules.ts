@@ -74,7 +74,7 @@ function extractAdvertisedRuleTargets(agentStart: string): readonly string[] {
   return [...targets].toSorted()
 }
 
-const docsAgentStart = await readFile(join(repoRoot, 'docs', 'agent-start.txt'), 'utf8')
+const docsAgentStart = await readFile(join(repoRoot, '.cache', 'docs-source', 'agent-start.txt'), 'utf8')
 const localManifest = parsePackageManifest(await readFile(join(repoRoot, 'packages', 'workpaper', 'package.json'), 'utf8'))
 const npmLatestVersion = requireSuccessfulCommand('npm', ['view', '@bilig/workpaper', 'version'])
 const advertisedTargets = extractAdvertisedRuleTargets(docsAgentStart)

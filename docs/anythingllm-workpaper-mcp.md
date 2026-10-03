@@ -33,7 +33,7 @@ Edit `plugins/anythingllm_mcp_servers.json`:
 ```json
 {
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "type": "streamable",
       "url": "https://bilig.proompteng.ai/mcp"
     }

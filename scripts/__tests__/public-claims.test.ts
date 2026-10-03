@@ -60,10 +60,15 @@ describe('public claim check', () => {
       'docs/index.html': '<main>Public site</main>',
       'docs/public-api.md': '# Public API',
       'internal/plans/workbook-view-platform-10x-production-plan-2026-04-29.md': '# Internal plan',
-      'packages/headless/README.md': '# Headless',
+      'packages/workpaper/README.md': '# Headless',
     })
 
-    expect(collectPublicClaimFiles(repoRoot)).toEqual(['README.md', 'docs/index.html', 'docs/public-api.md', 'packages/headless/README.md'])
+    expect(collectPublicClaimFiles(repoRoot)).toEqual([
+      'README.md',
+      'docs/index.html',
+      'docs/public-api.md',
+      'packages/workpaper/README.md',
+    ])
   })
 
   it('passes for the current checked-in public surfaces', () => {

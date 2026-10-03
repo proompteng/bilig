@@ -48,10 +48,10 @@ Discuss the shape first if you are still reducing the case:
 
 Use the narrowest command that matches the blocker:
 
-| Blocker | First local command | What to paste |
-| --- | --- | --- |
-| WorkPaper import, formula, or persistence mismatch | `npm exec --package @bilig/workpaper@latest -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"` | The Markdown clinic report with requested cells, formula samples, warnings, and actual readback. |
-| Saved workbook compatibility question | `npm exec --yes --package @bilig/xlsx-formula-recalc@latest -- workbook-compatibility-report ./reduced.xlsx --json` | The compatibility report with unsupported functions, external links, volatile formulas, and inspected formula counts. |
+| Blocker                                            | First local command                                                                                                 | What to paste                                                                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| WorkPaper import, formula, or persistence mismatch | `npm exec --package @bilig/workpaper@latest -- bilig-formula-clinic ./reduced.xlsx --cells "Summary!B7,Inputs!B2"`  | The Markdown clinic report with requested cells, formula samples, warnings, and actual readback.                      |
+| Saved workbook compatibility question              | `npm exec --yes --package @bilig/xlsx-formula-recalc@latest -- workbook-compatibility-report ./reduced.xlsx --json` | The compatibility report with unsupported functions, external links, volatile formulas, and inspected formula counts. |
 
 If the workbook is already reduced, run the clinic reporter locally and paste
 the Markdown output into the fixture form. It reads the file on your machine and

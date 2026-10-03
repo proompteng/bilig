@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { WorkPaper } from '@bilig/headless'
+import { WorkPaper } from '@bilig/workpaper'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 type OpportunityRecord = {

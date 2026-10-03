@@ -20,7 +20,7 @@ export interface WorkPaperXlsxCorpusInternalCliOptions extends WorkPaperXlsxCorp
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const defaultCorpusRunStopMarkerPath = join(rootDir, '.agent-coordination', '20260507T074946Z-codex-stop-interactive-corpus-runs.md')
-const checkedInFixtureCorpusDirectories = new Set([resolve(rootDir, 'packages/headless/fixtures/xlsx-corpus')])
+const checkedInFixtureCorpusDirectories = new Set([resolve(rootDir, 'packages/workpaper/fixtures/xlsx-corpus')])
 const xlsxExtensions = new Set(['.xls', '.xlsm', '.xlsx'])
 const allowLargeWorkPaperMaterializationFlag = '--allow-large-workpaper-materialization'
 

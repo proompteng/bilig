@@ -46,37 +46,30 @@ function syncVersionedStaticReferenceLine(line: string, options: StaticReference
     workbookPackageSpec,
     workpaperPackageSpec,
   } = options
+  if (line.includes('Current checked npm footprint for')) {
+    return line.replace(new RegExp(`@bilig/workpaper@${stableSemverPattern}`, 'g'), headlessPackageSpec)
+  }
   return line
-    .replace(new RegExp(`(npm exec --package )@bilig/headless@${stableSemverPattern}`, 'g'), `$1${headlessPackageSpec}`)
     .replace(new RegExp(`(npm exec --package )@bilig/workpaper@${stableSemverPattern}`, 'g'), `$1${workpaperPackageSpec}`)
     .replace(new RegExp(`(npm install )@bilig/workbook@${stableSemverPattern}`, 'g'), `$1${workbookPackageSpec}`)
-    .replace(new RegExp(`(npm install )@bilig/headless@${stableSemverPattern}`, 'g'), `$1${headlessPackageSpec}`)
     .replace(new RegExp(`(npm install )@bilig/workpaper@${stableSemverPattern}`, 'g'), `$1${workpaperPackageSpec}`)
-    .replace(new RegExp(`("--package",\\s*")@bilig/headless@${stableSemverPattern}(")`, 'g'), `$1${headlessPackageSpec}$2`)
     .replace(new RegExp(`("--package",\\s*")@bilig/workpaper@${stableSemverPattern}(")`, 'g'), `$1${workpaperPackageSpec}$2`)
-    .replace(new RegExp(`('--package',\\s*')@bilig/headless@${stableSemverPattern}(')`, 'g'), `$1${headlessPackageSpec}$2`)
     .replace(new RegExp(`('--package',\\s*')@bilig/workpaper@${stableSemverPattern}(')`, 'g'), `$1${workpaperPackageSpec}$2`)
-    .replace(new RegExp(`^(\\s*)"@bilig/headless@${stableSemverPattern}"(,?\\s*)$`, 'g'), `$1"${headlessPackageSpec}"$2`)
     .replace(new RegExp(`^(\\s*)"@bilig/workpaper@${stableSemverPattern}"(,?\\s*)$`, 'g'), `$1"${workpaperPackageSpec}"$2`)
-    .replace(new RegExp(`^(\\s*)'@bilig/headless@${stableSemverPattern}'(,?\\s*)$`, 'g'), `$1'${headlessPackageSpec}'$2`)
     .replace(new RegExp(`^(\\s*)'@bilig/workpaper@${stableSemverPattern}'(,?\\s*)$`, 'g'), `$1'${workpaperPackageSpec}'$2`)
     .replace(
-      new RegExp(`(Current checked npm footprint for \`)@bilig/headless@${stableSemverPattern}(\`)`, 'g'),
+      new RegExp(`(Current checked npm footprint for \`)@bilig/workpaper@${stableSemverPattern}(\`)`, 'g'),
       `$1${headlessPackageSpec}$2`,
     )
     .replace(new RegExp(`npm latest is \`${stableSemverPattern}\``, 'g'), `npm latest is \`${headlessPackageVersion}\``)
-    .replace(new RegExp(`npm latest is \`@bilig/headless@${stableSemverPattern}\``, 'g'), `npm latest is \`${headlessPackageSpec}\``)
     .replace(new RegExp(`npm latest is \`@bilig/workpaper@${stableSemverPattern}\``, 'g'), `npm latest is \`${workpaperPackageSpec}\``)
-    .replace(new RegExp(`npm latest \`@bilig/headless@${stableSemverPattern}\``, 'g'), `npm latest \`${headlessPackageSpec}\``)
     .replace(new RegExp(`npm latest \`@bilig/workpaper@${stableSemverPattern}\``, 'g'), `npm latest \`${workpaperPackageSpec}\``)
-    .replace(new RegExp(`\`@bilig/headless@${stableSemverPattern}\``, 'g'), `\`${headlessPackageSpec}\``)
     .replace(new RegExp(`\`@bilig/workpaper@${stableSemverPattern}\``, 'g'), `\`${workpaperPackageSpec}\``)
     .replace(new RegExp(`\`@bilig/workbook@${stableSemverPattern}\``, 'g'), `\`${workbookPackageSpec}\``)
     .replace(
       new RegExp(`io\\.github\\.proompteng/bilig-workpaper@${stableSemverPattern}`, 'g'),
       `io.github.proompteng/bilig-workpaper@${headlessPackageVersion}`,
     )
-    .replace(new RegExp(`(now points reviewers at \`)@bilig/headless@${stableSemverPattern}(\`)`, 'g'), `$1${workpaperPackageSpec}$2`)
     .replace(new RegExp(`(now points reviewers at \`)@bilig/workpaper@${stableSemverPattern}(\`)`, 'g'), `$1${workpaperPackageSpec}$2`)
     .replace(
       new RegExp(

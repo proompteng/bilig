@@ -1,7 +1,7 @@
 ---
 title: Install Bilig WorkPaper in Claude Desktop with MCPB
 published: true
-description: Download or reproduce the Claude Desktop MCPB bundle for the published @bilig/headless WorkPaper MCP server and test formula-backed workbook tools locally.
+description: Download or reproduce the Claude Desktop MCPB bundle for the published @bilig/workpaper WorkPaper MCP server and test formula-backed workbook tools locally.
 tags: claude, mcpb, mcp, spreadsheet, workbook, agents
 canonical_url: https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -12,7 +12,7 @@ image: /assets/github-social-preview.png
 
 Use this path when you want a local Claude Desktop bundle instead of editing
 `claude_desktop_config.json` by hand. The bundle contains the published
-`@bilig/headless` package, runs the WorkPaper MCP stdio server with Node, and
+`@bilig/workpaper` package, runs the WorkPaper MCP stdio server with Node, and
 needs no API key.
 
 ## Download the bundle
@@ -40,7 +40,7 @@ From the repository root:
 pnpm mcpb:workpaper:build
 ```
 
-The command resolves the latest published `@bilig/headless`, installs its
+The command resolves the latest published `@bilig/workpaper`, installs its
 production dependencies into a local bundle folder, writes a MCPB manifest, and
 packs:
 
@@ -48,11 +48,11 @@ packs:
 build/mcpb/bilig-workpaper.mcpb
 ```
 
-Resolve the current published `@bilig/headless` version before building. This
+Resolve the current published `@bilig/workpaper` version before building. This
 keeps the guide from baking a stale version into setup commands:
 
 ```sh
-BILIG_HEADLESS_VERSION=$(npm view @bilig/headless version)
+BILIG_HEADLESS_VERSION=$(npm view @bilig/workpaper version)
 pnpm mcpb:workpaper:build -- --package-version "$BILIG_HEADLESS_VERSION"
 ```
 
@@ -116,7 +116,7 @@ build/mcpb/bilig-workpaper/
 ```
 
 `server/index.js` imports the file-backed WorkPaper MCP server from the
-packaged `@bilig/headless` dependency, seeds a local `workpaper.json` on first
+packaged `@bilig/workpaper` dependency, seeds a local `workpaper.json` on first
 run, and passes through the bundled package version.
 The manifest points Claude Desktop at that launcher with:
 

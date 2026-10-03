@@ -8,7 +8,7 @@ import {
   serializeWorkPaperDocument,
   type RawCellContent,
   type WorkPaperCellAddress,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 type JsonObject = Record<string, unknown>
 type JsonRpcId = string | number | null

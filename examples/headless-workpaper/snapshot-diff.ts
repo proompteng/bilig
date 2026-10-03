@@ -1,4 +1,4 @@
-import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
+import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/workpaper'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 type WorkPaperDocument = ReturnType<typeof exportWorkPaperDocument>

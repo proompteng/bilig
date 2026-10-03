@@ -43,7 +43,7 @@ supports local MCP servers under the `mcp` option. Use this project-local
   "$schema": "https://opencode.ai/config.json",
   "instructions": ["AGENTS.md"],
   "mcp": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "type": "local",
       "command": [
         "npm",
@@ -56,16 +56,16 @@ supports local MCP servers under the `mcp` option. Use this project-local
         "--workpaper",
         "./.bilig/pricing.workpaper.json",
         "--init-demo-workpaper",
-        "--writable"
+        "--writable",
       ],
-      "enabled": true
+      "enabled": true,
     },
     "bilig-workpaper-demo": {
       "type": "remote",
       "url": "https://bilig.proompteng.ai/mcp",
-      "enabled": false
-    }
-  }
+      "enabled": false,
+    },
+  },
 }
 ```
 

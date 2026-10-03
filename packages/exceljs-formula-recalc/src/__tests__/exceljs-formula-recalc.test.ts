@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { recalculateExceljsBuffer, recalculateExceljsWorkbook } from '../index.js'
 
-describe('exceljs-formula-recalc', () => {
+describe('@bilig/exceljs-formula-recalc', () => {
   it('mutates an ExcelJS workbook with recalculated formula results', async () => {
     const workbook = new ExcelJS.Workbook()
     const inputs = workbook.addWorksheet('Inputs')

@@ -9,7 +9,7 @@ canonical_url: https://proompteng.github.io/bilig/csv-shaped-workpaper-input-rec
 # CSV-Shaped Input To WorkPaper
 
 This recipe shows how to turn a small tabular payload into a formula-backed
-`@bilig/headless` WorkPaper workbook. It is for service payloads, test fixtures,
+`@bilig/workpaper` WorkPaper workbook. It is for service payloads, test fixtures,
 and quick evaluator scripts where the source data looks like CSV.
 
 The parser below is intentionally tiny. It handles a simple comma-delimited
@@ -24,7 +24,7 @@ mkdir bilig-csv-shaped-input
 cd bilig-csv-shaped-input
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install --save-dev tsx typescript
 ```
 
@@ -42,7 +42,7 @@ The important shape is small: parse the payload, build a workbook with formulas,
 then read calculated cells from a separate summary sheet.
 
 ```ts
-import { WorkPaper } from '@bilig/headless'
+import { WorkPaper } from '@bilig/workpaper'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 type RevenueCsvRow = {

@@ -6,7 +6,7 @@ What happened, or what should change?
 
 Choose the closest area:
 
-- `@bilig/headless`
+- `@bilig/workpaper`
 - `@bilig/core`
 - `@bilig/formula`
 - grid UI

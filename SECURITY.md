@@ -10,7 +10,7 @@ transport, and agent-facing APIs.
 ## Supported Versions
 
 Security fixes target the current `main` branch and the latest published
-`@bilig/headless` runtime package set on npm. Older prerelease or unpublished
+`@bilig/workpaper` runtime package set on npm. Older prerelease or unpublished
 workspace states are not treated as supported release lines.
 
 ## Reporting A Vulnerability

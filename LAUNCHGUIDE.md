@@ -5,7 +5,7 @@ This is the public launch surface for the root GitHub Action:
 ```yaml
 - uses: proompteng/bilig@v1
   with:
-    workbooks: "**/*.xlsx"
+    workbooks: '**/*.xlsx'
     changed-files-only: true
 ```
 

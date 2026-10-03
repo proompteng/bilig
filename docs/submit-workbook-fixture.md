@@ -54,7 +54,7 @@ Send the smallest public case that proves the behavior.
 
 Good fixture reports include:
 
-- the `@bilig/headless` version or commit you tested
+- the `@bilig/workpaper` version or commit you tested
 - a reduced workbook, public gist, or pasted sheet data
 - exact sheet names, cells, ranges, and formulas
 - expected output from Excel, another system, or a manual check
@@ -76,7 +76,7 @@ mkdir bilig-fixture-check
 cd bilig-fixture-check
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install --save-dev tsx typescript @types/node
 ```
 

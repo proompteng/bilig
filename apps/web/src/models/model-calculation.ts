@@ -4,7 +4,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless/browser'
+} from '@bilig/workpaper/browser'
 import { ValueTag } from '@bilig/protocol'
 import type { ModelDefinition, ModelDocument } from './model-document.js'
 import { formatModelNumber } from './model-format.js'

@@ -23,14 +23,14 @@ describe('docs discovery core guards', () => {
 
   it('rejects forbidden proof strings with the owning document path', () => {
     const documents = [
-      { path: 'packages/headless/README.md', content: 'safe relative link' },
+      { path: 'packages/workpaper/README.md', content: 'safe relative link' },
       { path: 'docs/llms.txt', content: 'safe public link' },
     ]
 
     expect(() => requireDocumentsNotInclude(documents, ['../../docs'])).not.toThrow()
     expect(() => requireDocumentsNotInclude(documents, ['safe public link'])).toThrow('docs/llms.txt must not include safe public link')
     expect(() => requireDocumentNotIncludes(documents[0], ['safe relative link'])).toThrow(
-      'packages/headless/README.md must not include safe relative link',
+      'packages/workpaper/README.md must not include safe relative link',
     )
   })
 

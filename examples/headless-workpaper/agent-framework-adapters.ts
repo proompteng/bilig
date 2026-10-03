@@ -4,7 +4,7 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 import { z } from 'zod'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>

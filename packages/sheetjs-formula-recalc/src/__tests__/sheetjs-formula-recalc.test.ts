@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest'
 
 import { recalculateSheetjsWorkbook } from '../index.js'
 import { WorkPaper, exportXlsx } from '@bilig/workpaper/xlsx'
-import { runXlsxFormulaRecalcCli } from 'xlsx-formula-recalc/cli-api'
+import { runXlsxFormulaRecalcCli } from '@bilig/xlsx-formula-recalc/cli-api'
 
-describe('sheetjs-formula-recalc', () => {
+describe('@bilig/sheetjs-formula-recalc', () => {
   it('re-exports the native XLSX recalculation boundary with a SheetJS-named API', async () => {
     const sourceWorkbook = WorkPaper.buildFromSheets({
       Inputs: [

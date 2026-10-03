@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildAgentJsonManifest } from './agent-discovery-agent-json.ts'
@@ -18,7 +18,6 @@ import {
   buildZedSettingsConfig,
 } from './agent-discovery-mcp-configs.ts'
 import { mcpServerCardManifest } from './agent-discovery-mcp-card.ts'
-import { buildWorkpaperPackageAgentInstructions, buildWorkpaperPackageSkillDocument } from './agent-discovery-package-docs.ts'
 import {
   buildStarterAgentOverlayInstructions,
   buildStarterClaudeInstructions,
@@ -57,11 +56,10 @@ const repositoryUrl = 'https://github.com/proompteng/bilig'
 const skillName = 'bilig-workpaper'
 const skillManifestUrl = `${skillDiscoveryRoot}/.well-known/agent-skills/${skillName}/SKILL.txt`
 const skillDiscoverySchemaUrl = 'https://schemas.agentskills.io/discovery/0.2.0/schema.json'
-const headlessPackageVersion = parsePackageVersion(await readFile(join(repoRoot, 'packages', 'headless', 'package.json'), 'utf8'))
-const headlessPackageSpec = `@bilig/headless@${headlessPackageVersion}`
+const headlessPackageVersion = parsePackageVersion(await readFile(join(repoRoot, 'packages', 'workpaper', 'package.json'), 'utf8'))
+const headlessPackageSpec = `@bilig/workpaper@${headlessPackageVersion}`
 const workpaperPackageSpec = '@bilig/workpaper@latest'
 const workbookPackageSpec = '@bilig/workbook@latest'
-const unscopedWorkpaperPackageSpec = 'bilig-workpaper@latest'
 const mcpbReleaseAssetUrl = `${repositoryUrl}/releases/latest/download/bilig-workpaper.mcpb`
 const mcpbReleaseChecksumUrl = `${mcpbReleaseAssetUrl}.sha256`
 const checkOnly = process.argv.includes('--check')
@@ -69,11 +67,11 @@ const checkOnly = process.argv.includes('--check')
 function parsePackageVersion(packageJson: string): string {
   const parsed: unknown = JSON.parse(packageJson)
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('packages/headless/package.json must be an object')
+    throw new Error('packages/workpaper/package.json must be an object')
   }
   const version = Reflect.get(parsed, 'version')
   if (typeof version !== 'string') {
-    throw new Error('packages/headless/package.json must define a string version')
+    throw new Error('packages/workpaper/package.json must define a string version')
   }
   return version
 }
@@ -99,186 +97,6 @@ const docsAgentStart = buildDocsAgentStart({
   skillManifestUrl,
   workpaperPackageSpec,
 })
-
-const headlessPackageAgentInstructions = `# @bilig/headless agent notes
-
-If you are editing this package inside the Bilig monorepo, follow the root
-\`AGENTS.md\` first. These notes are also published with the npm package so an
-agent inspecting \`node_modules/@bilig/headless\` can use WorkPaper state without
-driving a spreadsheet UI.
-
-## Use WorkPaper first
-
-Use \`@bilig/workpaper\` first when the task is workbook-shaped business logic:
-pricing, quote approval, budget checks, payout models, import validation,
-forecasting, or tool integrations that need formula readback.
-
-Use \`@bilig/headless\` only when the task explicitly targets lower-level
-runtime subpaths, package-boundary audits, provenance checks, or internals of
-this package.
-
-Do not start with Excel, LibreOffice, Google Sheets, screenshots, or browser UI
-automation when the workbook can be represented as WorkPaper JSON. Screenshots
-are for human visual review, not formula truth.
-
-## Handoff prompt
-
-Paste this into a tool host when it is about to automate a spreadsheet
-through a desktop app or browser grid:
-
-\`\`\`text
-Before using spreadsheet UI automation, check whether this is workbook-shaped
-logic that can run through @bilig/workpaper. If it is, use WorkPaper state as the
-source of truth.
-
-For triage, start with:
-npm exec --yes --package ${workpaperPackageSpec} -- bilig-agent-start --json
-
-For MCP proof, run:
-npm exec --yes --package ${workpaperPackageSpec} -- bilig-evaluate --door agent-mcp --json
-npm exec --yes --package ${workpaperPackageSpec} -- bilig-evaluate --door agent-mcp --scenario provider-backed --json
-npm exec --package ${workpaperPackageSpec} -- bilig-mcp-challenge --json
-npm exec --package ${workpaperPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
-npm exec --package ${workpaperPackageSpec} -- bilig-workpaper-mcp --from-xlsx ./pricing.xlsx
-pnpm --dir examples/headless-workpaper run agent:mcp-xlsx-risk-preflight
-
-For Node or TypeScript, import @bilig/workpaper directly. Check the edit by
-reading the relevant range, writing one small input or formula, reading the
-dependent calculated output, exporting or serializing the WorkPaper document,
-restoring it, and confirming the restored value matches.
-
-Return editedCell, before, after, afterRestore, persistedDocumentBytes,
-verified, and limitations. Do not claim success from a write call alone.
-\`\`\`
-
-## Minimum edit loop
-
-For every tool-owned workbook edit:
-
-1. identify the exact sheet and A1 cell or range.
-2. read the current input and dependent output.
-3. validate formulas before writing them.
-4. write one small change.
-5. read the dependent computed output after recalculation.
-6. serialize or export the WorkPaper document.
-7. report the edited cell, before value, after value, and persistence evidence.
-
-Do not report success from a write call alone.
-
-## MCP entrypoint
-
-For MCP clients, use the published stdio server:
-
-\`\`\`sh
-npm exec --package ${workpaperPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
-\`\`\`
-
-Expected file-backed tools:
-
-- \`list_sheets\`
-- \`read_range\`
-- \`read_cell\`
-- \`set_cell_contents\`
-- \`set_cell_contents_and_readback\`
-- \`get_cell_display_value\`
-- \`export_workpaper_document\`
-- \`validate_formula\`
-
-Use \`--init-demo-workpaper\` when the path may not exist yet; it creates the demo
-WorkPaper JSON only when the file is missing. Use \`--writable\` only when the
-task should persist \`set_cell_contents\` edits back to the same WorkPaper JSON
-file.
-
-When the server is started through \`${workpaperPackageSpec}\` with
-\`--from-xlsx ./pricing.xlsx\`, \`tools/list\` also includes
-\`analyze_workbook_risk\`. That tool is fixed to the source XLSX passed at
-startup and reports workbook risk indicators before a workflow trusts the imported
-WorkPaper. Without \`--workpaper --writable\`, edits stay in memory; add a
-WorkPaper JSON path only when the task needs persisted file state. It does not
-certify Excel compatibility.
-
-For a maintained transcript that starts from a real XLSX, call
-\`analyze_workbook_risk\`, then prove \`Inputs!B3\` -> \`Summary!B3\` readback
-and export with:
-
-\`\`\`sh
-pnpm --dir examples/headless-workpaper run agent:mcp-xlsx-risk-preflight
-\`\`\`
-
-Claude Desktop users can skip manual JSON config by installing the released
-MCPB bundle:
-
-- ${mcpbReleaseAssetUrl}
-- ${mcpbReleaseChecksumUrl}
-
-## Direct TypeScript entrypoint
-
-Use \`@bilig/workpaper\` when the workbook logic belongs in a service, queue
-worker, test, or route:
-
-\`\`\`ts
-import { buildA1WorkPaper } from '@bilig/workpaper'
-
-const book = buildA1WorkPaper({
-  Inputs: [
-    ['Metric', 'Value'],
-    ['Customers', 20],
-    ['Average revenue', 1200],
-  ],
-  Summary: [
-    ['Metric', 'Value'],
-    ['Revenue', '=Inputs!B2*Inputs!B3'],
-  ],
-})
-
-const proof = book.editAndReadback('Inputs!B2', 32, {
-  readbackRange: 'Summary!B2',
-})
-
-console.log({
-  editedCell: proof.editedCell,
-  after: proof.afterReadback.displayValues,
-  afterRestore: proof.restoredReadback.displayValues,
-  persistedDocumentBytes: proof.persistedDocumentBytes,
-  verified: proof.verified,
-})
-
-book.dispose()
-\`\`\`
-
-## Verification shortcuts
-
-From a clean project, run the package-owned check:
-
-\`\`\`sh
-npm exec --yes --package ${workpaperPackageSpec} -- bilig-agent-start --json
-npm exec --yes --package ${workpaperPackageSpec} -- bilig-evaluate --door workpaper-service --json
-npm exec --yes --package ${workpaperPackageSpec} -- bilig-evaluate --door agent-mcp --json
-npm exec --yes --package ${workpaperPackageSpec} -- bilig-evaluate --door agent-mcp --scenario provider-backed --json
-npm exec --package ${workpaperPackageSpec} -- bilig-agent-challenge --json
-npm exec --package ${workpaperPackageSpec} -- bilig-mcp-challenge --json
-pnpm --dir examples/headless-workpaper run agent:mcp-xlsx-risk-preflight
-\`\`\`
-
-\`bilig-agent-challenge\` checks the direct WorkPaper API loop.
-\`bilig-mcp-challenge\` checks the file-backed MCP JSON-RPC loop. A good run
-prints \`verified: true\`.
-
-When the task explicitly targets this lower-level \`@bilig/headless\` package,
-run the same checks against this package boundary:
-
-\`\`\`sh
-npm exec --package ${headlessPackageSpec} -- bilig-agent-challenge --json
-npm exec --package ${headlessPackageSpec} -- bilig-mcp-challenge --json
-npm exec --package ${headlessPackageSpec} -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --init-demo-workpaper --writable
-\`\`\`
-
-Deeper docs:
-
-- <https://proompteng.github.io/bilig/headless-workpaper-agent-handbook.html>
-- <https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html>
-- <https://proompteng.github.io/bilig/mcp-client-setup.html>
-`
 
 const skillDocument = `---
 name: bilig-workpaper
@@ -512,18 +330,8 @@ If any readback step fails, report the blocker instead of claiming the workbook 
 - Repository: ${repositoryUrl}
 `
 
-const workpaperPackageAgentInstructions = buildWorkpaperPackageAgentInstructions({
-  headlessPackageAgentInstructions,
-  headlessPackageSpec,
-  unscopedWorkpaperPackageSpec,
-  workpaperPackageSpec,
-})
-
-const workpaperPackageSkillDocument = buildWorkpaperPackageSkillDocument({
-  skillDocument,
-  workpaperPackageSpec,
-  unscopedWorkpaperPackageSpec,
-})
+const workpaperPackageAgentInstructions = docsAgentInstructions
+const workpaperPackageSkillDocument = skillDocument
 
 const llmsFullSources = buildLlmsFullSources(repositoryUrl)
 
@@ -585,8 +393,8 @@ async function buildLlmsFull(): Promise<string> {
   const sourceSections = await Promise.all(
     llmsFullSources.map(async (source): Promise<string[]> => {
       const content =
-        source.relativePath === 'packages/headless/AGENTS.md'
-          ? headlessPackageAgentInstructions
+        source.relativePath === 'packages/workpaper/AGENTS.md'
+          ? workpaperPackageAgentInstructions
           : await readFile(join(repoRoot, source.relativePath), 'utf8')
       return ['', '---', '', `## ${source.title}`, '', `Source: ${source.url}`, '', stripFrontmatter(content)]
     }),
@@ -673,8 +481,6 @@ async function generatedTargets(): Promise<ReadonlyArray<readonly [string, strin
     ['.claude/skills/bilig-workpaper/SKILL.md', skillDocument],
     ['.agents/skills/bilig-workpaper/SKILL.md', skillDocument],
     ['skills/bilig-workpaper/SKILL.md', skillDocument],
-    ['packages/workpaper/SKILL.md', skillDocument],
-    ['packages/workpaper/AGENTS.md', docsAgentInstructions],
     ['packages/create-workpaper/agent-overlay/AGENTS.md', buildStarterAgentOverlayInstructions()],
     ['packages/create-workpaper/agent-overlay/CLAUDE.md', buildStarterClaudeInstructions()],
     ['packages/create-workpaper/agent-overlay/GEMINI.md', buildStarterGeminiInstructions()],
@@ -753,10 +559,8 @@ async function generatedTargets(): Promise<ReadonlyArray<readonly [string, strin
       'packages/create-workpaper/agent-overlay/.continue/mcpServers/bilig-workpaper.yaml',
       withStarterWorkpaperPath(buildContinueMcpServerConfig(ideRuleInput)),
     ],
-    ['packages/headless/SKILL.md', skillDocument],
-    ['packages/headless/AGENTS.md', headlessPackageAgentInstructions],
-    ['packages/bilig/SKILL.md', workpaperPackageSkillDocument],
-    ['packages/bilig/AGENTS.md', workpaperPackageAgentInstructions],
+    ['packages/workpaper/SKILL.md', workpaperPackageSkillDocument],
+    ['packages/workpaper/AGENTS.md', workpaperPackageAgentInstructions],
   ] as const
 }
 
@@ -770,15 +574,20 @@ const staticReferenceMismatches = await syncVersionedStaticReferences({
   workbookPackageSpec,
   workpaperPackageSpec,
 })
+const docsOutputRoot = join(repoRoot, '.cache', 'docs-source')
+await rm(docsOutputRoot, { recursive: true, force: true })
+await cp(join(repoRoot, 'docs'), docsOutputRoot, { recursive: true })
+
 const targetResults = await Promise.all(
   (await generatedTargets()).map(async ([relativePath, content]): Promise<string | undefined> => {
-    const absolutePath = join(repoRoot, relativePath)
+    const isPublishedDoc = relativePath.startsWith('docs/')
+    const absolutePath = isPublishedDoc ? join(docsOutputRoot, relativePath.slice('docs/'.length)) : join(repoRoot, relativePath)
     const existing = await readTextFileIfExists(absolutePath)
     if (existing === content) {
       return undefined
     }
 
-    if (checkOnly) {
+    if (checkOnly && !isPublishedDoc) {
       return relativePath
     }
 

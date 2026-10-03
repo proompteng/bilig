@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
-import { createWorkPaperFromDocument, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
-import { buildDemoWorkPaper } from '@bilig/headless/mcp'
+import { createWorkPaperFromDocument, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/workpaper'
+import { buildDemoWorkPaper } from '@bilig/workpaper/mcp'
 
 type JsonObject = Record<string, unknown>
 
@@ -111,7 +111,7 @@ async function runPublishedMcpBinary(path: string, lines: string[]): Promise<str
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   const child = spawn(
     npmCommand,
-    ['exec', '--loglevel=error', '--package', '@bilig/headless@latest', '--', 'bilig-workpaper-mcp', '--workpaper', path, '--writable'],
+    ['exec', '--loglevel=error', '--package', '@bilig/workpaper@latest', '--', 'bilig-workpaper-mcp', '--workpaper', path, '--writable'],
     {
       cwd: process.cwd(),
       env: {
@@ -179,7 +179,7 @@ function createTranscriptOutput(path: string, requests: string[], responses: str
 
   return {
     transport: 'stdio',
-    command: 'npm exec --package @bilig/headless@latest -- bilig-workpaper-mcp --workpaper pricing.workpaper.json --writable',
+    command: 'npm exec --package @bilig/workpaper@latest -- bilig-workpaper-mcp --workpaper pricing.workpaper.json --writable',
     requestLines: requests,
     responseSummary: {
       protocolVersion: readString(initializeResult.protocolVersion, 'protocolVersion'),

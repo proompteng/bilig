@@ -28,15 +28,15 @@ const nativeXlsxExampleScripts = [
 const nativeXlsxAppFixtureTests = ['apps/bilig/src/workbook-runtime/workbook-session-shared.test.ts'] as const
 const nativeXlsxExcelFixtureTests = ['packages/excel-fixtures/src/__tests__/macos-excel-oracle.test.ts'] as const
 const nativeXlsxHeadlessFixtureTests = [
-  'packages/headless/src/__tests__/macos-desktop-excel-chart-deleted-sheet-oracle.test.ts',
-  'packages/headless/src/__tests__/macos-desktop-excel-conditional-format-artifacts-oracle.test.ts',
-  'packages/headless/src/__tests__/macos-desktop-excel-external-link-cache.test.ts',
-  'packages/headless/src/__tests__/macos-desktop-excel-hyperlink-structural-oracle.test.ts',
-  'packages/headless/src/__tests__/macos-desktop-excel-preserved-package-metadata-oracle.test.ts',
-  'packages/headless/src/__tests__/macos-desktop-excel-protected-ranges-oracle.test.ts',
-  'packages/headless/src/__tests__/macos-desktop-excel-threaded-comment-structural-oracle.test.ts',
-  'packages/headless/src/__tests__/macos-desktop-excel-workbook-protection-oracle.test.ts',
-  'packages/headless/src/__tests__/work-paper-source-preserving-xlsx-export.test.ts',
+  'packages/workpaper/src/__tests__/macos-desktop-excel-chart-deleted-sheet-oracle.test.ts',
+  'packages/workpaper/src/__tests__/macos-desktop-excel-conditional-format-artifacts-oracle.test.ts',
+  'packages/workpaper/src/__tests__/macos-desktop-excel-external-link-cache.test.ts',
+  'packages/workpaper/src/__tests__/macos-desktop-excel-hyperlink-structural-oracle.test.ts',
+  'packages/workpaper/src/__tests__/macos-desktop-excel-preserved-package-metadata-oracle.test.ts',
+  'packages/workpaper/src/__tests__/macos-desktop-excel-protected-ranges-oracle.test.ts',
+  'packages/workpaper/src/__tests__/macos-desktop-excel-threaded-comment-structural-oracle.test.ts',
+  'packages/workpaper/src/__tests__/macos-desktop-excel-workbook-protection-oracle.test.ts',
+  'packages/workpaper/src/__tests__/work-paper-source-preserving-xlsx-export.test.ts',
 ] as const
 const nativeXlsxExcelImportFixtureTests = [
   'packages/excel-import/src/__tests__/excel-import.test.ts',
@@ -84,32 +84,22 @@ const nativeXlsxExcelImportFixtureTests = [
   'packages/excel-import/src/__tests__/xlsx-worksheet-relationship-path-import.test.ts',
   'packages/excel-import/src/__tests__/xlsx-worksheet-dimensions-roundtrip.test.ts',
 ] as const
-const nativeXlsxFormulaRecalcPackages = ['packages/xlsx-formula-recalc', 'packages/bilig-xlsx-formula-recalc'] as const
-const nativeXlsxFormulaRecalcReadmes = ['packages/xlsx-formula-recalc/README.md', 'packages/bilig-xlsx-formula-recalc/README.md'] as const
+const nativeXlsxFormulaRecalcPackages = ['packages/xlsx-formula-recalc'] as const
+const nativeXlsxFormulaRecalcReadmes = ['packages/xlsx-formula-recalc/README.md'] as const
 const publishedNativeXlsxRuntimePackages = [
   'packages/xlsx',
   'packages/excel-import',
-  'packages/headless',
-  'packages/bilig',
   'packages/workpaper',
   'packages/xlsx-formula-recalc',
-  'packages/bilig-xlsx-formula-recalc',
   'packages/exceljs-formula-recalc',
-  'packages/bilig-exceljs-formula-recalc',
   'packages/sheetjs-formula-recalc',
-  'packages/bilig-sheetjs-formula-recalc',
 ] as const
 const fileBackedXlsxFormulaRecalcCliEntrypoints = [
   'packages/xlsx-formula-recalc/src/cli.ts',
   'packages/xlsx-formula-recalc/src/cache-doctor-cli.ts',
   'packages/xlsx-formula-recalc/src/sheetjs-cli.ts',
-  'packages/bilig-xlsx-formula-recalc/src/cli.ts',
-  'packages/bilig-xlsx-formula-recalc/src/cache-doctor-cli.ts',
-  'packages/bilig-xlsx-formula-recalc/src/sheetjs-cli.ts',
   'packages/sheetjs-formula-recalc/src/cli.ts',
   'packages/exceljs-formula-recalc/src/cli.ts',
-  'packages/bilig-sheetjs-formula-recalc/src/cli.ts',
-  'packages/bilig-exceljs-formula-recalc/src/cli.ts',
 ] as const
 const xlsxOwnedStreamingNativeSources = [
   'packages/xlsx/src/streaming-native-cell-arena.ts',
@@ -818,13 +808,12 @@ describe('repository dependency policy', () => {
     const cliApi = readFileSync(join(repoRoot, 'packages/xlsx-formula-recalc/src/cli-api.ts'), 'utf8')
     const fileRecalc = readFileSync(join(repoRoot, 'packages/xlsx-formula-recalc/src/file-recalc.ts'), 'utf8')
     const bytesRecalc = readFileSync(join(repoRoot, 'packages/xlsx-formula-recalc/src/bytes-recalc.ts'), 'utf8')
-    const scopedIndex = readFileSync(join(repoRoot, 'packages/bilig-xlsx-formula-recalc/src/index.ts'), 'utf8')
+    const scopedIndex = readFileSync(join(repoRoot, 'packages/xlsx-formula-recalc/src/index.ts'), 'utf8')
     const sheetjsAdapter = readFileSync(join(repoRoot, 'packages/sheetjs-formula-recalc/src/index.ts'), 'utf8')
     const exceljsAdapter = readFileSync(join(repoRoot, 'packages/exceljs-formula-recalc/src/index.ts'), 'utf8')
-    const sheetjsLegacyHelperExport = sheetjsAdapter.split('\n').find((line) => line.includes("from 'bilig-workpaper/xlsx'")) ?? ''
-    const exceljsLegacyHelperExport = exceljsAdapter.split('\n').find((line) => line.includes("from 'bilig-workpaper/xlsx'")) ?? ''
-    const unscopedManifest = packageManifest('packages/xlsx-formula-recalc')
-    const scopedManifest = packageManifest('packages/bilig-xlsx-formula-recalc')
+    const sheetjsLegacyHelperExport = sheetjsAdapter.split('\n').find((line) => line.includes("from '@bilig/workpaper/xlsx'")) ?? ''
+    const exceljsLegacyHelperExport = exceljsAdapter.split('\n').find((line) => line.includes("from '@bilig/workpaper/xlsx'")) ?? ''
+    const manifest = packageManifest('packages/xlsx-formula-recalc')
     const externalWorkbookGuardIndex = cliApi.indexOf('assertXlsxExternalWorkbookByteInputWithinLimit(byteLength, workbook.path)')
     const externalWorkbookReadIndex = cliApi.indexOf('bytes: readFileSync(workbook.path)')
 
@@ -842,19 +831,18 @@ describe('repository dependency policy', () => {
     expect(bytesRecalc).toContain('assertXlsxFormulaRecalcBytesApiWithinLimit(bytes)')
     expect(bytesRecalc).toContain('await writeFile(inputPath, bytes)')
     expect(scopedIndex).not.toContain('legacy-workpaper')
-    expect(objectField(unscopedManifest, 'exports')).not.toHaveProperty('./legacy-workpaper')
-    expect(objectField(scopedManifest, 'exports')).not.toHaveProperty('./legacy-workpaper')
-    expect(sheetjsAdapter).toContain("from 'xlsx-formula-recalc'")
+    expect(objectField(manifest, 'exports')).not.toHaveProperty('./legacy-workpaper')
+    expect(sheetjsAdapter).toContain("from '@bilig/xlsx-formula-recalc'")
     expect(sheetjsLegacyHelperExport).not.toContain('recalculateXlsx')
-    expect(sheetjsAdapter).not.toContain('xlsx-formula-recalc/legacy-workpaper')
-    expect(exceljsAdapter).toContain("from 'xlsx-formula-recalc'")
+    expect(sheetjsAdapter).not.toContain('@bilig/xlsx-formula-recalc/legacy-workpaper')
+    expect(exceljsAdapter).toContain("from '@bilig/xlsx-formula-recalc'")
     expect(exceljsLegacyHelperExport).not.toContain('recalculateXlsx')
-    expect(exceljsAdapter).not.toContain('xlsx-formula-recalc/legacy-workpaper')
+    expect(exceljsAdapter).not.toContain('@bilig/xlsx-formula-recalc/legacy-workpaper')
   })
 
-  it('keeps primary xlsx-formula-recalc option types native-only', () => {
+  it('keeps primary @bilig/xlsx-formula-recalc option types native-only', () => {
     const primaryTypes = readFileSync(join(repoRoot, 'packages/xlsx-formula-recalc/src/types.ts'), 'utf8')
-    const legacyWorkPaper = readFileSync(join(repoRoot, 'packages/bilig/src/xlsx-recalc.ts'), 'utf8')
+    const legacyWorkPaper = readFileSync(join(repoRoot, 'packages/workpaper/src/xlsx-recalc.ts'), 'utf8')
 
     expect(primaryTypes).toContain("export type XlsxFormulaRecalcEngineMode = 'streaming-native'")
     expect(primaryTypes).toContain("export type XlsxFormulaRecalcFallbackPolicy = 'error'")
@@ -867,8 +855,8 @@ describe('repository dependency policy', () => {
   })
 
   it('keeps bilig-workpaper/xlsx public file-to-file recalc on @bilig/xlsx streaming-native', () => {
-    const legacyWorkPaper = readFileSync(join(repoRoot, 'packages/bilig/src/xlsx-recalc.ts'), 'utf8')
-    const publicXlsxBarrel = readFileSync(join(repoRoot, 'packages/bilig/src/xlsx.ts'), 'utf8')
+    const legacyWorkPaper = readFileSync(join(repoRoot, 'packages/workpaper/src/xlsx-recalc.ts'), 'utf8')
+    const publicXlsxBarrel = readFileSync(join(repoRoot, 'packages/workpaper/src/xlsx.ts'), 'utf8')
     const fileToFileStart = legacyWorkPaper.indexOf('export async function recalculateXlsxFileToFile')
     const fileToFileEnd = legacyWorkPaper.indexOf('export function recalculateXlsxToFile')
     const fileToFileSource = legacyWorkPaper.slice(fileToFileStart, fileToFileEnd)
@@ -883,7 +871,7 @@ describe('repository dependency policy', () => {
   })
 
   it('keeps bilig-workpaper legacy bytes recalc small-workbook only', () => {
-    const legacyWorkPaper = readFileSync(join(repoRoot, 'packages/bilig/src/xlsx-recalc.ts'), 'utf8')
+    const legacyWorkPaper = readFileSync(join(repoRoot, 'packages/workpaper/src/xlsx-recalc.ts'), 'utf8')
 
     expect(legacyWorkPaper).toContain('const legacyWorkPaperBytesApiLimit = 1_000_000')
     expect(legacyWorkPaper).toContain("assertLegacyWorkPaperBytesApiWithinLimit(bytes, 'recalculateXlsx')")
@@ -893,7 +881,7 @@ describe('repository dependency policy', () => {
   })
 
   it('keeps headless MCP XLSX file import on the file-backed importer boundary', () => {
-    const mcpXlsxFile = readFileSync(join(repoRoot, 'packages/headless/src/work-paper-mcp-xlsx-file.ts'), 'utf8')
+    const mcpXlsxFile = readFileSync(join(repoRoot, 'packages/workpaper/src/work-paper-mcp-xlsx-file.ts'), 'utf8')
     const guardIndex = mcpXlsxFile.indexOf('assertWorkPaperMcpXlsxImportWithinSmallWorkbookLimit(xlsxPath)')
     const importIndex = mcpXlsxFile.indexOf('importXlsxFile(xlsxPath')
     const workPaperIndex = mcpXlsxFile.indexOf('WorkPaper.buildFromSnapshot')
@@ -911,7 +899,7 @@ describe('repository dependency policy', () => {
   })
 
   it('keeps formula clinic large-file mode on native preflight before WorkPaper import', () => {
-    const formulaClinic = readFileSync(join(repoRoot, 'packages/headless/src/formula-clinic-cli.ts'), 'utf8')
+    const formulaClinic = readFileSync(join(repoRoot, 'packages/workpaper/src/formula-clinic-cli.ts'), 'utf8')
     const largeFileGuardIndex = formulaClinic.indexOf('fileSizeBytes > formulaClinicLegacyWorkPaperBytesApiLimit')
     const readBytesIndex = formulaClinic.indexOf('new Uint8Array(readFileSync(filePath))')
     const workPaperIndex = formulaClinic.indexOf('WorkPaper.buildFromSnapshot')
@@ -932,11 +920,11 @@ describe('repository dependency policy', () => {
 
   it('keeps WorkPaper evaluator doors owned by WorkPaper packages', () => {
     const xlsxEvaluator = readFileSync(join(repoRoot, 'packages/xlsx-formula-recalc/src/evaluator-cli.ts'), 'utf8')
-    const unscopedWorkPaperBin = readFileSync(join(repoRoot, 'packages/bilig/bin/bilig-evaluate.js'), 'utf8')
+    const unscopedWorkPaperBin = readFileSync(join(repoRoot, 'packages/workpaper/bin/bilig-evaluate.js'), 'utf8')
     const scopedWorkPaperBin = readFileSync(join(repoRoot, 'packages/workpaper/bin/bilig-evaluate.js'), 'utf8')
-    const unscopedWorkPaperEvaluator = readFileSync(join(repoRoot, 'packages/bilig/src/evaluator.ts'), 'utf8')
+    const unscopedWorkPaperEvaluator = readFileSync(join(repoRoot, 'packages/workpaper/src/evaluator.ts'), 'utf8')
 
-    expect(xlsxEvaluator).not.toContain("import('@bilig/headless')")
+    expect(xlsxEvaluator).not.toContain("import('@bilig/workpaper')")
     expect(xlsxEvaluator).not.toContain('workpaper-service')
     expect(unscopedWorkPaperBin).toContain("await import('../dist/evaluator-bin.js')")
     expect(scopedWorkPaperBin).toContain("await import('../dist/evaluator-bin.js')")
@@ -946,17 +934,17 @@ describe('repository dependency policy', () => {
     expect(unscopedWorkPaperEvaluator).not.toContain('xlsx-cache')
   })
 
-  it('keeps bilig-workpaper off the xlsx-formula-recalc package boundary', () => {
-    const manifest = packageManifest('packages/bilig')
+  it('keeps bilig-workpaper off the @bilig/xlsx-formula-recalc package boundary', () => {
+    const manifest = packageManifest('packages/workpaper')
     const dependencies = objectField(manifest, 'dependencies')
     const scripts = objectField(manifest, 'scripts')
-    const xlsxRiskTool = readFileSync(join(repoRoot, 'packages/bilig/src/work-paper-mcp-xlsx-risk-tool.ts'), 'utf8')
-    const sourceViolations = sourceFiles(join(repoRoot, 'packages/bilig/src')).flatMap((sourceFile) =>
+    const xlsxRiskTool = readFileSync(join(repoRoot, 'packages/workpaper/src/work-paper-mcp-xlsx-risk-tool.ts'), 'utf8')
+    const sourceViolations = sourceFiles(join(repoRoot, 'packages/workpaper/src')).flatMap((sourceFile) =>
       sourceSpecifierViolations(relativePath(sourceFile), ['@bilig/xlsx-formula-recalc']),
     )
 
     expect(dependencies).not.toHaveProperty('@bilig/xlsx-formula-recalc')
-    expect(dependencies).not.toHaveProperty('xlsx-formula-recalc')
+    expect(dependencies).not.toHaveProperty('@bilig/xlsx-formula-recalc')
     expect(stringField(scripts, 'build')).not.toContain('@bilig/xlsx-formula-recalc')
     expect(sourceViolations).toEqual([])
     expect(xlsxRiskTool).toContain("from '@bilig/xlsx/workbook-compatibility-report'")
@@ -970,22 +958,22 @@ describe('repository dependency policy', () => {
   })
 
   it('keeps native file recalc CLI and public file types off static headless imports', () => {
-    const violations = nativeXlsxFormulaRecalcPathBoundarySources.flatMap((path) => sourceSpecifierViolations(path, ['@bilig/headless']))
+    const violations = nativeXlsxFormulaRecalcPathBoundarySources.flatMap((path) => sourceSpecifierViolations(path, ['@bilig/workpaper']))
 
     expect(violations).toEqual([])
   })
 
-  it('keeps the xlsx-formula-recalc native package install and build path off @bilig/headless', () => {
+  it('keeps the @bilig/xlsx-formula-recalc native package install and build path off @bilig/workpaper', () => {
     const manifest = packageManifest('packages/xlsx-formula-recalc')
     const dependencies = objectField(manifest, 'dependencies')
     const devDependencies = objectField(manifest, 'devDependencies')
     const peerDependencies = objectField(manifest, 'peerDependencies')
     const scripts = objectField(manifest, 'scripts')
 
-    expect(dependencies).not.toHaveProperty('@bilig/headless')
-    expect(peerDependencies).not.toHaveProperty('@bilig/headless')
-    expect(devDependencies).not.toHaveProperty('@bilig/headless')
-    expect(stringField(scripts, 'build')).not.toContain('@bilig/headless')
+    expect(dependencies).not.toHaveProperty('@bilig/workpaper')
+    expect(peerDependencies).not.toHaveProperty('@bilig/workpaper')
+    expect(devDependencies).not.toHaveProperty('@bilig/workpaper')
+    expect(stringField(scripts, 'build')).not.toContain('@bilig/workpaper')
   })
 
   it('keeps published Bilig XLSX runtime packages free of SheetJS xlsx dependencies', () => {

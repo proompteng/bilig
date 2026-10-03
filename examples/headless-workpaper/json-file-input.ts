@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { WorkPaper } from '@bilig/headless'
+import { WorkPaper } from '@bilig/workpaper'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 type OpportunityRecord = {

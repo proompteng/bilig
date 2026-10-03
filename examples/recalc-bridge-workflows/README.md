@@ -48,10 +48,10 @@ They reproduce the common Stack Overflow questions directly:
 
 - [How to recalculate all formulas in excel file through Javascript?](https://stackoverflow.com/questions/63085785/how-to-recalculate-all-formulas-in-excel-file-through-javascript)
   with native `@bilig/xlsx`: edit `A1`, observe stale cached `C1`, run
-  `xlsx-formula-recalc`, and verify `C1` changes from `3` to `5`.
+  `@bilig/xlsx-formula-recalc`, and verify `C1` changes from `3` to `5`.
 - [Get computed value of Excel sheet cell in Node.js](https://stackoverflow.com/questions/44199441/get-computed-value-of-excel-sheet-cell-in-node-js)
   with ExcelJS: edit `A1`, observe stale formula `result`, run
-  `exceljs-formula-recalc`, and verify the ExcelJS formula result is patched
+  `@bilig/exceljs-formula-recalc`, and verify the ExcelJS formula result is patched
   from `3` to `5`.
 
 If you answer those threads, disclose the maintainer relationship and keep the
@@ -66,6 +66,6 @@ calculation engines. If your service changes `Inputs!B2` and `Inputs!B3`, a
 dependent formula such as `Summary!B2` can still show the old cached value until
 another calculation step runs.
 
-Use `xlsx-formula-recalc` when you have XLSX bytes from `@bilig/xlsx` or
-`xlsx-populate`. Use `exceljs-formula-recalc` when you need the recalculated
+Use `@bilig/xlsx-formula-recalc` when you have XLSX bytes from `@bilig/xlsx` or
+`xlsx-populate`. Use `@bilig/exceljs-formula-recalc` when you need the recalculated
 values patched back onto an ExcelJS workbook object.

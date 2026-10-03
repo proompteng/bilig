@@ -24,7 +24,7 @@ describe('runtime package publish validation', () => {
       versionModuleSource: packageManifestVersionModuleSource(),
     })
 
-    expect(() => validateStagedRuntimePackageVersion('@bilig/headless', stagedPackageDir, '9.9.9')).not.toThrow()
+    expect(() => validateStagedRuntimePackageVersion('@bilig/workpaper', stagedPackageDir, '9.9.9')).not.toThrow()
   })
 
   it('rejects a staged headless package with the old hardcoded WorkPaper.version behavior', () => {
@@ -33,8 +33,8 @@ describe('runtime package publish validation', () => {
       versionModuleSource: "export const WORKPAPER_VERSION = '0.1.95'\n",
     })
 
-    expect(() => validateStagedRuntimePackageVersion('@bilig/headless', stagedPackageDir, '9.9.9')).toThrow(
-      'Staged @bilig/headless WorkPaper.version does not match package version',
+    expect(() => validateStagedRuntimePackageVersion('@bilig/workpaper', stagedPackageDir, '9.9.9')).toThrow(
+      'Staged @bilig/workpaper WorkPaper.version does not match package version',
     )
   })
 
@@ -45,15 +45,16 @@ describe('runtime package publish validation', () => {
       versionModuleSource: packageManifestVersionModuleSource(),
     })
 
-    syncStagedMcpServerMetadata('@bilig/headless', stagedPackageDir, '9.9.9')
+    syncStagedMcpServerMetadata('@bilig/workpaper', stagedPackageDir, '9.9.9')
 
-    expect(() => validateStagedMcpServerMetadata('@bilig/headless', stagedPackageDir, '9.9.9')).not.toThrow()
+    expect(() => validateStagedMcpServerMetadata('@bilig/workpaper', stagedPackageDir, '9.9.9')).not.toThrow()
   })
 
-  it('accepts a staged scoped WorkPaper package with MCP metadata', () => {
+  it('accepts a staged WorkPaper package with MCP metadata', () => {
     const stagedPackageDir = stageMcpPackage({
       packageName: '@bilig/workpaper',
       manifestVersion: '9.9.9',
+      versionModuleSource: packageManifestVersionModuleSource(),
     })
 
     expect(() => validateStagedRuntimePackageVersion('@bilig/workpaper', stagedPackageDir, '9.9.9')).not.toThrow()
@@ -66,8 +67,8 @@ describe('runtime package publish validation', () => {
       versionModuleSource: packageManifestVersionModuleSource(),
     })
 
-    expect(() => validateStagedRuntimePackageVersion('@bilig/headless', stagedPackageDir, '9.9.9')).toThrow(
-      'Staged @bilig/headless server.json version must match package version',
+    expect(() => validateStagedRuntimePackageVersion('@bilig/workpaper', stagedPackageDir, '9.9.9')).toThrow(
+      'Staged @bilig/workpaper server.json version must match package version',
     )
   })
 
@@ -79,8 +80,8 @@ describe('runtime package publish validation', () => {
       versionModuleSource: packageManifestVersionModuleSource(),
     })
 
-    expect(() => validateStagedRuntimePackageVersion('@bilig/headless', stagedPackageDir, '9.9.9')).toThrow(
-      'Staged @bilig/headless server.json description must be a string no longer than 100 characters',
+    expect(() => validateStagedRuntimePackageVersion('@bilig/workpaper', stagedPackageDir, '9.9.9')).toThrow(
+      'Staged @bilig/workpaper server.json description must be a string no longer than 100 characters',
     )
   })
 
@@ -91,8 +92,8 @@ describe('runtime package publish validation', () => {
       versionModuleSource: packageManifestVersionModuleSource(),
     })
 
-    expect(() => validateStagedRuntimePackageVersion('@bilig/headless', stagedPackageDir, '9.9.9')).toThrow(
-      'Staged @bilig/headless server.json contains overclaiming MCP Registry wording',
+    expect(() => validateStagedRuntimePackageVersion('@bilig/workpaper', stagedPackageDir, '9.9.9')).toThrow(
+      'Staged @bilig/workpaper server.json contains overclaiming MCP Registry wording',
     )
   })
 
@@ -103,7 +104,7 @@ describe('runtime package publish validation', () => {
       versionModuleSource: packageManifestVersionModuleSource(),
     })
 
-    expect(() => validateStagedRuntimePackageVersion('@bilig/headless', stagedPackageDir, '9.9.9')).not.toThrow()
+    expect(() => validateStagedRuntimePackageVersion('@bilig/workpaper', stagedPackageDir, '9.9.9')).not.toThrow()
   })
 
   it('rejects MCP metadata without the hosted remote endpoint', () => {
@@ -113,8 +114,8 @@ describe('runtime package publish validation', () => {
       versionModuleSource: packageManifestVersionModuleSource(),
     })
 
-    expect(() => validateStagedRuntimePackageVersion('@bilig/headless', stagedPackageDir, '9.9.9')).toThrow(
-      'Staged @bilig/headless server.json must include the hosted Streamable HTTP remote endpoint',
+    expect(() => validateStagedRuntimePackageVersion('@bilig/workpaper', stagedPackageDir, '9.9.9')).toThrow(
+      'Staged @bilig/workpaper server.json must include the hosted Streamable HTTP remote endpoint',
     )
   })
 
@@ -131,7 +132,7 @@ function stageHeadlessPackage(args: {
   readonly versionModuleSource: string
 }): string {
   return stageMcpPackage({
-    packageName: '@bilig/headless',
+    packageName: '@bilig/workpaper',
     manifestVersion: args.manifestVersion,
     includeRemote: args.includeRemote,
     serverDescription: args.serverDescription,
@@ -141,7 +142,7 @@ function stageHeadlessPackage(args: {
 }
 
 function stageMcpPackage(args: {
-  readonly packageName: '@bilig/headless' | '@bilig/workpaper'
+  readonly packageName: '@bilig/workpaper'
   readonly manifestVersion: string
   readonly includeRemote?: boolean
   readonly serverDescription?: string

@@ -16,9 +16,7 @@ the workbook context resources, invoke a reusable workflow prompt, call one
 tool, return exact cell readback, and include enough structured output for the
 agent to verify the edit.
 
-`@bilig/workpaper` is the public agent-facing package for WorkPaper MCP. MCP
-stays as the transport and discovery layer around ordinary Node functions; the
-lower-level runtime implementation still lives in `@bilig/headless`.
+`@bilig/workpaper` owns the WorkPaper runtime and MCP tools. MCP provides transport and discovery around the package’s Node functions.
 
 If you need the short agent decision path before the protocol details, start
 with the [headless WorkPaper agent handbook](headless-workpaper-agent-handbook.md).
@@ -195,15 +193,15 @@ npm exec --package @bilig/workpaper@latest -- bilig-workpaper-mcp
 
 ### Cursor demo server config
 
-For a Cursor smoke that matches the lower-level runtime package, add this
+For a Cursor smoke using the WorkPaper package, add this
 server to `.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
-    "bilig-workpaper": {
+    "@bilig/workpaper": {
       "command": "npm",
-      "args": ["exec", "--yes", "--package", "@bilig/headless@latest", "--", "bilig-workpaper-mcp"]
+      "args": ["exec", "--yes", "--package", "@bilig/workpaper@latest", "--", "bilig-workpaper-mcp"]
     }
   }
 }

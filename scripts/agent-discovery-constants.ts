@@ -10,12 +10,9 @@ export const agentNotAFitBoundaries = [
 
 export const versionedStaticReferenceRoots = [
   'README.md',
-  'packages/headless/README.md',
-  'packages/headless/AGENTS.md',
-  'packages/headless/SKILL.md',
-  'packages/bilig/README.md',
-  'packages/bilig/AGENTS.md',
-  'packages/bilig/SKILL.md',
+  'packages/workpaper/README.md',
+  'packages/workpaper/AGENTS.md',
+  'packages/workpaper/SKILL.md',
   'skills/bilig-workpaper/SKILL.md',
   'docs/agent-workbook-challenge.md',
   'docs/agent-xlsx-risk-preflight.md',

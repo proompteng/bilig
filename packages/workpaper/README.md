@@ -7,8 +7,7 @@ Use this when business logic is easiest to review as workbook cells and
 formulas, but the calculation needs to run in a backend service, queue worker,
 serverless route, test, or tool.
 
-`@bilig/workpaper` is the canonical scoped npm entrypoint. The unscoped
-`bilig-workpaper` package remains published as a compatibility and search alias.
+`@bilig/workpaper` owns the runtime, public API, CLI tools, and optional MCP server.
 
 ## Install
 
@@ -305,3 +304,20 @@ framework, MCP, or package-boundary gap, open the smallest implementation gap:
 <https://github.com/proompteng/bilig/discussions/new?category=general>.
 
 Full docs: <https://proompteng.github.io/bilig/>
+
+## Package Footprint
+
+<!-- headless-package-footprint:start -->
+
+Current checked npm footprint for `@bilig/workpaper@0.164.11`:
+
+- Pack dry run: `881 kB` tarball, `5.36 MB` unpacked, `862` package entries.
+- Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
+  import/export stays behind the `@bilig/workpaper/xlsx` subpath; MCP is the
+  `bilig-workpaper-mcp` binary wrapper; reduced workbook reports use the
+  `bilig-formula-clinic` binary.
+- Cold-start gate: Node imports the main entrypoint, builds a two-sheet
+  WorkPaper, and reads `24000` under `1000 ms` without importing
+  the XLSX subpath.
+- Runtime: Node `>=24.0.0`.
+<!-- headless-package-footprint:end -->

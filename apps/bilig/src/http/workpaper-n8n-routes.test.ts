@@ -1,6 +1,6 @@
 import Fastify from 'fastify'
 import { describe, expect, it } from 'vitest'
-import { buildN8nForecastWorkPaper, exportWorkPaperDocument } from '@bilig/headless'
+import { buildN8nForecastWorkPaper, exportWorkPaperDocument } from '@bilig/workpaper'
 import { registerWorkPaperN8nRoutes } from './workpaper-n8n-routes.js'
 
 describe('workpaper n8n forecast route', () => {

@@ -1,5 +1,5 @@
-import { createWorkPaperFromDocument, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from 'bilig-workpaper'
-import type { WorkPaper } from 'bilig-workpaper'
+import { createWorkPaperFromDocument, exportWorkPaperDocument, parseWorkPaperDocument, serializeWorkPaperDocument } from './persistence.js'
+import type { WorkPaper } from './work-paper.js'
 import { tool } from 'ai'
 import { z } from 'zod'
 

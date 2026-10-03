@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs'
+import { formatJsonForRepo } from './generated-json-format.ts'
 import {
   createTsconfigPaths,
   scanWorkspaceResolution,
@@ -12,31 +13,6 @@ function formatJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`
 }
 
-function formatTsconfigPathsJson(paths: Record<string, string[]>): string {
-  const entries = Object.entries(paths).map(([packageName, values]) => {
-    const prefix = `      ${JSON.stringify(packageName)}: `
-    const inlineValues = `[${values.map((value) => JSON.stringify(value)).join(', ')}]`
-    const inlineEntry = `${prefix}${inlineValues}`
-
-    if (inlineEntry.length <= 132) {
-      return inlineEntry
-    }
-
-    return `${prefix}[\n${values.map((value) => `        ${JSON.stringify(value)}`).join(',\n')}\n      ]`
-  })
-  return [
-    '{',
-    '  "extends": "./tsconfig.base.json",',
-    '  "compilerOptions": {',
-    '    "paths": {',
-    entries.join(',\n'),
-    '    }',
-    '  }',
-    '}',
-    '',
-  ].join('\n')
-}
-
 function readFileIfExists(path: string): string | null {
   try {
     return readFileSync(path, 'utf8')
@@ -47,7 +23,12 @@ function readFileIfExists(path: string): string | null {
 
 const resolution = scanWorkspaceResolution()
 const resolutionJson = formatJson(resolution)
-const tsconfigJson = formatTsconfigPathsJson(createTsconfigPaths(resolution))
+const tsconfigJson = formatJsonForRepo(
+  JSON.stringify({
+    extends: './tsconfig.base.json',
+    compilerOptions: { paths: createTsconfigPaths(resolution) },
+  }),
+)
 
 if (checkOnly) {
   const failures: string[] = []

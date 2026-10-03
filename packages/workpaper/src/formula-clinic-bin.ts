@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runFormulaClinicCli } from '@bilig/headless/cli'
+import { runFormulaClinicCli } from './cli.js'
 import { importXlsx } from './xlsx.js'
 
 process.exitCode = runFormulaClinicCli({

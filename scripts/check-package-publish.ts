@@ -135,7 +135,7 @@ function validateTarballContents(packageLabel, manifest, tarEntries, tarListing,
   if (typeof manifest.mcpName === 'string') {
     requiredEntries.add('package/server.json')
   }
-  if (packageLabel === '@bilig/headless') {
+  if (packageLabel === '@bilig/workpaper') {
     requiredEntries.add('package/AGENTS.md')
     requiredEntries.add('package/SKILL.md')
   }

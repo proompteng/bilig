@@ -1,4 +1,4 @@
-# exceljs-formula-recalc Agent Notes
+# @bilig/exceljs-formula-recalc Agent Notes
 
 Use this package when a Node.js task already uses ExcelJS for workbook I/O but
 needs recalculated formula values after editing inputs.
@@ -6,13 +6,13 @@ needs recalculated formula values after editing inputs.
 Start with the one-command proof:
 
 ```sh
-npx --package exceljs-formula-recalc exceljs-recalc --demo --json
+npx --package @bilig/exceljs-formula-recalc exceljs-recalc --demo --json
 ```
 
 For a workbook that ExcelJS already wrote to disk:
 
 ```sh
-npx --package exceljs-formula-recalc exceljs-recalc quote.xlsx \
+npx --package @bilig/exceljs-formula-recalc exceljs-recalc quote.xlsx \
   --set Inputs!B2=48 \
   --read Summary!B7 \
   --out quote.recalculated.xlsx \
@@ -22,7 +22,7 @@ npx --package exceljs-formula-recalc exceljs-recalc quote.xlsx \
 Use the API when code needs the in-memory ExcelJS workbook patched:
 
 ```ts
-import { recalculateExceljsWorkbook } from 'exceljs-formula-recalc'
+import { recalculateExceljsWorkbook } from '@bilig/exceljs-formula-recalc'
 
 const result = await recalculateExceljsWorkbook(workbook, {
   edits: [{ target: 'Inputs!B2', value: 48 }],

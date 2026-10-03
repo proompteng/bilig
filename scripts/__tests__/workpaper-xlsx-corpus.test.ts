@@ -563,7 +563,7 @@ describe('WorkPaper XLSX corpus verifier', () => {
 })
 
 function checkedInCorpusDir(): string {
-  return join(dirname(fileURLToPath(import.meta.url)), '../../packages/headless/fixtures/xlsx-corpus')
+  return join(dirname(fileURLToPath(import.meta.url)), '../../packages/workpaper/fixtures/xlsx-corpus')
 }
 
 function checkedInCorpusFile(): string {

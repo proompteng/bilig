@@ -1,7 +1,7 @@
 ---
 title: OpenAI Responses WorkPaper tool calls
 published: true
-description: Run @bilig/headless behind OpenAI Responses function calls, return function_call_output items, and verify formula readback after a workbook edit.
+description: Run @bilig/workpaper behind OpenAI Responses function calls, return function_call_output items, and verify formula readback after a workbook edit.
 tags: openai responses, function calling, tool calling, spreadsheet, node, typescript
 canonical_url: https://proompteng.github.io/bilig/openai-responses-workpaper-tool-call.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -15,7 +15,7 @@ then explain the number the workbook calculated.
 
 The model should not write workbook JSON. Give it two small function tools:
 read a bounded range, and set one validated input cell. Your Node process runs
-those tools against `@bilig/headless`, returns `function_call_output` items, and
+those tools against `@bilig/workpaper`, returns `function_call_output` items, and
 asks the model to answer from the computed readback.
 
 ## Runnable TypeScript Example

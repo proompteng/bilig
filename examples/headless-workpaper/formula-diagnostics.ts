@@ -1,4 +1,4 @@
-import { WorkPaper, type WorkPaperCellAddress, type WorkPaperFormulaDiagnostic } from '@bilig/headless'
+import { WorkPaper, type WorkPaperCellAddress, type WorkPaperFormulaDiagnostic } from '@bilig/workpaper'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 

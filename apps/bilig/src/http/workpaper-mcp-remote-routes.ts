@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { WORKPAPER_VERSION } from '@bilig/headless'
+import { WORKPAPER_VERSION } from '@bilig/workpaper'
 import {
   WORKPAPER_MCP_PROTOCOL_VERSION,
   WORKPAPER_MCP_SUPPORTED_PROTOCOL_VERSIONS,
@@ -8,7 +8,7 @@ import {
   createWorkPaperMcpJsonRpcError,
   dispatchWorkPaperMcpJsonRpc,
   isWorkPaperMcpProtocolVersion,
-} from '@bilig/headless/mcp'
+} from '@bilig/workpaper/mcp'
 
 const MCP_ENDPOINTS = ['/mcp', '/mcp/workpaper'] as const
 const MCP_SERVER_CARD_ENDPOINTS = [

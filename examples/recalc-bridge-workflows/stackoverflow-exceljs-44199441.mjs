@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import ExcelJS from 'exceljs'
-import { recalculateExceljsWorkbook } from 'exceljs-formula-recalc'
+import { recalculateExceljsWorkbook } from '@bilig/exceljs-formula-recalc'
 
 const exampleDir = dirname(fileURLToPath(import.meta.url))
 const outputDir = join(exampleDir, 'dist')

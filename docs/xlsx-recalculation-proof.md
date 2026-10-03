@@ -14,7 +14,7 @@ This is the fastest honest test for Bilig's XLSX formula-recalculation claim.
 It does not require cloning the monorepo.
 
 The script creates a quote workbook, writes it to `.xlsx`, imports the file
-through `@bilig/headless/xlsx`, changes input cells, reads recalculated formula
+through `@bilig/workpaper/xlsx`, changes input cells, reads recalculated formula
 outputs, exports the edited workbook, reimports that edited file, and checks
 that formulas survived the round trip.
 
@@ -25,7 +25,7 @@ mkdir bilig-xlsx-proof
 cd bilig-xlsx-proof
 npm init -y >/dev/null
 npm pkg set type=module
-npm install @bilig/headless tsx
+npm install @bilig/workpaper tsx
 curl -fsSLO https://proompteng.github.io/bilig/xlsx-recalculation-proof.ts
 npx tsx xlsx-recalculation-proof.ts
 ```

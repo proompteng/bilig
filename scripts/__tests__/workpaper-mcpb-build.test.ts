@@ -44,7 +44,7 @@ describe('WorkPaper MCPB builder', () => {
       'validate_formula',
     ])
     expect(manifest.keywords).toContain('mcpb')
-    expect(manifest.compatibility.runtimes.node).toBe('>=22.0.0')
+    expect(manifest.compatibility.runtimes.node).toBe('>=24.0.0')
   })
 
   it('renders a module launcher and package manifest that bundle the exact published package version', () => {
@@ -58,26 +58,15 @@ describe('WorkPaper MCPB builder', () => {
         'import {',
         '  exportWorkPaperDocument,',
         '  serializeWorkPaperDocument,',
-        "} from '@bilig/headless';",
+        "} from '@bilig/workpaper';",
         '',
         'const requirePackageJson = createRequire(import.meta.url);',
-        "const packageManifest = requirePackageJson('../node_modules/@bilig/headless/package.json');",
+        "const packageManifest = requirePackageJson('../node_modules/@bilig/workpaper/package.json');",
         "const serverVersion = typeof packageManifest.version === 'string' ? packageManifest.version : '0.0.0';",
         'const serverDir = dirname(fileURLToPath(import.meta.url));',
         "const workpaperPath = join(serverDir, 'workpaper.json');",
         '',
-        'async function loadMcpRuntime() {',
-        '  try {',
-        "    return await import('@bilig/headless/mcp');",
-        '  } catch (error) {',
-        "    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') {",
-        "      return await import('@bilig/headless');",
-        '    }',
-        '    throw error;',
-        '  }',
-        '}',
-        '',
-        'const { buildDemoWorkPaper, createFileBackedWorkPaperMcpToolServerFromFile, runDemoWorkPaperMcpStdioServer } = await loadMcpRuntime();',
+        "import { buildDemoWorkPaper, createFileBackedWorkPaperMcpToolServerFromFile, runDemoWorkPaperMcpStdioServer } from '@bilig/workpaper/mcp';",
         '',
         'if (!existsSync(workpaperPath)) {',
         '  writeFileSync(workpaperPath, serializeWorkPaperDocument(exportWorkPaperDocument(buildDemoWorkPaper(), { includeConfig: true })));',
@@ -94,7 +83,7 @@ describe('WorkPaper MCPB builder', () => {
       private: true,
       type: 'module',
       dependencies: {
-        '@bilig/headless': '0.13.27',
+        '@bilig/workpaper': '0.13.27',
       },
     })
     expect(renderWorkPaperMcpbReadme('0.13.27')).toContain('Bundled package version: `0.13.27`')

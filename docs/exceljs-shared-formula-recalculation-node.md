@@ -53,7 +53,7 @@ then recalculates after edits.
 
 ## What Bilig does
 
-`@bilig/headless/xlsx` imports XLSX files through the Bilig Excel import layer.
+`@bilig/workpaper/xlsx` imports XLSX files through the Bilig Excel import layer.
 That layer reads worksheet formula XML, tracks shared-formula bases, and expands
 follower cells with translated references before the snapshot reaches
 `WorkPaper`.
@@ -84,7 +84,7 @@ calculation.
 
 ## When this is a fit
 
-Try `@bilig/headless` when:
+Try `@bilig/workpaper` when:
 
 - the service owns the workbook state;
 - the workflow needs write, recalculate, readback, and persistence in Node;

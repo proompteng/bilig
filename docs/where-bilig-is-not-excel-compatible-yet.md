@@ -10,7 +10,7 @@ image: /assets/github-social-preview.png
 
 # Where bilig Is Not Excel-Compatible Yet
 
-Status: public compatibility boundary for `@bilig/headless`
+Status: public compatibility boundary for `@bilig/workpaper`
 
 `bilig` is not a complete Excel clone. The current adoption wedge is narrower:
 `@bilig/workpaper` gives Node services and tool hosts a workbook API with formulas,
@@ -67,7 +67,7 @@ That boundary is security posture, not a missing convenience feature.
 
 ### Full Excel application parity
 
-`@bilig/headless` is a workbook engine package, not a replacement for the full
+`@bilig/workpaper` is a workbook engine package, not a replacement for the full
 Excel desktop application.
 
 It does not claim complete parity for:
@@ -129,7 +129,7 @@ than every spreadsheet UI. Keep those claims separated.
 
 ## When bilig Is A Good Fit Today
 
-`@bilig/headless` is a good fit when you need:
+`@bilig/workpaper` is a good fit when you need:
 
 - a Node workbook engine for formula-backed business workflows
 - agent-controlled workbook edits with explicit readback

@@ -252,7 +252,7 @@ describe('run-vitest wrapper arguments', () => {
 
   it('runs package Vitest wrappers through tsx instead of bun', () => {
     const packageJson = readFileSync(resolve(repoRoot, 'package.json'), 'utf8')
-    const headlessPackageScripts = readPackageScripts(resolve(repoRoot, 'packages/headless/package.json'))
+    const headlessPackageScripts = readPackageScripts(resolve(repoRoot, 'packages/workpaper/package.json'))
     const xlsxFormulaRecalcPackageScripts = readPackageScripts(resolve(repoRoot, 'packages/xlsx-formula-recalc/package.json'))
     const runVitestSource = readFileSync(resolve(repoRoot, 'scripts/run-vitest.ts'), 'utf8')
 

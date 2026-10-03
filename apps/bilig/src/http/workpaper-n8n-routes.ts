@@ -4,7 +4,7 @@ import {
   createN8nWorkPaperEvaluationProof,
   type N8nForecastRequestBody,
   type N8nWorkPaperEvaluationRequestBody,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 export function registerWorkPaperN8nRoutes(app: FastifyInstance): void {
   app.post('/api/workpaper/n8n/forecast', handleN8nForecastRequest)

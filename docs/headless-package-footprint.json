@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "package": {
-    "name": "@bilig/headless",
+    "name": "@bilig/workpaper",
     "version": "0.164.11",
-    "description": "Lower-level WorkPaper formula runtime for Node services with JSON persistence and verified formula readback.",
-    "nodeEngine": ">=22.0.0",
+    "description": "Run workbook-shaped business rules in Node services: edit inputs, recalculate formulas, read outputs, and save WorkPaper JSON.",
+    "nodeEngine": ">=24.0.0",
     "keywordCount": 19,
     "keywords": [
       "bilig",
@@ -14,8 +14,8 @@
       "mcp",
       "mcp-server",
       "mcp-tools",
+      "model-context-protocol",
       "node",
-      "node-services",
       "server-side-formula-engine",
       "server-side-formulas",
       "tool-integration",
@@ -33,11 +33,11 @@
     "hasMcpBinary": true
   },
   "npmPackDryRun": {
-    "tarballBytes": 861334,
-    "unpackedBytes": 5259867,
-    "entryCount": 841,
-    "readmeBytes": 49595,
-    "packageJsonBytes": 3140
+    "tarballBytes": 880694,
+    "unpackedBytes": 5364686,
+    "entryCount": 862,
+    "readmeBytes": 12287,
+    "packageJsonBytes": 3861
   },
   "coldStartProbe": {
     "runtime": "node",

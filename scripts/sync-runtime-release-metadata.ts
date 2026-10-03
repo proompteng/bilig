@@ -30,7 +30,7 @@ parseStableSemver(version)
 const notesMarkdown = readFileSync(resolve(rootDir, notesFile), 'utf8').trim()
 const syncResult = syncRuntimePackageVersions({ rootDir, version })
 
-const changelogPath = join(rootDir, 'packages/headless/CHANGELOG.md')
+const changelogPath = join(rootDir, 'packages/workpaper/CHANGELOG.md')
 const existingChangelog = readFileSync(changelogPath, 'utf8')
 const releaseHeading = `## ${version}`
 if (!existingChangelog.includes(releaseHeading)) {
@@ -47,7 +47,7 @@ console.log(
       updatedPackages: syncResult.updatedPackages,
       updatedFiles: [...syncResult.updatedFiles, changelogPath],
       changelogPath,
-      runtimeVersionSource: 'packages/headless/package.json',
+      runtimeVersionSource: 'packages/workpaper/package.json',
     },
     null,
     2,

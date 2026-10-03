@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 import { attachRuntimeSnapshot } from '@bilig/core'
 import { importXlsx } from '@bilig/excel-import'
-import { WorkPaper, type WorkPaperConfig, type WorkPaperSheet } from '@bilig/headless'
+import { WorkPaper, type WorkPaperConfig, type WorkPaperSheet } from '@bilig/workpaper'
 import { formatErrorCode, ValueTag, type CellValue, type WorkbookFormulaAuditEntrySnapshot, type WorkbookSnapshot } from '@bilig/protocol'
 import { decodeCellAddress, encodeCellAddress, readXlsxWorkbookCells, type XlsxWorkbookCell } from '@bilig/xlsx'
 import type {

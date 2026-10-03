@@ -8,7 +8,7 @@ canonical_url: https://proompteng.github.io/bilig/formula-edge-groupby-spill-fix
 
 # GROUPBY Spill Fixture Walkthrough
 
-Status: public formula-edge fixture note for `@bilig/headless`.
+Status: public formula-edge fixture note for `@bilig/workpaper`.
 
 This page documents one canonical grouped dynamic-array fixture. It is
 intentionally narrow: the claim is that the current SUM-form `GROUPBY` fixture

@@ -1,5 +1,5 @@
-import { exportXlsx } from '@bilig/headless/xlsx'
-import { WorkPaper } from 'bilig-workpaper'
+import { exportXlsx } from '@bilig/workpaper/xlsx'
+import { WorkPaper } from '@bilig/workpaper'
 import { describe, expect, it } from 'vitest'
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'

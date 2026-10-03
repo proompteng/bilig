@@ -2,9 +2,9 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "node",
   "packages": {
-    "packages/headless": {
-      "component": "headless",
-      "package-name": "@bilig/headless",
+    "packages/workpaper": {
+      "component": "workpaper",
+      "package-name": "@bilig/workpaper",
       "changelog-path": "CHANGELOG.md",
       "extra-files": ["package.json"],
       "include-component-in-tag": true,

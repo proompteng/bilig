@@ -73,7 +73,7 @@ for (const removedNeedle of [
     ['docs/index.html', index],
     ['docs/llms.txt', llms],
     ['docs/llms-full.txt', llmsFull],
-    ['packages/headless/README.md', headlessReadme],
+    ['packages/workpaper/README.md', headlessReadme],
   ] as const) {
     requireNotIncludes(content, removedNeedle, path)
   }
@@ -91,7 +91,7 @@ for (const [path, content, needles] of [
     ],
   ],
   [
-    'packages/headless/README.md',
+    'packages/workpaper/README.md',
     headlessReadme,
     ['examples/headless-workpaper', 'examples/serverless-workpaper-api', 'examples/xlsx-recalculation-node'],
   ],
@@ -108,7 +108,7 @@ for (const [path, content, needles] of [
     workbookAutomationExamplesDoc,
     ['examples/headless-workpaper', 'invoice-totals', 'subscription-mrr'],
   ],
-  ['docs/server-side-spreadsheet-automation-node.md', serverSideSpreadsheetAutomationNode, ['@bilig/headless', 'calculated cells']],
+  ['docs/server-side-spreadsheet-automation-node.md', serverSideSpreadsheetAutomationNode, ['@bilig/workpaper', 'calculated cells']],
   [
     'docs/node-framework-workpaper-adapters.md',
     nodeFrameworkWorkpaperAdaptersDoc,

@@ -1,7 +1,7 @@
 ---
 title: Evaluate Excel formulas in Node.js with TypeScript
 published: true
-description: A TypeScript-first path for evaluating spreadsheet formulas in Node.js with @bilig/headless, verified readback, and JSON persistence.
+description: A TypeScript-first path for evaluating spreadsheet formulas in Node.js with @bilig/workpaper, verified readback, and JSON persistence.
 tags: typescript, node, excel, spreadsheet, formulas
 canonical_url: https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -10,7 +10,7 @@ image: /assets/github-social-preview.png
 
 # Evaluate Excel formulas in Node.js with TypeScript
 
-Use `@bilig/headless` when a Node.js program needs a small workbook model it can
+Use `@bilig/workpaper` when a Node.js program needs a small workbook model it can
 edit, recalculate, read, and persist. The useful case is not "open Excel on the
 server." It is "run spreadsheet-shaped logic in a service and prove the result
 that came back."
@@ -38,7 +38,7 @@ mkdir bilig-node-formulas
 cd bilig-node-formulas
 npm init -y
 npm pkg set type=module
-npm install @bilig/headless
+npm install @bilig/workpaper
 npm install -D tsx typescript @types/node
 ```
 
@@ -52,7 +52,7 @@ import {
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
   type WorkPaperCellAddress,
-} from '@bilig/headless'
+} from '@bilig/workpaper'
 
 type NumericCell = {
   value: number
@@ -133,14 +133,14 @@ formula depends on sheet state:
 - the service needs to persist the workbook document
 - an agent or test needs evidence that the write changed the expected output
 
-That is the boundary `@bilig/headless` is built around.
+That is the boundary `@bilig/workpaper` is built around.
 
 ## Where this is different from writing XLSX files
 
 An XLSX library is the right first choice when the file is the product: reports,
 styles, images, tables, and handoff to Excel or another spreadsheet app.
 
-Use `@bilig/headless` when the service needs calculated workbook state before a
+Use `@bilig/workpaper` when the service needs calculated workbook state before a
 person opens any file. You can still export or import at the system boundary,
 but the WorkPaper model is the part that calculates and verifies the values in
 Node.
@@ -155,7 +155,7 @@ Before using any headless spreadsheet engine in a service, check these items:
 - Does the package expose useful errors for unsupported formulas?
 - Can you keep a small fixture in CI that covers your real workflow?
 
-For `@bilig/headless`, start with one TypeScript fixture and keep it boring:
+For `@bilig/workpaper`, start with one TypeScript fixture and keep it boring:
 build the workbook, edit one input, read one dependent output, persist, restore,
 and assert the same value after restore.
 
