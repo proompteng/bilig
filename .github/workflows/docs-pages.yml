@@ -32,9 +32,14 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" .cache/docs-site
           cp .cache/docs-source/{AGENTS.md,agent-start.txt,agent.json,skill.md,skill.txt,llms-install.md,llms.txt,llms-full.txt} .cache/docs-site/
           cp -R .cache/docs-source/.well-known .cache/docs-site/
-      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
+      - name: Archive documentation including discovery directories
+        run: tar --dereference --hard-dereference --directory .cache/docs-site -cf "$RUNNER_TEMP/artifact.tar" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          path: .cache/docs-site
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
 
   deploy:
     needs: build
