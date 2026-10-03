@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": "npm",
       "args": [
         "exec",

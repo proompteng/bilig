@@ -29,7 +29,7 @@ Open Qodo IDE Agentic Tools MCP settings and add this local server:
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": "npm",
       "args": [
         "exec",

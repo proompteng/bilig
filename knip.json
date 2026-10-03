@@ -34,10 +34,12 @@
     },
     "packages/workpaper": {
       "entry": [
+        "src/agent-start-bin.ts",
         "src/agent-workbook-challenge-bin.ts",
         "src/evaluator-bin.ts",
         "src/formula-clinic-bin.ts",
         "src/mcp-challenge-bin.ts",
+        "src/n8n-forecast-server-bin.ts",
         "src/work-paper-mcp-stdio-bin.ts"
       ]
     },
@@ -48,41 +50,12 @@
         "src/evaluator-bin.ts",
         "src/sheetjs-cli.ts",
         "src/workbook-compatibility-report-cli.ts"
-      ]
-    },
-    "packages/workpaper": {
-      "entry": [
-        "src/agent-start-bin.ts",
-        "src/agent-workbook-challenge-bin.ts",
-        "src/mcp-challenge-bin.ts",
-        "src/n8n-forecast-server-bin.ts",
-        "src/work-paper-mcp-stdio-bin.ts"
-      ]
-    },
-    "packages/workpaper": {
-      "entry": [
-        "src/agent-start-bin.ts",
-        "src/agent-workbook-challenge-bin.ts",
-        "src/evaluator-bin.ts",
-        "src/formula-clinic-bin.ts",
-        "src/mcp-challenge-bin.ts",
-        "src/n8n-forecast-server-bin.ts",
-        "src/work-paper-mcp-stdio-bin.ts"
       ]
     },
     "packages/wasm-kernel": {
       "entry": ["assembly/index.ts"],
       "project": ["assembly/**/*.ts"],
       "ignoreDependencies": ["assemblyscript"]
-    },
-    "packages/xlsx-formula-recalc": {
-      "entry": [
-        "src/cache-doctor-cli.ts",
-        "src/cli.ts",
-        "src/evaluator-bin.ts",
-        "src/sheetjs-cli.ts",
-        "src/workbook-compatibility-report-cli.ts"
-      ]
     }
   }
 }

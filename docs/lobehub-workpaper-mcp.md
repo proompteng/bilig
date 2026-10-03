@@ -32,7 +32,7 @@ skill**, then choose **Import JSON config** and paste:
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "url": "https://bilig.proompteng.ai/mcp",
       "type": "http"
     }

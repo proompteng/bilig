@@ -196,7 +196,7 @@ Use file-backed stdio for private project state:
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": "npm",
       "args": [
         "exec",

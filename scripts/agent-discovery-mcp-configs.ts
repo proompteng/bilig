@@ -36,7 +36,7 @@ export function buildZedSettingsConfig(input: AgentIdeRuleInput): string {
   return `${JSON.stringify(
     {
       context_servers: {
-        '@bilig/workpaper': {
+        'bilig-workpaper': {
           command: {
             path: 'npm',
             args: [
@@ -70,7 +70,7 @@ export function buildTraeMcpConfig(input: AgentIdeRuleInput): string {
   return `${JSON.stringify(
     {
       mcpServers: {
-        '@bilig/workpaper': {
+        'bilig-workpaper': {
           command: 'npm',
           args: [
             'exec',
@@ -99,7 +99,7 @@ export function buildOpenCodeMcpConfig(input: AgentIdeRuleInput): string {
   "$schema": "https://opencode.ai/config.json",
   "instructions": ["AGENTS.md"],
   "mcp": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "type": "local",
       "command": [
         "npm",
@@ -161,7 +161,7 @@ export function buildFileBackedMcpServerConfig(input: {
 
 export function buildClaudeCodeMcpConfig(input: AgentIdeRuleInput): string {
   return buildFileBackedMcpServerConfig({
-    serverKey: '@bilig/workpaper',
+    serverKey: 'bilig-workpaper',
     workpaperPackageSpec: input.workpaperPackageSpec,
     workpaperPath: './.bilig/pricing.workpaper.json',
   })
@@ -185,7 +185,7 @@ export function buildJunieMcpConfig(input: AgentIdeRuleInput): string {
 
 export function buildRooMcpConfig(input: AgentIdeRuleInput): string {
   return buildFileBackedMcpServerConfig({
-    serverKey: '@bilig/workpaper',
+    serverKey: 'bilig-workpaper',
     workpaperPackageSpec: input.workpaperPackageSpec,
     workpaperPath: './.bilig/pricing.workpaper.json',
   })
@@ -193,7 +193,7 @@ export function buildRooMcpConfig(input: AgentIdeRuleInput): string {
 
 export function buildReusableMcpConfig(input: AgentIdeRuleInput): string {
   return buildFileBackedMcpServerConfig({
-    serverKey: '@bilig/workpaper',
+    serverKey: 'bilig-workpaper',
     workpaperPackageSpec: input.workpaperPackageSpec,
     workpaperPath: './.bilig/pricing.workpaper.json',
   })

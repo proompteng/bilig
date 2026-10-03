@@ -28,7 +28,7 @@ Create `.trae/mcp.json` in the project root:
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": "npm",
       "args": [
         "exec",

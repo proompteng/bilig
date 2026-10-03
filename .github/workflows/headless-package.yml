@@ -735,13 +735,8 @@ jobs:
             'packages/core/package.json',
             'packages/excel-import/package.json',
             'packages/workpaper/package.json',
-            'packages/workpaper/package.json',
-            'packages/workpaper/package.json',
-            'packages/xlsx-formula-recalc/package.json',
             'packages/xlsx-formula-recalc/package.json',
             'packages/sheetjs-formula-recalc/package.json',
-            'packages/sheetjs-formula-recalc/package.json',
-            'packages/exceljs-formula-recalc/package.json',
             'packages/exceljs-formula-recalc/package.json',
             'packages/create-workpaper/package.json',
           ];
@@ -835,22 +830,10 @@ jobs:
             packages/core/package.json
             packages/excel-import/package.json
             packages/workpaper/package.json
-            packages/workpaper/package.json
-            packages/workpaper/package.json
-            packages/xlsx-formula-recalc/package.json
             packages/xlsx-formula-recalc/package.json
             packages/sheetjs-formula-recalc/package.json
-            packages/sheetjs-formula-recalc/package.json
-            packages/exceljs-formula-recalc/package.json
             packages/exceljs-formula-recalc/package.json
             packages/create-workpaper/package.json
-            packages/workpaper/AGENTS.md
-            packages/workpaper/server.json
-            packages/workpaper/SKILL.md
-            packages/workpaper/README.md
-            packages/workpaper/AGENTS.md
-            packages/workpaper/SKILL.md
-            packages/workpaper/README.md
             packages/workpaper/AGENTS.md
             packages/workpaper/server.json
             packages/workpaper/SKILL.md
@@ -858,14 +841,11 @@ jobs:
             packages/xlsx-formula-recalc/AGENTS.md
             packages/xlsx-formula-recalc/SKILL.md
             packages/xlsx-formula-recalc/README.md
-            packages/xlsx-formula-recalc/README.md
             packages/sheetjs-formula-recalc/AGENTS.md
             packages/sheetjs-formula-recalc/SKILL.md
             packages/sheetjs-formula-recalc/README.md
-            packages/sheetjs-formula-recalc/README.md
             packages/exceljs-formula-recalc/AGENTS.md
             packages/exceljs-formula-recalc/SKILL.md
-            packages/exceljs-formula-recalc/README.md
             packages/exceljs-formula-recalc/README.md
             packages/workpaper/CHANGELOG.md
             skills/bilig-workpaper/SKILL.md

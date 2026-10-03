@@ -34,7 +34,7 @@ describe('syncRuntimePackageVersions', () => {
       join(rootDir, 'gemini-extension.json'),
       `${JSON.stringify(
         {
-          name: '@bilig/workpaper',
+          name: 'bilig-workpaper',
           version: '0.1.95',
           contextFileName: 'gemini-workpaper-context.md',
         },

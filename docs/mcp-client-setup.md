@@ -173,7 +173,7 @@ Add the same stdio server to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "type": "stdio",
       "command": "npm",
       "args": [
@@ -320,7 +320,7 @@ For another repository, copy this shape:
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": "npm",
       "args": [
         "exec",
@@ -366,7 +366,7 @@ shape:
 ```json
 {
   "context_servers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": {
         "path": "npm",
         "args": [
@@ -469,7 +469,7 @@ Configure MCP Servers, and add this entry to the MCP settings JSON under
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": "npm",
       "args": [
         "exec",

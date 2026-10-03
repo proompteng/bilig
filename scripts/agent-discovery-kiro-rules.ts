@@ -61,7 +61,7 @@ ${commandSafetyStandard()}
 
 export function buildKiroMcpConfig(input: AgentIdeRuleInput): string {
   return buildFileBackedMcpServerConfig({
-    serverKey: '@bilig/workpaper',
+    serverKey: 'bilig-workpaper',
     workpaperPackageSpec: input.workpaperPackageSpec,
     workpaperPath: './.bilig/pricing.workpaper.json',
   })

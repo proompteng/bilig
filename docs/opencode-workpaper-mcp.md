@@ -43,7 +43,7 @@ supports local MCP servers under the `mcp` option. Use this project-local
   "$schema": "https://opencode.ai/config.json",
   "instructions": ["AGENTS.md"],
   "mcp": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "type": "local",
       "command": [
         "npm",

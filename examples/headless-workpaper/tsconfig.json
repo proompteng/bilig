@@ -12,11 +12,8 @@
       "@bilig/workpaper": ["../../packages/workpaper/src/index.ts"],
       "@bilig/workpaper/mcp": ["../../packages/workpaper/src/mcp.ts"],
       "@bilig/protocol": ["../../packages/protocol/src/index.ts"],
-      "@bilig/workpaper": ["../../packages/workpaper/src/index.ts"],
       "@bilig/workpaper/ai-sdk": ["../../packages/workpaper/src/ai-sdk.ts"],
-      "@bilig/workpaper/xlsx": ["../../packages/workpaper/src/xlsx.ts"],
-      "@bilig/workpaper": ["../../packages/workpaper/src/index.ts"],
-      "@bilig/workpaper/mcp": ["../../packages/workpaper/src/mcp.ts"]
+      "@bilig/workpaper/xlsx": ["../../packages/workpaper/src/xlsx.ts"]
     },
     "skipLibCheck": true,
     "strict": true,

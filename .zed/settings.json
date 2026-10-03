@@ -1,6 +1,6 @@
 {
   "context_servers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": {
         "path": "npm",
         "args": [

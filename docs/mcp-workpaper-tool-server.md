@@ -199,7 +199,7 @@ server to `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": "npm",
       "args": ["exec", "--yes", "--package", "@bilig/workpaper@latest", "--", "bilig-workpaper-mcp"]
     }

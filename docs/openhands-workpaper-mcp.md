@@ -63,7 +63,7 @@ OpenHands also reads `~/.openhands/mcp.json`. The equivalent config is:
 ```json
 {
   "mcpServers": {
-    "@bilig/workpaper": {
+    "bilig-workpaper": {
       "command": "npm",
       "args": [
         "exec",

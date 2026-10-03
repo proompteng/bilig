@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildA1WorkPaper, createWorkPaperFromDocument, parseWorkPaperDocument } from '@bilig/workpaper'
 import { loadRuntimeNpmPackages } from '../runtime-package-set.ts'
+import { buildClaudeCodeMcpConfig } from '../agent-discovery-mcp-configs.ts'
 
 const repoRoot = resolve(new URL('../..', import.meta.url).pathname)
 
@@ -31,6 +32,23 @@ describe('canonical public workbook runtime', () => {
     expect(manifest.dependencies).toHaveProperty('@bilig/core')
     expect(manifest.dependencies).toHaveProperty('@bilig/formula')
     expect(manifest.dependencies).not.toHaveProperty('@bilig/workpaper')
+  })
+
+  it('keeps editor identifiers separate from the scoped npm runtime', () => {
+    const extension = JSON.parse(readFileSync(resolve(repoRoot, 'gemini-extension.json'), 'utf8'))
+    expect(extension.name).toBe('bilig-workpaper')
+    expect(Object.keys(extension.mcpServers)).toEqual(['bilig-workpaper'])
+    expect(extension.mcpServers['bilig-workpaper'].args).toContain('@bilig/workpaper@latest')
+    const config = JSON.parse(
+      buildClaudeCodeMcpConfig({
+        workpaperPackageSpec: '@bilig/workpaper@latest',
+        remoteMcpEndpoint: 'https://bilig.proompteng.ai/mcp',
+        repositoryUrl: 'https://github.com/proompteng/bilig',
+        siteRoot: 'https://proompteng.github.io/bilig',
+      }),
+    )
+    expect(Object.keys(config.mcpServers)).toEqual(['bilig-workpaper'])
+    expect(config.mcpServers['bilig-workpaper'].args).toContain('@bilig/workpaper@latest')
   })
 
   it('recalculates and restores a formula through the public A1 API', () => {
