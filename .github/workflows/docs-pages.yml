@@ -29,6 +29,7 @@ jobs:
           destination: .cache/docs-site
       - name: Preserve raw agent discovery documents
         run: |
+          sudo chown -R "$(id -u):$(id -g)" .cache/docs-site
           cp .cache/docs-source/{AGENTS.md,agent-start.txt,agent.json,skill.md,skill.txt,llms-install.md,llms.txt,llms-full.txt} .cache/docs-site/
           cp -R .cache/docs-source/.well-known .cache/docs-site/
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
