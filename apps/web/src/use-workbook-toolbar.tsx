@@ -700,5 +700,6 @@ export function useWorkbookToolbar(input: {
   return {
     ribbon,
     statusModeLabel,
+    statusSyncLabel: statusPresentation.syncLabel,
   }
 }

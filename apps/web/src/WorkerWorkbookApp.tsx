@@ -107,9 +107,6 @@ function WorkerWorkbookAppInner({
     connectionState,
     toolbarControls: (
       <>
-        <a className={missingSheetActionClass} href="/models">
-          Models
-        </a>
         {shortcuts.shortcutHelpButton}
         {importToggle}
       </>
@@ -330,6 +327,7 @@ function WorkerWorkbookAppInner({
       <WorkbookDocumentHeader
         documentId={runtimeConfig.documentId}
         workbookName={app.workbookName}
+        syncLabel={app.statusSyncLabel}
         userId={runtimeConfig.currentUserId}
         {...(runtimeConfig.serverUrl ? { serverUrl: runtimeConfig.serverUrl } : {})}
         isSynced={app.runtimeSyncState !== 'local-only' && Boolean(zero || runtimeConfig.serverUrl)}

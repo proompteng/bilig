@@ -691,7 +691,7 @@ export function useWorkerWorkbookAppState(input: {
     syncAgentAuthoritativeRevision,
   })
 
-  const { ribbon, statusModeLabel } = useWorkbookToolbar({
+  const { ribbon, statusModeLabel, statusSyncLabel } = useWorkbookToolbar({
     connectionStateName: connectionState.name,
     runtimeReady,
     pendingMutationSummary: runtimeState?.pendingMutationSummary,
@@ -820,6 +820,7 @@ export function useWorkerWorkbookAppState(input: {
     flushPendingEditCommit,
     renameWorkbook,
     workbookName: runtimeState?.workbookName ?? 'Loading workbook…',
+    statusSyncLabel,
     clearAgentError,
     clearRuntimeError,
     agentPanel,

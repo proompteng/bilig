@@ -268,7 +268,7 @@ test('web app keeps the toolbar compact on narrow viewports', async ({ page }) =
   expect(lastControlBox.y + lastControlBox.height).toBeLessThanOrEqual(toolbarBox.y + toolbarBox.height + 1)
 })
 
-test('web app prioritizes editing controls over secondary actions on phone toolbars', async ({ page }) => {
+test('@browser-ci web app prioritizes editing controls over secondary actions on phone toolbars', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 })
   await page.goto('/?sheet=Sheet1&cell=B10')
   await waitForWorkbookReady(page)
@@ -281,6 +281,8 @@ test('web app prioritizes editing controls over secondary actions on phone toolb
   await expect(page.getByTestId('workbook-shortcut-button')).toBeHidden()
   await expect(page.getByTestId('workbook-import-toggle')).toBeHidden()
   await expect(page.getByTestId('workbook-side-panel-open')).toBeVisible()
+  await expect(page.getByTestId('document-save-status')).toBeVisible()
+  await expect(page.getByTestId('document-save-status')).toHaveText(/^(Saved|Local saved|Saving…|Sync pending)$/)
   await expect(numberFormat).toContainText('General')
   await expect(fontSize).toContainText('10')
   await expect(overflowCue).toBeVisible()

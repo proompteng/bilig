@@ -23,6 +23,7 @@ const menuItemClass = `${actionClass} w-full cursor-default data-[highlighted]:b
 export function WorkbookDocumentHeader(props: {
   readonly documentId: string
   readonly workbookName: string
+  readonly syncLabel: string
   readonly userId: string
   readonly serverUrl?: string
   readonly isSynced: boolean
@@ -143,6 +144,17 @@ export function WorkbookDocumentHeader(props: {
               >
                 Export Bilig backup
               </Menu.Item>
+              <Menu.Item
+                className={menuItemClass}
+                onClick={() => {
+                  void run(async () => {
+                    await props.flushPendingEdit()
+                    window.location.assign('/models')
+                  })
+                }}
+              >
+                Models
+              </Menu.Item>
               <Menu.Separator className="my-1 h-px bg-[var(--wb-border)]" />
               <Menu.Group>
                 <Menu.GroupLabel className="px-2 py-1 text-[11px] text-[var(--wb-text-muted)]">
@@ -172,8 +184,14 @@ export function WorkbookDocumentHeader(props: {
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
-      <span className="ml-auto truncate text-[11px] text-[var(--wb-text-muted)]" title={`Document: ${props.documentId}`}>
-        {isBusy ? 'Working…' : props.isSynced ? 'Synced workbook' : 'Local workbook'}
+      <span
+        className="ml-auto truncate text-[11px] text-[var(--wb-text-muted)]"
+        title={`${props.isSynced ? 'Synced workbook' : 'Local workbook'} • Document: ${props.documentId}`}
+      >
+        <span className="max-[420px]:hidden">{isBusy ? 'Working…' : props.isSynced ? 'Synced workbook' : 'Local workbook'}</span>
+        <span className="hidden max-[420px]:inline" data-testid="document-save-status">
+          {isBusy ? 'Working…' : props.syncLabel}
+        </span>
       </span>
       <Dialog.Root open={isRenaming} onOpenChange={setIsRenaming}>
         <Dialog.Portal>

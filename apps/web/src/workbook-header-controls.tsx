@@ -92,7 +92,9 @@ export function WorkbookHeaderStatusChip({ modeLabel, syncLabel, tone = 'neutral
         title={`${modeLabel} • ${syncLabel}`}
       >
         <span aria-hidden="true" className={cn('size-2 rounded-full', toneClass)} />
-        <span data-testid="status-sync">{syncLabel}</span>
+        <span className="max-[420px]:hidden" data-testid="status-sync">
+          {syncLabel}
+        </span>
       </span>
     </>
   )
