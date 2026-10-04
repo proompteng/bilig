@@ -19,11 +19,13 @@ Current summary for the monolith backend.
 ## Production boundary configuration
 
 - `BILIG_AUTH_MODE` must be explicit outside `NODE_ENV=development|test`.
-  Production uses `signed-proxy` behind a trusted identity proxy. `demo` is
-  rejected in every other environment, including staging and an unset or
-  malformed `NODE_ENV`.
+  Public production uses `demo` for anonymous guests with server-signed session
+  cookies. Guest sessions ignore caller-supplied identity headers and remain
+  unauthenticated. Private deployments can use `signed-proxy` behind a trusted
+  identity proxy.
 - `BILIG_SESSION_SECRET` must contain at least 32 bytes. `signed-proxy` also
   requires a distinct `BILIG_AUTH_PROXY_SECRET` of at least 32 bytes.
+  Production session cookies use `Secure`, `HttpOnly`, and `SameSite=Lax` by default.
 - A signed proxy sends `x-bilig-auth-user`, `x-bilig-auth-roles`,
   `x-bilig-auth-timestamp`, and `x-bilig-auth-signature`. The signature is a
   base64url HMAC-SHA256 over `timestamp`, user ID, and the comma-separated role

@@ -9,10 +9,10 @@ function createRequest(headers: Record<string, string>) {
 }
 
 describe('resolveRequestSession', () => {
-  it('ignores caller-controlled identity headers in explicit demo mode', () => {
+  it.each(['test', 'production'])('ignores caller-controlled identity headers in explicit demo mode under %s', (nodeEnv) => {
     const resolver = createRequestSessionResolver({
       env: {
-        NODE_ENV: 'test',
+        NODE_ENV: nodeEnv,
         BILIG_AUTH_MODE: 'demo',
         BILIG_SESSION_SECRET: 'test-session-secret-that-is-at-least-32-bytes',
       },
@@ -37,10 +37,10 @@ describe('resolveRequestSession', () => {
     })
   })
 
-  it('restores only a valid signed demo cookie', () => {
+  it.each(['test', 'production'])('restores only a valid signed demo cookie under %s', (nodeEnv) => {
     const resolver = createRequestSessionResolver({
       env: {
-        NODE_ENV: 'test',
+        NODE_ENV: nodeEnv,
         BILIG_AUTH_MODE: 'demo',
         BILIG_SESSION_SECRET: 'test-session-secret-that-is-at-least-32-bytes',
       },
@@ -48,6 +48,8 @@ describe('resolveRequestSession', () => {
     })
     const first = resolveRequestSession(createRequest({}), resolver)
     const cookie = resolver.serializeCookie(first)
+    expect(cookie).toContain('HttpOnly; SameSite=Lax')
+    expect(cookie.includes('; Secure')).toBe(nodeEnv === 'production')
 
     const restored = resolveRequestSession(createRequest({ cookie }), resolver)
 
@@ -60,10 +62,10 @@ describe('resolveRequestSession', () => {
     })
   })
 
-  it('replaces forged and malformed demo cookies without throwing', () => {
+  it.each(['test', 'production'])('replaces forged and malformed demo cookies without throwing under %s', (nodeEnv) => {
     const resolver = createRequestSessionResolver({
       env: {
-        NODE_ENV: 'test',
+        NODE_ENV: nodeEnv,
         BILIG_AUTH_MODE: 'demo',
         BILIG_SESSION_SECRET: 'test-session-secret-that-is-at-least-32-bytes',
       },
@@ -144,15 +146,17 @@ describe('resolveRequestSession', () => {
     expect(() => createRequestSessionResolver({ env: { NODE_ENV: 'production' } })).toThrow(
       'BILIG_AUTH_MODE must be explicitly configured in production',
     )
-    expect(() =>
-      createRequestSessionResolver({
-        env: {
-          NODE_ENV: 'production',
-          BILIG_AUTH_MODE: 'demo',
-          BILIG_SESSION_SECRET: 'production-demo-secret-that-is-at-least-32-bytes',
-        },
-      }),
-    ).toThrow('BILIG_AUTH_MODE=demo is not allowed in production; use signed-proxy')
+    for (const sessionSecret of [undefined, '', 'short']) {
+      expect(() =>
+        createRequestSessionResolver({
+          env: {
+            NODE_ENV: 'production',
+            BILIG_AUTH_MODE: 'demo',
+            BILIG_SESSION_SECRET: sessionSecret,
+          },
+        }),
+      ).toThrow('BILIG_SESSION_SECRET must contain at least 32 bytes')
+    }
     expect(() =>
       createRequestSessionResolver({
         env: {
@@ -165,8 +169,8 @@ describe('resolveRequestSession', () => {
     ).toThrow('BILIG_SESSION_SECRET must contain at least 32 bytes')
   })
 
-  it('allows explicit demo mode for local and E2E environments', () => {
-    for (const nodeEnv of ['development', 'test']) {
+  it('allows explicitly configured anonymous demo mode in every environment', () => {
+    for (const nodeEnv of ['development', 'test', 'production', 'staging', undefined]) {
       const resolver = createRequestSessionResolver({
         env: {
           NODE_ENV: nodeEnv,
@@ -179,17 +183,16 @@ describe('resolveRequestSession', () => {
     }
   })
 
-  it('rejects demo mode outside explicitly local environments', () => {
+  it('rejects implicit demo mode outside explicitly local environments', () => {
     for (const nodeEnv of [undefined, '', ' ', 'staging', ' STAGING ', 'development ']) {
       expect(() =>
         createRequestSessionResolver({
           env: {
             NODE_ENV: nodeEnv,
-            BILIG_AUTH_MODE: 'demo',
             BILIG_SESSION_SECRET: 'local-demo-secret-that-is-at-least-32-bytes',
           },
         }),
-      ).toThrow('BILIG_AUTH_MODE=demo is only allowed when NODE_ENV is explicitly "development" or "test"')
+      ).toThrow('BILIG_AUTH_MODE must be explicitly configured outside development and test')
     }
   })
 

@@ -126,12 +126,6 @@ function resolveAuthMode(env: Readonly<Record<string, string | undefined>>): Bil
     }
     return 'demo'
   }
-  if (configured === 'demo' && !isExplicitLocalEnvironment) {
-    if (nodeEnv === 'production') {
-      throw new Error('BILIG_AUTH_MODE=demo is not allowed in production; use signed-proxy')
-    }
-    throw new Error('BILIG_AUTH_MODE=demo is only allowed when NODE_ENV is explicitly "development" or "test"')
-  }
   if (configured !== 'demo' && configured !== 'signed-proxy') {
     throw new Error(`BILIG_AUTH_MODE must be "demo" or "signed-proxy", got ${configured}`)
   }

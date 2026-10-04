@@ -157,14 +157,43 @@ describe('sync-server remote MCP origin policy', () => {
 })
 
 describe('sync-server request authentication', () => {
-  it('rejects demo authentication during production server startup', () => {
+  it('serves and restores signed anonymous sessions in production without an identity proxy', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('BILIG_AUTH_MODE', 'demo')
     vi.stubEnv('BILIG_SESSION_SECRET', 'production-demo-secret-that-is-at-least-32-bytes')
+    vi.stubEnv('BILIG_AUTH_PROXY_SECRET', '')
 
+    let app: ReturnType<typeof createSyncServer>['app'] | undefined
     try {
-      expect(() => createSyncServer({ logger: false })).toThrow('BILIG_AUTH_MODE=demo is not allowed in production; use signed-proxy')
+      app = createSyncServer({ logger: false }).app
+      const response = await app.inject({
+        method: 'GET',
+        url: '/runtime-config.json',
+        headers: {
+          authorization: 'Bearer admin@example.com',
+          'x-bilig-user-id': 'admin@example.com',
+        },
+      })
+      expect(response.statusCode).toBe(200)
+      const userId: unknown = response.json().currentUserId
+      expect(userId).toMatch(/^guest:/u)
+      const cookies = response.cookies
+      expect(cookies).toHaveLength(1)
+      const cookie = cookies[0]
+      expect(cookie).toMatchObject({ name: 'bilig_session', httpOnly: true, secure: true, sameSite: 'Lax' })
+      if (!cookie) {
+        throw new Error('Expected a signed anonymous session cookie')
+      }
+      const restored = await app.inject({
+        method: 'GET',
+        url: '/runtime-config.json',
+        headers: { cookie: `${cookie.name}=${cookie.value}` },
+      })
+      expect(restored.statusCode).toBe(200)
+      expect(restored.json().currentUserId).toBe(userId)
+      expect(restored.headers['set-cookie']).toBeUndefined()
     } finally {
+      await app?.close()
       vi.unstubAllEnvs()
     }
   })
