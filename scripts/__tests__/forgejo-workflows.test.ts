@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
@@ -39,6 +40,35 @@ function workflowConcurrency(workflow: Record<string, unknown>): Record<string, 
 }
 
 describe('forgejo workflows', () => {
+  it('publishes all image tags with the ARM variant required by Kargo', () => {
+    const jobs = workflowJobs(readWorkflow('.forgejo/workflows/release-images.yml'))
+    const publish = asRecord(jobs['publish-manifests'], 'publish-manifests')
+    const steps = publish['steps']
+    if (!Array.isArray(steps)) throw new Error('publish-manifests.steps must be an array')
+    const step = asRecord(
+      steps.find((entry: unknown) => isRecord(entry) && entry['name'] === 'Publish multi-arch image tags'),
+      'Publish multi-arch image tags',
+    )
+    const run = step['run']
+    if (typeof run !== 'string') throw new Error('Publish multi-arch image tags.run must be a script')
+    const sha = 'a'.repeat(40)
+    const script = run
+      .replaceAll('${{ steps.meta.outputs.sha }}', sha)
+      .replaceAll('${{ steps.meta.outputs.short_sha }}', sha.slice(0, 7))
+      .replaceAll('${{ steps.head.outputs.publish_latest }}', 'true')
+    const output = execFileSync('bash', ['-euc', `docker() { printf '%s\\n' "$*"; }\n${script}`], {
+      env: { ...process.env, REGISTRY: 'registry.example.test', IMAGE_NAMESPACE: 'lab' },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    const image = 'registry.example.test/lab/bilig-app'
+    expect(output.split('\n').filter((line) => line.startsWith('manifest annotate') && line.includes('--arch arm64'))).toEqual(
+      [sha, sha.slice(0, 7), 'latest'].map(
+        (tag) => `manifest annotate ${image}:${tag} ${image}:${sha}-arm64 --os linux --arch arm64 --variant v8`,
+      ),
+    )
+  })
+
   it('keeps manual deep correctness out of push-triggered release images', () => {
     const releaseImages = readWorkflow('.forgejo/workflows/release-images.yml')
     const manualDeep = readWorkflow('.forgejo/workflows/forgejo-manual-deep-correctness.yml')
