@@ -1,4 +1,5 @@
 import { encodeAgentFrame } from '@bilig/agent-api'
+import type { ZeroSyncService } from '../zero/service.js'
 
 import {
   Effect,
@@ -157,6 +158,39 @@ describe('sync-server remote MCP origin policy', () => {
 })
 
 describe('sync-server request authentication', () => {
+  it('preserves an anonymous browser identity through cookie-free Zero query and mutation forwarding', async () => {
+    const handleQuery = vi.fn<ZeroSyncService['handleQuery']>(async () => ({ queries: [] }))
+    const handleMutate = vi.fn<ZeroSyncService['handleMutate']>(async () => ({ mutations: [] }))
+    const { app } = createSyncServer({ logger: false, zeroSyncService: createZeroSyncStub({ handleQuery, handleMutate }) })
+    try {
+      const browser = await app.inject({ method: 'GET', url: '/v2/session' })
+      const session = browser.json<{ authToken: string; userId: string; isAuthenticated: boolean }>()
+      expect(session.isAuthenticated).toBe(false)
+      expect(session.authToken).toMatch(/^v1\./u)
+      const responses = await Promise.all(
+        ['query', 'mutate', 'mutate'].map((endpoint) =>
+          app.inject({
+            method: 'POST',
+            url: `/api/zero/v2/${endpoint}`,
+            headers: { authorization: `Bearer ${session.authToken}` },
+            payload: {},
+          }),
+        ),
+      )
+      for (const response of responses) {
+        expect(response.statusCode).toBe(200)
+        expect(response.headers['set-cookie']).toBeUndefined()
+      }
+      expect(handleQuery).toHaveBeenCalledWith(expect.anything(), { userID: session.userId, roles: ['editor'] }, 'demo')
+      expect(handleMutate).toHaveBeenCalledTimes(2)
+      for (const call of handleMutate.mock.calls) {
+        expect(call[1]).toEqual({ userID: session.userId, roles: ['editor'] })
+      }
+    } finally {
+      await app.close()
+    }
+  })
+
   it('serves and restores signed anonymous sessions in production without an identity proxy', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('BILIG_AUTH_MODE', 'demo')

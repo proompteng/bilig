@@ -34,6 +34,7 @@ export interface RequestSessionResolver {
   resolve(request: HeadersRequestLike): BiligRequestSession
   persist(reply: FastifyReply, session: BiligRequestSession): void
   serializeCookie(session: BiligRequestSession): string
+  createAuthToken(session: BiligRequestSession): string
 }
 
 interface CreateRequestSessionResolverOptions {
@@ -142,13 +143,13 @@ function signaturesMatch(actual: string, expected: string): boolean {
   return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
 }
 
-function encodeSessionCookieValue(userId: string, secret: string): string {
+function encodeGuestToken(userId: string, secret: string): string {
   const payload = Buffer.from(userId).toString('base64url')
   const unsigned = `v1.${payload}`
   return `${unsigned}.${sign(secret, unsigned)}`
 }
 
-function decodeSessionCookieValue(value: string | undefined, secret: string): string | undefined {
+function decodeGuestToken(value: string | undefined, secret: string): string | undefined {
   if (!value) {
     return undefined
   }
@@ -213,7 +214,7 @@ export function createRequestSessionResolver(options: CreateRequestSessionResolv
   const sessionByRequest = new WeakMap<object, BiligRequestSession>()
 
   const serializeCookie = (session: BiligRequestSession): string => {
-    const value = encodeSessionCookieValue(session.userId, sessionSecret)
+    const value = encodeGuestToken(session.userId, sessionSecret)
     return `${SESSION_COOKIE_NAME}=${encodeURIComponent(value)}; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE}; HttpOnly; SameSite=Lax${secureCookie ? '; Secure' : ''}`
   }
 
@@ -229,12 +230,14 @@ export function createRequestSessionResolver(options: CreateRequestSessionResolv
         session = resolveSignedProxySession(request, proxySecret ?? '', now)
       } else {
         const cookieMap = parseCookieHeader(firstHeaderValue(request.headers.cookie))
-        const cookieUserId = decodeSessionCookieValue(cookieMap.get(SESSION_COOKIE_NAME), sessionSecret)
-        session = cookieUserId
+        const cookieUserId = decodeGuestToken(cookieMap.get(SESSION_COOKIE_NAME), sessionSecret)
+        const bearerToken = firstHeaderValue(request.headers['authorization'])?.match(/^Bearer\s+(\S+)$/iu)?.[1]
+        const userId = cookieUserId ?? decodeGuestToken(bearerToken, sessionSecret)
+        session = userId
           ? {
-              userId: cookieUserId,
+              userId,
               roles: ['editor'],
-              authSource: 'cookie',
+              authSource: cookieUserId ? 'cookie' : 'header',
               isAuthenticated: false,
               setCookie: false,
             }
@@ -255,6 +258,9 @@ export function createRequestSessionResolver(options: CreateRequestSessionResolv
       }
     },
     serializeCookie,
+    createAuthToken(session) {
+      return mode === 'demo' ? encodeGuestToken(session.userId, sessionSecret) : session.userId
+    },
   }
 }
 

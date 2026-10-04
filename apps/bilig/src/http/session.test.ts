@@ -81,6 +81,33 @@ describe('resolveRequestSession', () => {
     }
   })
 
+  it.each(['test', 'production'])('restores signed guest tokens and rejects forged tokens under %s', (nodeEnv) => {
+    let counter = 0
+    const resolver = createRequestSessionResolver({
+      env: { NODE_ENV: nodeEnv, BILIG_AUTH_MODE: 'demo', BILIG_SESSION_SECRET: 'test-session-secret-that-is-at-least-32-bytes' },
+      randomUUID: () => `guest-${String(++counter)}`,
+    })
+    const first = resolveRequestSession(createRequest({}), resolver)
+    const token = resolver.createAuthToken(first)
+    expect(resolveRequestSession(createRequest({ authorization: `Bearer ${token}` }), resolver)).toEqual({
+      ...first,
+      authSource: 'header',
+      setCookie: false,
+    })
+    expect(resolveRequestSession(createRequest({ authorization: `Bearer ${token}forged` }), resolver)).toMatchObject({
+      userId: 'guest:guest-2',
+      authSource: 'guest',
+      setCookie: true,
+    })
+    const other = resolveRequestSession(createRequest({}), resolver)
+    expect(
+      resolveRequestSession(
+        createRequest({ cookie: resolver.serializeCookie(first), authorization: `Bearer ${resolver.createAuthToken(other)}` }),
+        resolver,
+      ).userId,
+    ).toBe(first.userId)
+  })
+
   it('accepts only fresh signed proxy assertions in authenticated mode', () => {
     const proxySecret = 'test-proxy-secret-that-is-at-least-32-bytes'
     const timestamp = '1735689600'

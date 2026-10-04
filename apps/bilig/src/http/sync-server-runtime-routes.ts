@@ -107,7 +107,7 @@ export function registerSyncServerRuntimeRoutes(
     const requestSession = resolveRequestSession(request, options.sessionResolver)
     options.sessionResolver.persist(reply, requestSession)
     return createRuntimeSession({
-      authToken: requestSession.userId,
+      authToken: options.sessionResolver.createAuthToken(requestSession),
       userId: requestSession.userId,
       roles: requestSession.roles,
       isAuthenticated: requestSession.isAuthenticated,
