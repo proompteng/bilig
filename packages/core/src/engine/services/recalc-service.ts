@@ -1,6 +1,5 @@
 import { Effect } from 'effect'
 import { ErrorCode, FormulaMode, ValueTag, type CellValue } from '@bilig/protocol'
-import { makeCellKey } from '../../workbook-store.js'
 import { CellFlags } from '../../cell-store.js'
 import { areCellValuesEqual, emptyValue, errorValue } from '../../engine-value-utils.js'
 import type { RuntimeFormula, U32 } from '../runtime-state.js'
@@ -20,6 +19,7 @@ import { filterSkippedCachedFormulaCells } from './recalc-skipped-cached-formula
 import { capturePivotOutputValues, notePivotValueChanges } from './recalc-pivot-value-changes.js'
 import { createRecalcValueChangeCollector, type RecalcValueChangeCollector } from './recalc-value-change-collector.js'
 import type { EngineRecalcService, EngineRecalcServiceArgs } from './recalc-service-types.js'
+import { forEachDirtyRegionCell } from './recalc-dirty-region-cells.js'
 
 export type { DirtyRegion, EngineRecalcService } from './recalc-service-types.js'
 
@@ -888,20 +888,10 @@ export function createEngineRecalcService(args: EngineRecalcServiceArgs): Engine
           let explicitChangedCount = 0
 
           for (const region of dirtyRegions) {
-            const sheet = args.state.workbook.getSheet(region.sheetName)
-            if (!sheet) {
-              continue
-            }
-
-            for (let row = region.rowStart; row <= region.rowEnd; row += 1) {
-              for (let col = region.colStart; col <= region.colEnd; col += 1) {
-                const cellIndex = args.state.workbook.cellKeyToIndex.get(makeCellKey(sheet.id, row, col))
-                if (cellIndex !== undefined) {
-                  changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
-                  explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
-                }
-              }
-            }
+            forEachDirtyRegionCell(args.state.workbook, region, (cellIndex) => {
+              changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
+              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
+            })
           }
 
           const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
