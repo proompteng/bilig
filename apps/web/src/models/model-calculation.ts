@@ -19,6 +19,28 @@ export interface ModelCalculation {
   readonly scenarios: readonly { readonly id: string; readonly values: readonly ModelResult[] }[]
   readonly workpaperJson: string
   readonly restoreVerified: boolean
+  readonly sensitivity: ModelSensitivity | null
+}
+
+export interface ModelSensitivityRequest {
+  readonly inputId: string
+  readonly step: number
+}
+
+export interface ModelSensitivity {
+  readonly inputId: string
+  readonly rows: readonly { readonly offset: number; readonly inputValue: number; readonly values: readonly ModelResult[] }[]
+}
+
+export function parseModelSensitivityRequest(value: unknown): ModelSensitivityRequest | null {
+  if (value === null) return null
+  if (typeof value !== 'object' || !value || !('inputId' in value) || typeof value.inputId !== 'string') {
+    throw new Error('Choose an assumption for what-if analysis.')
+  }
+  if (!('step' in value) || typeof value.step !== 'number' || !Number.isFinite(value.step) || value.step <= 0) {
+    throw new Error('Step size must be a positive finite number.')
+  }
+  return { inputId: value.inputId, step: value.step }
 }
 
 function buildWorkbook(definition: ModelDefinition): WorkPaper {
@@ -44,7 +66,8 @@ function readResults(workbook: WorkPaper, definition: ModelDefinition): ModelRes
   })
 }
 
-export function calculateModel(model: ModelDocument): ModelCalculation {
+export function calculateModel(model: ModelDocument, sensitivityRequest: ModelSensitivityRequest | null): ModelCalculation {
+  const request = parseModelSensitivityRequest(sensitivityRequest)
   const workbook = buildWorkbook(model)
   try {
     const current = readResults(workbook, model)
@@ -64,7 +87,22 @@ export function calculateModel(model: ModelDocument): ModelCalculation {
         scenarioWorkbook.dispose()
       }
     })
-    return { current, scenarios, workpaperJson, restoreVerified }
+    let sensitivity: ModelSensitivity | null = null
+    if (request) {
+      const inputIndex = model.inputs.findIndex((input) => input.id === request.inputId)
+      const input = model.inputs[inputIndex]
+      if (!input) throw new Error('The selected assumption no longer exists.')
+      const sheet = workbook.getSheetId('Inputs')
+      if (sheet === undefined) throw new Error('The model has no Inputs sheet.')
+      const rows = [-2, -1, 0, 1, 2].map((offset) => {
+        const inputValue = input.value + offset * request.step
+        if (!Number.isFinite(inputValue)) throw new Error('Step size produces values outside the supported numeric range.')
+        workbook.setCellContents({ sheet, row: inputIndex + 1, col: 1 }, inputValue)
+        return { offset, inputValue, values: readResults(workbook, model) }
+      })
+      sensitivity = { inputId: input.id, rows }
+    }
+    return { current, scenarios, workpaperJson, restoreVerified, sensitivity }
   } finally {
     workbook.dispose()
   }

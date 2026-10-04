@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Archive, ArrowLeft, Download, Plus } from 'lucide-react'
 import { captureModelScenario, MODEL_LIMITS, type ModelDocument } from './model-document.js'
 import { ModelField, ModelFormatSelect } from './ModelField.js'
 import { ModelComparison } from './ModelComparison.js'
+import { ModelSensitivity } from './ModelSensitivity.js'
 import { useModelCalculation } from './use-model-calculation.js'
 import { useModelEditor } from './use-model-editor.js'
 import { downloadModelFile } from './model-download.js'
@@ -19,9 +20,17 @@ export function ModelEditor(props: {
     onNavigationGuard(waitForSave)
     return () => onNavigationGuard(null)
   }, [onNavigationGuard, waitForSave])
-  const calculationState = useModelCalculation(model)
+  const [view, setView] = useState<'model' | 'compare' | 'what-if'>('model')
+  const [sensitivityInputId, setSensitivityInputId] = useState(model.inputs[0]?.id ?? '')
+  const [sensitivityStep, setSensitivityStep] = useState<number | null>(null)
+  const sensitivityInput = model.inputs.find((input) => input.id === sensitivityInputId) ?? model.inputs[0]
+  const step = sensitivityStep ?? (Math.abs(sensitivityInput?.value ?? 0) * 0.1 || 1)
+  const sensitivityRequest = useMemo(
+    () => (view === 'what-if' && sensitivityInput ? { inputId: sensitivityInput.id, step } : null),
+    [view, sensitivityInput, step],
+  )
+  const calculationState = useModelCalculation(model, sensitivityRequest)
   const calculation = calculationState.kind === 'ready' ? calculationState.calculation : null
-  const [view, setView] = useState<'model' | 'compare'>('model')
   const [scenarioName, setScenarioName] = useState('')
   const [notice, setNotice] = useState('')
   const isSaved = saveState.kind === 'saved'
@@ -88,6 +97,9 @@ export function ModelEditor(props: {
           <button aria-pressed={view === 'compare'} onClick={() => setView('compare')}>
             Compare <span className="model-count">{model.scenarios.length}</span>
           </button>
+          <button aria-pressed={view === 'what-if'} onClick={() => setView('what-if')}>
+            What if
+          </button>
         </div>
         <form
           className="model-scenario-form"
@@ -125,7 +137,19 @@ export function ModelEditor(props: {
           {calculationState.message}
         </div>
       ) : null}
-      {view === 'compare' ? (
+      {view === 'what-if' ? (
+        <ModelSensitivity
+          model={model}
+          input={sensitivityInput}
+          step={step}
+          calculation={calculation}
+          onInputChange={(inputId) => {
+            setSensitivityInputId(inputId)
+            setSensitivityStep(null)
+          }}
+          onStepChange={setSensitivityStep}
+        />
+      ) : view === 'compare' ? (
         <ModelComparison
           model={model}
           calculation={calculation}

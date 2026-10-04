@@ -463,6 +463,29 @@
   align-items: center;
   gap: 8px;
 }
+.model-sensitivity-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-block: var(--model-space);
+}
+.model-sensitivity-controls label,
+.model-sensitivity-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--wb-text-muted);
+  font-size: var(--model-font-small);
+}
+.model-sensitivity-controls :is(select, input) {
+  height: var(--model-control-height);
+  padding-inline: 10px;
+  border: 1px solid var(--wb-border);
+  border-radius: var(--wb-radius-control);
+  background: var(--wb-surface);
+  color: var(--wb-text);
+  font: inherit;
+}
 .model-scenario-form > input {
   width: 160px;
   min-height: var(--model-control-height);

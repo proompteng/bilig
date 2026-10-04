@@ -172,6 +172,30 @@ test('@browser-ci model workspace works at a mobile viewport without document ov
   await page.screenshot({ path: testInfo.outputPath('model-mobile.png'), fullPage: true })
 })
 
+test('@browser-ci what-if analysis compares five recalculated variations without changing the saved model', async ({ page }, testInfo) => {
+  await createContribution(page)
+  await page.getByRole('button', { name: 'What if', exact: true }).click()
+  const table = page.getByRole('region', { name: 'What-if comparison table' })
+  const profit = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Operating profit', exact: true }) })
+  await expect(profit.getByRole('cell')).toHaveText(['$1,800.00', '$2,400.00', '$3,000.00', '$3,600.00', '$4,200.00'])
+  await editValue(page, 'Step size', '20')
+  await expect(profit.getByRole('cell')).toHaveText(['$600.00', '$1,800.00', '$3,000.00', '$4,200.00', '$5,400.00'])
+  await editValue(page, 'Step size', '0')
+  await expect(page.getByRole('alert')).toHaveText('Enter a positive number.')
+  await page.getByLabel('Step size', { exact: true }).press('Escape')
+  await page.getByLabel('Assumption', { exact: true }).selectOption('price')
+  await expect(profit.getByRole('cell')).toHaveText(['$1,000.00', '$2,000.00', '$3,000.00', '$4,000.00', '$5,000.00'])
+  await page.screenshot({ path: testInfo.outputPath('what-if.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.getByRole('button', { name: 'Model', exact: true }).click()
+  await expect(page.getByLabel('Units sold', { exact: true })).toHaveValue('100')
+  await expect(page.getByLabel('Price per unit', { exact: true })).toHaveValue('100')
+  await page.reload()
+  await expect(page.getByLabel('Revenue', { exact: true })).toHaveText('$10,000.00')
+  await expect(page.getByRole('button', { name: 'Compare 0', exact: true })).toBeVisible()
+})
+
 test('@browser-ci model import errors leave the library usable', async ({ page }) => {
   await page.goto('/models')
   await page

@@ -5,7 +5,7 @@ export function ModelField(props: {
   readonly label: string
   readonly value: string
   readonly onCommit: (value: string) => void
-  readonly kind?: 'text' | 'number' | 'formula'
+  readonly kind?: 'text' | 'number' | 'positive-number' | 'formula'
   readonly className?: string
   readonly maxLength?: number
 }) {
@@ -19,8 +19,12 @@ export function ModelField(props: {
       setError('Enter a value.')
       return
     }
-    if (props.kind === 'number' && !Number.isFinite(Number(next))) {
+    if ((props.kind === 'number' || props.kind === 'positive-number') && !Number.isFinite(Number(next))) {
       setError('Enter a finite number.')
+      return
+    }
+    if (props.kind === 'positive-number' && Number(next) <= 0) {
+      setError('Enter a positive number.')
       return
     }
     if (props.kind === 'formula' && !next.startsWith('=')) {
@@ -38,7 +42,7 @@ export function ModelField(props: {
         aria-invalid={error !== null}
         aria-describedby={error ? errorId : undefined}
         value={draft ?? props.value}
-        inputMode={props.kind === 'number' ? 'decimal' : undefined}
+        inputMode={props.kind === 'number' || props.kind === 'positive-number' ? 'decimal' : undefined}
         maxLength={props.maxLength ?? 120}
         spellCheck={props.kind !== 'formula'}
         onChange={(event) => {
