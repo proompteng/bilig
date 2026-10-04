@@ -15,12 +15,12 @@ export function FormulaAutocomplete({ suggestions, highlightedIndex, onSelect }:
   return (
     <div
       aria-label="Formula suggestions"
-      className={`${formulaPopupClass()} absolute left-0 right-0 top-[calc(100%+0.375rem)] z-40`}
+      className={`${formulaPopupClass()} absolute left-0 w-full max-w-md top-[calc(100%+0.375rem)] z-40`}
       data-testid="formula-autocomplete"
       id="formula-autocomplete"
       role="listbox"
     >
-      <ul className="max-h-72 overflow-auto py-1">
+      <ul className="max-h-60 overflow-auto py-1">
         {suggestions.map((suggestion, index) => {
           const active = index === highlightedIndex
           return (
@@ -47,7 +47,7 @@ export function FormulaAutocomplete({ suggestions, highlightedIndex, onSelect }:
                   {suggestion.kind === 'function' ? suggestion.category : 'Name'}
                 </span>
               </div>
-              {suggestion.kind === 'function' ? (
+              {suggestion.kind === 'function' && active ? (
                 <div className="mt-1 truncate text-[11px] text-[var(--color-mauve-600)]">{suggestion.summary}</div>
               ) : null}
             </li>

@@ -104,7 +104,7 @@ afterEach(() => {
 })
 
 describe('FormulaBar', () => {
-  it('renders autocomplete suggestions and argument hints for formula edits', async () => {
+  it('renders argument hints without unrelated suggestions at empty arguments', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const host = document.createElement('div')
@@ -117,7 +117,7 @@ describe('FormulaBar', () => {
 
     const autocomplete = host.querySelector("[data-testid='formula-autocomplete']")
     const argHint = host.querySelector("[data-testid='formula-arg-hint']")
-    expect(autocomplete?.textContent).toContain('IF')
+    expect(autocomplete).toBeNull()
     expect(argHint?.textContent).toContain('value_if_true')
 
     await act(async () => {

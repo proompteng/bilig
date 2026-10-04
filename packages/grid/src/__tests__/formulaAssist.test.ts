@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { applyFormulaSuggestion, resolveFormulaAssistState, resolveNameBoxDisplayValue } from '../formulaAssist.js'
 
 describe('formula assist helpers', () => {
+  it('keeps argument help without reopening suggestions after accepting a function', () => {
+    const state = resolveFormulaAssistState({ value: '=SUM()', caret: 5 })
+    expect(state.suggestions).toEqual([])
+    expect(state.activeFunction?.entry.name).toBe('SUM')
+    expect(resolveFormulaAssistState({ value: '=SUM(A1,', caret: 8 }).suggestions).toEqual([])
+    expect(resolveFormulaAssistState({ value: '=SUM(SU', caret: 7 }).suggestions.some((entry) => entry.name === 'SUM')).toBe(true)
+  })
+
+  it('shows the actual SUBSTITUTE parameters', () => {
+    const state = resolveFormulaAssistState({ value: '=SUBSTITUTE(', caret: 12 })
+    expect(state.activeFunction?.signature).toBe('SUBSTITUTE(text, old_text, new_text, [instance_num])')
+  })
+
   it('suggests common functions for a typed prefix', () => {
     const state = resolveFormulaAssistState({
       value: '=su',
