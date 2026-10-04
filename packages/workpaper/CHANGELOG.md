@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 1.1.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v1.0.0
+- Manual override: no
+
+## Features
+- feat(workbook): add document controls and durable backup restore (55797089)
+
+## Fixes
+- fix(formula): focus completion and correct function hints (d2a53f97)
+
 ## 1.0.0
 
 - Release type: major

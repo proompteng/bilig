@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "package": {
     "name": "@bilig/workpaper",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Run workbook-shaped business rules in Node services: edit inputs, recalculate formulas, read outputs, and save WorkPaper JSON.",
     "nodeEngine": ">=24.0.0",
     "keywordCount": 19,
@@ -33,9 +33,9 @@
     "hasMcpBinary": true
   },
   "npmPackDryRun": {
-    "tarballBytes": 881818,
-    "unpackedBytes": 5364671,
-    "entryCount": 862,
+    "tarballBytes": 882894,
+    "unpackedBytes": 5370191,
+    "entryCount": 865,
     "readmeBytes": 12281,
     "packageJsonBytes": 3858
   },
