@@ -1,4 +1,5 @@
 import {
+  BILIG_CONTENT_TYPE,
   CSV_CONTENT_TYPE,
   XLSM_CONTENT_TYPE,
   XLSX_CONTENT_TYPE,
@@ -96,6 +97,9 @@ async function readErrorMessage(response: Response): Promise<string> {
 export function resolveWorkbookImportContentType(file: Pick<File, 'name' | 'type'>): WorkbookImportContentType | null {
   const normalizedType = normalizeWorkbookImportContentType(file.type)
   const normalizedName = file.name.trim().toLowerCase()
+  if (normalizedType === BILIG_CONTENT_TYPE || normalizedName.endsWith('.bilig.json')) {
+    return BILIG_CONTENT_TYPE
+  }
   if (normalizedType === XLSX_CONTENT_TYPE || normalizedName.endsWith('.xlsx')) {
     return XLSX_CONTENT_TYPE
   }

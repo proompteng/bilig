@@ -403,10 +403,10 @@ test('@browser-ci web app restores a keyboard clear through undo and redo histor
   await page.keyboard.press('Delete')
   await expect(formulaInput).toHaveValue('')
 
-  await page.getByRole('button', { name: 'Undo' }).click()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(formulaInput).toHaveValue('delete-undo-redo')
 
-  await page.getByRole('button', { name: 'Redo' }).click()
+  await page.getByRole('button', { name: 'Redo', exact: true }).click()
   await expect(formulaInput).toHaveValue('')
 })
 

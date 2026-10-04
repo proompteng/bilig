@@ -132,6 +132,7 @@ export interface ZeroSyncService {
     options?: { readonly createIfMissing?: boolean },
   ): Promise<void>
   inspectWorkbook<T>(documentId: string, task: (runtime: WorkbookRuntime) => Promise<T> | T): Promise<T>
+  importWorkbookSnapshot(documentId: string, snapshot: WorkbookSnapshot, session: SessionIdentity): Promise<void>
   applyServerMutator(name: string, args: unknown, session?: SessionIdentity): Promise<void>
   applyAgentCommandBundle(
     documentId: string,
@@ -222,6 +223,10 @@ class DisabledZeroSyncService implements ZeroSyncService {
   }
 
   async inspectWorkbook<T>(_documentId: string, _task: (runtime: WorkbookRuntime) => Promise<T> | T): Promise<T> {
+    throw new Error('Zero sync is not configured')
+  }
+
+  async importWorkbookSnapshot(): Promise<never> {
     throw new Error('Zero sync is not configured')
   }
 
@@ -430,6 +435,44 @@ class EnabledZeroSyncService implements ZeroSyncService {
       const runtime = await this.runtimeManager.loadRuntime(this.runtimeStore, documentId)
       return await task(runtime)
     })
+  }
+
+  async importWorkbookSnapshot(documentId: string, snapshot: WorkbookSnapshot, session: SessionIdentity): Promise<void> {
+    const client = await this.pool.connect()
+    try {
+      await this.runtimeManager.runExclusive(documentId, async () => {
+        await client.query('BEGIN')
+        try {
+          await acquireWorkbookMutationLock(client, documentId)
+          const runtimeStore = createWorkbookRuntimeStoreConnection(client, createZeroDbProvider(client))
+          const state = await this.runtimeManager.loadRuntime(runtimeStore, documentId)
+          const undoSnapshot = state.engine.exportSnapshot()
+          state.engine.importSnapshot(snapshot)
+          const ownerUserId = resolveOwnerUserId(state, session)
+          const persisted = await persistWorkbookMutation(client, documentId, {
+            previousState: state,
+            nextEngine: state.engine,
+            updatedBy: session.userID,
+            ownerUserId,
+            eventPayload: { kind: 'importWorkbookSnapshot', snapshot },
+            undoBundle: { kind: 'snapshot', snapshot: undoSnapshot },
+          })
+          this.runtimeManager.commitMutation(documentId, {
+            projectionCommit: persisted.projectionCommit,
+            headRevision: persisted.revision,
+            calculatedRevision: persisted.calculatedRevision,
+            ownerUserId,
+          })
+          await client.query('COMMIT')
+        } catch (error) {
+          this.runtimeManager.invalidate(documentId)
+          await client.query('ROLLBACK').catch(() => undefined)
+          throw error
+        }
+      })
+    } finally {
+      client.release()
+    }
   }
 
   async applyServerMutator(name: string, args: unknown, session?: SessionIdentity): Promise<void> {

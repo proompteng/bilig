@@ -124,7 +124,6 @@ export function useWorkbookAppPanels(input: {
   zeroHealthReady: boolean
   workbookAgentEnabled?: boolean
   remoteSyncAvailable: boolean
-  changeCount: number
   changesPanel: ReactNode
   featureSidePanelTabs?: readonly WorkbookSidePanelTabDefinition[]
   selectAddress: (sheetName: string, address: string) => void
@@ -136,7 +135,6 @@ export function useWorkbookAppPanels(input: {
   syncAgentAuthoritativeRevision?: (revision: number) => Promise<void> | void
 }) {
   const {
-    changeCount,
     changesPanel,
     featureSidePanelTabs = [],
     currentUserId,
@@ -210,11 +208,10 @@ export function useWorkbookAppPanels(input: {
       {
         value: 'changes',
         label: 'Changes',
-        count: changeCount > 0 ? changeCount : undefined,
         panel: changesPanel,
       },
     ],
-    [agentPanel, changeCount, changesPanel, featureSidePanelTabs, pendingCommandCount],
+    [agentPanel, changesPanel, featureSidePanelTabs, pendingCommandCount],
   )
   const visibleSidePanelTabs = useMemo(() => sidePanelTabs.filter((tab) => tab.panel != null), [sidePanelTabs])
   const { activeSidePanelTab, closeSidePanel, isSidePanelOpen, openSidePanel, setActiveSidePanelTab, setSidePanelWidth, sidePanelWidth } =
@@ -222,7 +219,7 @@ export function useWorkbookAppPanels(input: {
       documentId,
       storageScope: { documentId, userId: currentUserId },
       availableTabs: visibleSidePanelTabs.map((tab) => tab.value),
-      defaultOpen: true,
+      defaultOpen: false,
       defaultTab: 'assistant',
     })
   const sidePanelId = `workbook-side-panel-${documentId}`

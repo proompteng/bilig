@@ -63,6 +63,7 @@ function createZeroSyncServiceStub(input: {
       throw new Error('not used')
     },
     inspectWorkbook: input.inspectWorkbook,
+    async importWorkbookSnapshot() {},
     async applyServerMutator() {
       throw new Error('not used')
     },

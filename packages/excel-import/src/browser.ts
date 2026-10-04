@@ -1,7 +1,9 @@
+import { importBiligBackup } from './bilig-backup.js'
 import type { CsvParseOptions } from '@bilig/core'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import { importCsv } from './csv-import.js'
 import {
+  BILIG_CONTENT_TYPE,
   CSV_CONTENT_TYPE,
   LEGACY_XLS_CONTENT_TYPE,
   XLSB_CONTENT_TYPE,
@@ -23,6 +25,7 @@ import { tryImportLargeSimpleXlsx } from './xlsx-large-simple-import.js'
 import { readXlsxZipEntriesLazy, readXlsxZipEntriesLazyFromByteSource, type XlsxZipByteSource, type XlsxZipEntries } from './xlsx-zip.js'
 
 export {
+  BILIG_CONTENT_TYPE,
   CSV_CONTENT_TYPE,
   EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES,
   LEGACY_XLS_CONTENT_TYPE,
@@ -231,6 +234,9 @@ export function importWorkbookFile(
   }
   if (normalizedContentType === LEGACY_XLS_CONTENT_TYPE) {
     return importXls(bytes, fileName)
+  }
+  if (normalizedContentType === BILIG_CONTENT_TYPE) {
+    return importBiligBackup(bytes, fileName)
   }
   if (normalizedContentType === CSV_CONTENT_TYPE) {
     const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)

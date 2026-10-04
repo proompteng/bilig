@@ -140,6 +140,7 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async inspectWorkbook<T>(_documentId: string, _task: (runtime: WorkbookRuntime) => T | Promise<T>): Promise<T> {
       throw new Error('not used')
     },
+    async importWorkbookSnapshot() {},
     async applyServerMutator() {},
     async applyAgentCommandBundle() {
       throw new Error('not used')

@@ -318,7 +318,7 @@ test('@browser-ci web app gates unmerge on real merged-cell state', async ({ pag
   await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
   await waitForWorkbookReady(page)
 
-  const structureButton = page.getByRole('button', { name: 'Structure' })
+  const structureButton = page.getByRole('button', { name: 'Structure', exact: true })
   const unmergeButton = page.getByRole('button', { exact: true, name: 'Unmerge cells' })
 
   await clickProductCell(page, 0, 0)
@@ -1003,6 +1003,7 @@ test('@browser-ci web app commits a first formula bar draft when focus leaves im
   await installTypeGpuCellReadbackHarness(page)
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-formula-first-blur'))}`)
   await waitForWorkbookReady(page)
+  await page.getByRole('button', { name: 'Open workbook side panel', exact: true }).click()
 
   const formulaInput = page.getByTestId('formula-input')
 

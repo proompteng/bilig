@@ -179,6 +179,7 @@ test('@browser-sync web app reverts an authoritative change from the changes pan
   await openZeroWorkbookPage(page, documentId)
 
   const formulaInput = page.getByTestId('formula-input')
+  await page.getByTestId('workbook-side-panel-open').click()
   const changesTab = page.getByTestId('workbook-side-panel-tab-changes')
   const changesPanel = page.getByTestId('workbook-side-panel-panel-changes')
 

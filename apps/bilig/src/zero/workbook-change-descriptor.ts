@@ -459,6 +459,14 @@ export function buildWorkbookChangeDescriptor(payload: WorkbookEventPayload): Wo
         range,
       }
     }
+    case 'importWorkbookSnapshot':
+      return {
+        eventKind: payload.kind,
+        summary: `Imported ${payload.snapshot.workbook.name}`,
+        sheetName: null,
+        anchorAddress: null,
+        range: null,
+      }
     case 'renderCommit':
       return summarizeRenderCommit(payload)
     case 'restoreVersion':

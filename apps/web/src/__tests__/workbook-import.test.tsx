@@ -287,7 +287,9 @@ describe('workbook import', () => {
     })
     await flushToasts()
 
-    expect(findActiveToast('import-error')?.title).toBe('Only local CSV, XLSX, and XLSM files can be staged for workbook import.')
+    expect(findActiveToast('import-error')?.title).toBe(
+      'Only local Bilig backups, CSV, XLSX, and XLSM files can be staged for workbook import.',
+    )
 
     const file = new File(['Name,Value\nalpha,12'], 'metrics.csv', { type: CSV_CONTENT_TYPE })
     setInputFiles(input!, [file])

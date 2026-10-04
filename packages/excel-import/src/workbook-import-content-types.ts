@@ -1,3 +1,4 @@
+export const BILIG_CONTENT_TYPE = 'application/vnd.bilig.workbook+json'
 export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 export const XLSM_CONTENT_TYPE = 'application/vnd.ms-excel.sheet.macroenabled.12'
 export const XLSB_CONTENT_TYPE = 'application/vnd.ms-excel.sheet.binary.macroenabled.12'
@@ -10,7 +11,7 @@ export const EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES = [
   LEGACY_XLS_CONTENT_TYPE,
 ] as const
 export type ExcelWorkbookImportContentType = (typeof EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES)[number]
-export const WORKBOOK_IMPORT_CONTENT_TYPES = [...EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES, CSV_CONTENT_TYPE] as const
+export const WORKBOOK_IMPORT_CONTENT_TYPES = [...EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES, CSV_CONTENT_TYPE, BILIG_CONTENT_TYPE] as const
 export type WorkbookImportContentType = (typeof WORKBOOK_IMPORT_CONTENT_TYPES)[number]
 
 export function normalizeWorkbookImportContentType(contentType: string): WorkbookImportContentType | null {
@@ -24,6 +25,8 @@ export function normalizeWorkbookImportContentType(contentType: string): Workboo
       return XLSB_CONTENT_TYPE
     case LEGACY_XLS_CONTENT_TYPE:
       return LEGACY_XLS_CONTENT_TYPE
+    case BILIG_CONTENT_TYPE:
+      return BILIG_CONTENT_TYPE
     case CSV_CONTENT_TYPE:
       return CSV_CONTENT_TYPE
     default:

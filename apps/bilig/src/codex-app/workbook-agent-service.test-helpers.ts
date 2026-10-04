@@ -340,6 +340,7 @@ export function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): Ze
     async inspectWorkbook<T>(documentId: string, task: (runtime: WorkbookRuntime) => T | Promise<T>) {
       return await task(await createWorkbookRuntimeStub(documentId))
     },
+    async importWorkbookSnapshot() {},
     async applyServerMutator() {},
     async applyAgentCommandBundle(_documentId, bundle) {
       const revision = Math.max(2, bundle.baseRevision + 1)

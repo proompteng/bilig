@@ -22,6 +22,7 @@ vi.mock('../use-workbook-presence.js', () => ({
 function renderHarness(
   host: HTMLElement,
   overrides: {
+    readonly openOnRender?: boolean
     readonly remoteSyncAvailable?: boolean
     readonly zeroConfigured?: boolean
     readonly zeroHealthReady?: boolean
@@ -44,7 +45,6 @@ function renderHarness(
       zeroConfigured: overrides.zeroConfigured ?? true,
       zeroHealthReady: overrides.zeroHealthReady ?? true,
       remoteSyncAvailable: overrides.remoteSyncAvailable ?? true,
-      changeCount: 1,
       changesPanel: <div data-testid="changes-panel">Changes panel</div>,
       featureSidePanelTabs: overrides.featureSidePanelTabs,
       selectAddress: vi.fn(),
@@ -69,12 +69,19 @@ function renderHarness(
   }
 
   const root = createRoot(host)
+  let hasRendered = false
   return {
     root,
     async render() {
       await act(async () => {
         root.render(<Harness />)
       })
+      if (!hasRendered && overrides.openOnRender !== false) {
+        await act(async () => {
+          host.querySelector("[data-testid='workbook-side-panel-open']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        })
+      }
+      hasRendered = true
     },
     async unmount() {
       await act(async () => {
@@ -147,17 +154,21 @@ describe('useWorkbookAppPanels', () => {
     document.body.innerHTML = ''
   })
 
-  it('opens the assistant panel by default on first render', async () => {
+  it('starts closed and opens when the user requests the assistant', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     mockAgentPane(0)
     const host = document.createElement('div')
     document.body.appendChild(host)
-    const harness = renderHarness(host)
+    const harness = renderHarness(host, { openOnRender: false })
 
     await harness.render()
     expect(host.querySelector("[data-testid='workbook-side-panel-toggle-group']")).toBeNull()
-    expect(host.querySelector("[data-testid='workbook-side-panel-panel-assistant']")).not.toBeNull()
+    expect(host.querySelector("[data-testid='workbook-side-panel-panel-assistant']")).toBeNull()
+
+    await act(async () => {
+      host.querySelector("[data-testid='workbook-side-panel-open']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
 
     mockAgentPane(2)
     await harness.render()

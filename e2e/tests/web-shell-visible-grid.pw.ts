@@ -845,7 +845,7 @@ test('@browser-ci web app moves background fill presentation without source or t
 test('@browser-ci web app repaints shifted styled survivors after structural row delete', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-structural-row-delete-visual-survivor')
   const survivorText = 'row-delete-survivor'
-  await page.setViewportSize({ width: 1280, height: 1040 })
+  await page.setViewportSize({ width: 1280, height: 1120 })
   await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
   await waitForWorkbookReady(page)
 

@@ -1,8 +1,10 @@
+import { importBiligBackup } from './bilig-backup.js'
 import { createRequire } from 'node:module'
 import type { Unzipped } from 'fflate'
 import type { CsvParseOptions } from '@bilig/core'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import {
+  BILIG_CONTENT_TYPE,
   CSV_CONTENT_TYPE,
   LEGACY_XLS_CONTENT_TYPE,
   XLSB_CONTENT_TYPE,
@@ -79,6 +81,7 @@ export type {
   XlsxImportOptions,
 } from './xlsx-import-limits.js'
 export {
+  BILIG_CONTENT_TYPE,
   CSV_CONTENT_TYPE,
   EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES,
   LEGACY_XLS_CONTENT_TYPE,
@@ -688,6 +691,9 @@ export function importWorkbookFile(
   }
   if (normalizedContentType === LEGACY_XLS_CONTENT_TYPE) {
     return importXls(bytes, fileName, options.xlsx)
+  }
+  if (normalizedContentType === BILIG_CONTENT_TYPE) {
+    return importBiligBackup(bytes, fileName)
   }
   if (normalizedContentType === CSV_CONTENT_TYPE) {
     const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)

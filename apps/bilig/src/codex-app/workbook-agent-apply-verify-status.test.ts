@@ -56,6 +56,7 @@ function createZeroSyncHarness(
       }
       return await task(runtime)
     },
+    async importWorkbookSnapshot() {},
     async applyServerMutator() {
       throw new Error('not used')
     },

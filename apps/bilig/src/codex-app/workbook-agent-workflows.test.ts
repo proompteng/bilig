@@ -50,6 +50,7 @@ function createZeroSyncStub(input?: { onInspectWorkbook?: () => void; createRunt
       }
       throw new Error('inspectWorkbook should not be called')
     },
+    async importWorkbookSnapshot() {},
     async applyServerMutator() {
       throw new Error('not used')
     },

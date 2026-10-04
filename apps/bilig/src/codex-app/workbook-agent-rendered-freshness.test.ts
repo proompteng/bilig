@@ -159,6 +159,7 @@ function createZeroSyncService(engine: SpreadsheetEngine, input: { readonly revi
       }
       return await task(runtime)
     },
+    async importWorkbookSnapshot() {},
     async applyServerMutator() {
       throw new Error('not used')
     },

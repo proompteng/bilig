@@ -55,7 +55,7 @@ export function useWorkbookImportController(input: {
       const contentType = resolveWorkbookImportContentType(file)
       if (!contentType) {
         setStagedImport(null)
-        setError('Only local CSV, XLSX, and XLSM files can be staged for workbook import.')
+        setError('Only local Bilig backups, CSV, XLSX, and XLSM files can be staged for workbook import.')
         setIsOpen(true)
         setIsPreviewing(false)
         return
@@ -117,6 +117,7 @@ export function useWorkbookImportController(input: {
 
   return {
     clearError: useCallback(() => setError(null), []),
+    open: useCallback(() => setIsOpen(true), []),
     close: useCallback(() => setIsOpen(false), []),
     error,
     importStagedFile,

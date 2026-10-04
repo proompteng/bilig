@@ -213,6 +213,8 @@ test('web app keeps the workbook visible when the assistant rail becomes a phone
   await page.goto('/?sheet=Sheet1&cell=B10')
   await waitForWorkbookReady(page)
 
+  await expect(page.getByTestId('workbook-side-panel')).toHaveCount(0)
+  await page.getByTestId('workbook-side-panel-open').click()
   await expect(page.getByTestId('workbook-side-panel')).toBeVisible()
 
   await page.setViewportSize({ width: 390, height: 844 })

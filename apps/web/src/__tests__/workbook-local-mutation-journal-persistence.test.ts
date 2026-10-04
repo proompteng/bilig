@@ -106,6 +106,20 @@ describe('workbook local mutation journal persistence', () => {
     expect(removeItem).not.toHaveBeenCalled()
   })
 
+  it('preserves the sequence across repeated reloads with an empty restored journal', () => {
+    persistWorkbookMutationJournal(scope, [mutation({ status: 'acked', ackedAtUnixMs: 300 })])
+    const restored = loadPersistedWorkbookMutationJournal(scope)
+    expect(restored?.nextPendingMutationSeq).toBe(2)
+
+    persistWorkbookMutationJournal(scope, restored?.mutationJournalEntries ?? [])
+    persistWorkbookMutationJournal(scope, [])
+
+    expect(loadPersistedWorkbookMutationJournal(scope)).toEqual({
+      mutationJournalEntries: [],
+      nextPendingMutationSeq: 2,
+    })
+  })
+
   it('clears empty journals that have no mutation high-water mark', () => {
     persistWorkbookMutationJournal(scope, [])
 

@@ -14,7 +14,7 @@ export const workbookHeaderActionButtonClass = cva(
         false: '',
       },
       iconOnly: {
-        true: 'w-8 gap-0 px-0',
+        true: 'w-8 gap-2 px-0',
         false: 'gap-2 px-2.5',
       },
     },
@@ -86,15 +86,13 @@ export function WorkbookHeaderStatusChip({ modeLabel, syncLabel, tone = 'neutral
     <>
       <span
         aria-label={`Workbook status: ${modeLabel}, ${syncLabel}`}
-        className={`inline-flex h-8 items-center justify-center gap-0 px-0 text-[12px] font-medium ${surfaceClass}`}
+        className={`inline-flex h-8 items-center justify-center gap-2 px-0 text-[12px] font-medium ${surfaceClass}`}
         data-testid="status-mode"
         role="status"
         title={`${modeLabel} • ${syncLabel}`}
       >
         <span aria-hidden="true" className={cn('size-2 rounded-full', toneClass)} />
-      </span>
-      <span aria-hidden="true" data-testid="status-sync" hidden>
-        {syncLabel}
+        <span data-testid="status-sync">{syncLabel}</span>
       </span>
     </>
   )

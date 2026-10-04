@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CSV_CONTENT_TYPE, LEGACY_XLS_CONTENT_TYPE, XLSB_CONTENT_TYPE, type AgentFrame } from '@bilig/agent-api'
+import { BILIG_CONTENT_TYPE, CSV_CONTENT_TYPE, LEGACY_XLS_CONTENT_TYPE, XLSB_CONTENT_TYPE, type AgentFrame } from '@bilig/agent-api'
 import { prepareWorkbookLoad, routeAgentFrame } from './agent-routing.js'
 
 describe('routeAgentFrame', () => {
@@ -141,6 +141,27 @@ describe('prepareWorkbookLoad', () => {
     ).toThrow('CSV cell count exceeds the configured limit')
   })
 
+  it('creates a native workbook from a validated backup and enforces cell limits', () => {
+    const snapshot = {
+      version: 1,
+      workbook: { name: 'Copy of Budget' },
+      sheets: [{ name: 'Sheet1', order: 0, cells: [{ address: 'A1', formula: 'SUM(3,4,5)' }] }],
+    }
+    const request = {
+      kind: 'loadWorkbookFile' as const,
+      id: 'native-backup',
+      replicaId: 'browser',
+      openMode: 'create' as const,
+      fileName: 'budget.bilig.json',
+      contentType: BILIG_CONTENT_TYPE,
+      bytesBase64: Buffer.from(JSON.stringify(snapshot)).toString('base64'),
+    }
+    const prepared = prepareWorkbookLoad(request, {})
+    expect(prepared.imported.snapshot).toEqual(snapshot)
+    expect(prepared.documentId).toBeTruthy()
+    expect(() => prepareWorkbookLoad(request, {}, { maxImportCells: 0 })).toThrow('Bilig backup cell count exceeds the configured limit')
+  })
+
   it.each([
     ['legacy XLS', 'legacy.xls', LEGACY_XLS_CONTENT_TYPE],
     ['XLSB', 'binary.xlsb', XLSB_CONTENT_TYPE],
@@ -158,6 +179,6 @@ describe('prepareWorkbookLoad', () => {
         },
         {},
       ),
-    ).toThrow('The server accepts CSV, XLSX, and XLSM files')
+    ).toThrow('The server accepts Bilig backups, CSV, XLSX, and XLSM files')
   })
 })

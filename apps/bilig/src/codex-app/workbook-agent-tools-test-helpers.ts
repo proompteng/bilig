@@ -121,6 +121,7 @@ export function createZeroSyncHarness(engine: SpreadsheetEngine) {
       }
       return await task(runtime)
     },
+    async importWorkbookSnapshot() {},
     async applyServerMutator() {
       throw new Error('not used')
     },

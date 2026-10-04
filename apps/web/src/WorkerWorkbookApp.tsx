@@ -1,3 +1,4 @@
+import { WorkbookDocumentHeader } from './WorkbookDocumentHeader.js'
 import { Profiler, useCallback, useEffect, useMemo, useRef } from 'react'
 import { WorkbookView } from '@bilig/grid'
 import type { BiligRuntimeConfig } from '@bilig/zero-sync'
@@ -96,7 +97,7 @@ function WorkerWorkbookAppInner({
   connectionState: ZeroConnectionState
   zero?: ZeroClient
 }) {
-  const { clearImportError, importError, importPanel, importToggle } = useWorkbookImportPane({
+  const { openImport, clearImportError, importError, importPanel, importToggle } = useWorkbookImportPane({
     currentDocumentId: runtimeConfig.documentId,
     enabled: true,
   })
@@ -326,6 +327,19 @@ function WorkerWorkbookAppInner({
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
+      <WorkbookDocumentHeader
+        documentId={runtimeConfig.documentId}
+        workbookName={app.workbookName}
+        userId={runtimeConfig.currentUserId}
+        {...(runtimeConfig.serverUrl ? { serverUrl: runtimeConfig.serverUrl } : {})}
+        isSynced={app.runtimeSyncState !== 'local-only' && Boolean(zero || runtimeConfig.serverUrl)}
+        isReady={app.workbookReady}
+        exportSnapshot={app.exportWorkbookSnapshot}
+        flushPendingEdit={app.flushPendingEditCommit}
+        onRename={app.renameWorkbook}
+        onImport={openImport}
+        onError={app.reportRuntimeError}
+      />
       {app.editorConflictBanner}
       <div className="relative flex min-h-0 flex-1">
         <WorkbookToastRegion toasts={toasts} />

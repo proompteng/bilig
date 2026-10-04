@@ -1,3 +1,4 @@
+import { prepareWorkbookLoad } from '../workbook-runtime/agent-routing.js'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { MAX_AGENT_WORKBOOK_IMPORT_BYTES, decodeAgentFrame, encodeAgentFrame } from '@bilig/agent-api'
 import type { RuntimeSession } from '@bilig/contracts'
@@ -147,7 +148,7 @@ export function registerSyncServerRuntimeRoutes(
         }),
       )
       if (response.kind === 'response' && response.response.kind === 'workbookLoaded') {
-        await resolveAuthorizedWorkbookSession({
+        const session = await resolveAuthorizedWorkbookSession({
           request,
           reply,
           documentId: response.response.documentId,
@@ -155,6 +156,14 @@ export function registerSyncServerRuntimeRoutes(
           createIfMissing: createsWorkbook,
           ...(options.zeroSyncService ? { zeroSyncService: options.zeroSyncService } : {}),
         })
+        if (options.zeroSyncService?.enabled && frame.kind === 'request' && frame.request.kind === 'loadWorkbookFile') {
+          const prepared = prepareWorkbookLoad(
+            { ...frame.request, openMode: 'replace', documentId: response.response.documentId },
+            {},
+            options.maxImportBytes !== undefined ? { maxImportBytes: options.maxImportBytes } : {},
+          )
+          await options.zeroSyncService.importWorkbookSnapshot(response.response.documentId, prepared.imported.snapshot, session)
+        }
       }
       reply.header('content-type', 'application/octet-stream')
       return Buffer.from(encodeAgentFrame(response))

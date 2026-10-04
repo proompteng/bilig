@@ -97,6 +97,7 @@ export function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): Ze
     async inspectWorkbook<T>(_documentId: string, _task: (runtime: never) => T | Promise<T>) {
       throw new Error('not used')
     },
+    async importWorkbookSnapshot() {},
     async applyServerMutator() {
       throw new Error('not used')
     },

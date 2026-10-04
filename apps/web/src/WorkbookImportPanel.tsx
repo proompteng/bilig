@@ -1,4 +1,4 @@
-import { CSV_CONTENT_TYPE, XLSM_CONTENT_TYPE, type WorkbookImportContentType } from '@bilig/agent-api'
+import { BILIG_CONTENT_TYPE, CSV_CONTENT_TYPE, XLSM_CONTENT_TYPE, type WorkbookImportContentType } from '@bilig/agent-api'
 import type { ImportedWorkbookPreview } from '@bilig/excel-import/browser'
 import { Upload } from 'lucide-react'
 import { useId } from 'react'
@@ -16,6 +16,9 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatImportType(contentType: WorkbookImportContentType): string {
+  if (contentType === BILIG_CONTENT_TYPE) {
+    return 'Bilig backup'
+  }
   if (contentType === CSV_CONTENT_TYPE) {
     return 'CSV'
   }
@@ -157,7 +160,7 @@ export function WorkbookImportPanel(props: {
                   <span className="truncate">{props.stagedPreview?.fileName ?? 'File'}</span>
                 </div>
                 <input
-                  accept=".csv,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
+                  accept=".bilig.json,application/vnd.bilig.workbook+json,.csv,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
                   className="sr-only"
                   data-testid="workbook-import-file"
                   disabled={!props.enabled || props.isPreviewing || props.isImporting}

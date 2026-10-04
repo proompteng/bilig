@@ -90,6 +90,10 @@ export type WorkbookEventPayload =
       range: CellRangeRef
     }
   | {
+      kind: 'importWorkbookSnapshot'
+      snapshot: WorkbookSnapshot
+    }
+  | {
       kind: 'renderCommit'
       ops: CommitOp[]
     }
@@ -224,6 +228,7 @@ export const WORKBOOK_EVENT_KINDS = [
   'setCellFormula',
   'clearCell',
   'clearRange',
+  'importWorkbookSnapshot',
   'renderCommit',
   'fillRange',
   'copyRange',
@@ -368,6 +373,8 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
       return matchesMutationArgsSchema(value, clearCellArgsSchema)
     case 'clearRange':
       return matchesMutationArgsSchema(value, clearRangeArgsSchema)
+    case 'importWorkbookSnapshot':
+      return isWorkbookSnapshot(value['snapshot'])
     case 'renderCommit':
       return matchesMutationArgsSchema(value, renderCommitArgsSchema)
     case 'fillRange':
@@ -519,6 +526,7 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case 'applyBatch':
     case 'applyAgentCommandBundle':
     case 'applyWorkbookPlanData':
+    case 'importWorkbookSnapshot':
     case 'renderCommit':
     case 'insertRows':
     case 'deleteRows':
@@ -561,6 +569,9 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
       return
     case 'clearRange':
       engine.clearRange(payload.range)
+      return
+    case 'importWorkbookSnapshot':
+      engine.importSnapshot(payload.snapshot)
       return
     case 'renderCommit':
       engine.renderCommit(payload.ops)

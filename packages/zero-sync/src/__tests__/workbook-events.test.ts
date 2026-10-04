@@ -1,6 +1,8 @@
+import { SpreadsheetEngine } from '@bilig/core'
 import { describe, expect, it } from 'vitest'
 import { defineModel, planWorkbookAction, toPlanData } from '@bilig/workbook'
 import {
+  applyWorkbookEvent,
   isAuthoritativeWorkbookEventBatch,
   isAuthoritativeWorkbookEventBatchAfterRevision,
   isAuthoritativeWorkbookEventRecord,
@@ -488,4 +490,29 @@ describe('workbook event guards', () => {
       }),
     ).toBe(false)
   })
+})
+
+it('replays imported snapshots with formulas and names through the authoritative event stream', async () => {
+  const snapshot = {
+    version: 1 as const,
+    workbook: { name: 'Budget' },
+    sheets: [
+      {
+        name: 'Sheet1',
+        order: 0,
+        cells: [
+          { address: 'A1', value: 3 },
+          { address: 'B1', formula: 'A1*4' },
+        ],
+      },
+    ],
+  }
+  const payload = { kind: 'importWorkbookSnapshot' as const, snapshot }
+  expect(isWorkbookEventPayload(payload)).toBe(true)
+  expect(isWorkbookEventPayload({ ...payload, snapshot: { version: 2 } })).toBe(false)
+  const engine = new SpreadsheetEngine()
+  await engine.ready()
+  applyWorkbookEvent(engine, payload)
+  expect(engine.exportSnapshot().workbook.name).toBe('Budget')
+  expect(engine.exportSnapshot().sheets[0]?.cells.find((cell) => cell.address === 'B1')?.formula).toBe('A1*4')
 })

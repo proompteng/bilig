@@ -258,6 +258,7 @@ describe('sync-server workbook authorization', () => {
   it('creates ownership metadata only after an authorized new-workbook import', async () => {
     const auth = createSignedProxyTestSession('owner@example.com')
     const assertWorkbookAccess = vi.fn(async () => {})
+    const importWorkbookSnapshot = vi.fn(async () => {})
     const { app } = createSyncServer({
       logger: false,
       sessionResolver: auth.sessionResolver,
@@ -278,7 +279,7 @@ describe('sync-server workbook authorization', () => {
           })
         },
       }),
-      zeroSyncService: createZeroSyncStub({ assertWorkbookAccess }),
+      zeroSyncService: createZeroSyncStub({ assertWorkbookAccess, importWorkbookSnapshot }),
     })
 
     try {
@@ -304,6 +305,11 @@ describe('sync-server workbook authorization', () => {
 
       expect(response.statusCode).toBe(200)
       expect(assertWorkbookAccess).toHaveBeenCalledOnce()
+      expect(importWorkbookSnapshot).toHaveBeenCalledWith('csv:new-book', expect.objectContaining({ workbook: { name: 'new-book' } }), {
+        userID: 'owner@example.com',
+        roles: ['editor'],
+      })
+      expect(assertWorkbookAccess.mock.invocationCallOrder[0]).toBeLessThan(importWorkbookSnapshot.mock.invocationCallOrder[0] ?? 0)
       expect(assertWorkbookAccess).toHaveBeenCalledWith(
         'csv:new-book',
         { userID: 'owner@example.com', roles: ['editor'] },

@@ -1,4 +1,5 @@
 import {
+  BILIG_CONTENT_TYPE,
   CSV_CONTENT_TYPE,
   MAX_AGENT_WORKBOOK_IMPORT_BYTES,
   XLSM_CONTENT_TYPE,
@@ -14,7 +15,12 @@ import {
 import { importWorkbookFile, type ImportedWorkbook } from '@bilig/excel-import'
 import { buildBrowserUrl, createImportedDocumentId, decodeWorkbookBase64, normalizeBaseUrl } from './session-shared.js'
 
-const serverWorkbookImportContentTypes = new Set<WorkbookImportContentType>([CSV_CONTENT_TYPE, XLSX_CONTENT_TYPE, XLSM_CONTENT_TYPE])
+const serverWorkbookImportContentTypes = new Set<WorkbookImportContentType>([
+  BILIG_CONTENT_TYPE,
+  CSV_CONTENT_TYPE,
+  XLSX_CONTENT_TYPE,
+  XLSM_CONTENT_TYPE,
+])
 
 export interface AgentFrameContext {
   serverUrl?: string
@@ -75,7 +81,7 @@ export function prepareWorkbookLoad(
 ): PreparedWorkbookLoad {
   const contentType = normalizeWorkbookImportContentType(request.contentType)
   if (!contentType || !serverWorkbookImportContentTypes.has(contentType)) {
-    throw new Error('Unsupported workbook upload content type. The server accepts CSV, XLSX, and XLSM files.')
+    throw new Error('Unsupported workbook upload content type. The server accepts Bilig backups, CSV, XLSX, and XLSM files.')
   }
   if (request.openMode === 'replace' && !request.documentId) {
     throw new Error('Workbook replace uploads require documentId')
@@ -106,6 +112,15 @@ export function prepareWorkbookLoad(
       },
     },
   })
+  if (contentType === BILIG_CONTENT_TYPE) {
+    const cellCount = imported.snapshot.sheets.reduce((count, sheet) => count + sheet.cells.length, 0)
+    const formulaCount = imported.snapshot.sheets.reduce(
+      (count, sheet) => count + sheet.cells.filter((cell) => cell.formula !== undefined).length,
+      0,
+    )
+    if (cellCount > maxImportCells) throw new Error('Bilig backup cell count exceeds the configured limit')
+    if (formulaCount > maxImportFormulaCells) throw new Error('Bilig backup formula count exceeds the configured limit')
+  }
   const documentId = request.documentId ?? createImportedDocumentId(contentType)
   const sessionId = normalizeSessionId(documentId, request.replicaId)
   const serverUrl = normalizeBaseUrl(context.serverUrl ?? options.publicServerUrl ?? options.defaultServerUrl ?? 'http://127.0.0.1:4321')

@@ -21,6 +21,7 @@ const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 
 export {
+  BILIG_CONTENT_TYPE,
   CSV_CONTENT_TYPE,
   LEGACY_XLS_CONTENT_TYPE,
   WORKBOOK_IMPORT_CONTENT_TYPES,

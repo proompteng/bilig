@@ -126,7 +126,10 @@ export function persistWorkbookMutationJournal(
   const key = storageKey(scope)
   const scopedEntries = replicaJournalEntries(scope, entries)
   const activeEntries = scopedEntries.filter((mutation) => mutation.status !== 'acked')
-  const nextPendingMutationSeq = nextMutationSeq(scopedEntries)
+  const nextPendingMutationSeq = Math.max(
+    nextMutationSeq(scopedEntries),
+    loadPersistedWorkbookMutationJournal(scope)?.nextPendingMutationSeq ?? 1,
+  )
   try {
     if (activeEntries.length === 0 && nextPendingMutationSeq <= 1) {
       storage.removeItem(key)

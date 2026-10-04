@@ -77,6 +77,7 @@ export function useWorkbookImportPane(input: {
   )
 
   return {
+    openImport: controller.open,
     clearImportError: controller.clearError,
     importError: controller.error,
     importPanel,
