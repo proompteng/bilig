@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot } from '@bilig/grid'
-import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { CellRangeRef, CellSnapshot } from '@bilig/protocol'
 import { scheduleSelectionPersistence } from './selection-persistence.js'
 import type { WorkbookPerfSession } from './perf/workbook-perf.js'
@@ -14,6 +13,7 @@ import {
   evaluateOptimisticFormula,
   optimisticCellKey,
 } from './workbook-optimistic-cell.js'
+import { optimisticCellTargetFromKey, supersedeOptimisticSeedsInRange } from './workbook-optimistic-seeds.js'
 import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from './workbook-optimistic-cell-flags.js'
 import { LOCAL_CELL_CONTENT_DIRTY_MASK } from './projected-workbook-local-delta.js'
 import type { WorkbookMutationMethod } from './workbook-sync.js'
@@ -96,17 +96,6 @@ function resolveDetachedOptimisticValue(
       parsed,
     }),
   )
-}
-
-function optimisticCellTargetFromKey(key: string): EditTargetSelection | null {
-  const separatorIndex = key.lastIndexOf(':')
-  if (separatorIndex <= 0 || separatorIndex === key.length - 1) {
-    return null
-  }
-  return {
-    sheetName: key.slice(0, separatorIndex),
-    address: key.slice(separatorIndex + 1),
-  }
 }
 
 function isOptimisticSnapshot(snapshot: CellSnapshot): boolean {
@@ -249,46 +238,16 @@ export function useWorkerWorkbookInteractionState(input: {
     }
   }, [])
   const supersedeOptimisticCellSeedsForRange = useCallback((range: CellRangeRef): (() => void) | null => {
-    const start = parseCellAddress(range.startAddress, range.sheetName)
-    const end = parseCellAddress(range.endAddress, range.sheetName)
-    const startRow = Math.min(start.row, end.row)
-    const endRow = Math.max(start.row, end.row)
-    const startCol = Math.min(start.col, end.col)
-    const endCol = Math.max(start.col, end.col)
-    const removedSeeds: Array<readonly [string, string, string | undefined, CellSnapshot | undefined]> = []
-
-    for (let row = startRow; row <= endRow; row += 1) {
-      for (let col = startCol; col <= endCol; col += 1) {
-        const address = formatAddress(row, col)
-        const key = optimisticCellKey(range.sheetName, address)
-        const seed = optimisticCellSeedsRef.current.get(key)
-        if (seed === undefined) {
-          continue
-        }
-        removedSeeds.push([key, seed, optimisticCellResolvedValuesRef.current.get(key), optimisticCellSnapshotsRef.current.get(key)])
-        optimisticCellSeedsRef.current.delete(key)
-        optimisticCellResolvedValuesRef.current.delete(key)
-        optimisticCellSnapshotsRef.current.delete(key)
-      }
-    }
-
-    if (removedSeeds.length === 0) {
-      return null
-    }
-
+    const rollback = supersedeOptimisticSeedsInRange(
+      range,
+      optimisticCellSeedsRef.current,
+      optimisticCellResolvedValuesRef.current,
+      optimisticCellSnapshotsRef.current,
+    )
+    if (!rollback) return null
     bumpOptimisticSeedRevision((revision) => revision + 1)
     return () => {
-      for (const [key, seed, resolvedValue, snapshot] of removedSeeds) {
-        if (!optimisticCellSeedsRef.current.has(key)) {
-          optimisticCellSeedsRef.current.set(key, seed)
-        }
-        if (resolvedValue !== undefined && !optimisticCellResolvedValuesRef.current.has(key)) {
-          optimisticCellResolvedValuesRef.current.set(key, resolvedValue)
-        }
-        if (snapshot !== undefined && !optimisticCellSnapshotsRef.current.has(key)) {
-          optimisticCellSnapshotsRef.current.set(key, snapshot)
-        }
-      }
+      rollback()
       bumpOptimisticSeedRevision((revision) => revision + 1)
     }
   }, [])

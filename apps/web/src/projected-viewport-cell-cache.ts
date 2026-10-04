@@ -27,6 +27,8 @@ export interface ProjectedViewportCellSnapshotWriteResult {
   readonly changed: boolean
 }
 
+type CellSnapshotWriteOptions = { force?: boolean; forceOptimistic?: boolean; allowOptimisticClearResurrection?: boolean }
+
 function normalizeMaxCachedCellsPerSheet(rawMaxCachedCellsPerSheet: number | undefined): number {
   if (typeof rawMaxCachedCellsPerSheet !== 'number' || !Number.isFinite(rawMaxCachedCellsPerSheet) || rawMaxCachedCellsPerSheet < 1) {
     return DEFAULT_MAX_CACHED_CELLS_PER_SHEET
@@ -204,24 +206,55 @@ export class ProjectedViewportCellCache {
   }
 
   deleteCellSnapshot(sheetName: string, address: string): boolean {
-    const key = `${sheetName}!${address}`
-    if (!this.cellSnapshots.delete(key)) {
-      return false
+    return this.deleteCellSnapshots([{ sheetName, address }])
+  }
+
+  deleteCellSnapshots(targets: readonly { readonly sheetName: string; readonly address: string }[]): boolean {
+    const changedKeys = new Set<string>()
+    for (const { sheetName, address } of targets) {
+      const key = `${sheetName}!${address}`
+      if (!this.cellSnapshots.delete(key)) continue
+      changedKeys.add(key)
+      this.cellAccessTicks.delete(key)
+      const sheetCellKeys = this.cellKeysBySheet.get(sheetName)
+      sheetCellKeys?.delete(key)
+      if (sheetCellKeys?.size === 0) this.cellKeysBySheet.delete(sheetName)
     }
-    this.cellAccessTicks.delete(key)
-    const sheetCellKeys = this.cellKeysBySheet.get(sheetName)
-    sheetCellKeys?.delete(key)
-    if (sheetCellKeys?.size === 0) {
-      this.cellKeysBySheet.delete(sheetName)
-    }
-    this.notifyCellSubscriptions(new Set([key]))
+    if (changedKeys.size === 0) return false
+    this.notifyCellSubscriptions(changedKeys)
     this.emitChange()
     return true
   }
 
-  writeCellSnapshot(
+  writeCellSnapshot(snapshot: CellSnapshot, options: CellSnapshotWriteOptions = {}): ProjectedViewportCellSnapshotWriteResult {
+    const result = this.writeCellSnapshotWithoutNotifications(snapshot, options)
+    if (result.changed) {
+      this.notifyCellSubscriptions(new Set([`${snapshot.sheetName}!${snapshot.address}`]))
+      this.emitChange()
+    }
+    return result
+  }
+
+  writeCellSnapshots(
+    snapshots: readonly CellSnapshot[],
+    options: CellSnapshotWriteOptions = {},
+  ): ProjectedViewportCellSnapshotWriteResult[] {
+    const changedKeys = new Set<string>()
+    const results = snapshots.map((snapshot) => {
+      const result = this.writeCellSnapshotWithoutNotifications(snapshot, options)
+      if (result.changed) changedKeys.add(`${snapshot.sheetName}!${snapshot.address}`)
+      return result
+    })
+    if (changedKeys.size > 0) {
+      this.notifyCellSubscriptions(changedKeys)
+      this.emitChange()
+    }
+    return results
+  }
+
+  private writeCellSnapshotWithoutNotifications(
     snapshot: CellSnapshot,
-    options: { force?: boolean; forceOptimistic?: boolean; allowOptimisticClearResurrection?: boolean } = {},
+    options: CellSnapshotWriteOptions,
   ): ProjectedViewportCellSnapshotWriteResult {
     const key = `${snapshot.sheetName}!${snapshot.address}`
     const current = this.cellSnapshots.get(key)
@@ -259,8 +292,6 @@ export class ProjectedViewportCellCache {
     this.cellSnapshots.set(key, incoming)
     this.touchCellKey(key)
     this.sheetCellKeys(snapshot.sheetName).add(key)
-    this.notifyCellSubscriptions(new Set([key]))
-    this.emitChange()
     return { acceptedSnapshot: incoming, changed: true }
   }
 

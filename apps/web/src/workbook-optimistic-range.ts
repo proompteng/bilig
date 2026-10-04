@@ -60,33 +60,7 @@ export function applyOptimisticClearRange(viewportStore: OptimisticViewportStore
   const cellCount = (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1)
 
   if (cellCount > MAX_MATERIALIZED_OPTIMISTIC_CLEAR_CELLS) {
-    const rollbackOverlay = viewportStore.beginOptimisticClearRange?.(range) ?? null
-    const queueClearSnapshot = (previous: CellSnapshot) => {
-      const next = createContentClearedOptimisticSnapshot(previous)
-      previousSnapshots.push(previous)
-      nextSnapshots.push(next)
-      rollbackVersion = Math.max(rollbackVersion, next.version)
-    }
-    if (viewportStore.forEachCachedOrVisibleCellSnapshotInRange) {
-      viewportStore.forEachCachedOrVisibleCellSnapshotInRange(range, queueClearSnapshot)
-    } else if (viewportStore.forEachCellSnapshotInRange) {
-      viewportStore.forEachCellSnapshotInRange(range, queueClearSnapshot)
-    } else {
-      return null
-    }
-    if (nextSnapshots.length === 0 && !rollbackOverlay) {
-      return null
-    }
-    nextSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot, { localDirtyMask: LOCAL_CELL_CONTENT_DIRTY_MASK }))
-    return () => {
-      rollbackOverlay?.()
-      previousSnapshots.forEach((snapshot) => {
-        rollbackVersion += 1
-        viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion), {
-          localDirtyMask: LOCAL_CELL_CONTENT_DIRTY_MASK,
-        })
-      })
-    }
+    return viewportStore.beginOptimisticClearRange?.(range) ?? null
   }
 
   for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {

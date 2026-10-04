@@ -23,12 +23,12 @@ export interface PendingViewportRangeOverlay {
 }
 
 export interface ProjectedViewportRangeOverlayStoreCallbacks {
-  readonly deleteCellSnapshot: (sheetName: string, address: string) => void
+  readonly deleteCellSnapshots: (targets: readonly { readonly sheetName: string; readonly address: string }[]) => void
   readonly forEachCachedOrVisibleCellSnapshotInRange: (range: CellRangeRef, listener: (snapshot: CellSnapshot) => void) => void
   readonly getCell: (sheetName: string, address: string) => CellSnapshot
   readonly hasCellSnapshot: (sheetName: string, address: string) => boolean
-  readonly setCellSnapshot: (snapshot: CellSnapshot) => void
-  readonly setCellSnapshots?: ((snapshots: readonly CellSnapshot[]) => void) | undefined
+  readonly setCellSnapshots: (snapshots: readonly CellSnapshot[]) => void
+  readonly restoreCellSnapshots: (snapshots: readonly CellSnapshot[]) => void
 }
 
 export class ProjectedViewportRangeOverlayStore {
@@ -189,10 +189,8 @@ export class ProjectedViewportRangeOverlayStore {
       snapshotsToSet.push(snapshot)
       snapshotsToDelete.push({ sheetName: snapshot.sheetName, address: snapshot.address })
     })
-    this.setCellSnapshots(snapshotsToSet)
-    snapshotsToDelete.forEach(({ sheetName, address }) => {
-      this.callbacks.deleteCellSnapshot(sheetName, address)
-    })
+    this.callbacks.restoreCellSnapshots(snapshotsToSet)
+    this.callbacks.deleteCellSnapshots(snapshotsToDelete)
     overlay.materializedPreviousSnapshots.clear()
   }
 
@@ -243,11 +241,7 @@ export class ProjectedViewportRangeOverlayStore {
     if (snapshots.length === 0) {
       return
     }
-    if (this.callbacks.setCellSnapshots) {
-      this.callbacks.setCellSnapshots(snapshots)
-      return
-    }
-    snapshots.forEach((snapshot) => this.callbacks.setCellSnapshot(snapshot))
+    this.callbacks.setCellSnapshots(snapshots)
   }
 
   private invalidateResolvedSnapshots(): void {

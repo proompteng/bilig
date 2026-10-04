@@ -474,26 +474,34 @@ export function useWorkerWorkbookAppState(input: {
     canUndo: false,
     canRedo: false,
   }
+  const prepareHistoryChange = useCallback(() => {
+    for (const sheetName of sheetNames) {
+      supersedeOptimisticCellSeedsForSheet(sheetName)
+      workerHandleRef.current?.viewportStore.clearOptimisticCellFlagsForSheet(sheetName)
+    }
+  }, [sheetNames, supersedeOptimisticCellSeedsForSheet, workerHandleRef])
   const undoLocalLatestChange = useCallback(() => {
     void (async () => {
       try {
         await flushPendingEditCommit()
+        prepareHistoryChange()
         await undoWorkbookLocalChange()
       } catch (error) {
         reportRuntimeError(error)
       }
     })()
-  }, [flushPendingEditCommit, reportRuntimeError, undoWorkbookLocalChange])
+  }, [flushPendingEditCommit, prepareHistoryChange, reportRuntimeError, undoWorkbookLocalChange])
   const redoLocalLatestChange = useCallback(() => {
     void (async () => {
       try {
         await flushPendingEditCommit()
+        prepareHistoryChange()
         await redoWorkbookLocalChange()
       } catch (error) {
         reportRuntimeError(error)
       }
     })()
-  }, [flushPendingEditCommit, redoWorkbookLocalChange, reportRuntimeError])
+  }, [flushPendingEditCommit, prepareHistoryChange, redoWorkbookLocalChange, reportRuntimeError])
   const canUndo = zeroConfigured ? remoteCanUndo : !hasLocalMutationInFlight && localHistoryState.canUndo
   const canRedo = zeroConfigured ? remoteCanRedo : !hasLocalMutationInFlight && localHistoryState.canRedo
   const undoLatestChange = useCallback(() => {
@@ -504,12 +512,13 @@ export function useWorkerWorkbookAppState(input: {
     void (async () => {
       try {
         await flushPendingEditCommit()
+        prepareHistoryChange()
         undoRemoteLatestChange()
       } catch (error) {
         reportRuntimeError(error)
       }
     })()
-  }, [flushPendingEditCommit, reportRuntimeError, undoLocalLatestChange, undoRemoteLatestChange, zeroConfigured])
+  }, [flushPendingEditCommit, prepareHistoryChange, reportRuntimeError, undoLocalLatestChange, undoRemoteLatestChange, zeroConfigured])
   const redoLatestChange = useCallback(() => {
     if (!zeroConfigured) {
       redoLocalLatestChange()
@@ -518,12 +527,13 @@ export function useWorkerWorkbookAppState(input: {
     void (async () => {
       try {
         await flushPendingEditCommit()
+        prepareHistoryChange()
         redoRemoteLatestChange()
       } catch (error) {
         reportRuntimeError(error)
       }
     })()
-  }, [flushPendingEditCommit, redoLocalLatestChange, redoRemoteLatestChange, reportRuntimeError, zeroConfigured])
+  }, [flushPendingEditCommit, prepareHistoryChange, redoLocalLatestChange, redoRemoteLatestChange, reportRuntimeError, zeroConfigured])
 
   const previewAgentCommandBundle = useCallback(
     async (bundle: WorkbookAgentCommandBundle) => {

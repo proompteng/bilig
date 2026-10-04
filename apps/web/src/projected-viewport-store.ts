@@ -92,19 +92,24 @@ export class ProjectedViewportStore implements GridEngineLike {
       maxCachedCellsPerSheet: this.options.maxCachedCellsPerSheet ?? DEFAULT_MAX_CACHED_CELLS_PER_SHEET,
     })
     this.rangeOverlayStore = new ProjectedViewportRangeOverlayStore({
-      deleteCellSnapshot: (sheetName, address) => {
-        this.cellCache.deleteCellSnapshot(sheetName, address)
+      deleteCellSnapshots: (targets) => {
+        this.cellCache.deleteCellSnapshots(targets)
       },
       forEachCachedOrVisibleCellSnapshotInRange: (range, listener) => {
         this.cellCache.forEachCachedOrVisibleCellSnapshotInRange(range, listener)
       },
       getCell: (sheetName, address) => this.cellCache.getCell(sheetName, address),
       hasCellSnapshot: (sheetName, address) => this.cellCache.hasCellSnapshot(sheetName, address),
-      setCellSnapshot: (snapshot) => {
-        this.setCellSnapshot(snapshot, { force: true, forceOptimistic: true, suppressRangeOverlays: false })
-      },
       setCellSnapshots: (snapshots) => {
         this.setCellSnapshots(snapshots, { force: true, forceOptimistic: true, suppressRangeOverlays: false })
+      },
+      restoreCellSnapshots: (snapshots) => {
+        this.setCellSnapshots(snapshots, {
+          force: true,
+          forceOptimistic: true,
+          allowOptimisticClearResurrection: true,
+          suppressRangeOverlays: false,
+        })
       },
     })
     this.axisStore = new ProjectedViewportAxisStore({
@@ -293,7 +298,8 @@ export class ProjectedViewportStore implements GridEngineLike {
       if (options.suppressRangeOverlays !== false) {
         this.rangeOverlayStore.suppressExistingOverlaysForCell(snapshot.sheetName, snapshot.address)
       }
-      const result = this.cellCache.writeCellSnapshot(snapshot, options)
+    })
+    this.cellCache.writeCellSnapshots(snapshots, options).forEach((result) => {
       if (result.changed && result.acceptedSnapshot && options.emitLocalDelta !== false) {
         const acceptedSnapshotsByMask =
           acceptedSnapshotsBySheetAndMask.get(result.acceptedSnapshot.sheetName) ?? new Map<number, CellSnapshot[]>()
