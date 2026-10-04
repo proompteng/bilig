@@ -1,6 +1,6 @@
 {
   "name": "@bilig/create-workpaper",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Create a runnable Bilig WorkPaper starter for Node services and tool integrations.",
   "keywords": [
     "bilig",

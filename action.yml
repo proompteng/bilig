@@ -18,7 +18,7 @@ inputs:
   package-version:
     description: npm version or dist-tag for @bilig/xlsx-formula-recalc. Pin this for production workflows.
     required: false
-    default: '1.1.0'
+    default: '1.1.1'
   inspect-limit:
     description: Formula cells to recompute during inspection. Use "all" or a positive integer.
     required: false
