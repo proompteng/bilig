@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useActorRef, useSelector } from '@xstate/react'
 import { isWorkbookAgentCommandBundle, isWorkbookAgentPreviewSummary, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import { parseCellAddress } from '@bilig/formula'
-import { isWorkbookSnapshot, type CellRangeRef, type WorkbookSnapshot, type WorkbookTableSnapshot } from '@bilig/protocol'
+import type { CellRangeRef, WorkbookTableSnapshot } from '@bilig/protocol'
 import { createWorkerRuntimeMachine, getWorkerRuntimeController, getWorkerRuntimeHandle } from './runtime-machine.js'
 import { createRuntimeFetch, type resolveRuntimeConfig } from './runtime-config.js'
 import type { ZeroClient } from './runtime-session.js'
@@ -701,7 +701,7 @@ export function useWorkerWorkbookAppState(input: {
     syncAgentAuthoritativeRevision,
   })
 
-  const { ribbon, statusModeLabel, statusSyncLabel } = useWorkbookToolbar({
+  const { ribbon, statusModeLabel } = useWorkbookToolbar({
     connectionStateName: connectionState.name,
     runtimeReady,
     pendingMutationSummary: runtimeState?.pendingMutationSummary,
@@ -808,29 +808,8 @@ export function useWorkerWorkbookAppState(input: {
     await retryPendingMutation(failedPendingMutation.id)
   }, [failedPendingMutation, retryPendingMutation])
 
-  const exportWorkbookSnapshot = useCallback(async (): Promise<WorkbookSnapshot> => {
-    await flushPendingEditCommit()
-    const snapshot = await runtimeController?.invoke('exportSnapshot')
-    if (!isWorkbookSnapshot(snapshot)) throw new Error('Workbook is not ready to export')
-    return snapshot
-  }, [flushPendingEditCommit, runtimeController])
-
-  const renameWorkbook = useCallback(
-    async (name: string): Promise<void> => {
-      const trimmed = name.trim()
-      if (!trimmed) throw new Error('Workbook name cannot be empty')
-      await invokeMutation('renderCommit', [{ kind: 'upsertWorkbook', name: trimmed }])
-    },
-    [invokeMutation],
-  )
-
   return {
     agentError,
-    exportWorkbookSnapshot,
-    flushPendingEditCommit,
-    renameWorkbook,
-    workbookName: runtimeState?.workbookName ?? 'Loading workbook…',
-    statusSyncLabel,
     clearAgentError,
     clearRuntimeError,
     agentPanel,

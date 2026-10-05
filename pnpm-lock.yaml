@@ -209,9 +209,6 @@ importers:
       '@bilig/worker-transport':
         specifier: workspace:*
         version: link:../../packages/worker-transport
-      '@bilig/workpaper':
-        specifier: workspace:*
-        version: link:../../packages/workpaper
       '@bilig/zero-sync':
         specifier: workspace:*
         version: link:../../packages/zero-sync

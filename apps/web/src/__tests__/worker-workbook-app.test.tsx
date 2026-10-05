@@ -293,6 +293,7 @@ describe('WorkerWorkbookApp', () => {
 
     expect(typeof latestWorkbookViewProps.current?.['onSelectionChange']).toBe('function')
     expect(latestWorkbookViewProps.current?.['onSelectionRangeChange']).toBeUndefined()
+    expect(host.querySelector('header[aria-label="Workbook document"]')).toBeNull()
 
     await act(async () => {
       root.unmount()

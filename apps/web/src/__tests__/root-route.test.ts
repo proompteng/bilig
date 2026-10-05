@@ -7,13 +7,9 @@ describe('resolveWebEntryRoute', () => {
     expect(resolveWebEntryRoute(`${ISOLATED_WORKBOOK_PANE_RENDERER_PATH}/`)).toBe('isolated-workbook-pane-renderer')
   })
 
-  it('opens models at the root and preserves workbook and debug links', () => {
-    expect(resolveWebEntryRoute('/')).toBe('models')
-    expect(resolveWebEntryRoute('/models/')).toBe('models')
-    expect(resolveWebEntryRoute('/models', '?model=example')).toBe('models')
+  it('opens the spreadsheet at the root and workbook paths', () => {
+    expect(resolveWebEntryRoute('/')).toBe('app')
     expect(resolveWebEntryRoute('/workbook')).toBe('app')
-    expect(resolveWebEntryRoute('/', '?document=example')).toBe('app')
-    expect(resolveWebEntryRoute('/', '?persist=0')).toBe('app')
     expect(resolveWebEntryRoute('/workbooks/demo')).toBe('app')
   })
 })
