@@ -108,7 +108,7 @@
     "fflate": "0.3.11"
   },
   "devDependencies": {
-    "ai": "6.0.195",
+    "ai": "7.0.127",
     "zod": "4.3.6"
   },
   "peerDependencies": {
