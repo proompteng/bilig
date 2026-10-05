@@ -88,7 +88,7 @@ test('web app keeps toolbar controls aligned and consistently sized', async ({ p
   expect(toolbarBox.height).toBeLessThanOrEqual(48)
 })
 
-test('web app shows save state in the toolbar on desktop and the document header on phones', async ({ page }) => {
+test('web app keeps toolbar save state accessible on desktop and phones', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 })
   await page.goto('/workbook')
   await waitForWorkbookReady(page)
@@ -102,7 +102,6 @@ test('web app shows save state in the toolbar on desktop and the document header
   )
   expect(statusAriaLabel).toContain(`, ${syncText ?? ''}`)
   await expect(page.getByTestId('status-sync')).toBeVisible()
-  await expect(page.getByTestId('document-save-status')).toBeHidden()
   const visibleTrailingText = await page
     .getByTestId('toolbar-trailing-content')
     .evaluate((element) => (element instanceof HTMLElement ? element.innerText.trim() : ''))
@@ -110,8 +109,8 @@ test('web app shows save state in the toolbar on desktop and the document header
 
   await page.setViewportSize({ width: 390, height: 760 })
   await expect(page.getByTestId('status-sync')).toBeHidden()
-  await expect(page.getByTestId('document-save-status')).toBeVisible()
-  await expect(page.getByTestId('document-save-status')).toHaveText(syncText ?? '')
+  await expect(page.getByTestId('status-mode')).toBeVisible()
+  await expect(page.getByTestId('status-mode')).toHaveAttribute('aria-label', statusAriaLabel ?? '')
   const statusBox = await getBox(page.getByTestId('status-mode'))
 
   expect(statusBox.width).toBeLessThanOrEqual(12)
@@ -285,11 +284,12 @@ test('@browser-ci web app prioritizes editing controls over secondary actions on
   await expect(page.getByTestId('workbook-shortcut-button')).toBeHidden()
   await expect(page.getByTestId('workbook-import-toggle')).toBeHidden()
   await expect(page.getByTestId('workbook-side-panel-open')).toBeVisible()
-  await expect(page.getByTestId('document-save-status')).toBeVisible()
-  await expect(page.getByTestId('document-save-status')).toHaveText(
+  await expect(page.getByTestId('status-mode')).toBeVisible()
+  await expect(page.getByTestId('status-mode')).toHaveAttribute(
+    'aria-label',
     remoteSyncEnabled
-      ? /^(Saved|Saving…|Sync pending|Sync issue)$/
-      : /^(Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/,
+      ? /^Workbook status: [^,]+, (Saved|Saving…|Sync pending|Sync issue)$/
+      : /^Workbook status: [^,]+, (Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/,
   )
   await expect(numberFormat).toContainText('General')
   await expect(fontSize).toContainText('10')
