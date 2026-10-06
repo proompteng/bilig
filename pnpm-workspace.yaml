@@ -3,7 +3,7 @@ packages:
   - 'packages/*'
 
 overrides:
-  '@opentelemetry/auto-instrumentations-node': '0.76.0'
+  '@opentelemetry/auto-instrumentations-node': '0.79.0'
   '@opentelemetry/core': '2.8.0'
   '@opentelemetry/exporter-prometheus': '0.218.0'
   '@opentelemetry/sdk-node': '0.218.0'
