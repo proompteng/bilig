@@ -87,7 +87,7 @@ export const colorPickerPopupClass = cva(
 )
 
 export const colorPickerSwatchClass = cva(
-  'relative border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] outline-none transition-colors hover:border-[var(--wb-accent)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-1 focus-visible:ring-[var(--wb-accent)]',
+  'relative block aspect-square w-full min-w-0 rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] outline-none transition-colors hover:border-[var(--wb-accent)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-1 focus-visible:ring-[var(--wb-accent)] aria-pressed:outline aria-pressed:outline-2 aria-pressed:outline-offset-[-3px] aria-pressed:outline-[var(--wb-text)]',
 )
 
 export function classNames(...values: Array<string | false | null | undefined>): string {

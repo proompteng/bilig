@@ -3,6 +3,7 @@ import type { CellSnapshot, Viewport, WorkbookDefinedNameSnapshot } from '@bilig
 import { flushSync } from 'react-dom'
 import { FormulaBar } from './FormulaBar.js'
 import type { GridEngineLike } from './grid-engine.js'
+import type { SelectionAggregateSummary } from './selectionAggregateSummary.js'
 import { formatSelectionSnapshotSummary } from './gridSelection.js'
 import { WorkbookSelectionStatus } from './WorkbookSelectionStatus.js'
 import { WorkbookSheetTabs } from './WorkbookSheetTabs.js'
@@ -23,6 +24,7 @@ interface WorkbookViewProps {
   selectedAddr: string
   selectedCellSnapshot: CellSnapshot
   selectionSnapshot: GridSelectionSnapshot
+  selectionSummary?: SelectionAggregateSummary | null | undefined
   editorTargetSelection?: EditTargetSelection | null | undefined
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
   editorValue: string
@@ -197,6 +199,7 @@ export function WorkbookView({
   selectedAddr,
   selectedCellSnapshot,
   selectionSnapshot,
+  selectionSummary = null,
   editorTargetSelection,
   definedNames,
   editorValue,
@@ -321,8 +324,14 @@ export function WorkbookView({
   }, [])
 
   const sheetTabsTrailingContent = React.useMemo(
-    () => <MemoWorkbookSelectionStatusSurface engine={engine} selectionLabel={selectionLabel} selectionSnapshot={selectionSnapshot} />,
-    [engine, selectionLabel, selectionSnapshot],
+    () => (
+      <MemoWorkbookSelectionStatusSurface
+        summary={selectionSummary}
+        selectionLabel={selectionLabel}
+        selectionSnapshot={selectionSnapshot}
+      />
+    ),
+    [selectionSummary, selectionLabel, selectionSnapshot],
   )
 
   const requestGridFocus = React.useCallback(() => {

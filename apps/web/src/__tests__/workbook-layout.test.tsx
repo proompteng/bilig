@@ -454,6 +454,7 @@ describe('workbook layout', () => {
             flags: 0,
             version: 1,
           }}
+          selectionSummary={{ nonEmptyCount: 2, numericCount: 2, sum: 30, min: 10, max: 20 }}
           selectionSnapshot={{
             sheetName: 'Sheet1',
             address: 'A3',
@@ -486,7 +487,7 @@ describe('workbook layout', () => {
     })
 
     const summary = host.querySelector("[data-testid='workbook-selection-summary']")
-    expect(summary?.textContent).toContain('Sum: 30.00')
+    expect(summary?.textContent).toContain('Sum: 30')
 
     await act(async () => {
       root.unmount()
@@ -519,6 +520,7 @@ describe('workbook layout', () => {
             flags: 0,
             version: 1,
           }}
+          selectionSummary={{ nonEmptyCount: 2, numericCount: 2, sum: 30, min: 10, max: 20 }}
           selectionSnapshot={{
             sheetName: 'Sheet1',
             address: 'A3',
@@ -551,7 +553,7 @@ describe('workbook layout', () => {
     })
 
     const trigger = host.querySelector("[data-testid='workbook-selection-status-trigger']")
-    expect(trigger?.textContent).toContain('Sum: 30.00')
+    expect(trigger?.textContent).toContain('Sum: 30')
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -562,7 +564,7 @@ describe('workbook layout', () => {
     const avgIndicatorSlot = document.querySelector("[data-testid='workbook-selection-status-option-avg-indicator-slot']")
     const sumIndicatorSlot = document.querySelector("[data-testid='workbook-selection-status-option-sum-indicator-slot']")
     const menu = document.querySelector("[data-testid='workbook-selection-status-menu']")
-    expect(avgOption?.textContent).toContain('Avg: 15.00')
+    expect(avgOption?.textContent).toContain('Avg: 15')
     expect(menu?.getAttribute('class')).toContain('w-max')
     expect(avgOption?.getAttribute('class')).toContain('whitespace-nowrap')
     expect(avgOptionText?.getAttribute('class')).toContain('whitespace-nowrap')
@@ -573,7 +575,7 @@ describe('workbook layout', () => {
       avgOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(trigger?.textContent).toContain('Avg: 15.00')
+    expect(trigger?.textContent).toContain('Avg: 15')
 
     await act(async () => {
       root.unmount()

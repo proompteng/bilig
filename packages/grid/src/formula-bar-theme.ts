@@ -5,7 +5,7 @@ export const formulaBarRootClass = cva(
 )
 
 export const formulaFieldShellClass = cva(
-  'box-border flex h-8 min-h-8 items-stretch rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] transition-[border-color,box-shadow]',
+  'box-border flex min-h-[var(--wb-control-height)] items-stretch rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] transition-[border-color,box-shadow]',
   {
     variants: {
       focused: {
@@ -20,15 +20,21 @@ export const formulaFieldShellClass = cva(
 )
 
 export const formulaFieldAddonClass = cva(
-  'inline-flex h-full shrink-0 items-center justify-center border-r border-[var(--wb-border)] bg-[var(--wb-muted)] text-[11px] font-semibold uppercase tracking-[0.08em] leading-none text-[var(--wb-text-subtle)]',
+  'inline-flex min-h-[calc(var(--wb-control-height)-2px)] shrink-0 items-center justify-center border-r border-[var(--wb-border)] bg-[var(--wb-muted)] text-[11px] font-semibold uppercase tracking-[0.08em] leading-none text-[var(--wb-text-subtle)]',
 )
 
 export const formulaInputClass = cva(
-  'wb-scrollbar-none block h-full min-w-0 flex-1 resize-none overflow-auto border-0 bg-transparent px-3 py-[7px] text-[12px] leading-4 text-[var(--wb-text)] outline-none placeholder:text-[var(--wb-text-subtle)]',
+  'wb-scrollbar-none block min-h-[calc(var(--wb-control-height)-2px)] min-w-0 flex-1 resize-none max-h-[calc(var(--wb-formula-max-height)-2px)] border-0 bg-transparent px-3 text-[12px] text-[var(--wb-text)] outline-none placeholder:text-[var(--wb-text-subtle)]',
+  {
+    variants: {
+      focused: { true: 'overflow-auto py-[7px] leading-4', false: 'overflow-hidden py-0 leading-[calc(var(--wb-control-height)-2px)]' },
+    },
+    defaultVariants: { focused: false },
+  },
 )
 
 export const formulaStandaloneInputClass = cva(
-  'box-border h-8 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[12px] font-medium leading-none text-[var(--wb-text)] outline-none transition-[border-color,box-shadow,color] placeholder:text-[var(--wb-text-subtle)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]',
+  'box-border h-[var(--wb-control-height)] w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[12px] font-medium leading-none text-[var(--wb-text)] outline-none transition-[border-color,box-shadow,color] placeholder:text-[var(--wb-text-subtle)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]',
   {
     variants: {
       invalid: {

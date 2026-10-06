@@ -348,6 +348,7 @@ function WorkerWorkbookAppInner({
                 editorTargetSelection={app.editorTargetSelection}
                 editorSelectionBehavior={app.editorSelectionBehavior}
                 engine={app.workerHandle.viewportStore}
+                selectionSummary={app.selectionSummary}
                 definedNames={app.definedNames}
                 isEditing={Boolean(app.writesAllowed && app.isEditing)}
                 isEditingCell={Boolean(app.writesAllowed && app.isEditingCell)}

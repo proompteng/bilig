@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ChevronDown, Pipette } from 'lucide-react'
 import { Popover } from '@base-ui/react/popover'
 import {
@@ -8,13 +8,9 @@ import {
   toDisplayHexColor,
   type ColorSwatch,
 } from './workbook-colors.js'
-import {
-  classNames,
-  colorPickerPopupClass,
-  colorPickerSwatchClass,
-  toolbarButtonClass,
-  toolbarPopupActionClass,
-} from './workbook-toolbar-theme.js'
+import { classNames, colorPickerPopupClass, toolbarButtonClass, toolbarPopupActionClass } from './workbook-toolbar-theme.js'
+
+import { ColorSwatchGrid } from './workbook-color-swatch-grid.js'
 
 type EyeDropperConstructor = new () => {
   open(): Promise<{ sRGBHex: string }>
@@ -52,11 +48,15 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
   onReset,
   onSelectColor,
 }: ColorPaletteButtonProps) {
+  const swatchFocusRef = useRef<HTMLButtonElement | null>(null)
   const [open, setOpen] = useState(false)
   const [panel, setPanel] = useState<'palette' | 'custom'>('palette')
   const [customColorValue, setCustomColorValue] = useState('')
   const normalizedCurrentColor = normalizeHexColor(currentColor)
   const paletteRows = useMemo(() => swatches.filter((row) => row.length > 0), [swatches])
+  const recentSwatches = recentColors.map((color) => ({ label: `${ariaLabel} custom ${color}`, value: color }))
+  const labelRows = (rows: readonly (readonly ColorSwatch[])[]) =>
+    rows.map((row) => row.map((swatch) => ({ ...swatch, label: `${ariaLabel} ${swatch.label}` })))
   const eyeDropperCtor = getEyeDropperConstructor()
 
   useEffect(() => {
@@ -136,29 +136,30 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
         <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
           <Popover.Popup
             aria-label={`${ariaLabel} palette`}
-            className={classNames(colorPickerPopupClass(), 'w-[320px]')}
+            className={classNames(colorPickerPopupClass(), 'w-[var(--wb-palette-width)] max-w-[calc(100vw-1rem)]')}
+            initialFocus={swatchFocusRef}
             data-testid={`${ariaLabel.toLowerCase().replace(/\s+/g, '-')}-palette`}
           >
-            <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--color-mauve-200)] pb-3">
+            <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--wb-border)] pb-3">
               <div className="flex min-w-0 items-center gap-2.5">
                 <span
                   aria-hidden="true"
-                  className="h-10 w-10 shrink-0 rounded-md border border-[var(--color-mauve-300)]"
+                  className="h-10 w-10 shrink-0 rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)]"
                   style={{ backgroundColor: normalizedCurrentColor } satisfies CSSProperties}
                 />
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-[var(--color-mauve-900)]">{ariaLabel}</div>
-                  <div className="text-[11px] text-[var(--color-mauve-600)] uppercase">{toDisplayHexColor(normalizedCurrentColor)}</div>
+                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">{ariaLabel}</div>
+                  <div className="text-[11px] text-[var(--wb-text-muted)] uppercase">{toDisplayHexColor(normalizedCurrentColor)}</div>
                 </div>
               </div>
-              <div className="inline-flex rounded-lg border border-[var(--color-mauve-200)] bg-[var(--color-mauve-50)] p-0.5">
+              <div className="inline-flex rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-0.5">
                 <button
                   aria-label={`Show ${ariaLabel.toLowerCase()} swatches`}
                   className={classNames(
-                    'inline-flex h-7 items-center rounded-md px-3 text-[11px] font-semibold transition-colors',
+                    'inline-flex h-7 items-center rounded-[var(--wb-radius-control)] px-3 text-[11px] font-semibold transition-colors',
                     panel === 'palette'
-                      ? 'bg-white text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]'
-                      : 'bg-transparent text-[var(--color-mauve-600)] hover:bg-[var(--color-mauve-100)]',
+                      ? 'bg-[var(--wb-surface)] text-[var(--wb-text)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]'
+                      : 'bg-transparent text-[var(--wb-text-muted)] hover:bg-[var(--wb-muted)]',
                   )}
                   onClick={() => setPanel('palette')}
                   type="button"
@@ -168,10 +169,10 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                 <button
                   aria-label={`Open custom ${ariaLabel.toLowerCase()} picker`}
                   className={classNames(
-                    'inline-flex h-7 items-center rounded-md px-3 text-[11px] font-semibold transition-colors',
+                    'inline-flex h-7 items-center rounded-[var(--wb-radius-control)] px-3 text-[11px] font-semibold transition-colors',
                     panel === 'custom'
-                      ? 'bg-white text-[var(--color-mauve-900)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]'
-                      : 'bg-transparent text-[var(--color-mauve-600)] hover:bg-[var(--color-mauve-100)]',
+                      ? 'bg-[var(--wb-surface)] text-[var(--wb-text)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]'
+                      : 'bg-transparent text-[var(--wb-text-muted)] hover:bg-[var(--wb-muted)]',
                   )}
                   onClick={() => setPanel('custom')}
                   type="button"
@@ -183,75 +184,29 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
 
             {panel === 'palette' ? (
               <div className="space-y-3">
-                <div>
-                  <div className="grid grid-cols-8 gap-1.5">
-                    {GOOGLE_SHEETS_STANDARD_SWATCHES.map((swatch) => {
-                      const selected = swatch.value === normalizedCurrentColor
-                      return (
-                        <button
-                          aria-label={`${ariaLabel} ${swatch.label}`}
-                          className={classNames(colorPickerSwatchClass(), 'h-7 w-7 rounded-[4px]')}
-                          data-color={swatch.value}
-                          key={`${ariaLabel}-${swatch.label}`}
-                          onClick={() => applyColor(swatch.value, 'preset')}
-                          style={{ backgroundColor: swatch.value } satisfies CSSProperties}
-                          type="button"
-                        >
-                          {selected ? (
-                            <span className="absolute inset-[-2px] rounded-[7px] border-2 border-[var(--color-mauve-500)]" />
-                          ) : null}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="space-y-1.5">
-                    {paletteRows.map((row) => (
-                      <div className="grid grid-cols-10 gap-1.5" key={`${ariaLabel}-row-${row[0]?.label ?? 'empty'}`}>
-                        {row.map((swatch) => {
-                          const selected = swatch.value === normalizedCurrentColor
-                          return (
-                            <button
-                              aria-label={`${ariaLabel} ${swatch.label}`}
-                              className={classNames(colorPickerSwatchClass(), 'h-7 w-7 rounded-[4px]')}
-                              data-color={swatch.value}
-                              key={`${ariaLabel}-${swatch.label}`}
-                              onClick={() => applyColor(swatch.value, 'preset')}
-                              style={{ backgroundColor: swatch.value } satisfies CSSProperties}
-                              type="button"
-                            >
-                              {selected ? (
-                                <span className="absolute inset-[-2px] rounded-[7px] border-2 border-[var(--color-mauve-500)]" />
-                              ) : null}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {recentColors.length > 0 ? (
-                  <div className="border-t border-[var(--color-mauve-200)] pt-3">
-                    <div className="grid grid-cols-8 gap-1.5">
-                      {recentColors.map((color) => (
-                        <button
-                          aria-label={`${ariaLabel} custom ${color}`}
-                          className={classNames(colorPickerSwatchClass(), 'h-7 w-7 rounded-[4px]')}
-                          data-color={color}
-                          key={`${ariaLabel}-recent-${color}`}
-                          onClick={() => applyColor(color, 'custom')}
-                          style={{ backgroundColor: color } satisfies CSSProperties}
-                          type="button"
-                        >
-                          {color === normalizedCurrentColor ? (
-                            <span className="absolute inset-[-2px] rounded-[7px] border-2 border-[var(--color-mauve-500)]" />
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
+                <ColorSwatchGrid
+                  ariaLabel={`${ariaLabel} theme colors`}
+                  columnCount={8}
+                  currentColor={normalizedCurrentColor}
+                  rows={labelRows([GOOGLE_SHEETS_STANDARD_SWATCHES])}
+                  onSelect={(color) => applyColor(color, 'preset')}
+                />
+                <ColorSwatchGrid
+                  ariaLabel={`${ariaLabel} swatches`}
+                  currentColor={normalizedCurrentColor}
+                  rows={labelRows(paletteRows)}
+                  focusRef={swatchFocusRef}
+                  onSelect={(color) => applyColor(color, 'preset')}
+                />
+                {recentSwatches.length > 0 ? (
+                  <div className="border-t border-[var(--wb-border)] pt-3">
+                    <ColorSwatchGrid
+                      ariaLabel={`Recent ${ariaLabel.toLowerCase()} colors`}
+                      columnCount={8}
+                      currentColor={normalizedCurrentColor}
+                      rows={[recentSwatches]}
+                      onSelect={(color) => applyColor(color, 'custom')}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -262,7 +217,7 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                     <span className="sr-only">{customInputLabel}</span>
                     <input
                       aria-label={customInputLabel}
-                      className="h-24 w-full cursor-pointer rounded-lg border border-[var(--color-mauve-200)] bg-white p-0.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                      className="h-24 w-full cursor-pointer rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-0.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                       type="color"
                       value={normalizedCurrentColor}
                       onChange={(event) => {
@@ -276,7 +231,7 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                       <span className="sr-only">{`${ariaLabel} hex value`}</span>
                       <input
                         aria-label={`${ariaLabel} hex value`}
-                        className="h-9 w-full rounded-md border border-[var(--color-mauve-200)] bg-white px-3 text-[12px] font-medium tracking-[0.04em] text-[var(--color-mauve-900)] uppercase outline-none transition-[border-color,box-shadow] focus:border-[var(--color-mauve-400)] focus:ring-2 focus:ring-[var(--color-mauve-400)]"
+                        className="h-8 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium tracking-[0.04em] text-[var(--wb-text)] uppercase outline-none transition-[border-color,box-shadow] focus:border-[var(--wb-accent-ring)] focus:ring-2 focus:ring-[var(--wb-accent-ring)]"
                         inputMode="text"
                         value={customColorValue}
                         onChange={(event) => setCustomColorValue(event.target.value.toUpperCase())}
@@ -290,7 +245,7 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                     </label>
                     <div className="flex gap-2">
                       <button
-                        className={classNames(toolbarPopupActionClass(), 'h-9 flex-1 justify-center')}
+                        className={classNames(toolbarPopupActionClass(), 'h-8 flex-1 justify-center')}
                         disabled={!typedColorValid}
                         onClick={applyTypedColor}
                         type="button"
@@ -300,7 +255,7 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                       {eyeDropperCtor ? (
                         <button
                           aria-label={`Sample ${ariaLabel.toLowerCase()} from screen`}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--color-mauve-200)] bg-white text-[var(--color-mauve-700)] transition-colors hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-muted)] hover:text-[var(--wb-text)]"
                           onClick={() => {
                             void openEyeDropper()
                           }}
@@ -313,34 +268,24 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                   </div>
                 </div>
 
-                {recentColors.length > 0 ? (
-                  <div className="border-t border-[var(--color-mauve-200)] pt-3">
-                    <div className="grid grid-cols-8 gap-1.5">
-                      {recentColors.map((color) => (
-                        <button
-                          aria-label={`${ariaLabel} custom ${color}`}
-                          className={classNames(colorPickerSwatchClass(), 'h-7 w-7 rounded-[4px]')}
-                          data-color={color}
-                          key={`${ariaLabel}-recent-${color}`}
-                          onClick={() => applyColor(color, 'custom')}
-                          style={{ backgroundColor: color } satisfies CSSProperties}
-                          type="button"
-                        >
-                          {color === normalizedCurrentColor ? (
-                            <span className="absolute inset-[-2px] rounded-[7px] border-2 border-[var(--color-mauve-500)]" />
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
+                {recentSwatches.length > 0 ? (
+                  <div className="border-t border-[var(--wb-border)] pt-3">
+                    <ColorSwatchGrid
+                      ariaLabel={`Recent ${ariaLabel.toLowerCase()} colors`}
+                      columnCount={8}
+                      currentColor={normalizedCurrentColor}
+                      rows={[recentSwatches]}
+                      onSelect={(color) => applyColor(color, 'custom')}
+                    />
                   </div>
                 ) : null}
               </div>
             )}
 
-            <div className="mt-3 border-t border-[var(--color-mauve-200)] pt-3">
+            <div className="mt-3 border-t border-[var(--wb-border)] pt-3">
               <button
                 aria-label={`Reset ${ariaLabel.toLowerCase()}`}
-                className={classNames(toolbarPopupActionClass(), 'h-9 px-3')}
+                className={classNames(toolbarPopupActionClass(), 'h-8 px-3')}
                 onClick={() => {
                   onReset()
                   closePalette()

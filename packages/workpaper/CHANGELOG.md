@@ -11,6 +11,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(core): bound dirty recalculation to stored cells (9888bdeb)
 
 ## 1.1.0
@@ -20,9 +21,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(workbook): add document controls and durable backup restore (55797089)
 
 ## Fixes
+
 - fix(formula): focus completion and correct function hints (d2a53f97)
 
 ## 1.0.0
@@ -32,9 +35,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Breaking changes
+
 - refactor(packages)!: consolidate canonical workbook runtimes (c6390416)
 
 ## Fixes
+
 - fix(runtime): harden trust and lifecycle boundaries (a0485435)
 - fix(workpaper): harden public onboarding proof (7946e4ac)
 - fix(repo): harden runtime and clean stale debt (3f740671)
@@ -42,6 +47,7 @@ This package is released as part of the aligned bilig library package set.
 - fix(n8n): lock reproducible community node dependencies (3fcad560)
 
 ## Internal runtime changes
+
 - refactor(core): split structural hotspot helpers (aa2d0752)
 - refactor(engine): split cache and cli helpers (dd0cf3d8)
 - chore(ci): purge proof-garbage scorecards (b495f4ba)

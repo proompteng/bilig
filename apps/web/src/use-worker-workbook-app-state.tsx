@@ -25,6 +25,7 @@ import { useWorkerWorkbookGridState } from './use-worker-workbook-grid-state.js'
 import { useWorkerWorkbookInteractionState } from './use-worker-workbook-interaction-state.js'
 import { WorkbookTablesPanel } from './WorkbookTablesPanel.js'
 import { getWorkbookUiSlotContributions } from './workbook-ui-slots.js'
+import { useWorkbookSelectionSummary } from './use-workbook-selection-summary.js'
 
 const workerRuntimeMachine = createWorkerRuntimeMachine()
 const EMPTY_WORKBOOK_TABLES: readonly WorkbookTableSnapshot[] = Object.freeze([])
@@ -808,7 +809,15 @@ export function useWorkerWorkbookAppState(input: {
     await retryPendingMutation(failedPendingMutation.id)
   }, [failedPendingMutation, retryPendingMutation])
 
+  const selectionSummary = useWorkbookSelectionSummary({
+    selection: selectionSnapshot,
+    runtime: runtimeController,
+    runtimeState,
+    onError: reportRuntimeError,
+  })
+
   return {
+    selectionSummary,
     agentError,
     clearAgentError,
     clearRuntimeError,

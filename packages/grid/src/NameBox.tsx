@@ -45,7 +45,7 @@ export const NameBox = forwardRef<HTMLInputElement, NameBoxProps>(function NameB
   }, [displayValue, sheetName])
 
   return (
-    <div className="w-28 shrink-0 sm:w-[168px]">
+    <div className="w-20 shrink-0 sm:w-28">
       <label className="sr-only" htmlFor="name-box-input">
         Name
       </label>

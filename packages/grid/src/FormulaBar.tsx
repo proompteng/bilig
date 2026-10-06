@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { WorkbookDefinedNameSnapshot } from '@bilig/protocol'
 import { FormulaArgumentHint } from './FormulaArgumentHint.js'
 import { FormulaAutocomplete } from './FormulaAutocomplete.js'
@@ -54,6 +54,13 @@ export function FormulaBar({
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0)
   const [dismissedAutocompleteValue, setDismissedAutocompleteValue] = useState<string | null>(null)
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
+
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    if (!input) return
+    input.style.height = 'calc(var(--wb-control-height) - 2px)'
+    if (isFormulaFocused) input.style.height = `min(${input.scrollHeight}px, calc(var(--wb-formula-max-height) - 2px))`
+  }, [isFormulaFocused, value])
 
   useEffect(() => {
     setFormulaCaret((current) => (isFormulaFocused || localFormulaDraftDirtyRef.current ? Math.min(value.length, current) : value.length))
@@ -228,7 +235,7 @@ export function FormulaBar({
               aria-controls={showAutocomplete ? 'formula-autocomplete' : undefined}
               aria-expanded={showAutocomplete ? 'true' : 'false'}
               aria-label="Formula"
-              className={formulaInputClass()}
+              className={formulaInputClass({ focused: isFormulaFocused })}
               data-formula-editing={isEditing ? 'true' : 'false'}
               data-testid="formula-input"
               id="formula-input"
@@ -236,6 +243,7 @@ export function FormulaBar({
               ref={inputRef}
               role="combobox"
               rows={1}
+              wrap={isFormulaFocused ? 'soft' : 'off'}
               {...workbookTextControlProps}
               value={value}
               onBlur={(event) => {

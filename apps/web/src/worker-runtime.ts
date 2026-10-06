@@ -78,6 +78,7 @@ import {
 import { exportWorkerRuntimeSnapshot } from './worker-runtime-export-snapshot.js'
 import { applyAuthoritativeWorkbookEvents } from './worker-runtime-authoritative-events.js'
 import { prepareAuthoritativeSnapshotProjection } from './worker-runtime-authoritative-snapshot.js'
+import { collectWorkbookSelectionSummary } from './workbook-selection-summary.js'
 export type {
   InstallAuthoritativeSnapshotInput,
   InstallBenchmarkCorpusResult,
@@ -320,6 +321,11 @@ export class WorkbookWorkerRuntime {
       replicaId: this.requireBootstrapOptions().replicaId,
       bundle,
     })
+  }
+
+  async getSelectionSummary(range: CellRangeRef) {
+    if (!isCellRangeRef(range)) throw new Error('Selection summary requires a workbook range')
+    return collectWorkbookSelectionSummary(await this.getProjectionEngine(), range)
   }
 
   async buildCreateTableCommandBundle(range: CellRangeRef): Promise<WorkbookAgentCommandBundle> {
