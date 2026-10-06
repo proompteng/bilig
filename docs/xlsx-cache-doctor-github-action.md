@@ -86,7 +86,7 @@ jobs:
         with:
           workbooks: '**/*.xlsx'
           changed-files-only: 'true'
-          package-version: '1.1.1'
+          package-version: '1.1.2'
           json-output: ${{ runner.temp }}/xlsx-cache-doctor.json
           markdown-output: ${{ runner.temp }}/xlsx-cache-doctor.md
           fail-on-stale: 'false'
@@ -145,7 +145,7 @@ workflow after you test the example:
 ```yaml
 - uses: proompteng/bilig@<full-commit-sha>
   with:
-    package-version: '1.1.1'
+    package-version: '1.1.2'
 ```
 
 Pin both values in production. The Action ref pins the wrapper scripts;
@@ -162,7 +162,7 @@ a write token.
 | `workbook`           |          | Path to one workbook to inspect. Kept for existing copied workflows.              |
 | `workbooks`          |          | Glob, comma list, or newline list of XLSX workbooks to inspect.                   |
 | `changed-files-only` | `false`  | Only inspect matched XLSX files changed in the pull request or current git diff.  |
-| `package-version`    | 1.1.1 | npm version or dist-tag for `@bilig/xlsx-formula-recalc`. Pin this in production. |
+| `package-version`    | 1.1.2 | npm version or dist-tag for `@bilig/xlsx-formula-recalc`. Pin this in production. |
 | `inspect-limit`      | `all`    | Formula cells to recompute during inspection. Use `all` or a positive integer.    |
 | `json-output`        |          | Optional path for the JSON report.                                                |
 | `markdown-output`    |          | Optional path for the Markdown report.                                            |

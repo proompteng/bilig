@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 1.1.2
+
+- Release type: patch
+- Previous libraries tag: libraries-v1.1.1
+- Manual override: no
+
+## Fixes
+- fix(workbook): polish editing and accurate selection totals (2dcb37b6)
+
 ## 1.1.1
 
 - Release type: patch

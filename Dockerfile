@@ -11,7 +11,7 @@ RUN corepack enable
 
 FROM node:24-bookworm-slim@sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e AS bilig-workpaper-mcp
 
-ARG BILIG_WORKPAPER_VERSION=1.1.1
+ARG BILIG_WORKPAPER_VERSION=1.1.2
 ENV NODE_ENV="production"
 WORKDIR /workpaper
 

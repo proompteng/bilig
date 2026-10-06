@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "package": {
     "name": "@bilig/workpaper",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Run workbook-shaped business rules in Node services: edit inputs, recalculate formulas, read outputs, and save WorkPaper JSON.",
     "nodeEngine": ">=24.0.0",
     "keywordCount": 19,
