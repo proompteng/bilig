@@ -1,5 +1,4 @@
 import { cva } from 'class-variance-authority'
-import { cn } from './cn.js'
 
 export const workbookHeaderActionButtonClass = cva(
   'inline-flex h-8 items-center justify-center rounded-[var(--wb-radius-control)] border text-[12px] font-medium transition-[background-color,border-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--wb-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-50',
@@ -52,50 +51,3 @@ export const workbookHeaderActionButtonClass = cva(
 
 export const workbookHeaderSurfaceClass =
   'inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)]'
-
-interface WorkbookHeaderStatusChipProps {
-  modeLabel: string
-  syncLabel: string
-  tone?: 'positive' | 'progress' | 'warning' | 'danger' | 'neutral'
-}
-
-export function WorkbookHeaderStatusChip({ modeLabel, syncLabel, tone = 'neutral' }: WorkbookHeaderStatusChipProps) {
-  const toneClass =
-    tone === 'positive'
-      ? 'bg-[var(--wb-success)]'
-      : tone === 'progress'
-        ? 'bg-[var(--wb-accent)]'
-        : tone === 'warning'
-          ? 'bg-[var(--wb-warning)]'
-          : tone === 'danger'
-            ? 'bg-[var(--wb-danger)]'
-            : 'bg-[var(--wb-text-subtle)]'
-
-  const surfaceClass =
-    tone === 'positive'
-      ? 'text-[var(--wb-success)]'
-      : tone === 'progress'
-        ? 'text-[var(--wb-accent)]'
-        : tone === 'warning'
-          ? 'text-[var(--wb-warning)]'
-          : tone === 'danger'
-            ? 'text-[var(--wb-danger-text)]'
-            : 'text-[var(--wb-text-muted)]'
-
-  return (
-    <>
-      <span
-        aria-label={`Workbook status: ${modeLabel}, ${syncLabel}`}
-        className={`inline-flex h-8 items-center justify-center gap-2 px-0 text-[12px] font-medium ${surfaceClass}`}
-        data-testid="status-mode"
-        role="status"
-        title={`${modeLabel} • ${syncLabel}`}
-      >
-        <span aria-hidden="true" className={cn('size-2 rounded-full', toneClass)} />
-        <span className="max-[420px]:hidden" data-testid="status-sync">
-          {syncLabel}
-        </span>
-      </span>
-    </>
-  )
-}

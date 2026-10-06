@@ -306,7 +306,6 @@ function createWorkbookAppState(overrides: Record<string, unknown> = {}): Record
     sidePanel: null,
     sidePanelId: undefined,
     sidePanelWidth: undefined,
-    statusModeLabel: 'Live',
     toggleBooleanCell: vi.fn(),
     toolbarTrailingContent: null,
     transferRequested: false,

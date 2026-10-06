@@ -10,7 +10,8 @@ import {
 } from '@bilig/protocol'
 import { WorkbookToolbar, type BorderPreset } from './workbook-toolbar.js'
 import { isPresetColor, mergeRecentCustomColors, normalizeHexColor } from './workbook-colors.js'
-import { WorkbookHeaderStatusChip } from './workbook-header-controls.js'
+import { WorkbookSaveStatus } from './workbook-save-status.js'
+import { deriveWorkbookSaveState } from './workbook-save-state.js'
 import type { WorkbookMutationMethod } from './workbook-sync.js'
 import {
   applyToolbarStylePatch,
@@ -19,7 +20,6 @@ import {
   cellRangeKey,
   clearStyleFieldsOptimisticPatch,
   DEFAULT_BORDER_SIDE,
-  deriveWorkbookStatusPresentation,
   hasAnyBorder,
   mergeToolbarStylePatch,
   type OptimisticToolbarStyle,
@@ -29,8 +29,6 @@ import {
   shouldRouteWorkbookShortcutToWorkbookScope,
 } from './workbook-toolbar-state.js'
 import { createRangeRef, getNormalizedRangeBounds, type ZeroConnectionState } from './worker-workbook-app-model.js'
-
-export { deriveWorkbookStatusPresentation } from './workbook-toolbar-state.js'
 
 export function useWorkbookToolbar(input: {
   connectionStateName: ZeroConnectionState['name']
@@ -160,7 +158,7 @@ export function useWorkbookToolbar(input: {
     toolbarMutationQueueRef.current = queueTail
     return queuedMutation
   }, [])
-  const statusPresentation = deriveWorkbookStatusPresentation({
+  const saveState = deriveWorkbookSaveState({
     connectionStateName,
     runtimeReady,
     pendingMutationSummary,
@@ -171,7 +169,6 @@ export function useWorkbookToolbar(input: {
     hasLocalMutationInFlight: hasLocalMutationInFlight === true,
     writesAllowed,
   })
-  const statusModeLabel = statusPresentation.modeLabel
 
   useEffect(() => {
     if (optimisticStyle && optimisticStyle.rangeKey !== selectedRangeKey) {
@@ -639,11 +636,7 @@ export function useWorkbookToolbar(input: {
         selectedFontSize={selectedFontSize}
         trailingContent={
           <>
-            <WorkbookHeaderStatusChip
-              modeLabel={statusPresentation.modeLabel}
-              syncLabel={statusPresentation.syncLabel}
-              tone={statusPresentation.tone}
-            />
+            <WorkbookSaveStatus state={saveState} />
             {trailingContent}
           </>
         }
@@ -686,9 +679,7 @@ export function useWorkbookToolbar(input: {
       resetTextColor,
       selectedFontSize,
       setNumberFormatPreset,
-      statusPresentation.modeLabel,
-      statusPresentation.syncLabel,
-      statusPresentation.tone,
+      saveState,
       trailingContent,
       visibleRecentFillColors,
       visibleRecentTextColors,
@@ -699,6 +690,5 @@ export function useWorkbookToolbar(input: {
 
   return {
     ribbon,
-    statusModeLabel,
   }
 }

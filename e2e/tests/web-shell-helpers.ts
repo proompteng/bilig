@@ -665,8 +665,8 @@ export async function waitForTypeGpuVisibleFrame(page: Page): Promise<void> {
 async function waitForWorkbookReadyOnce(page: Page): Promise<void> {
   await expect(page.getByTestId('formula-bar')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('sheet-grid')).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByTestId('status-sync')).toHaveText(
-    /^(Saved|Saving…|Sync pending|Local saved|Local only|Offline|Sync issue|Read only)$/,
+  await expect(page.getByTestId('workbook-save-status')).toHaveText(
+    /^(Saved|Saving…|Saved on this device|Offline|Save failed|Read only)$/,
     {
       timeout: 15_000,
     },

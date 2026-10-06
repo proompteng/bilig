@@ -8,7 +8,7 @@ import type {
   CellStyleRecord,
 } from '@bilig/protocol'
 import type { BorderPreset } from './workbook-toolbar.js'
-import { formatConnectionStateLabel, isTextEntryTarget, type ZeroConnectionState } from './worker-workbook-app-model.js'
+import { isTextEntryTarget } from './worker-workbook-app-model.js'
 
 export const BORDER_CLEAR_FIELDS: readonly CellStyleField[] = ['borderTop', 'borderRight', 'borderBottom', 'borderLeft'] as const
 
@@ -20,8 +20,6 @@ export const DEFAULT_BORDER_SIDE = {
 
 const PENDING_STYLE_ID = '__bilig_pending_toolbar_style__'
 const WORKBOOK_KEYBOARD_SCOPE_SELECTOR = '[data-workbook-keyboard-scope="true"]'
-
-type WorkbookHeaderStatusTone = 'positive' | 'progress' | 'warning' | 'danger' | 'neutral'
 
 export interface OptimisticToolbarStyle {
   readonly rangeKey: string
@@ -165,63 +163,6 @@ export function selectedStyleMatchesPatch(selectedStyle: CellStyleRecord | undef
 export function hasAnyBorder(style: CellStyleRecord | undefined): boolean {
   const borders = style?.borders
   return Boolean(borders?.top || borders?.right || borders?.bottom || borders?.left)
-}
-
-export interface WorkbookStatusPresentation {
-  readonly modeLabel: string
-  readonly syncLabel: string
-  readonly tone: WorkbookHeaderStatusTone
-}
-
-export function deriveWorkbookStatusPresentation(input: {
-  connectionStateName: ZeroConnectionState['name']
-  runtimeReady: boolean
-  remoteSyncAvailable: boolean
-  zeroConfigured: boolean
-  zeroHealthReady: boolean
-  writesAllowed: boolean
-  hasLocalMutationInFlight?: boolean
-  pendingMutationSummary?:
-    | {
-        readonly activeCount: number
-        readonly failedCount: number
-      }
-    | undefined
-  failedPendingMutation?: unknown
-}): WorkbookStatusPresentation {
-  const modeLabel = formatConnectionStateLabel(input.connectionStateName)
-  if (!input.runtimeReady) {
-    return { modeLabel, syncLabel: 'Loading…', tone: 'neutral' }
-  }
-  if (!input.writesAllowed) {
-    return { modeLabel, syncLabel: 'Read only', tone: 'warning' }
-  }
-  if (input.failedPendingMutation || (input.pendingMutationSummary?.failedCount ?? 0) > 0) {
-    return { modeLabel, syncLabel: 'Sync issue', tone: 'danger' }
-  }
-  if (input.hasLocalMutationInFlight === true) {
-    return { modeLabel, syncLabel: 'Saving…', tone: 'neutral' }
-  }
-  if (!input.zeroConfigured) {
-    return {
-      modeLabel,
-      syncLabel: (input.pendingMutationSummary?.activeCount ?? 0) > 0 ? 'Local saved' : 'Local only',
-      tone: 'warning',
-    }
-  }
-  if ((input.pendingMutationSummary?.activeCount ?? 0) > 0) {
-    return { modeLabel, syncLabel: 'Sync pending', tone: 'warning' }
-  }
-  if (input.connectionStateName === 'needs-auth' || input.connectionStateName === 'error') {
-    return { modeLabel, syncLabel: 'Sync issue', tone: 'danger' }
-  }
-  if (input.connectionStateName === 'disconnected' || input.connectionStateName === 'closed') {
-    return { modeLabel, syncLabel: 'Offline', tone: 'warning' }
-  }
-  if (input.connectionStateName === 'connecting' || !input.remoteSyncAvailable || !input.zeroHealthReady) {
-    return { modeLabel, syncLabel: 'Local saved', tone: 'warning' }
-  }
-  return { modeLabel, syncLabel: 'Saved', tone: 'positive' }
 }
 
 export function cellRangeKey(range: CellRangeRef): string {

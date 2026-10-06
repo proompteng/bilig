@@ -26,10 +26,8 @@ test('@browser-ci web app renders the minimal product shell without legacy demo 
 
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
   await expect(page.getByRole('button', { name: 'Templates' })).toHaveCount(0)
-  await expect(page.getByTestId('status-sync')).toHaveText(
-    remoteSyncEnabled
-      ? /^(Saved|Saving…|Sync pending|Sync issue)$/
-      : /^(Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/,
+  await expect(page.getByTestId('workbook-save-status')).toHaveText(
+    remoteSyncEnabled ? /^(Saved|Saving…|Save failed)$/ : /^(Saved|Saving…|Saved on this device|Read only|Offline|Save failed)$/,
     { timeout: 15_000 },
   )
   await expect(page.locator('.formula-result-shell')).toHaveCount(0)
@@ -88,32 +86,25 @@ test('web app keeps toolbar controls aligned and consistently sized', async ({ p
   expect(toolbarBox.height).toBeLessThanOrEqual(48)
 })
 
-test('web app keeps toolbar save state accessible on desktop and phones', async ({ page }) => {
+test('@browser-ci web app keeps routine save feedback accessible without a visible badge', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 })
   await page.goto('/workbook')
   await waitForWorkbookReady(page)
 
-  const syncText = await page.getByTestId('status-sync').textContent()
-  expect(syncText).toMatch(/^(Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/)
-  await expect(page.getByTestId('status-label')).toHaveCount(0)
-  const statusAriaLabel = await page.getByTestId('status-mode').getAttribute('aria-label')
-  expect(statusAriaLabel).toMatch(
-    /^Workbook status: [^,]+, (Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/,
-  )
-  expect(statusAriaLabel).toContain(`, ${syncText ?? ''}`)
-  await expect(page.getByTestId('status-sync')).toBeVisible()
-  const visibleTrailingText = await page
-    .getByTestId('toolbar-trailing-content')
-    .evaluate((element) => (element instanceof HTMLElement ? element.innerText.trim() : ''))
-  expect(visibleTrailingText).toContain(syncText ?? '')
+  const saveStatus = page.getByTestId('workbook-save-status')
+  await expect(saveStatus).toHaveAttribute('role', 'status')
+  await expect(saveStatus).toHaveClass('sr-only')
+  await expect(saveStatus).toHaveText(/^(Saved|Saved on this device)$/)
+  await expect(saveStatus.locator('[aria-hidden]')).toHaveCount(0)
+  await page.getByTestId('formula-input').fill('quiet edit')
+  await expect(saveStatus).toHaveClass('sr-only')
+  await page.getByTestId('formula-input').press('Escape')
 
   await page.setViewportSize({ width: 390, height: 760 })
-  await expect(page.getByTestId('status-sync')).toBeHidden()
-  await expect(page.getByTestId('status-mode')).toBeVisible()
-  await expect(page.getByTestId('status-mode')).toHaveAttribute('aria-label', statusAriaLabel ?? '')
-  const statusBox = await getBox(page.getByTestId('status-mode'))
-
-  expect(statusBox.width).toBeLessThanOrEqual(12)
+  await expect(saveStatus).toHaveClass('sr-only')
+  const statusBox = await getBox(saveStatus)
+  expect(statusBox.width).toBeLessThanOrEqual(1)
+  expect(statusBox.height).toBeLessThanOrEqual(1)
 })
 
 test('web app keeps toolbar, formula bar, grid, and footer tightly stacked', async ({ page }) => {
@@ -284,13 +275,7 @@ test('@browser-ci web app prioritizes editing controls over secondary actions on
   await expect(page.getByTestId('workbook-shortcut-button')).toBeHidden()
   await expect(page.getByTestId('workbook-import-toggle')).toBeHidden()
   await expect(page.getByTestId('workbook-side-panel-open')).toBeVisible()
-  await expect(page.getByTestId('status-mode')).toBeVisible()
-  await expect(page.getByTestId('status-mode')).toHaveAttribute(
-    'aria-label',
-    remoteSyncEnabled
-      ? /^Workbook status: [^,]+, (Saved|Saving…|Sync pending|Sync issue)$/
-      : /^Workbook status: [^,]+, (Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/,
-  )
+  await expect(page.getByTestId('workbook-save-status')).toHaveClass('sr-only')
   await expect(numberFormat).toContainText('General')
   await expect(fontSize).toContainText('10')
   await expect(overflowCue).toBeVisible()

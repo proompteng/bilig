@@ -297,25 +297,6 @@ export function createRangeRef(sheetName: string, startRow: number, startCol: nu
   }
 }
 
-export function formatConnectionStateLabel(state: ZeroConnectionState['name']): string {
-  switch (state) {
-    case 'connected':
-      return 'Live'
-    case 'connecting':
-      return 'Connecting'
-    case 'disconnected':
-      return 'Disconnected'
-    case 'needs-auth':
-      return 'Needs auth'
-    case 'error':
-      return 'Error'
-    case 'closed':
-      return 'Closed'
-    default:
-      return state
-  }
-}
-
 export function canAttemptRemoteSync(state: ZeroConnectionState['name']): boolean {
   return state === 'connected'
 }

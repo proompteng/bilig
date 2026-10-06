@@ -696,7 +696,7 @@ test('@browser-sync web app enables undo and redo for a normal edit', async ({ p
   const documentId = createTestDocumentId('playwright-undo-redo-basic')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
-  await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
+  await expect(page.getByTestId('workbook-save-status')).toHaveText('Saved', { timeout: 30_000 })
 
   const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
   const redoButton = page.getByRole('button', { name: 'Redo', exact: true })
@@ -732,7 +732,7 @@ test('@browser-sync web app preserves redo across a longer undo history', async 
   const documentId = createTestDocumentId('playwright-undo-redo-long')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
-  await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
+  await expect(page.getByTestId('workbook-save-status')).toHaveText('Saved', { timeout: 30_000 })
 
   const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
   const redoButton = page.getByRole('button', { name: 'Redo', exact: true })
@@ -790,7 +790,7 @@ test('@browser-sync web app clears redo after a fresh edit branches history', as
   const documentId = createTestDocumentId('playwright-undo-redo-branch')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
-  await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
+  await expect(page.getByTestId('workbook-save-status')).toHaveText('Saved', { timeout: 30_000 })
 
   const undoButton = page.getByRole('button', { name: 'Undo', exact: true })
   const redoButton = page.getByRole('button', { name: 'Redo', exact: true })

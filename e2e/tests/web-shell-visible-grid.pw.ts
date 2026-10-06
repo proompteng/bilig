@@ -396,11 +396,11 @@ test('@browser-ci web app keeps rendered edits, clears, headers, and fills coher
     .toBeGreaterThan(120)
 
   await expect
-    .poll(() => page.getByTestId('status-sync').textContent(), {
+    .poll(() => page.getByTestId('workbook-save-status').textContent(), {
       message: 'workbook should finish saving before reload persistence proof',
       timeout: 15_000,
     })
-    .toMatch(/^(Saved|Local saved|Local only)$/)
+    .toMatch(/^(Saved|Saved on this device)$/)
   await page.reload({ waitUntil: 'domcontentloaded' })
   await waitForWorkbookReady(page)
   await clickProductCell(page, 3, 2)

@@ -32,7 +32,7 @@ test('whole-sheet clear stays responsive, supports undo, and persists after relo
   await page.getByRole('button', { name: 'Select entire sheet' }).click()
   await page.getByTestId('sheet-grid').press('Delete')
   await expect(formula).toHaveValue('')
-  await expect(page.getByTestId('status-mode')).toHaveAttribute('aria-label', /Saved|Local saved|Local only/)
+  await expect(page.getByTestId('workbook-save-status')).toHaveText(/Saved|Saved on this device/)
   await page.reload()
   await waitForWorkbookReady(page)
   await name.fill('A1')

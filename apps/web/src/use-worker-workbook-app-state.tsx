@@ -703,7 +703,7 @@ export function useWorkerWorkbookAppState(input: {
     syncAgentAuthoritativeRevision,
   })
 
-  const { ribbon, statusModeLabel } = useWorkbookToolbar({
+  const { ribbon } = useWorkbookToolbar({
     connectionStateName: connectionState.name,
     runtimeReady,
     pendingMutationSummary: runtimeState?.pendingMutationSummary,
@@ -887,7 +887,6 @@ export function useWorkerWorkbookAppState(input: {
     sheetNames,
     sidePanel,
     sidePanelWidth,
-    statusModeLabel,
     toggleBooleanCell,
     visibleEditorValue,
     workbookReady,
