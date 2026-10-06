@@ -17,7 +17,7 @@ import { optimisticCellTargetFromKey, supersedeOptimisticSeedsInRange } from './
 import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from './workbook-optimistic-cell-flags.js'
 import { LOCAL_CELL_CONTENT_DIRTY_MASK } from './projected-workbook-local-delta.js'
 import type { WorkbookMutationMethod } from './workbook-sync.js'
-import { deferInteractionPersistence } from './interaction-idle-scheduler.js'
+import { useDeferredEditCommits } from './use-deferred-edit-commits.js'
 import {
   clampSelectionMovement,
   emptyCellSnapshot,
@@ -36,11 +36,6 @@ import {
 export interface EditTargetSelection {
   readonly sheetName: string
   readonly address: string
-}
-
-interface DeferredEditCommitTask {
-  ready: boolean
-  runNow(): Promise<void>
 }
 
 function selectionSnapshotToRangeRef(selection: GridSelectionSnapshot): CellRangeRef {
@@ -157,7 +152,7 @@ export function useWorkerWorkbookInteractionState(input: {
   const editorBaseHydrationPendingRef = useRef(false)
   const pendingEditCommitSessionRef = useRef<number | null>(null)
   const pendingEditCommitMovementAppliedRef = useRef(false)
-  const pendingEditCommitQueueRef = useRef<DeferredEditCommitTask[]>([])
+  const { enqueueDeferredEditCommit, flushPendingEditCommit, isEditCommitPending } = useDeferredEditCommits()
 
   useEffect(() => {
     const previousSelection = selectionRef.current
@@ -555,58 +550,6 @@ export function useWorkerWorkbookInteractionState(input: {
     [invokeEditCommitMutation, perfSession],
   )
 
-  const flushReadyPendingEditCommits = useCallback(async (): Promise<void> => {
-    const drainReadyTasks = async (): Promise<void> => {
-      const nextTask = pendingEditCommitQueueRef.current[0]
-      if (nextTask?.ready !== true) {
-        return
-      }
-      await nextTask.runNow()
-      if (pendingEditCommitQueueRef.current[0] === nextTask) {
-        pendingEditCommitQueueRef.current.shift()
-      }
-      await drainReadyTasks()
-    }
-    await drainReadyTasks()
-  }, [])
-
-  const flushPendingEditCommit = useCallback(async (): Promise<void> => {
-    const drainPendingTasks = async (): Promise<void> => {
-      const nextTask = pendingEditCommitQueueRef.current[0]
-      if (!nextTask) {
-        return
-      }
-      nextTask.ready = true
-      await nextTask.runNow()
-      if (pendingEditCommitQueueRef.current[0] === nextTask) {
-        pendingEditCommitQueueRef.current.shift()
-      }
-      await drainPendingTasks()
-    }
-    await drainPendingTasks()
-  }, [])
-
-  const enqueueDeferredEditCommit = useCallback(
-    (run: () => Promise<void>): void => {
-      let taskPromise: Promise<void> | null = null
-      const task: DeferredEditCommitTask = {
-        ready: false,
-        runNow() {
-          task.ready = true
-          taskPromise ??= run()
-          return taskPromise
-        },
-      }
-      pendingEditCommitQueueRef.current.push(task)
-      void (async () => {
-        await deferInteractionPersistence()
-        task.ready = true
-        await flushReadyPendingEditCommits()
-      })()
-    },
-    [flushReadyPendingEditCommits],
-  )
-
   const commitEditor = useCallback(
     (movement?: EditMovement, valueOverride?: string, targetSelectionOverride?: EditTargetSelection): boolean => {
       if (!writesAllowed) {
@@ -924,6 +867,7 @@ export function useWorkerWorkbookInteractionState(input: {
     handleSelectionChange,
     isEditing,
     isEditingCell,
+    isEditCommitPending,
     moveSelectionRange,
     pasteIntoSelection,
     selectAddress,

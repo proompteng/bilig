@@ -666,8 +666,8 @@ describe('WorkbookToolbar shortcuts menus and save state', () => {
         writesAllowed: true,
       }),
     ).toMatchObject({
-      syncLabel: 'Sync pending',
-      tone: 'warning',
+      syncLabel: 'Saving…',
+      tone: 'neutral',
     })
 
     expect(

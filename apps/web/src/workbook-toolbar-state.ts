@@ -199,15 +199,17 @@ export function deriveWorkbookStatusPresentation(input: {
   if (input.failedPendingMutation || (input.pendingMutationSummary?.failedCount ?? 0) > 0) {
     return { modeLabel, syncLabel: 'Sync issue', tone: 'danger' }
   }
+  if (input.hasLocalMutationInFlight === true) {
+    return { modeLabel, syncLabel: 'Saving…', tone: 'neutral' }
+  }
   if (!input.zeroConfigured) {
     return {
       modeLabel,
-      syncLabel:
-        input.hasLocalMutationInFlight === true || (input.pendingMutationSummary?.activeCount ?? 0) > 0 ? 'Local saved' : 'Local only',
+      syncLabel: (input.pendingMutationSummary?.activeCount ?? 0) > 0 ? 'Local saved' : 'Local only',
       tone: 'warning',
     }
   }
-  if (input.hasLocalMutationInFlight === true || (input.pendingMutationSummary?.activeCount ?? 0) > 0) {
+  if ((input.pendingMutationSummary?.activeCount ?? 0) > 0) {
     return { modeLabel, syncLabel: 'Sync pending', tone: 'warning' }
   }
   if (input.connectionStateName === 'needs-auth' || input.connectionStateName === 'error') {
