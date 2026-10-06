@@ -13,6 +13,7 @@ export function useWorkbookSelectionSummary(input: {
   const [result, setResult] = useState<{ key: string; summary: SelectionAggregateSummary } | null>(null)
 
   useEffect(() => {
+    setResult((current) => (current?.key === key ? current : null))
     if (!runtime || kind === 'cell') return
     let cancelled = false
     void (async () => {

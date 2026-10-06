@@ -18,12 +18,12 @@ it('ignores superseded ranges and preserves the current summary while refreshing
     ),
   }
   const onError = vi.fn()
-  function Harness({ address, revision }: { address: string; revision: number }) {
+  function Harness({ address, revision, kind = 'range' }: { address: string; revision: number; kind?: 'cell' | 'range' }) {
     const result = useWorkbookSelectionSummary({
       runtime,
       onError,
       runtimeState: revision,
-      selection: { sheetName: 'Sheet1', address, kind: 'range', range: { startAddress: address, endAddress: 'B3' } },
+      selection: { sheetName: 'Sheet1', address, kind, range: { startAddress: address, endAddress: 'B3' } },
     })
     return <output>{result?.sum ?? 'pending'}</output>
   }
@@ -54,7 +54,18 @@ it('ignores superseded ranges and preserves the current summary while refreshing
       pending[2]?.(response(30))
     })
     expect(host.textContent).toBe('30')
-    expect(runtime.invoke).toHaveBeenCalledTimes(3)
+    await act(async () => {
+      root.render(<Harness address="C1" revision={3} kind="cell" />)
+    })
+    await act(async () => {
+      root.render(<Harness address="B1" revision={3} />)
+    })
+    expect(host.textContent).toBe('pending')
+    await act(async () => {
+      pending[3]?.(response(40))
+    })
+    expect(host.textContent).toBe('40')
+    expect(runtime.invoke).toHaveBeenCalledTimes(4)
     expect(onError).not.toHaveBeenCalled()
   } finally {
     await act(async () => {
