@@ -72,11 +72,7 @@ export function GridSelectionVisualOverlay(props: GridSelectionVisualOverlayProp
   }
 
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
-      data-testid="grid-selection-visual-overlay"
-    >
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="grid-selection-visual-overlay">
       {rects.map((rect) => (
         <div
           className={classNameForRole(rect.role)}
@@ -132,6 +128,7 @@ function styleForRect(
     opacity: hidden ? 0 : undefined,
     top: rect.bounds.y,
     width: rect.bounds.width,
+    zIndex: rect.role === 'fill-handle' ? 50 : 20,
   }
   if (rect.role === 'selection-border' || rect.role === 'active-border') {
     return {

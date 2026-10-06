@@ -313,7 +313,6 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   }, [props.previewRanges, props.sheetName, getCellLocalBounds, visibleRange.height, visibleRange.width, visibleRange.x, visibleRange.y])
   const [paneRendererBackendStatus, setPaneRendererBackendStatus] = useState<WorkbookPaneSurfaceBackendStatusV3>('idle')
   const showSelectionFillHandle =
-    !props.isEditingCell &&
     displaySelectionRange !== null &&
     displayGridSelection.columns.length === 0 &&
     displayGridSelection.rows.length === 0 &&
@@ -525,16 +524,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         </button>
         <GridFillHandleOverlay
           getGeometrySnapshot={getLiveGeometrySnapshot}
-          hidden={
-            renderState.hostElement === null ||
-            props.isEditingCell ||
-            !displaySelectionRange ||
-            displayGridSelection.columns.length > 0 ||
-            displayGridSelection.rows.length > 0 ||
-            Boolean(renderState.fillPreviewRange) ||
-            renderState.isFillHandleDragging ||
-            renderState.isRangeMoveDragging
-          }
+          hidden={renderState.hostElement === null || !showSelectionFillHandle}
           hostHeight={renderState.hostElement?.clientHeight ?? 0}
           hostWidth={renderState.hostElement?.clientWidth ?? 0}
           minX={renderState.gridMetrics.rowMarkerWidth}

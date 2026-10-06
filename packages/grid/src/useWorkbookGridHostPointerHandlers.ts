@@ -136,6 +136,9 @@ export function useWorkbookGridHostPointerHandlers(input: {
       }
       event.preventDefault()
       event.stopPropagation()
+      if (isEditingCell && commitActiveEdit() === false) {
+        return
+      }
       focusGrid()
       rangeMoveCleanupRef.current?.()
       resizeCleanupRef.current?.()
@@ -169,12 +172,14 @@ export function useWorkbookGridHostPointerHandlers(input: {
       })
     },
     [
+      commitActiveEdit,
       emitSelectionChange,
       fillHandleCleanupRef,
       fillPreviewRangeRef,
       focusGrid,
       gridSelection,
       interactionState,
+      isEditingCell,
       onFillRange,
       rangeMoveCleanupRef,
       renderState.scrollViewportRef,

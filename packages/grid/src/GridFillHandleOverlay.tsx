@@ -62,7 +62,7 @@ export function GridFillHandleOverlay(props: GridFillHandleOverlayProps) {
   return (
     <div
       aria-hidden="true"
-      className="absolute z-30 cursor-crosshair rounded-[2px] border border-white bg-[var(--wb-selection-accent)] shadow-[0_0_0_1px_rgba(33,115,70,0.38)] outline-none"
+      className="absolute z-50 cursor-crosshair rounded-[2px] border border-white bg-[var(--wb-selection-accent)] shadow-[0_0_0_1px_rgba(33,115,70,0.38)] outline-none"
       data-grid-fill-handle="true"
       ref={handleRef}
       onClick={(event) => {
