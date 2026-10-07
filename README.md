@@ -5,6 +5,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-43853d)](packages/workpaper/package.json)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/proompteng/bilig/badge)](https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig)
 [![License: MIT](https://img.shields.io/badge/license-MIT-14784b)](LICENSE)
+[![MCP Queen operational grade](https://mcpqueen.com/badge/io.github.proompteng/bilig-workpaper.svg)](https://mcpqueen.com/s/io.github.proompteng/bilig-workpaper)
 
 **Keep the workbook model. Run the rule in Node.**
 
