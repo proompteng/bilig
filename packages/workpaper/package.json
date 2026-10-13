@@ -105,11 +105,11 @@
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/xlsx": "workspace:*",
-    "fflate": "0.3.11"
+    "fflate": "0.8.3"
   },
   "devDependencies": {
     "ai": "6.0.195",
-    "zod": "4.3.6"
+    "zod": "4.6.5"
   },
   "peerDependencies": {
     "ai": ">=6.0.0",
